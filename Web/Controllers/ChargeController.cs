@@ -53,6 +53,8 @@ namespace Web.Controllers
                 }
             }
 
+            charges = charges.OrderByDescending(c => c.Created).ToList();
+
             var subscriptions = new List<SubscriptionViewModel>();
             if (user.SubscriptionIds != null)
             {
@@ -64,6 +66,8 @@ namespace Web.Controllers
                     subscriptions.Add(SubscriptionViewModel.FromSubscription(sub, sub.Status == "active" ? source : null));
                 }
             }
+
+            subscriptions = subscriptions.OrderByDescending(s => s.Created).ToList();
 
             return new JsonResult(new {charges, subscriptions});
         }
