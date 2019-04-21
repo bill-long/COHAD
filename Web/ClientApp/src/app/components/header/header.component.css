@@ -6,12 +6,16 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-end;
     margin-bottom: 50px;
 }
 
-.header > h1, .header > h2 {
+.header > h1 {
     color: white;
-    text-shadow: #000 1px 0 10px;
+    text-shadow: black 3px 0 10px, black -3px 0 10px;
     text-align: center;
+}
+
+h1:last-child {
+    margin-bottom: 5%;
 }
