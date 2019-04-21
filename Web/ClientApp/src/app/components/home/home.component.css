@@ -1,0 +1,16 @@
+.constrained-image {
+    max-width: 100%;
+    margin-top: 5px;
+}
+
+.centered {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.container {
+    margin-bottom: 50px;
+}

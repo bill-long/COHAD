@@ -1,0 +1,18 @@
+<app-header imagePath="assets/leaves1.jpg"></app-header>
+<div class="container">
+  <div class="row">
+    <div class="col">
+      <h1 class="font-weight-lighter">Documents</h1>
+    </div>
+  </div>
+  <div class="row mt-2">
+    <div class="col">
+      <div class="folder mt-1" *ngFor="let f of folders">
+        <span octicon="file-directory" class="align-middle"></span> {{f.name}}
+        <div class="file ml-3 mt-1" *ngFor="let file of f.children" (click)="downloadFile(f.name, file.name)">
+          <span octicon="file" class="align-middle"></span> {{file.name}}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,17 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/oidc-client/1.4.1/oidc-client.min.js"></script>
+<script>
+  console.log("authcallback.html was called");
+  var mgr = new Oidc.UserManager({
+    metadataUrl: 'https://cohad.b2clogin.com/cohad.onmicrosoft.com/v2.0/.well-known/openid-configuration?p=b2c_1_v2_signup_signin',
+    loadUserInfo: false
+  });
+  mgr.signinRedirectCallback().then(() => {
+    window.history.replaceState({},
+      window.document.title,
+      window.location.origin);
+    window.location.assign("/");
+  }, err => {
+    console.error(err);
+  });
+</script>
+<p>Signing in...</p>

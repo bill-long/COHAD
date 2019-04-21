@@ -1,0 +1,47 @@
+<div class="container" *ngIf="me$ | async as me">
+  <div class="row" *ngIf="me.role === 0 && me.promotionState === 0">
+    <div class="col">
+      <h1 class="font-weight-lighter">Registration</h1>
+      <p>You currently have limited access to the site. In order to get full access, please
+        enter your street address. After you do so, COHAD will review your
+        information and grant you access.
+      </p>
+      <form>
+        <div class="form-group">
+          <label for="streetAddressInput">Street Address</label>
+          <input id="streetAddressInput" type="text" class="form-control" placeholder="58 Contoso St" [(ngModel)]="streetAddress" [ngModelOptions]="{standalone: true}">
+        </div>
+        <button class="btn btn-primary" type="submit" (click)="requestAccess()">Submit</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="row" *ngIf="me.role === 0 && me.promotionState === 1">
+    <div class="col">
+      <h1 class="font-weight-lighter">Registration</h1>
+      <p>Your access request is pending approval. Please check back later. In the meantime, you
+        can still pay dues or access basic information about COHAD.</p>
+    </div>
+  </div>
+
+  <div class="row" *ngIf="me.role === 0 && me.promotionState === 2">
+    <div class="col">
+      <h1 class="font-weight-lighter">Registration</h1>
+      <p>Your access request was denied. If you believe this was in error, please contact COHAD for assistance.</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <h1 class="font-weight-lighter">Profile</h1>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-2 text-right">Name</div>
+    <div class="col">{{me.givenName}} {{me.surname}}</div>
+  </div>
+  <div class="row">
+    <div class="col-2 text-right">Street Address</div>
+    <div class="col">{{me.streetAddress}}</div>
+  </div>
+</div>

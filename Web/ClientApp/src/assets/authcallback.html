@@ -1,0 +1,15 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/oidc-client/1.6.1/oidc-client.min.js"></script>
+<script>
+    var mgr = new Oidc.UserManager();
+    mgr.signinRedirectCallback().then(u => {
+        window.history.replaceState({},
+            window.document.title,
+            window.location.origin);
+        console.log("authcallback.html saving user", u);
+        if (u && u.state) {
+            window.location = u.state;
+        } else {
+            window.location = "/";
+        }
+    });
+</script>
