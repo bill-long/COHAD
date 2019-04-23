@@ -1,5 +1,5 @@
 .header {
-    height: 50%;
+    height: 50vh;
     min-height: 320px;
     background-size: cover;
     background-position: center;
@@ -14,8 +14,4 @@
     color: white;
     text-shadow: black 3px 0 10px, black -3px 0 10px;
     text-align: center;
-}
-
-h1:last-child {
-    margin-bottom: 5%;
 }
