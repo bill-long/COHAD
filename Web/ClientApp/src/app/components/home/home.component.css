@@ -14,3 +14,11 @@
 .container {
     margin-bottom: 50px;
 }
+
+/* Somehow, using bootstrap responsive font size made
+   the buttons not clickable at large viewports when
+   Home first loads. So, use this kludge for now.
+*/
+.btn {
+    z-index: 100;
+}
