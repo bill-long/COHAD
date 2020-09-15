@@ -136,5 +136,8 @@
       }
     }
   },
-  "defaultProject": "cohad-app"
+  "defaultProject": "cohad-app",
+  "cli": {
+    "analytics": false
+  }
 }

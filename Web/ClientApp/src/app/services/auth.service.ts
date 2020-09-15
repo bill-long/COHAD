@@ -29,7 +29,7 @@ export class AuthService {
       scope: 'openid profile https://cohad.onmicrosoft.com/frontend/api',
       response_type: 'id_token token',
       post_logout_redirect_uri: window.location.origin,
-      extraQueryParams: 'p=b2c_1_v2_signup_signin',
+      extraQueryParams: {'p': 'b2c_1_v2_signup_signin'},
       metadataUrl: 'https://cohad.b2clogin.com/cohad.onmicrosoft.com/v2.0/.well-known/openid-configuration?p=b2c_1_v2_signup_signin',
       loadUserInfo: false, // Because Azure B2C doesn't currently support userinfo_endpoint
       automaticSilentRenew: true,

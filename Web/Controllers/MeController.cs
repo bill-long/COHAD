@@ -13,9 +13,9 @@ namespace Web.Controllers
     [Authorize]
     public class MeController : ControllerBase
     {
-        private readonly AzureTableRepository<User> _userRepository;
+        private readonly CohadWebDbContext _userRepository;
 
-        public MeController(AzureTableRepository<User> userRepository)
+        public MeController(CohadWebDbContext userRepository)
         {
             _userRepository = userRepository;
         }
@@ -24,7 +24,7 @@ namespace Web.Controllers
         public async Task<UserViewModel> Get()
         {
             var nameId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
-            var user = await _userRepository.FindByKey(nameId);
+            var user = await _userRepository.Users.FindAsync(nameId);
             if (user != null)
             {
                 return UserViewModel.FromUser(user);
@@ -32,7 +32,7 @@ namespace Web.Controllers
 
             var newUser = new User
             {
-                Id = nameId,
+                NameIdentifier = nameId,
                 GivenName = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.GivenName)?.Value,
                 Surname = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Surname)?.Value,
                 IdentityProvider = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")?.Value,
@@ -42,7 +42,8 @@ namespace Web.Controllers
                 PromotionState = Models.User.PromotionStates.None
             };
 
-            user = await _userRepository.Add(newUser);
+            _userRepository.Users.Add(newUser);
+            await _userRepository.SaveChangesAsync();
             return UserViewModel.FromUser(user);
         }
 
@@ -50,7 +51,7 @@ namespace Web.Controllers
         public async Task<UserViewModel> RequestAccess(string streetAddress)
         {
             var nameId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
-            var user = await _userRepository.FindByKey(nameId);
+            var user = await _userRepository.Users.FindAsync(nameId);
             if (user == null)
             {
                 // The client should always be calling Get before the user requests promotion.
@@ -67,7 +68,7 @@ namespace Web.Controllers
 
             user.StreetAddress = streetAddress;
             user.PromotionState = Models.User.PromotionStates.Requested;
-            user = await _userRepository.Replace(user);
+            await _userRepository.SaveChangesAsync();
             return UserViewModel.FromUser(user);
         }
 

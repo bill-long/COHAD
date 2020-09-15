@@ -1,18 +1,15 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.WindowsAzure.Storage;
-using Microsoft.WindowsAzure.Storage.Blob;
-using Microsoft.WindowsAzure.Storage.Table;
+using Microsoft.Extensions.Hosting;
 using Web.Authorization;
 using Web.Models;
 using Web.Repository;
-using Web.Services;
 
 namespace Web
 {
@@ -28,8 +25,6 @@ namespace Web
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
-
             // In production, the Angular files will be served from this directory
             services.AddSpaStaticFiles(configuration =>
             {
@@ -41,7 +36,7 @@ namespace Web
                     {
                         options.Authority = "https://cohad.b2clogin.com/cohad.onmicrosoft.com/v2.0";
                         options.MetadataAddress = "https://cohad.b2clogin.com/cohad.onmicrosoft.com/v2.0/.well-known/openid-configuration?p=b2c_1_v2_signup_signin";
-                        options.Audience = "f172253e-dc5f-4429-818f-fc506f6bf4a6";
+                        options.Audience = "6034a3a8-53b5-401b-a66f-54be5966a067";
                     });
 
             // Allow reverse proxy from nginx
@@ -58,20 +53,22 @@ namespace Web
                 options.AddPolicy("Admin", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Roles.Administrator)));
             });
 
-            services.AddSingleton<IAuthorizationHandler, RoleAuthorizationHandler>();
+            services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();
 
             // Repository stuff
-            var storageAccount = CloudStorageAccount.Parse(Configuration["CohadConnectionString"]);
-            var tableClient = new CloudTableClient(storageAccount.TableStorageUri, storageAccount.Credentials);
-            services.AddSingleton<AzureTableRepository<User>>(sp => new AzureTableRepository<User>(tableClient.GetTableReference("Users")));
+            var uri = Configuration["CosmosUri"];
+            var key = Configuration["CosmosKey"];
+            var db = Configuration["CosmosDatabase"];
 
-            // Document storage
-            var blobClient = new CloudBlobClient(storageAccount.BlobStorageUri, storageAccount.Credentials);
-            services.AddSingleton(sp => new DocumentService(blobClient.GetContainerReference("shared-documents")));
+#if DEBUG
+            services.AddDbContext<CohadWebDbContext>(options => options.UseInMemoryDatabase("CohadWebDebugDatabase"));
+#else
+            services.AddDbContext<CohadWebDbContext>(options => options.UseCosmos(uri, key, db));
+#endif
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
@@ -91,7 +88,7 @@ namespace Web
             app.UseStaticFiles();
             app.UseSpaStaticFiles();
             app.UseAuthentication();
-            app.UseMvc();
+            app.UseAuthorization();
 
             app.UseSpa(spa =>
             {

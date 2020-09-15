@@ -2,16 +2,15 @@
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using Web.Models;
 using Web.Repository;
 
 namespace Web.Authorization
 {
     public class RoleAuthorizationHandler : AuthorizationHandler<RoleAuthorizationRequirement>
     {
-        private readonly AzureTableRepository<User> _userRepository;
+        private readonly CohadWebDbContext _userRepository;
 
-        public RoleAuthorizationHandler(AzureTableRepository<User> userRepository)
+        public RoleAuthorizationHandler(CohadWebDbContext userRepository)
         {
             _userRepository = userRepository;
         }
@@ -24,7 +23,7 @@ namespace Web.Authorization
                 return;
             }
 
-            var storedUser = await _userRepository.FindByKey(nameId);
+            var storedUser = await _userRepository.Users.FindAsync(nameId);
             if (storedUser == null || storedUser.Role < requirement.MinimumRole)
             {
                 return;
