@@ -29,8 +29,7 @@
               "node_modules/octicons/build/build.css",
               "src/styles.css"
             ],
-            "scripts": [],
-            "es5BrowserSupport": true
+            "scripts": []
           },
           "configurations": {
             "production": {
