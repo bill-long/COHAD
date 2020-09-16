@@ -12,3 +12,12 @@ export interface ApiUser {
     role: number;
     promotionState: number;
 }
+
+export interface IdentityClaims {
+    emails: string[];
+    family_name: string;
+    given_name: string;
+    idp: string;
+    sub: string;
+    streetAddress: string;
+}

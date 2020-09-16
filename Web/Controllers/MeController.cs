@@ -37,14 +37,14 @@ namespace Web.Controllers
                 Surname = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Surname)?.Value,
                 IdentityProvider = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")?.Value,
                 Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value,
-                StreetAddress = null,
+                StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
                 Role = Models.User.Roles.None,
                 PromotionState = Models.User.PromotionStates.None
             };
 
             _userRepository.Users.Add(newUser);
             await _userRepository.SaveChangesAsync();
-            return UserViewModel.FromUser(user);
+            return UserViewModel.FromUser(newUser);
         }
 
         [HttpPut("request-access/{streetAddress}")]

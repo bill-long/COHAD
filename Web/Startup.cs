@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using Web.Authorization;
 using Web.Models;
 using Web.Repository;
@@ -25,19 +27,33 @@ namespace Web
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddControllers();
+
             // In production, the Angular files will be served from this directory
             services.AddSpaStaticFiles(configuration =>
             {
                 configuration.RootPath = "ClientApp/dist/cohad-app";
             });
 
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            services
+                .AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                })
                 .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
                     {
-                        options.Authority = "https://cohad.b2clogin.com/cohad.onmicrosoft.com/v2.0";
-                        options.MetadataAddress = "https://cohad.b2clogin.com/cohad.onmicrosoft.com/v2.0/.well-known/openid-configuration?p=b2c_1_v2_signup_signin";
-                        options.Audience = "6034a3a8-53b5-401b-a66f-54be5966a067";
-                    });
+                        ValidateAudience = true,
+                        ValidateIssuer = true,
+                        ValidIssuer = "https://cohadorgb2c.b2clogin.com/a7e9006b-c606-4670-960c-3998b35ea5ee/v2.0/",
+                        ValidAudience = "5803d9fa-a62f-401c-b0f4-269b3cb468eb"
+                    };
+
+                    options.MetadataAddress =
+                        "https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/v2.0/.well-known/openid-configuration";
+                });
 
             // Allow reverse proxy from nginx
             services.Configure<ForwardedHeadersOptions>(options =>
@@ -49,6 +65,12 @@ namespace Web
             // Authorization stuff - make sure users have required roles
             services.AddAuthorization(options =>
             {
+                options.DefaultPolicy = new AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+                    .RequireClaim("http://schemas.microsoft.com/identity/claims/scope", "API")
+                    .Build();
+
                 options.AddPolicy("Member", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Roles.Member)));
                 options.AddPolicy("Admin", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Roles.Administrator)));
             });
@@ -87,8 +109,16 @@ namespace Web
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseSpaStaticFiles();
+            app.UseRouting();
             app.UseAuthentication();
             app.UseAuthorization();
+
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllerRoute(
+                    name: "default",
+                    pattern: "{controller}/{action=Index}/{id?}");
+            });
 
             app.UseSpa(spa =>
             {

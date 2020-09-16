@@ -1,74 +1,94 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { UserManager, User, UserManagerSettings, Log } from 'oidc-client';
-import { Observable, from, Subject, BehaviorSubject } from 'rxjs';
-import { map, shareReplay } from 'rxjs/operators';
+import { Observable, Subject, BehaviorSubject } from 'rxjs';
+import { filter } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
-import { Router } from '@angular/router';
+import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
+import { ApiUser, IdentityClaims } from '../models';
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class AuthService {
 
-  public user$: Observable<User>;
+  public user$: Observable<IdentityClaims>;
+
   public accessToken$: Observable<string>;
 
-  private userManager: UserManager;
-  private userSubject: Subject<User>;
+  private userSubject: Subject<IdentityClaims>;
 
-  constructor(private httpClient: HttpClient, private router: Router) {
+  private accessTokenSubject: Subject<string>;
+
+  constructor(private oauthService: OAuthService) {
     if (!environment.production) {
-      Log.logger = console;
     }
 
-    var config: UserManagerSettings = {
-      authority: 'https://cohad.b2clogin.com/cohad.onmicrosoft.com/v2.0',
-      client_id: 'f172253e-dc5f-4429-818f-fc506f6bf4a6',
-      redirect_uri: window.location.origin + '/authcallback.html',
-      scope: 'openid profile https://cohad.onmicrosoft.com/frontend/api',
-      response_type: 'id_token token',
-      post_logout_redirect_uri: window.location.origin,
-      extraQueryParams: {'p': 'b2c_1_v2_signup_signin'},
-      metadataUrl: 'https://cohad.b2clogin.com/cohad.onmicrosoft.com/v2.0/.well-known/openid-configuration?p=b2c_1_v2_signup_signin',
-      loadUserInfo: false, // Because Azure B2C doesn't currently support userinfo_endpoint
-      automaticSilentRenew: true,
-      silent_redirect_uri: window.location.origin + '/authsilentrenew.html'
+    this.userSubject = new BehaviorSubject<IdentityClaims>(null);
+
+    this.user$ = this.userSubject.asObservable();
+
+    this.accessTokenSubject = new BehaviorSubject<string>(null);
+
+    this.accessToken$ = this.accessTokenSubject.asObservable();
+
+    const authCodeFlowConfig: AuthConfig = {
+      // Url of the Identity Provider
+      issuer: 'https://cohadorgb2c.b2clogin.com/a7e9006b-c606-4670-960c-3998b35ea5ee/v2.0/',
+
+      tokenEndpoint: 'https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/oauth2/v2.0/token',
+
+      loginUrl: 'https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/oauth2/v2.0/authorize',
+
+      strictDiscoveryDocumentValidation: false,
+
+      // URL of the SPA to redirect the user to after login
+      redirectUri: window.location.origin,
+
+      // The SPA's id. The SPA is registerd with this id at the auth-server
+      // clientId: 'server.code',
+      clientId: '6034a3a8-53b5-401b-a66f-54be5966a067',
+
+      // Just needed if your auth server demands a secret. In general, this
+      // is a sign that the auth server is not configured with SPAs in mind
+      // and it might not enforce further best practices vital for security
+      // such applications.
+      // dummyClientSecret: 'secret',
+
+      responseType: 'code',
+
+      // set the scope for the permissions the client should request
+      // The first four are defined by OIDC.
+      // Important: Request offline_access to get a refresh token
+      // The api scope is a usecase specific one
+      scope: 'openid profile email offline_access https://cohadorgb2c.onmicrosoft.com/5803d9fa-a62f-401c-b0f4-269b3cb468eb/API',
+
+      showDebugInformation: true,
+
+      dummyClientSecret: '9g~nU-gSmG27VQfevME3-A5qpBWBHsis.X'
     };
 
-    this.userManager = new UserManager(config);
-    this.userSubject = new BehaviorSubject<User>(null);
-    this.user$ = this.userSubject.asObservable();
-    this.accessToken$ = this.user$.pipe(map(u => {
-      if (u && u.access_token) return u.access_token;
-      return null;
-    }));
+    this.oauthService.configure(authCodeFlowConfig);
 
-    this.userManager.getUser().then(u => {
-      if (u && !u.expired) {
-        this.userSubject.next(u);
-      }
-    });
+    this.oauthService.events.subscribe(e => console.log('OAuthService event', e));
 
-    this.userManager.events.addUserLoaded(() => {
-      this.userManager.getUser().then(u => this.userSubject.next(u));
-    });
+    this.oauthService.events
+      .subscribe(async e => {
+        console.log('OAuthService event', e);
+        this.updateSubjects();
+      });
 
-    this.userManager.events.addAccessTokenExpired(() => this.userSubject.next(null));
+    this.updateSubjects();
+
+    this.oauthService.tryLogin();
   }
 
-  login(): Promise<any> {
-    return this.userManager.signinRedirect();
+  login(): void {
+    return this.oauthService.initCodeFlow();
   }
 
-  logout(): Promise<any> {
-    return this.userManager.signoutRedirect();
+  logout(): void {
+    this.oauthService.logOut();
   }
 
-  async processCallback() {
-      let u = await this.userManager.signinRedirectCallback();
-      this.userSubject.next(u);
-      return u;
+  private updateSubjects(): void {
+    this.accessTokenSubject.next(this.oauthService.getAccessToken());
+    this.userSubject.next(this.oauthService.getIdentityClaims() as IdentityClaims);
   }
-
 }

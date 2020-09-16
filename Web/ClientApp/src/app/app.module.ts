@@ -13,11 +13,11 @@ import { NewsComponent } from './components/news/news.component';
 import { DuesComponent } from './components/dues/dues.component';
 import { DocumentsComponent } from './components/documents/documents.component';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
-import { AuthInterceptor } from './services/auth.interceptor';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
 import { ProfileComponent } from './components/profile/profile.component';
 import { FormsModule } from '@angular/forms';
 import { OcticonDirective } from './octicon.directive';
+import { OAuthModule } from 'angular-oauth2-oidc';
 
 @NgModule({
   declarations: [
@@ -39,11 +39,17 @@ import { OcticonDirective } from './octicon.directive';
     BrowserAnimationsModule,
     HttpClientModule,
     NgbModule,
-    FormsModule
+    FormsModule,
+    OAuthModule.forRoot({
+      resourceServer: {
+        sendAccessToken: true,
+        allowedUrls: [
+          'api/'
+        ]
+      }
+    })
   ],
-  providers: [
-    { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true }
-  ],
+  providers: [],
   bootstrap: [AppComponent]
 })
 export class AppModule { }

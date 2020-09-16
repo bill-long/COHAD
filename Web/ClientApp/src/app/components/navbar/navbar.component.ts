@@ -1,7 +1,6 @@
 import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { User } from 'oidc-client';
 import { AuthService } from 'src/app/services/auth.service';
 import { MeService } from 'src/app/services/me.service';
 import { Router, NavigationStart } from '@angular/router';
@@ -38,10 +37,10 @@ export class NavbarComponent implements OnInit {
     this.authService.logout();
   }
 
-  get userName$(): Observable<User> {
+  get userName$(): Observable<string> {
     return this.authService.user$.pipe(map(u => {
       if (u) {
-        return (u.profile.given_name || u.profile.family_name || u.profile.emails.toString().split(" ")[0]);
+        return (u.given_name || u.family_name || u.emails[0]);
       }
     }));
   }
