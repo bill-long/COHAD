@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace Web.Models
 {
@@ -19,14 +20,14 @@ namespace Web.Models
 
         public string StreetAddress { get; set; }
 
-        public Roles Role { get; set; }
+        public List<Role> Roles { get; set; }
 
         public PromotionStates PromotionState { get; set; }
 
-        public enum Roles
+        public enum Role
         {
-            None,
-            Member,
+            Resident,
+            Committee,
             Administrator
         }
 

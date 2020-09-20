@@ -1,40 +1,26 @@
-import { Injectable } from '@angular/core';
-import { Observable, Subject, BehaviorSubject } from 'rxjs';
-import { filter } from 'rxjs/operators';
+import { Injectable, Inject } from '@angular/core';
+import { Observable, Subject } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
-import { ApiUser, IdentityClaims } from '../models';
+import { IdentityClaims } from '../models';
+import { ApplicationState, dispatcher, Action, applicationState, AuthenticatedUserChanged, Login, Logout } from '../state';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
 
-  public user$: Observable<IdentityClaims>;
-
-  public accessToken$: Observable<string>;
-
-  private userSubject: Subject<IdentityClaims>;
-
-  private accessTokenSubject: Subject<string>;
-
-  constructor(private oauthService: OAuthService) {
-    if (!environment.production) {
-    }
-
-    this.userSubject = new BehaviorSubject<IdentityClaims>(null);
-
-    this.user$ = this.userSubject.asObservable();
-
-    this.accessTokenSubject = new BehaviorSubject<string>(null);
-
-    this.accessToken$ = this.accessTokenSubject.asObservable();
+  constructor(private oauthService: OAuthService,
+    @Inject(applicationState) private appState: Observable<ApplicationState>,
+    @Inject(dispatcher) private dispatcher: Subject<Action>) {
 
     const authCodeFlowConfig: AuthConfig = {
-      // Url of the Identity Provider
+
       issuer: 'https://cohadorgb2c.b2clogin.com/a7e9006b-c606-4670-960c-3998b35ea5ee/v2.0/',
 
       tokenEndpoint: 'https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/oauth2/v2.0/token',
 
       loginUrl: 'https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/oauth2/v2.0/authorize',
+
+      logoutUrl: 'https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/oauth2/v2.0/logout',
 
       strictDiscoveryDocumentValidation: false,
 
@@ -49,7 +35,7 @@ export class AuthService {
       // is a sign that the auth server is not configured with SPAs in mind
       // and it might not enforce further best practices vital for security
       // such applications.
-      // dummyClientSecret: 'secret',
+      dummyClientSecret: '9g~nU-gSmG27VQfevME3-A5qpBWBHsis.X',
 
       responseType: 'code',
 
@@ -59,36 +45,44 @@ export class AuthService {
       // The api scope is a usecase specific one
       scope: 'openid profile email offline_access https://cohadorgb2c.onmicrosoft.com/5803d9fa-a62f-401c-b0f4-269b3cb468eb/API',
 
-      showDebugInformation: true,
-
-      dummyClientSecret: '9g~nU-gSmG27VQfevME3-A5qpBWBHsis.X'
+      showDebugInformation: (environment.production ? false : true)
     };
 
     this.oauthService.configure(authCodeFlowConfig);
 
-    this.oauthService.events.subscribe(e => console.log('OAuthService event', e));
+    this.oauthService.setupAutomaticSilentRefresh();
 
     this.oauthService.events
       .subscribe(async e => {
         console.log('OAuthService event', e);
-        this.updateSubjects();
+        this.updateState();
       });
 
-    this.updateSubjects();
+    this.dispatcher.subscribe(a => {
+      if (a instanceof Login) {
+        this.oauthService.initCodeFlow();
+      } else if (a instanceof Logout) {
+        this.oauthService.logOut();
+      }
+    });
+
+    this.updateState();
 
     this.oauthService.tryLogin();
   }
 
-  login(): void {
-    return this.oauthService.initCodeFlow();
-  }
+  private updateState(): void {
+    let accessToken = this.oauthService.getAccessToken();
+    if (accessToken != null && this.oauthService.getAccessTokenExpiration() < Date.now()) {
+      if (!environment.production) {
+        console.log('Found expired token. Refreshing.');
 
-  logout(): void {
-    this.oauthService.logOut();
-  }
+      }
+      this.oauthService.refreshToken();
+      return;
+    }
 
-  private updateSubjects(): void {
-    this.accessTokenSubject.next(this.oauthService.getAccessToken());
-    this.userSubject.next(this.oauthService.getIdentityClaims() as IdentityClaims);
+    let identityClaims = this.oauthService.getIdentityClaims() as IdentityClaims;
+    this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken }));
   }
 }

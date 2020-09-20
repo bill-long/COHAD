@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -38,7 +39,7 @@ namespace Web.Controllers
                 IdentityProvider = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")?.Value,
                 Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value,
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
-                Role = Models.User.Roles.None,
+                Roles = new List<User.Role>(),
                 PromotionState = Models.User.PromotionStates.None
             };
 
@@ -77,7 +78,7 @@ namespace Web.Controllers
             public string GivenName { get; set; }
             public string Surname { get; set; }
             public string StreetAddress { get; set; }
-            public User.Roles Role { get; set; }
+            public List<string> Roles { get; set; }
             public User.PromotionStates PromotionState { get; set; }
 
             public static UserViewModel FromUser(User user)
@@ -87,7 +88,7 @@ namespace Web.Controllers
                     GivenName = user.GivenName,
                     Surname = user.Surname,
                     StreetAddress = user.StreetAddress,
-                    Role = user.Role,
+                    Roles = user.Roles.Select(r => r.ToString()).ToList(),
                     PromotionState = user.PromotionState
                 };
             }

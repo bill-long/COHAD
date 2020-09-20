@@ -6,8 +6,8 @@ import { Component, OnInit, Input } from '@angular/core';
   styleUrls: ['./header.component.css'],
   template: `
   <div class="header" [ngStyle]="{'background-image': 'url(' + imagePath + ')'}">
-    <h1 class="display-1 font-weight-bold">{{title}}</h1>
-    <h1 *ngFor="let subtitle of subtitles; last as isLast" [ngClass]="{ 'mb-1-md': isLast }">{{subtitle}}</h1>
+    <h1 class="mat-display-4 font-weight-bold">{{title}}</h1>
+    <h1 class="mat-display-2" *ngFor="let subtitle of subtitles">{{subtitle}}</h1>
   </div>
   `
 })

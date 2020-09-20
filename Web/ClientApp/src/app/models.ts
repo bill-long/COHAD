@@ -9,7 +9,7 @@ export interface ApiUser {
     identityProvider: string;
     emails: string;
     streetAddress: string;
-    role: number;
+    roles: string[];
     promotionState: number;
 }
 
@@ -20,4 +20,9 @@ export interface IdentityClaims {
     idp: string;
     sub: string;
     streetAddress: string;
+}
+
+export interface AuthUser {
+    identityClaims: IdentityClaims;
+    accessToken: string;
 }

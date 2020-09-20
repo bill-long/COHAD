@@ -1,9 +1,9 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Component, OnInit, ChangeDetectionStrategy, Inject } from '@angular/core';
+import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { AuthService } from 'src/app/services/auth.service';
-import { MeService } from 'src/app/services/me.service';
 import { Router, NavigationStart } from '@angular/router';
+import { applicationState, ApplicationState, dispatcher, Action, Login, Logout } from 'src/app/state';
+import { AuthService } from 'src/app/services/auth.service';
 
 @Component({
   selector: 'app-navbar',
@@ -16,7 +16,11 @@ export class NavbarComponent implements OnInit {
   disabled = false;
   isNavbarCollapsed = true;
 
-  constructor(private authService: AuthService, private meService: MeService, private router: Router) {
+  constructor(
+    @Inject(applicationState) private appState: Observable<ApplicationState>,
+    @Inject(dispatcher) private dispatcher: Observer<Action>,
+    private router: Router) {
+
     router.events.subscribe(e => {
       if (e instanceof NavigationStart) {
         this.isNavbarCollapsed = true;
@@ -29,26 +33,19 @@ export class NavbarComponent implements OnInit {
 
   login() {
     this.disabled = true;
-    this.authService.login();
+    this.dispatcher.next(new Login());
   }
 
   logout() {
     this.disabled = true;
-    this.authService.logout();
+    this.dispatcher.next(new Logout());
   }
 
   get userName$(): Observable<string> {
-    return this.authService.user$.pipe(map(u => {
-      if (u) {
-        return (u.given_name || u.family_name || u.emails[0]);
+    return this.appState.pipe(map(s => s.authUser), map(u => {
+      if (u && u.identityClaims) {
+        return (u.identityClaims.given_name || u.identityClaims.family_name || u.identityClaims.emails[0]);
       }
-    }));
-  }
-
-  get role$(): Observable<number> {
-    return this.meService.me.pipe(map(m => {
-      if (m != null) return m.role;
-      return 0;
     }));
   }
 

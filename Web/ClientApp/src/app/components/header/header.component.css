@@ -10,7 +10,7 @@
     margin-bottom: 50px;
 }
 
-.header > h1 {
+.header>h1 {
     color: white;
     text-shadow: black 3px 0 10px, black -3px 0 10px;
     text-align: center;

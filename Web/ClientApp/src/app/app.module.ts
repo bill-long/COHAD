@@ -1,6 +1,9 @@
 import { BrowserModule } from '@angular/platform-browser';
 import { NgModule } from '@angular/core';
-import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
+
+import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatButtonModule } from '@angular/material/button';
+import { MatMenuModule } from '@angular/material/menu';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -10,14 +13,15 @@ import { AboutComponent } from './components/about/about.component';
 import { NavbarComponent } from './components/navbar/navbar.component';
 import { HeaderComponent } from './components/header/header.component';
 import { NewsComponent } from './components/news/news.component';
-import { DuesComponent } from './components/dues/dues.component';
 import { DocumentsComponent } from './components/documents/documents.component';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
 import { ProfileComponent } from './components/profile/profile.component';
 import { FormsModule } from '@angular/forms';
-import { OcticonDirective } from './octicon.directive';
 import { OAuthModule } from 'angular-oauth2-oidc';
+import { MyinfoComponent } from './myinfo/myinfo.component';
+import { dispatcher, Action, initialState, initialStateValue, applicationState, applicationStateFactory } from './state';
+import { Subject } from 'rxjs';
 
 @NgModule({
   declarations: [
@@ -27,18 +31,16 @@ import { OAuthModule } from 'angular-oauth2-oidc';
     NavbarComponent,
     HeaderComponent,
     NewsComponent,
-    DuesComponent,
     DocumentsComponent,
     UnauthorizedComponent,
     ProfileComponent,
-    OcticonDirective
+    MyinfoComponent
   ],
   imports: [
     BrowserModule,
     AppRoutingModule,
     BrowserAnimationsModule,
     HttpClientModule,
-    NgbModule,
     FormsModule,
     OAuthModule.forRoot({
       resourceServer: {
@@ -47,9 +49,16 @@ import { OAuthModule } from 'angular-oauth2-oidc';
           'api/'
         ]
       }
-    })
+    }),
+    MatToolbarModule,
+    MatButtonModule,
+    MatMenuModule
   ],
-  providers: [],
+  providers: [
+    { provide: dispatcher, useValue: new Subject<Action>() },
+    { provide: initialState, useValue: initialStateValue },
+    { provide: applicationState, useFactory: applicationStateFactory, deps: [initialState, dispatcher] }
+  ],
   bootstrap: [AppComponent]
 })
 export class AppModule { }

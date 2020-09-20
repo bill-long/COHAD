@@ -71,8 +71,9 @@ namespace Web
                     .RequireClaim("http://schemas.microsoft.com/identity/claims/scope", "API")
                     .Build();
 
-                options.AddPolicy("Member", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Roles.Member)));
-                options.AddPolicy("Admin", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Roles.Administrator)));
+                options.AddPolicy("Resident", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Resident)));
+                options.AddPolicy("Committee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Committee)));
+                options.AddPolicy("Admin", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Administrator)));
             });
 
             services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();

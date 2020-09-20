@@ -24,7 +24,7 @@ namespace Web.Authorization
             }
 
             var storedUser = await _userRepository.Users.FindAsync(nameId);
-            if (storedUser == null || storedUser.Role < requirement.MinimumRole)
+            if (storedUser == null || !storedUser.Roles.Contains(requirement.RequiredRole))
             {
                 return;
             }

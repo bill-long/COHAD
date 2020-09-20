@@ -5,11 +5,11 @@ namespace Web.Authorization
 {
     public class RoleAuthorizationRequirement : IAuthorizationRequirement
     {
-        public User.Roles MinimumRole { get; }
+        public User.Role RequiredRole { get; }
 
-        public RoleAuthorizationRequirement(User.Roles minimumRole)
+        public RoleAuthorizationRequirement(User.Role requiredRole)
         {
-            MinimumRole = minimumRole;
+            RequiredRole = requiredRole;
         }
     }
 }

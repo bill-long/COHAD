@@ -1,15 +1,16 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Inject } from '@angular/core';
 import { ActivatedRouteSnapshot, CanActivate, RouterStateSnapshot, Router } from '@angular/router';
-import { MeService } from './services/me.service';
 import { map } from 'rxjs/operators';
+import { applicationState, ApplicationState } from './state';
+import { Observable } from 'rxjs';
 
-@Injectable({providedIn: 'root'})
+@Injectable({ providedIn: 'root' })
 export class RoleGuard implements CanActivate {
-    constructor(private meService: MeService, private router: Router) { }
+    constructor(@Inject(applicationState) private appState: Observable<ApplicationState>, private router: Router) { }
 
     canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot) {
-        return this.meService.me.pipe(map(me => {
-            if (me != null && me.role >= route.data["minimumRole"]) return true;
+        return this.appState.pipe(map(s => s.apiUser), map(me => {
+            if (me != null && me.roles.includes(route.data["requiredRole"])) return true;
             this.router.navigate(['/']);
             return false;
         }));
