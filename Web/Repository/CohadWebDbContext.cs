@@ -12,6 +12,8 @@ namespace Web.Repository
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<User>().ToContainer("Users");
+
             modelBuilder.Entity<User>()
                 .HasKey(u => u.UniqueId);
 
@@ -19,6 +21,8 @@ namespace Web.Repository
                 .HasConversion(
                     v => JsonSerializer.Serialize(v, default),
                     v => JsonSerializer.Deserialize<List<User.Role>>(v, default));
+
+            modelBuilder.Entity<Home>().ToContainer("Homes");
 
             modelBuilder.Entity<Home>()
                 .HasKey(h => h.Id);

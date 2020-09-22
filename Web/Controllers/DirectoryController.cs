@@ -19,8 +19,6 @@ namespace Web.Controllers
     {
         private readonly CohadWebDbContext dbContext;
 
-        private static readonly object homeImportLock = new object();
-
         public DirectoryController(CohadWebDbContext dbContext)
         {
             this.dbContext = dbContext;
@@ -28,26 +26,11 @@ namespace Web.Controllers
 
         public async Task<IEnumerable<DirectoryHome>> GetDirectory()
         {
-            try
-            {
-                Monitor.Enter(homeImportLock);
+            var homes = await dbContext.Homes.ToListAsync();
 
-                var homes = await dbContext.Homes.ToListAsync();
+            var visibleHomeInfo = dbContext.Homes.Select(DirectoryHome.FromStorageModel).ToList();
 
-                if (!homes.Any())
-                {
-                    homes.AddRange(Neighborhood.ReadInitialNeighborhoodData());
-                    await dbContext.SaveChangesAsync();
-                }
-
-                var visibleHomeInfo = homes.Select(DirectoryHome.FromStorageModel).ToList();
-
-                return visibleHomeInfo;
-            }
-            finally
-            {
-                Monitor.Exit(homeImportLock);
-            }
+            return visibleHomeInfo;
         }
     }
 }

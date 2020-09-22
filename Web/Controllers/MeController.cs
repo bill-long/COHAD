@@ -39,7 +39,7 @@ namespace Web.Controllers
                 IdentityProvider = User.Claims.First(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider").Value,
                 Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value,
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
-                Roles = new List<User.Role>{Models.User.Role.Resident, Models.User.Role.Administrator},
+                Roles = new List<User.Role>(),
                 PromotionState = Models.User.PromotionStates.None,
                 UniqueId = uniqueId
             };
