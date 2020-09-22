@@ -1,1 +1,16 @@
-<p>myinfo works!</p>
+<div class="outer-flexbox">
+
+    <div class="user-attributes-grid" *ngIf="apiUser$ | async as apiUser">
+        <div class="mat-h1">Your User Information</div>
+        <div></div>
+        <div>Name</div>
+        <div>{{ apiUser.displayName }}</div>
+        <div>Street Address</div>
+        <div>{{ apiUser.streetAddress }}</div>
+        <div>Email</div>
+        <div>{{ apiUser.email }}</div>
+        <div>Logged In From</div>
+        <div>{{ apiUser.identityProvider }}</div>
+    </div>
+
+</div>

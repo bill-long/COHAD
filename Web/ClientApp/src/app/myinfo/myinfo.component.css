@@ -1,0 +1,10 @@
+.outer-flexbox {
+    display: flex;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+.user-attributes-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+}

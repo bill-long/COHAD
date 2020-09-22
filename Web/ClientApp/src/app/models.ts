@@ -6,8 +6,9 @@ export interface ApiUser {
     modifierId: string;
     givenName: string;
     surname: string;
+    displayName: string;
     identityProvider: string;
-    emails: string;
+    email: string;
     streetAddress: string;
     roles: string[];
     promotionState: number;
@@ -25,4 +26,30 @@ export interface IdentityClaims {
 export interface AuthUser {
     identityClaims: IdentityClaims;
     accessToken: string;
+}
+
+export interface DirectoryHome {
+    streetNumber: number;
+    streetName: string;
+    phoneNumber: DirectoryPhoneNumber;
+    emailAddress: DirectoryEmailAddress;
+    residents: Resident[];
+}
+
+export interface Resident {
+    givenName: string;
+    surname: string;
+    emailAddresses: DirectoryEmailAddress[];
+    phoneNumbers: DirectoryPhoneNumber[];
+}
+
+export interface DirectoryPhoneNumber {
+    areaCode: number;
+    prefix: number;
+    lineNumber: number;
+    type: string;
+}
+
+export interface DirectoryEmailAddress {
+    address: string;
 }

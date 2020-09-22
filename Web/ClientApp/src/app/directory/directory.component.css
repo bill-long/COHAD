@@ -1,0 +1,94 @@
+mat-form-field {
+    margin-top: 15px;
+    width: 100%;
+}
+
+.outerWrapper {
+    display: flex;
+    justify-content: center;
+}
+
+.directoryView {
+    margin-top: 15px;
+    width: 600px;
+}
+
+.byAddressView .home {
+    margin-bottom: 10px;
+}
+
+.byAddressView .homeAddress {
+    font-weight: bold;
+    font-size: larger;
+}
+
+.residents {
+    display: flex;
+}
+
+.residentName {
+    margin-left: 10px;
+    width: 125px;
+}
+
+.byAddressView .residentPhone {
+    display: flex;
+    margin-left: 20px;
+}
+
+.byAddressView .phoneType {
+    width: 50px;
+}
+
+.byAddressView .phoneNumber {
+    width: 100px;
+}
+
+.byAddressView .residentEmail {
+    display: flex;
+    margin-left: 20px;
+}
+
+.emailLabel {
+    width: 50px;
+}
+
+.emailAddress {
+    width: 150px;
+}
+
+.bySurnameView {
+    font-size: large;
+}
+
+.bySurnameView .home {
+    margin-bottom: 20px;
+}
+
+.bySurnameView .surnameTitle {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.bySurnameView .surname {
+    font-weight: bold;
+}
+
+.bySurnameView .homePhone {
+    font-weight: bold;
+}
+
+.bySurnameView .residentEmail {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.bySurnameView .residentPhone {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.bySurnameView .phoneNumber {
+    text-align: right;
+}

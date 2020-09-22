@@ -24,8 +24,8 @@ namespace Web.Controllers
         [HttpGet]
         public async Task<UserViewModel> Get()
         {
-            var nameId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
-            var user = await _userRepository.Users.FindAsync(nameId);
+            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
+            var user = await _userRepository.Users.FindAsync(uniqueId);
             if (user != null)
             {
                 return UserViewModel.FromUser(user);
@@ -33,14 +33,15 @@ namespace Web.Controllers
 
             var newUser = new User
             {
-                NameIdentifier = nameId,
+                NameIdentifier = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value,
                 GivenName = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.GivenName)?.Value,
                 Surname = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Surname)?.Value,
-                IdentityProvider = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")?.Value,
+                IdentityProvider = User.Claims.First(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider").Value,
                 Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value,
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
-                Roles = new List<User.Role>(),
-                PromotionState = Models.User.PromotionStates.None
+                Roles = new List<User.Role>{Models.User.Role.Resident, Models.User.Role.Administrator},
+                PromotionState = Models.User.PromotionStates.None,
+                UniqueId = uniqueId
             };
 
             _userRepository.Users.Add(newUser);
@@ -77,7 +78,10 @@ namespace Web.Controllers
         {
             public string GivenName { get; set; }
             public string Surname { get; set; }
+            public string DisplayName => GivenName + " " + Surname;
             public string StreetAddress { get; set; }
+            public string Email { get; set; }
+            public string IdentityProvider { get; set; }
             public List<string> Roles { get; set; }
             public User.PromotionStates PromotionState { get; set; }
 
@@ -88,6 +92,8 @@ namespace Web.Controllers
                     GivenName = user.GivenName,
                     Surname = user.Surname,
                     StreetAddress = user.StreetAddress,
+                    Email = user.Emails,
+                    IdentityProvider = user.IdentityProvider,
                     Roles = user.Roles.Select(r => r.ToString()).ToList(),
                     PromotionState = user.PromotionState
                 };

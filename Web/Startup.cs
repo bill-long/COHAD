@@ -7,7 +7,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Web.Authorization;
 using Web.Models;
@@ -83,11 +82,9 @@ namespace Web
             var key = Configuration["CosmosKey"];
             var db = Configuration["CosmosDatabase"];
 
-#if DEBUG
-            services.AddDbContext<CohadWebDbContext>(options => options.UseInMemoryDatabase("CohadWebDebugDatabase"));
-#else
+            // services.AddDbContext<CohadWebDbContext>(options => options.UseInMemoryDatabase("CohadWebDebugDatabase"));
+
             services.AddDbContext<CohadWebDbContext>(options => options.UseCosmos(uri, key, db));
-#endif
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

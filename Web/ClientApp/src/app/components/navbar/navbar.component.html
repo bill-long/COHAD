@@ -3,7 +3,10 @@
   <div>
     <a mat-flat-button color="primary" routerLink="" routerLinkActive="mat-accent"
       [routerLinkActiveOptions]="{exact: true}">Home</a>
-    <a mat-flat-button color="primary" routerLink="about" routerLinkActive="mat-accent">About</a>
+    <a mat-flat-button color="primary" *ngIf="userName$ | async as userName" routerLink="directory"
+      routerLinkActive="mat-accent">Directory</a>
+    <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="userName$ | async">My
+      Info</a>
     <button mat-flat-button color="primary" *ngIf="userName$ | async as userName"
       [matMenuTriggerFor]="userMenu">{{userName}}</button>
     <mat-menu #userMenu="matMenu">

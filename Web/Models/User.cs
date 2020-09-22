@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
 
 namespace Web.Models
 {
@@ -24,6 +26,10 @@ namespace Web.Models
 
         public PromotionStates PromotionState { get; set; }
 
+        public string UniqueId { get; set; }
+
+        public List<Home> OwnedHomes { get; set; }
+
         public enum Role
         {
             Resident,
@@ -43,6 +49,20 @@ namespace Web.Models
             None, // Either the user has not requested, or they were approved and the state was cleared.
             Requested, // Currently awaiting approval.
             Denied // The user was denied and is now blocked from requesting promotion.
+        }
+
+        public static string GetUniqueIdFromClaims(IEnumerable<Claim> claims)
+        {
+            var claimsList = claims.ToList();
+            var nameId = claimsList.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+            var idProvider = claimsList
+                .FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")?.Value;
+            if (nameId == null || idProvider == null)
+            {
+                return null;
+            }
+
+            return idProvider + nameId;
         }
     }
 }

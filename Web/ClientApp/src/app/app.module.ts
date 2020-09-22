@@ -4,6 +4,11 @@ import { NgModule } from '@angular/core';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatTableModule } from '@angular/material/table';
+import { MatSortModule } from '@angular/material/sort';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -17,11 +22,12 @@ import { DocumentsComponent } from './components/documents/documents.component';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
 import { ProfileComponent } from './components/profile/profile.component';
-import { FormsModule } from '@angular/forms';
+import { ReactiveFormsModule } from '@angular/forms';
 import { OAuthModule } from 'angular-oauth2-oidc';
 import { MyinfoComponent } from './myinfo/myinfo.component';
 import { dispatcher, Action, initialState, initialStateValue, applicationState, applicationStateFactory } from './state';
 import { Subject } from 'rxjs';
+import { DirectoryComponent } from './directory/directory.component';
 
 @NgModule({
   declarations: [
@@ -34,14 +40,15 @@ import { Subject } from 'rxjs';
     DocumentsComponent,
     UnauthorizedComponent,
     ProfileComponent,
-    MyinfoComponent
+    MyinfoComponent,
+    DirectoryComponent
   ],
   imports: [
     BrowserModule,
     AppRoutingModule,
     BrowserAnimationsModule,
     HttpClientModule,
-    FormsModule,
+    ReactiveFormsModule,
     OAuthModule.forRoot({
       resourceServer: {
         sendAccessToken: true,
@@ -52,7 +59,12 @@ import { Subject } from 'rxjs';
     }),
     MatToolbarModule,
     MatButtonModule,
-    MatMenuModule
+    MatMenuModule,
+    MatTableModule,
+    MatSortModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonToggleModule
   ],
   providers: [
     { provide: dispatcher, useValue: new Subject<Action>() },

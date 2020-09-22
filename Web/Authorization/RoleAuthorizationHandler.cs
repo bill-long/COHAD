@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using System.Security.Claims;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Web.Repository;
@@ -17,13 +16,13 @@ namespace Web.Authorization
 
         protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, RoleAuthorizationRequirement requirement)
         {
-            var nameId = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(nameId))
+            var uniqueId = Models.User.GetUniqueIdFromClaims(context.User.Claims);
+            if (string.IsNullOrEmpty(uniqueId))
             {
                 return;
             }
 
-            var storedUser = await _userRepository.Users.FindAsync(nameId);
+            var storedUser = await _userRepository.Users.FindAsync(uniqueId);
             if (storedUser == null || !storedUser.Roles.Contains(requirement.RequiredRole))
             {
                 return;
