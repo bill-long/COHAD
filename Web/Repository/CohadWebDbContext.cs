@@ -22,6 +22,11 @@ namespace Web.Repository
                     v => JsonSerializer.Serialize(v, default),
                     v => JsonSerializer.Deserialize<List<User.Role>>(v, default));
 
+            modelBuilder.Entity<User>().Property(u => u.AuditLog)
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, default),
+                    v => JsonSerializer.Deserialize<List<AuditLogEntry>>(v, default));
+
             modelBuilder.Entity<Home>().ToContainer("Homes");
 
             modelBuilder.Entity<Home>()
@@ -41,6 +46,11 @@ namespace Web.Repository
                 .HasConversion(
                     v => JsonSerializer.Serialize(v, default),
                     v => JsonSerializer.Deserialize<EmailAddress>(v, default));
+
+            modelBuilder.Entity<Home>().Property(h => h.AuditLog)
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, default),
+                    v => JsonSerializer.Deserialize<List<AuditLogEntry>>(v, default));
         }
 
         public DbSet<User> Users { get; set; }

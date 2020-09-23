@@ -3,7 +3,7 @@ import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Router, NavigationStart } from '@angular/router';
 import { applicationState, ApplicationState, dispatcher, Action, Login, Logout } from 'src/app/state';
-import { AuthService } from 'src/app/services/auth.service';
+import { ApiUser } from 'src/app/models';
 
 @Component({
   selector: 'app-navbar',
@@ -41,12 +41,8 @@ export class NavbarComponent implements OnInit {
     this.dispatcher.next(new Logout());
   }
 
-  get userName$(): Observable<string> {
-    return this.appState.pipe(map(s => s.authUser), map(u => {
-      if (u && u.identityClaims) {
-        return (u.identityClaims.given_name || u.identityClaims.family_name || u.identityClaims.emails[0]);
-      }
-    }));
+  get user$(): Observable<ApiUser> {
+    return this.appState.pipe(map(s => s.apiUser));
   }
 
 }

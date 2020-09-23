@@ -1,10 +1,19 @@
 .outer-flexbox {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     margin-top: 15px;
+}
+
+.content-area {
+    width: 800px;
 }
 
 .user-attributes-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 150px auto;
+}
+
+.home-attributes {
+    margin-top: 15px;
 }

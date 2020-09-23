@@ -12,6 +12,7 @@ export interface ApiUser {
     streetAddress: string;
     roles: string[];
     promotionState: number;
+    ownedHomes: Home[];
 }
 
 export interface IdentityClaims {
@@ -52,4 +53,35 @@ export interface DirectoryPhoneNumber {
 
 export interface DirectoryEmailAddress {
     address: string;
+}
+
+export interface Home {
+    id: string;
+    streetNumber: number;
+    streetName: string;
+    phoneNumber: PhoneNumber;
+    emailAddress: EmailAddress;
+    residents: Resident[];
+    auditLog: AuditLogEntry[];
+}
+
+export interface PhoneNumber {
+    areaCode: number;
+    prefix: number;
+    lineNumber: number;
+    type: string;
+    visibleInDirectory: boolean;
+}
+
+export interface EmailAddress {
+    address: string;
+    visibleInDirectory: boolean;
+    groupEmailOptedIn: boolean;
+}
+
+export interface AuditLogEntry {
+    time: string;
+    userId: string;
+    userDisplayName: string;
+    action: string;
 }

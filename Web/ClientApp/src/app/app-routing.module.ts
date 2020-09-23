@@ -10,15 +10,19 @@ import { RoleGuard } from './role.guard';
 import { ProfileComponent } from './components/profile/profile.component';
 import { MyinfoComponent } from './myinfo/myinfo.component';
 import { DirectoryComponent } from './directory/directory.component';
+import { UsersComponent } from './users/users.component';
+import { HomesComponent } from './homes/homes.component';
 
 const routes: Routes = [
-  { path: '', component: HomeComponent, data: { animation: 'Home' } },
-  { path: 'about', component: AboutComponent, data: { animation: 'About' } },
-  { path: 'directory', component: DirectoryComponent, data: { animation: 'Directory' } },
-  { path: 'news', component: NewsComponent, data: { animation: 'News' } },
-  { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { requiredRole: 1, animation: 'Documents' } },
-  { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard], data: { animation: 'Profile' } },
+  { path: '', component: HomeComponent },
+  { path: 'about', component: AboutComponent },
+  { path: 'directory', component: DirectoryComponent, },
+  { path: 'news', component: NewsComponent },
+  { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { requiredRole: 'Resident' } },
+  { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard] },
   { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] },
+  { path: 'users', component: UsersComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } },
+  { path: 'homes', component: HomesComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } },
   { path: 'unauthorized', component: UnauthorizedComponent }
 ];
 

@@ -22,11 +22,11 @@ mat-form-field {
     font-size: larger;
 }
 
-.residents {
+.byAddressView .residents {
     display: flex;
 }
 
-.residentName {
+.byAddressView .residentName {
     margin-left: 10px;
     width: 125px;
 }
@@ -49,11 +49,11 @@ mat-form-field {
     margin-left: 20px;
 }
 
-.emailLabel {
+.byAddressView .emailLabel {
     width: 50px;
 }
 
-.emailAddress {
+.byAddressView .emailAddress {
     width: 150px;
 }
 

@@ -16,5 +16,7 @@ namespace Web.Models
         public EmailAddress EmailAddress { get; set; }
 
         public List<Resident> Residents { get; set; }
+
+        public List<AuditLogEntry> AuditLog { get; set; }
     }
 }

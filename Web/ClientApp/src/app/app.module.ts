@@ -28,6 +28,8 @@ import { MyinfoComponent } from './myinfo/myinfo.component';
 import { dispatcher, Action, initialState, initialStateValue, applicationState, applicationStateFactory } from './state';
 import { Subject } from 'rxjs';
 import { DirectoryComponent } from './directory/directory.component';
+import { UsersComponent } from './users/users.component';
+import { HomesComponent } from './homes/homes.component';
 
 @NgModule({
   declarations: [
@@ -41,7 +43,9 @@ import { DirectoryComponent } from './directory/directory.component';
     UnauthorizedComponent,
     ProfileComponent,
     MyinfoComponent,
-    DirectoryComponent
+    DirectoryComponent,
+    UsersComponent,
+    HomesComponent
   ],
   imports: [
     BrowserModule,

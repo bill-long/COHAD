@@ -1,7 +1,7 @@
 import { Observable, Subject, BehaviorSubject } from 'rxjs';
 import { InjectionToken } from '@angular/core';
-import { scan, shareReplay, startWith } from 'rxjs/operators';
-import { ApiUser, AuthUser } from './models';
+import { scan } from 'rxjs/operators';
+import { ApiUser, AuthUser, Home } from './models';
 
 export interface ApplicationState {
     authUser: AuthUser,

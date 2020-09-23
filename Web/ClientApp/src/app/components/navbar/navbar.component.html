@@ -3,15 +3,19 @@
   <div>
     <a mat-flat-button color="primary" routerLink="" routerLinkActive="mat-accent"
       [routerLinkActiveOptions]="{exact: true}">Home</a>
-    <a mat-flat-button color="primary" *ngIf="userName$ | async as userName" routerLink="directory"
+    <a mat-flat-button color="primary" *ngIf="(user$ | async)?.roles.includes('Resident')" routerLink="directory"
       routerLinkActive="mat-accent">Directory</a>
-    <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="userName$ | async">My
+    <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="user$ | async">My
       Info</a>
-    <button mat-flat-button color="primary" *ngIf="userName$ | async as userName"
-      [matMenuTriggerFor]="userMenu">{{userName}}</button>
+    <a mat-flat-button color="primary" *ngIf="(user$ | async)?.roles.includes('Committee')" routerLink="users"
+      routerLinkActive="mat-accent">User Management</a>
+    <a mat-flat-button color="primary" *ngIf="(user$ | async)?.roles.includes('Committee')" routerLink="homes"
+      routerLinkActive="mat-accent">Home Management</a>
+    <button mat-flat-button color="primary" *ngIf="user$ | async as user"
+      [matMenuTriggerFor]="userMenu">{{user.email}}</button>
     <mat-menu #userMenu="matMenu">
       <button mat-menu-item (click)="logout()" [disabled]="disabled">Sign Out</button>
     </mat-menu>
-    <button mat-button *ngIf="!(userName$ | async)" (click)="login()" [disabled]="disabled">Sign In</button>
+    <button mat-button *ngIf="!(user$ | async)" (click)="login()" [disabled]="disabled">Sign In</button>
   </div>
 </mat-toolbar>
