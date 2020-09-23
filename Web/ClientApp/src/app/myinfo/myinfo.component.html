@@ -1,0 +1,25 @@
+<div class="outer-flexbox">
+    <div class="content-area">
+        <div class="mat-h1">Your User Information</div>
+        <div class="user-attributes-grid" *ngIf="apiUser$ | async as apiUser">
+            <div>Name</div>
+            <div>{{ apiUser.displayName }}</div>
+            <div>Street Address</div>
+            <div>{{ apiUser.streetAddress }}</div>
+            <div>Email</div>
+            <div>{{ apiUser.email }}</div>
+            <div>Logged In From</div>
+            <div>{{ apiUser.identityProvider }}</div>
+        </div>
+
+        <div class="home-attributes" *ngIf="apiUser$ | async as apiUser">
+            <div class="mat-h1">Your Home</div>
+            <div *ngIf="apiUser.ownedHomes == null || apiUser.ownedHomes.length < 1">No homes are associated with this
+                account. You must be assigned permissions before you can see and edit your home information.</div>
+            <div *ngFor="let home of apiUser.ownedHomes">
+                {{home.streetNumber}} {{home.streetName}}
+            </div>
+        </div>
+
+    </div>
+</div>

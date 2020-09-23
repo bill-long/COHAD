@@ -1,0 +1,63 @@
+<div class="outerWrapper">
+    <div>
+        <mat-form-field appearance="fill">
+            <mat-label>Search</mat-label>
+            <input matInput [formControl]="homeFilter">
+        </mat-form-field>
+
+        <mat-button-toggle-group name="viewToggle" [formControl]="viewToggle">
+            <mat-button-toggle value="bySurname">By Surname</mat-button-toggle>
+            <mat-button-toggle value="byAddress">By Address</mat-button-toggle>
+        </mat-button-toggle-group>
+
+        <div class="directoryView byAddressView" *ngIf="viewToggle.value === 'byAddress'">
+            <div class="home" *ngFor="let home of (filteredSortedByAddress | async)">
+                <div class="homeAddress">{{home.streetNumber}} {{home.streetName}}</div>
+                <div class="homePhone" *ngIf="home.phoneNumber">Home Phone: ({{home.phoneNumber.areaCode}})
+                    {{home.phoneNumber.prefix}}-{{home.phoneNumber.lineNumber}}</div>
+                <div class="homeEmail" *ngIf="home.emailAddress">Email: {{home.emailAddress.address}}</div>
+                <div class="residents" *ngFor="let resident of home.residents">
+                    <div class="residentName">{{resident.givenName}} {{resident.surname}}</div>
+                    <div class="residentPhone" *ngFor="let phoneNumber of resident.phoneNumbers">
+                        <div class="phoneType">{{phoneNumber.type}}</div>
+                        <div class="phoneNumber">({{phoneNumber.areaCode}})
+                            {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+                        </div>
+                    </div>
+                    <div class="residentEmail" *ngFor="let email of resident.emailAddresses">
+                        <div class="emailLabel">Email</div>
+                        <div class="emailAddress">{{email.address}}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="directoryView bySurnameView" *ngIf="viewToggle.value === 'bySurname'">
+            <div class="home" *ngFor="let home of (filteredSortedBySurname | async)">
+                <div class="surnameTitle" *ngIf="home.residents?.length">
+                    <div class="coupleNames">
+                        <span class="surname">{{getSurname(home)}}</span>, {{getGivenNames(home)}}
+                    </div>
+                    <div class="homePhone" *ngIf="home.phoneNumber">({{home.phoneNumber.areaCode}})
+                        {{home.phoneNumber.prefix}}-{{('0000' + home.phoneNumber.lineNumber).slice(-4)}}</div>
+                </div>
+                <div class="homeAddress">{{home.streetNumber}} {{home.streetName}}</div>
+                <div class="homeEmail" *ngIf="home.emailAddress">Email: {{home.emailAddress.address}}</div>
+                <div *ngFor="let resident of home.residents">
+                    <div class="residentEmail" *ngFor="let email of resident.emailAddresses">
+                        <div>{{resident.givenName}} Email:</div>
+                        <div>{{email.address}}</div>
+                    </div>
+                    <div class="residentPhone" *ngFor="let phoneNumber of resident.phoneNumbers">
+                        <div>{{resident.givenName}} {{phoneNumber.type}}:</div>
+                        <div></div>
+                        <div class="phoneNumber">({{phoneNumber.areaCode}})
+                            {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>

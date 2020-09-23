@@ -3,25 +3,31 @@ import { Routes, RouterModule } from '@angular/router';
 import { HomeComponent } from './components/home/home.component';
 import { AboutComponent } from './components/about/about.component';
 import { NewsComponent } from './components/news/news.component';
-import { DuesComponent } from './components/dues/dues.component';
 import { DocumentsComponent } from './components/documents/documents.component';
 import { AuthGuard } from './auth.guard';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
 import { RoleGuard } from './role.guard';
 import { ProfileComponent } from './components/profile/profile.component';
+import { MyinfoComponent } from './myinfo/myinfo.component';
+import { DirectoryComponent } from './directory/directory.component';
+import { UsersComponent } from './users/users.component';
+import { HomesComponent } from './homes/homes.component';
 
 const routes: Routes = [
-  { path: '', component: HomeComponent, data: {animation: 'Home'} },
-  { path: 'about', component: AboutComponent, data: {animation: 'About'} },
-  { path: 'news', component: NewsComponent, data: {animation: 'News'} },
-  { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: {minimumRole: 1, animation: 'Documents'} },
-  { path: 'dues', component: DuesComponent, canActivate: [AuthGuard], data: {animation: 'Dues'} },
-  { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard], data: {animation: 'Profile'} },
+  { path: '', component: HomeComponent },
+  { path: 'about', component: AboutComponent },
+  { path: 'directory', component: DirectoryComponent, },
+  { path: 'news', component: NewsComponent },
+  { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { requiredRole: 'Resident' } },
+  { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard] },
+  { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] },
+  { path: 'users', component: UsersComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } },
+  { path: 'homes', component: HomesComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } },
   { path: 'unauthorized', component: UnauthorizedComponent }
 ];
 
 @NgModule({
-  imports: [RouterModule.forRoot(routes, {scrollPositionRestoration: 'enabled'})],
+  imports: [RouterModule.forRoot(routes, { scrollPositionRestoration: 'enabled' })],
   exports: [RouterModule]
 })
 export class AppRoutingModule { }

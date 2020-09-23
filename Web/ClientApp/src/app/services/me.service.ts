@@ -1,40 +1,40 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Inject } from '@angular/core';
 import { ApiUser } from '../models';
-import { Observable, ReplaySubject } from 'rxjs';
+import { Observable, ReplaySubject, Observer } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
-import { AuthService } from './auth.service';
 import { Router } from '@angular/router';
+import { applicationState, ApplicationState, dispatcher, Action, LoadUserCompleted, LoadUser } from '../state';
+import { map, filter, distinctUntilChanged } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root'
 })
 export class MeService {
 
-  public me: Observable<ApiUser>;
-  private meSubject: ReplaySubject<ApiUser>;
+  constructor(
+    @Inject(applicationState) private appState: Observable<ApplicationState>,
+    @Inject(dispatcher) private dispatcher: Observer<Action>,
+    private httpClient: HttpClient,
+    private router: Router) {
 
-  constructor(private authService: AuthService, private httpClient: HttpClient, private router: Router) {
-    this.meSubject = new ReplaySubject(null);
-    this.me = this.meSubject.asObservable();
-
-    // When the auth state changes, update the 'me' state
-    this.authService.user$.subscribe(authUser => {
-      if (authUser == null) {
-        this.meSubject.next(null);
+    // When the auth state changes, update the ApiUser
+    this.appState.pipe(map(s => s.authUser?.accessToken), filter(t => t != null), distinctUntilChanged()).subscribe(accessToken => {
+      this.dispatcher.next(new LoadUser());
+      if (accessToken == null) {
+        this.dispatcher.next(new LoadUserCompleted(null));
       } else {
-        httpClient.get<ApiUser>('api/me').subscribe(u => this.meSubject.next(u));
+        httpClient.get<ApiUser>('api/me').subscribe(u => this.dispatcher.next(new LoadUserCompleted(u)));
       }
     });
 
-    // If 
-    this.me.subscribe(apiUser => {
-      if (apiUser && apiUser.role === 0) {
-        router.navigate(['profile']);
+    this.appState.pipe(map(s => s.apiUser)).subscribe(apiUser => {
+      if (apiUser && apiUser.roles.length === 0) {
+        //router.navigate(['profile']);
       }
     });
   }
 
   requestAccess(streetAddress: string) {
-    this.httpClient.put<ApiUser>(`api/me/request-access/${streetAddress}`, null).subscribe(u => this.meSubject.next(u));
+    this.httpClient.put<ApiUser>(`api/me/request-access/${streetAddress}`, null).subscribe(u => this.dispatcher.next(new LoadUserCompleted(u)));
   }
 }
