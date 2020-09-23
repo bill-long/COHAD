@@ -8,10 +8,10 @@ import { AuthGuard } from './auth.guard';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
 import { RoleGuard } from './role.guard';
 import { ProfileComponent } from './components/profile/profile.component';
-import { MyinfoComponent } from './myinfo/myinfo.component';
-import { DirectoryComponent } from './directory/directory.component';
-import { UsersComponent } from './users/users.component';
-import { HomesComponent } from './homes/homes.component';
+import { MyinfoComponent } from './components/myinfo/myinfo.component';
+import { DirectoryComponent } from './components/directory/directory.component';
+import { UsersComponent } from './components/users/users.component';
+import { HomesComponent } from './components/homes/homes.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },

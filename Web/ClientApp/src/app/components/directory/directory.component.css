@@ -92,3 +92,7 @@ mat-form-field {
 .bySurnameView .phoneNumber {
     text-align: right;
 }
+
+mat-spinner {
+    margin-top: 15px;
+}

@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, combineLatest } from 'rxjs';
 import { startWith, debounceTime, map, shareReplay } from 'rxjs/operators';
 import { FormControl } from '@angular/forms';
-import { DirectoryHome } from '../models';
+import { DirectoryHome } from '../../models';
 
 @Component({
   selector: 'app-directory',
@@ -22,6 +22,8 @@ export class DirectoryComponent implements OnInit {
 
   filteredSortedBySurname: Observable<DirectoryHome[]>;
 
+  showSpinner: boolean = true;
+
   homeFilter = new FormControl('');
 
   viewToggle = new FormControl('bySurname');
@@ -32,6 +34,8 @@ export class DirectoryComponent implements OnInit {
 
   ngOnInit(): void {
     this.directoryData = this.httpClient.get<DirectoryHome[]>('api/directory').pipe(shareReplay(1));
+
+    this.directoryData.subscribe(data => this.showSpinner = false, err => this.showSpinner = false);
 
     this.directoryDataSortedByAddress = this.directoryData.pipe(map(homes => {
       const sorted = [...homes].sort((a, b) => {

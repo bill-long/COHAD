@@ -9,6 +9,7 @@ import { MatSortModule } from '@angular/material/sort';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -24,12 +25,12 @@ import { UnauthorizedComponent } from './components/unauthorized/unauthorized.co
 import { ProfileComponent } from './components/profile/profile.component';
 import { ReactiveFormsModule } from '@angular/forms';
 import { OAuthModule } from 'angular-oauth2-oidc';
-import { MyinfoComponent } from './myinfo/myinfo.component';
+import { MyinfoComponent } from './components/myinfo/myinfo.component';
 import { dispatcher, Action, initialState, initialStateValue, applicationState, applicationStateFactory } from './state';
 import { Subject } from 'rxjs';
-import { DirectoryComponent } from './directory/directory.component';
-import { UsersComponent } from './users/users.component';
-import { HomesComponent } from './homes/homes.component';
+import { DirectoryComponent } from './components/directory/directory.component';
+import { UsersComponent } from './components/users/users.component';
+import { HomesComponent } from './components/homes/homes.component';
 
 @NgModule({
   declarations: [
@@ -68,7 +69,8 @@ import { HomesComponent } from './homes/homes.component';
     MatSortModule,
     MatFormFieldModule,
     MatInputModule,
-    MatButtonToggleModule
+    MatButtonToggleModule,
+    MatProgressSpinnerModule
   ],
   providers: [
     { provide: dispatcher, useValue: new Subject<Action>() },
