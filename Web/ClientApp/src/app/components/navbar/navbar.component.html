@@ -7,10 +7,8 @@
       routerLinkActive="mat-accent">Directory</a>
     <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="user$ | async">My
       Info</a>
-    <a mat-flat-button color="primary" *ngIf="(user$ | async)?.roles.includes('Committee')" routerLink="users"
-      routerLinkActive="mat-accent">User Management</a>
-    <a mat-flat-button color="primary" *ngIf="(user$ | async)?.roles.includes('Committee')" routerLink="homes"
-      routerLinkActive="mat-accent">Home Management</a>
+    <a mat-flat-button color="primary" *ngIf="(user$ | async)?.roles.includes('Committee')" routerLink="manage"
+      routerLinkActive="mat-accent">Manage</a>
     <button mat-flat-button color="primary" *ngIf="user$ | async as user"
       [matMenuTriggerFor]="userMenu">{{user.email}}</button>
     <mat-menu #userMenu="matMenu">

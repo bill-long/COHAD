@@ -10,6 +10,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSidenavModule } from '@angular/material/sidenav';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -29,8 +30,7 @@ import { MyinfoComponent } from './components/myinfo/myinfo.component';
 import { dispatcher, Action, initialState, initialStateValue, applicationState, applicationStateFactory } from './state';
 import { Subject } from 'rxjs';
 import { DirectoryComponent } from './components/directory/directory.component';
-import { UsersComponent } from './components/users/users.component';
-import { HomesComponent } from './components/homes/homes.component';
+import { ManageComponent } from './components/manage/manage.component';
 
 @NgModule({
   declarations: [
@@ -45,8 +45,7 @@ import { HomesComponent } from './components/homes/homes.component';
     ProfileComponent,
     MyinfoComponent,
     DirectoryComponent,
-    UsersComponent,
-    HomesComponent
+    ManageComponent
   ],
   imports: [
     BrowserModule,
@@ -70,7 +69,8 @@ import { HomesComponent } from './components/homes/homes.component';
     MatFormFieldModule,
     MatInputModule,
     MatButtonToggleModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatSidenavModule
   ],
   providers: [
     { provide: dispatcher, useValue: new Subject<Action>() },

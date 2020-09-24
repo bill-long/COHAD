@@ -1,0 +1,9 @@
+.example-container {
+    min-height: 200px;
+    margin: 10px;
+}
+
+.side-nav-button {
+    width: 150px;
+    margin-bottom: 2px;
+}
