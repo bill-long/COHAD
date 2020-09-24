@@ -31,6 +31,9 @@ import { dispatcher, Action, initialState, initialStateValue, applicationState, 
 import { Subject } from 'rxjs';
 import { DirectoryComponent } from './components/directory/directory.component';
 import { ManageComponent } from './components/manage/manage.component';
+import { UserComponent } from './components/user/user.component';
+import { ManageUsersComponent } from './components/manage-users/manage-users.component';
+import { ManageHomesComponent } from './components/manage-homes/manage-homes.component';
 
 @NgModule({
   declarations: [
@@ -45,7 +48,10 @@ import { ManageComponent } from './components/manage/manage.component';
     ProfileComponent,
     MyinfoComponent,
     DirectoryComponent,
-    ManageComponent
+    ManageComponent,
+    UserComponent,
+    ManageUsersComponent,
+    ManageHomesComponent
   ],
   imports: [
     BrowserModule,

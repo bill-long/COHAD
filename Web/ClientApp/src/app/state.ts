@@ -1,21 +1,27 @@
 import { Observable, Subject, BehaviorSubject } from 'rxjs';
 import { InjectionToken } from '@angular/core';
 import { scan } from 'rxjs/operators';
-import { ApiUser, AuthUser, Home } from './models';
+import { ApiUser, AuthUser, Home, DirectoryHome } from './models';
 
 export interface ApplicationState {
     authUser: AuthUser,
     apiUser: ApiUser,
+    directory: DirectoryHome[],
     operationsInProgress: number
 }
 
 export const initialStateValue: ApplicationState = {
     authUser: null,
     apiUser: null,
+    directory: [],
     operationsInProgress: 0
 }
 
 export class AuthenticatedUserChanged { constructor(public authUser: AuthUser) { } }
+
+export class LoadDirectory { }
+
+export class LoadDirectoryCompleted { constructor(public data: DirectoryHome[]) { } }
 
 export class LoadUser { }
 
@@ -27,6 +33,8 @@ export class Logout { }
 
 export type Action =
     AuthenticatedUserChanged |
+    LoadDirectory |
+    LoadDirectoryCompleted |
     LoadUser |
     LoadUserCompleted |
     Login |
@@ -51,7 +59,17 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                 newState = {
                     authUser: action.authUser,
                     apiUser: state.apiUser,
+                    directory: state.directory,
                     operationsInProgress: state.operationsInProgress
+                }
+            } else if (action instanceof LoadDirectory) {
+                newState = addOperationInProgress(state);
+            } else if (action instanceof LoadDirectoryCompleted) {
+                newState = {
+                    authUser: state.authUser,
+                    apiUser: state.apiUser,
+                    directory: action.data,
+                    operationsInProgress: state.operationsInProgress - 1
                 }
             } else if (action instanceof LoadUser) {
                 newState = addOperationInProgress(state);
@@ -59,6 +77,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                 newState = {
                     authUser: state.authUser,
                     apiUser: action.user,
+                    directory: state.directory,
                     operationsInProgress: state.operationsInProgress - 1
                 }
             } else if (action instanceof Login) {
@@ -81,6 +100,7 @@ function addOperationInProgress(state: ApplicationState) {
     return {
         authUser: state.authUser,
         apiUser: state.apiUser,
+        directory: state.directory,
         operationsInProgress: state.operationsInProgress + 1
     };
 }

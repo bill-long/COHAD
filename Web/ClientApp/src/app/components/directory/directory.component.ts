@@ -1,9 +1,10 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, combineLatest } from 'rxjs';
-import { startWith, debounceTime, map, shareReplay } from 'rxjs/operators';
+import { Observable, combineLatest, Subject } from 'rxjs';
+import { startWith, debounceTime, map, shareReplay, take, delay } from 'rxjs/operators';
 import { FormControl } from '@angular/forms';
 import { DirectoryHome } from '../../models';
+import { applicationState, ApplicationState, Action, dispatcher, LoadDirectory } from 'src/app/state';
 
 @Component({
   selector: 'app-directory',
@@ -22,20 +23,26 @@ export class DirectoryComponent implements OnInit {
 
   filteredSortedBySurname: Observable<DirectoryHome[]>;
 
-  showSpinner: boolean = true;
+  showSpinner: Observable<boolean>;
 
   homeFilter = new FormControl('');
 
   viewToggle = new FormControl('bySurname');
 
-  constructor(private httpClient: HttpClient) {
-
-  }
+  constructor(
+    @Inject(applicationState) private appState: Observable<ApplicationState>,
+    @Inject(dispatcher) private dispatcher: Subject<Action>) { }
 
   ngOnInit(): void {
-    this.directoryData = this.httpClient.get<DirectoryHome[]>('api/directory').pipe(shareReplay(1));
+    this.directoryData = this.appState.pipe(delay(5), map(s => s.directory));
 
-    this.directoryData.subscribe(data => this.showSpinner = false, err => this.showSpinner = false);
+    this.showSpinner = this.appState.pipe(map(s => s.operationsInProgress > 0));
+
+    this.directoryData.pipe(take(1)).subscribe(data => {
+      if (data == null || data.length < 1) {
+        this.dispatcher.next(new LoadDirectory());
+      }
+    });
 
     this.directoryDataSortedByAddress = this.directoryData.pipe(map(homes => {
       const sorted = [...homes].sort((a, b) => {
