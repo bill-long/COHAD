@@ -1,5 +1,5 @@
 export interface ApiUser {
-    id: string;
+    uniqueId: string;
     createdTime: string;
     modifiedTime: string;
     creatorId: string;

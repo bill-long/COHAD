@@ -11,6 +11,10 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatGridListModule } from '@angular/material/grid-list';
+import { MatIconModule } from '@angular/material/icon';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -24,7 +28,7 @@ import { DocumentsComponent } from './components/documents/documents.component';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
 import { ProfileComponent } from './components/profile/profile.component';
-import { ReactiveFormsModule } from '@angular/forms';
+import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { OAuthModule } from 'angular-oauth2-oidc';
 import { MyinfoComponent } from './components/myinfo/myinfo.component';
 import { dispatcher, Action, initialState, initialStateValue, applicationState, applicationStateFactory } from './state';
@@ -58,6 +62,7 @@ import { ManageHomesComponent } from './components/manage-homes/manage-homes.com
     AppRoutingModule,
     BrowserAnimationsModule,
     HttpClientModule,
+    FormsModule,
     ReactiveFormsModule,
     OAuthModule.forRoot({
       resourceServer: {
@@ -76,7 +81,11 @@ import { ManageHomesComponent } from './components/manage-homes/manage-homes.com
     MatInputModule,
     MatButtonToggleModule,
     MatProgressSpinnerModule,
-    MatSidenavModule
+    MatSidenavModule,
+    MatGridListModule,
+    MatIconModule,
+    MatChipsModule,
+    MatAutocompleteModule
   ],
   providers: [
     { provide: dispatcher, useValue: new Subject<Action>() },

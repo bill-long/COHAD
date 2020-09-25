@@ -1,0 +1,11 @@
+mat-form-field {
+    margin: 5px;
+}
+
+.wide-input .mat-form-field-infix {
+    width: 380px;
+}
+
+.action-bar>button {
+    margin-left: 5px;
+}

@@ -17,7 +17,7 @@ import { ManageHomesComponent } from './components/manage-homes/manage-homes.com
 const routes: Routes = [
   { path: '', component: HomeComponent },
   { path: 'about', component: AboutComponent },
-  { path: 'directory', component: DirectoryComponent, },
+  { path: 'directory', component: DirectoryComponent },
   { path: 'news', component: NewsComponent },
   { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { requiredRole: 'Resident' } },
   { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard] },

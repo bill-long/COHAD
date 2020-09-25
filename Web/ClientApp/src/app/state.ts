@@ -4,6 +4,8 @@ import { scan } from 'rxjs/operators';
 import { ApiUser, AuthUser, Home, DirectoryHome } from './models';
 
 export interface ApplicationState {
+    allHomes: Home[],
+    allUsers: ApiUser[],
     authUser: AuthUser,
     apiUser: ApiUser,
     directory: DirectoryHome[],
@@ -11,6 +13,8 @@ export interface ApplicationState {
 }
 
 export const initialStateValue: ApplicationState = {
+    allHomes: [],
+    allUsers: [],
     authUser: null,
     apiUser: null,
     directory: [],
@@ -18,6 +22,14 @@ export const initialStateValue: ApplicationState = {
 }
 
 export class AuthenticatedUserChanged { constructor(public authUser: AuthUser) { } }
+
+export class LoadAllHomes { }
+
+export class LoadAllHomesCompleted { constructor(public homes: Home[]) { } }
+
+export class LoadAllUsers { }
+
+export class LoadAllUsersCompleted { constructor(public users: ApiUser[]) { } }
 
 export class LoadDirectory { }
 
@@ -57,29 +69,57 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
 
             if (action instanceof AuthenticatedUserChanged) {
                 newState = {
+                    allHomes: state.allHomes,
+                    allUsers: state.allUsers,
                     authUser: action.authUser,
                     apiUser: state.apiUser,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress
-                }
+                };
+            } else if (action instanceof LoadAllHomes) {
+                newState = addOperationInProgress(state);
+            } else if (action instanceof LoadAllHomesCompleted) {
+                newState = {
+                    allHomes: action.homes,
+                    allUsers: state.allUsers,
+                    authUser: state.authUser,
+                    apiUser: state.apiUser,
+                    directory: state.directory,
+                    operationsInProgress: state.operationsInProgress - 1
+                };
+            } else if (action instanceof LoadAllUsers) {
+                newState = addOperationInProgress(state);
+            } else if (action instanceof LoadAllUsersCompleted) {
+                newState = {
+                    allHomes: state.allHomes,
+                    allUsers: action.users,
+                    authUser: state.authUser,
+                    apiUser: state.apiUser,
+                    directory: state.directory,
+                    operationsInProgress: state.operationsInProgress - 1
+                };
             } else if (action instanceof LoadDirectory) {
                 newState = addOperationInProgress(state);
             } else if (action instanceof LoadDirectoryCompleted) {
                 newState = {
+                    allHomes: state.allHomes,
+                    allUsers: state.allUsers,
                     authUser: state.authUser,
                     apiUser: state.apiUser,
                     directory: action.data,
                     operationsInProgress: state.operationsInProgress - 1
-                }
+                };
             } else if (action instanceof LoadUser) {
                 newState = addOperationInProgress(state);
             } else if (action instanceof LoadUserCompleted) {
                 newState = {
+                    allHomes: state.allHomes,
+                    allUsers: state.allUsers,
                     authUser: state.authUser,
                     apiUser: action.user,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress - 1
-                }
+                };
             } else if (action instanceof Login) {
                 newState = state;
             } else if (action instanceof Logout) {
@@ -98,6 +138,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
 
 function addOperationInProgress(state: ApplicationState) {
     return {
+        allHomes: state.allHomes,
+        allUsers: state.allUsers,
         authUser: state.authUser,
         apiUser: state.apiUser,
         directory: state.directory,

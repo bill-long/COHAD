@@ -6,11 +6,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Web.Models;
+using Web.PresentationModels;
 using Web.Repository;
 using Web.UpdateModels;
 
 namespace Web.Controllers
 {
+    [Route("api/[controller]")]
+    [ApiController]
     [Authorize(Policy = "Committee")]
     public class UserController : ControllerBase
     {
@@ -20,11 +23,11 @@ namespace Web.Controllers
             _dbContext = dbContext;
         }
 
-        public async Task<IEnumerable<Models.User>> Get()
+        public async Task<IEnumerable<PresentationUser>> Get()
         {
             var allUsers = await _dbContext.Users.ToListAsync();
 
-            return allUsers;
+            return allUsers.Select(PresentationUser.FromStorageModel);
         }
 
         /// <summary>
