@@ -10,7 +10,53 @@
             <mat-button-toggle value="byAddress">By Address</mat-button-toggle>
         </mat-button-toggle-group>
 
-        <div class="directoryView byAddressView" *ngIf="viewToggle.value === 'byAddress'">
+        <table class="by-surname" fxShow="{{ viewToggle.value === 'bySurname' }}" ngClass.gt-sm="large-text">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <ng-container *ngFor="let home of (filteredSortedBySurname | async)">
+                    <tr *ngIf="home.residents?.length">
+                        <td colspan="2"><span class="surname">{{getSurname(home)}}</span>, {{getGivenNames(home)}}</td>
+                        <td class="align-right">
+                            <div class="homePhone" *ngIf="home.phoneNumber">({{home.phoneNumber.areaCode}})
+                                {{home.phoneNumber.prefix}}-{{('0000' + home.phoneNumber.lineNumber).slice(-4)}}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="3">{{home.streetNumber}} {{home.streetName}}</td>
+                    </tr>
+                    <tr *ngIf="home.emailAddress">
+                        <td colspan="3">Email: {{home.emailAddress.address}}</td>
+                    </tr>
+                    <ng-container *ngFor="let resident of home.residents">
+                        <ng-container *ngFor="let email of resident.emailAddresses">
+                            <tr>
+                                <td>{{resident.givenName}} Email:</td>
+                                <td colspan="2">{{email.address}}</td>
+                            </tr>
+                        </ng-container>
+                        <ng-container *ngFor="let phoneNumber of resident.phoneNumbers">
+                            <tr>
+                                <td colspan="2">{{resident.givenName}} {{phoneNumber.type}}:</td>
+                                <td class="align-right">
+                                    <div class="phoneNumber">({{phoneNumber.areaCode}})
+                                        {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+                                    </div>
+                                </td>
+                            </tr>
+                        </ng-container>
+                    </ng-container>
+                    <tr class="spacer-row"></tr>
+                </ng-container>
+            </tbody>
+        </table>
+
+        <div class="directoryView byAddressView" fxShow="{{ viewToggle.value === 'byAddress' }}">
             <div class="home" *ngFor="let home of (filteredSortedByAddress | async)">
                 <div class="homeAddress">{{home.streetNumber}} {{home.streetName}}</div>
                 <div class="homePhone" *ngIf="home.phoneNumber">Home Phone: ({{home.phoneNumber.areaCode}})

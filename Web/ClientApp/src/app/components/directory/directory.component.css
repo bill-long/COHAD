@@ -8,9 +8,41 @@ mat-form-field {
     justify-content: center;
 }
 
+table {
+    width: 100%;
+    margin-top: 15px;
+}
+
+th {
+    width: 100px;
+}
+
+.spacer-row {
+    height: 15px;
+}
+
+.by-surname .surname {
+    font-weight: bold;
+}
+
+.by-surname .homePhone {
+    font-weight: bold;
+}
+
+.large-text {
+    font-size: large;
+}
+
+.large-text th {
+    width: 200px;
+}
+
+.align-right {
+    text-align: right;
+}
+
 .directoryView {
     margin-top: 15px;
-    width: 600px;
 }
 
 .byAddressView .home {
@@ -55,42 +87,6 @@ mat-form-field {
 
 .byAddressView .emailAddress {
     width: 150px;
-}
-
-.bySurnameView {
-    font-size: large;
-}
-
-.bySurnameView .home {
-    margin-bottom: 20px;
-}
-
-.bySurnameView .surnameTitle {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-}
-
-.bySurnameView .surname {
-    font-weight: bold;
-}
-
-.bySurnameView .homePhone {
-    font-weight: bold;
-}
-
-.bySurnameView .residentEmail {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-}
-
-.bySurnameView .residentPhone {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-}
-
-.bySurnameView .phoneNumber {
-    text-align: right;
 }
 
 mat-spinner {
