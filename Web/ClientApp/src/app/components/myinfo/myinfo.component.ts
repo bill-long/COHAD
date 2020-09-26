@@ -10,6 +10,8 @@ import { map } from 'rxjs/operators';
 })
 export class MyinfoComponent implements OnInit {
 
+  editEnabled: false;
+
   constructor(@Inject(applicationState) private appState: Observable<ApplicationState>) { }
 
   ngOnInit(): void {

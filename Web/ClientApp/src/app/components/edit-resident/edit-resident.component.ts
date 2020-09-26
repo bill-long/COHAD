@@ -10,6 +10,8 @@ export class EditResidentComponent implements OnInit {
 
   @Input() resident: Resident;
 
+  @Input() editEnabled: boolean;
+
   @Output() deleteResident = new EventEmitter<void>();
 
   constructor() { }

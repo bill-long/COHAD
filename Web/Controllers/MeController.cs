@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Repository;
@@ -29,6 +30,8 @@ namespace Web.Controllers
             var user = await _userRepository.Users.FindAsync(uniqueId);
             if (user != null)
             {
+                // This is necessary to resolve OwnedHomes since Cosmos does not support Includes yet
+                var allHomes = await _userRepository.Homes.ToListAsync();
                 return PresentationUser.FromStorageModel(user);
             }
 

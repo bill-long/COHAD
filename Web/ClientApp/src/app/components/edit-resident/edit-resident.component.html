@@ -2,58 +2,61 @@
     <div class="resident-top-line">
         <mat-form-field appearance="fill">
             <mat-label>Given Name</mat-label>
-            <input matInput [(ngModel)]="resident.givenName">
+            <input matInput [(ngModel)]="resident.givenName" [disabled]="!editEnabled">
         </mat-form-field>
 
         <mat-form-field appearance="fill">
             <mat-label>Surname</mat-label>
-            <input matInput [(ngModel)]="resident.surname">
+            <input matInput [(ngModel)]="resident.surname" [disabled]="!editEnabled">
         </mat-form-field>
 
         <div class="filler"></div>
 
         <button mat-icon-button color="warn" aria-label="delete resident" title="Delete resident"
-            (click)="deleteResident.next()">
+            (click)="deleteResident.next()" *ngIf="editEnabled">
             <mat-icon>delete</mat-icon>
         </button>
     </div>
 
     <div class="contact-info" *ngFor="let emailAddress of resident.emailAddresses">
         <button mat-icon-button color="warn" aria-label="delete email" title="Delete email address"
-            (click)="deleteEmail(emailAddress)">
+            (click)="deleteEmail(emailAddress)" *ngIf="editEnabled">
             <mat-icon>delete</mat-icon>
         </button>
-        <mat-form-field appearance="fill">
+        <mat-form-field appearance="fill" class="emailInput">
             <mat-label>Email</mat-label>
-            <input matInput [(ngModel)]="emailAddress.address">
+            <input matInput [(ngModel)]="emailAddress.address" [disabled]="!editEnabled">
         </mat-form-field>
         <div class="contact-options">
-            <mat-checkbox [(ngModel)]="emailAddress.visibleInDirectory">Show in directory</mat-checkbox>
-            <mat-checkbox [(ngModel)]="emailAddress.groupEmailOptedIn">Receive neighborhood emails at this address
+            <mat-checkbox [(ngModel)]="emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in directory
+            </mat-checkbox>
+            <mat-checkbox [(ngModel)]="emailAddress.groupEmailOptedIn" [disabled]="!editEnabled">Receive neighborhood
+                emails at this address
             </mat-checkbox>
         </div>
     </div>
 
     <div class="contact-info" *ngFor="let phoneNumber of resident.phoneNumbers">
         <button mat-icon-button color="warn" aria-label="delete phone number" title="Delete phone number"
-            (click)="deletePhone(phoneNumber)">
+            (click)="deletePhone(phoneNumber)" *ngIf="editEnabled">
             <mat-icon>delete</mat-icon>
         </button>
-        <mat-form-field appearance="fill">
+        <mat-form-field appearance="fill" class="phoneType">
             <mat-label>Type</mat-label>
-            <mat-select [(ngModel)]="phoneNumber.type">
+            <mat-select [(ngModel)]="phoneNumber.type" [disabled]="!editEnabled">
                 <mat-option value="Mobile">Mobile</mat-option>
                 <mat-option value="Home">Home</mat-option>
                 <mat-option value="Work">Work</mat-option>
             </mat-select>
         </mat-form-field>
-        <app-phone-number-input [phoneNumber]="phoneNumber"></app-phone-number-input>
+        <app-phone-number-input [phoneNumber]="phoneNumber" [editEnabled]="editEnabled"></app-phone-number-input>
         <div class="contact-options">
-            <mat-checkbox [(ngModel)]="phoneNumber.visibleInDirectory">Show in directory</mat-checkbox>
+            <mat-checkbox [(ngModel)]="phoneNumber.visibleInDirectory" [disabled]="!editEnabled">Show in directory
+            </mat-checkbox>
         </div>
     </div>
 
-    <div class="action-bar">
+    <div class="action-bar" *ngIf="editEnabled">
         <div class="filler"></div>
         <button mat-flat-button color="primary" (click)="addPhone()">Add Phone</button>
         <button mat-flat-button color="primary" (click)="addEmail()">Add Email</button>
