@@ -17,7 +17,7 @@
             <div *ngIf="apiUser.ownedHomes == null || apiUser.ownedHomes.length < 1">No homes are associated with this
                 account. You must be assigned permissions before you can see and edit your home information.</div>
             <div *ngFor="let home of apiUser.ownedHomes">
-                {{home.streetNumber}} {{home.streetName}}
+                <app-edit-home [home]="home"></app-edit-home>
             </div>
         </div>
 

@@ -1,4 +1,4 @@
-import { Component, OnInit, Inject, ViewChild } from '@angular/core';
+import { Component, OnInit, Inject, ViewChild, AfterViewInit } from '@angular/core';
 import { MatTableDataSource } from '@angular/material/table';
 import { Action, applicationState, ApplicationState, dispatcher, LoadAllUsers, LoadAllHomes } from 'src/app/state';
 import { Observer, Observable } from 'rxjs';
@@ -11,7 +11,7 @@ import { ApiUser, Home } from 'src/app/models';
   templateUrl: './manage-users.component.html',
   styleUrls: ['./manage-users.component.css']
 })
-export class ManageUsersComponent implements OnInit {
+export class ManageUsersComponent implements OnInit, AfterViewInit {
 
   dataSource = new MatTableDataSource<ApiUser>();
 
@@ -45,7 +45,6 @@ export class ManageUsersComponent implements OnInit {
     });
 
     allUsers$.subscribe(u => this.dataSource.data = u);
-    this.dataSource.sort = this.sort;
 
     this.allHomes$ = this.appState.pipe(map(s => s.allHomes));
     this.allHomes$.pipe(take(1)).subscribe(h => {
@@ -53,6 +52,10 @@ export class ManageUsersComponent implements OnInit {
         this.dispatcher.next(new LoadAllHomes);
       }
     });
+  }
+
+  ngAfterViewInit(): void {
+    this.dataSource.sort = this.sort;
   }
 
 }

@@ -15,6 +15,8 @@ import { MatGridListModule } from '@angular/material/grid-list';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSelectModule } from '@angular/material/select';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -38,6 +40,10 @@ import { ManageComponent } from './components/manage/manage.component';
 import { UserComponent } from './components/user/user.component';
 import { ManageUsersComponent } from './components/manage-users/manage-users.component';
 import { ManageHomesComponent } from './components/manage-homes/manage-homes.component';
+import { EditHomeComponent } from './components/edit-home/edit-home.component';
+import { EditResidentComponent } from './components/edit-resident/edit-resident.component';
+import { NgxMaskModule } from 'ngx-mask';
+import { PhoneNumberInputComponent } from './components/phone-number-input/phone-number-input.component'
 
 @NgModule({
   declarations: [
@@ -55,7 +61,10 @@ import { ManageHomesComponent } from './components/manage-homes/manage-homes.com
     ManageComponent,
     UserComponent,
     ManageUsersComponent,
-    ManageHomesComponent
+    ManageHomesComponent,
+    EditHomeComponent,
+    EditResidentComponent,
+    PhoneNumberInputComponent
   ],
   imports: [
     BrowserModule,
@@ -72,6 +81,7 @@ import { ManageHomesComponent } from './components/manage-homes/manage-homes.com
         ]
       }
     }),
+    NgxMaskModule.forRoot(),
     MatToolbarModule,
     MatButtonModule,
     MatMenuModule,
@@ -85,7 +95,9 @@ import { ManageHomesComponent } from './components/manage-homes/manage-homes.com
     MatGridListModule,
     MatIconModule,
     MatChipsModule,
-    MatAutocompleteModule
+    MatAutocompleteModule,
+    MatCheckboxModule,
+    MatSelectModule
   ],
   providers: [
     { provide: dispatcher, useValue: new Subject<Action>() },

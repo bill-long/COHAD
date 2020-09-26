@@ -1,0 +1,13 @@
+<h2>{{homeCopy.streetNumber}} {{homeCopy.streetName}}</h2>
+
+<button mat-flat-button color="primary" (click)="addResident()">Add Resident</button>
+
+<div class="residents-container">
+    <app-edit-resident *ngFor="let resident of homeCopy.residents" [resident]="resident"
+        (deleteResident)="deleteResident($event, resident)"></app-edit-resident>
+</div>
+
+<div class="action-bar">
+    <button mat-flat-button color="primary" (click)="save()" [disabled]="saveInProgress">Save Changes</button>
+    <button mat-flat-button color="warn" (click)="cancel()" [disabled]="saveInProgress">Cancel</button>
+</div>

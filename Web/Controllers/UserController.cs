@@ -27,6 +27,8 @@ namespace Web.Controllers
         {
             var allUsers = await _dbContext.Users.ToListAsync();
 
+            var allHomes = await _dbContext.Homes.ToListAsync();
+
             return allUsers.Select(PresentationUser.FromStorageModel);
         }
 
@@ -96,12 +98,18 @@ namespace Web.Controllers
 
             var user = await _dbContext.Users.FindAsync(userId);
 
+            // We have to do this to resolve OwnedHomes because Include is not supported yet:
+            // https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
+            var allHomes = await _dbContext.Homes.ToListAsync();
+
             var home = await _dbContext.Homes.FindAsync(homeId);
 
             if (user == null || home == null)
             {
                 return NotFound();
             }
+
+            user.OwnedHomes ??= new List<Home>();
 
             if (user.OwnedHomes.FirstOrDefault(h => h.Id == home.Id) != null)
             {
@@ -137,10 +145,16 @@ namespace Web.Controllers
 
             var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.UniqueId == userId);
 
+            // We have to do this to resolve OwnedHomes because Include is not supported yet:
+            // https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
+            var allHomes = await _dbContext.Homes.ToListAsync();
+
             if (user == null)
             {
                 return NotFound();
             }
+
+            user.OwnedHomes ??= new List<Home>();
 
             if (user.OwnedHomes.FirstOrDefault(h => h.Id == homeId) == null)
             {
@@ -190,6 +204,9 @@ namespace Web.Controllers
                 }
             }
 
+            // Not sure why this is necessary, but it doesn't detect role changes otherwise
+            _dbContext.Update(userToModify);
+
             userToModify.Roles.Add(roleToAdd);
 
             userToModify.AuditLog ??= new List<AuditLogEntry>();
@@ -201,7 +218,7 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _dbContext.SaveChangesAsync();
+            var result = await _dbContext.SaveChangesAsync();
 
             return Ok();
         }
@@ -232,6 +249,9 @@ namespace Web.Controllers
                     return Forbid();
                 }
             }
+
+            // Not sure why this is necessary, but it doesn't detect role changes otherwise
+            _dbContext.Update(userToModify);
 
             userToModify.Roles.Remove(roleToRemove);
 

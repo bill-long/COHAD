@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 
 namespace Web.Repository

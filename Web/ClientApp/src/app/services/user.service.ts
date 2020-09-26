@@ -32,13 +32,26 @@ export class UserService {
         const homesToAdd = newHomes.filter(nh => originalHomes.find(oh => oh.id == nh.id) == null);
         const homesToRemove = originalHomes.filter(oh => newHomes.find(nh => oh.id == nh.id) == null);
 
-        homesToAdd.forEach(async h => {
+        for (const h of homesToAdd) {
           await this.httpClient.put(`api/user/${changedUser.uniqueId}/homes/add/${h.id}`, {}).toPromise();
-        });
+        };
 
-        homesToRemove.forEach(async h => {
+        for (const h of homesToRemove) {
           await this.httpClient.put(`api/user/${changedUser.uniqueId}/homes/remove/${h.id}`, {}).toPromise();
-        });
+        };
+
+        const originalRoles = originalUser.roles ?? [];
+        const newRoles = changedUser.roles ?? [];
+        const rolesToAdd = newRoles.filter(nr => originalRoles.find(or => or == nr) == null);
+        const rolesToRemove = originalRoles.filter(or => newRoles.find(nr => or == nr) == null);
+
+        for (const r of rolesToAdd) {
+          await this.httpClient.put(`api/user/${changedUser.uniqueId}/roles/add/${r}`, {}).toPromise();
+        };
+
+        for (const r of rolesToRemove) {
+          await this.httpClient.put(`api/user/${changedUser.uniqueId}/roles/remove/${r}`, {}).toPromise();
+        };
 
         if (originalUser.givenName != changedUser.givenName ||
           originalUser.surname != changedUser.surname ||

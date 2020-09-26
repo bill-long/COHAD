@@ -1,0 +1,61 @@
+<div class="resident-wrapper">
+    <div class="resident-top-line">
+        <mat-form-field appearance="fill">
+            <mat-label>Given Name</mat-label>
+            <input matInput [(ngModel)]="resident.givenName">
+        </mat-form-field>
+
+        <mat-form-field appearance="fill">
+            <mat-label>Surname</mat-label>
+            <input matInput [(ngModel)]="resident.surname">
+        </mat-form-field>
+
+        <div class="filler"></div>
+
+        <button mat-icon-button color="warn" aria-label="delete resident" title="Delete resident"
+            (click)="deleteResident.next()">
+            <mat-icon>delete</mat-icon>
+        </button>
+    </div>
+
+    <div class="contact-info" *ngFor="let emailAddress of resident.emailAddresses">
+        <button mat-icon-button color="warn" aria-label="delete email" title="Delete email address"
+            (click)="deleteEmail(emailAddress)">
+            <mat-icon>delete</mat-icon>
+        </button>
+        <mat-form-field appearance="fill">
+            <mat-label>Email</mat-label>
+            <input matInput [(ngModel)]="emailAddress.address">
+        </mat-form-field>
+        <div class="contact-options">
+            <mat-checkbox [(ngModel)]="emailAddress.visibleInDirectory">Show in directory</mat-checkbox>
+            <mat-checkbox [(ngModel)]="emailAddress.groupEmailOptedIn">Receive neighborhood emails at this address
+            </mat-checkbox>
+        </div>
+    </div>
+
+    <div class="contact-info" *ngFor="let phoneNumber of resident.phoneNumbers">
+        <button mat-icon-button color="warn" aria-label="delete phone number" title="Delete phone number"
+            (click)="deletePhone(phoneNumber)">
+            <mat-icon>delete</mat-icon>
+        </button>
+        <mat-form-field appearance="fill">
+            <mat-label>Type</mat-label>
+            <mat-select [(ngModel)]="phoneNumber.type">
+                <mat-option value="Mobile">Mobile</mat-option>
+                <mat-option value="Home">Home</mat-option>
+                <mat-option value="Work">Work</mat-option>
+            </mat-select>
+        </mat-form-field>
+        <app-phone-number-input [phoneNumber]="phoneNumber"></app-phone-number-input>
+        <div class="contact-options">
+            <mat-checkbox [(ngModel)]="phoneNumber.visibleInDirectory">Show in directory</mat-checkbox>
+        </div>
+    </div>
+
+    <div class="action-bar">
+        <div class="filler"></div>
+        <button mat-flat-button color="primary" (click)="addPhone()">Add Phone</button>
+        <button mat-flat-button color="primary" (click)="addEmail()">Add Email</button>
+    </div>
+</div>

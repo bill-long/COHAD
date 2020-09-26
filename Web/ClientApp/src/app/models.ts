@@ -34,10 +34,10 @@ export interface DirectoryHome {
     streetName: string;
     phoneNumber: DirectoryPhoneNumber;
     emailAddress: DirectoryEmailAddress;
-    residents: Resident[];
+    residents: DirectoryResident[];
 }
 
-export interface Resident {
+export interface DirectoryResident {
     givenName: string;
     surname: string;
     emailAddresses: DirectoryEmailAddress[];
@@ -63,6 +63,13 @@ export interface Home {
     emailAddress: EmailAddress;
     residents: Resident[];
     auditLog: AuditLogEntry[];
+}
+
+export interface Resident {
+    givenName: string;
+    surname: string;
+    emailAddresses: EmailAddress[];
+    phoneNumbers: PhoneNumber[];
 }
 
 export interface PhoneNumber {
