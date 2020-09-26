@@ -1,9 +1,9 @@
-<mat-form-field appearance="fill" [ngClass]="{ 'displaynone': focusedHome != null }">
+<mat-form-field appearance="fill" fxHide="{{ focusedHome != null }}">
     <mat-label>Search</mat-label>
     <input matInput [formControl]="homeFilter">
 </mat-form-field>
 
-<table mat-table [dataSource]="dataSource" matSort [ngClass]="{ 'displaynone': focusedHome != null }">
+<table mat-table [dataSource]="dataSource" matSort fxHide="{{ focusedHome != null }}">
 
     <ng-container matColumnDef="streetNumber">
         <th mat-header-cell *matHeaderCellDef mat-sort-header> Street Number </th>
