@@ -41,54 +41,6 @@ th {
     text-align: right;
 }
 
-.directoryView {
-    margin-top: 15px;
-}
-
-.byAddressView .home {
-    margin-bottom: 10px;
-}
-
-.byAddressView .homeAddress {
-    font-weight: bold;
-    font-size: larger;
-}
-
-.byAddressView .residents {
-    display: flex;
-}
-
-.byAddressView .residentName {
-    margin-left: 10px;
-    width: 125px;
-}
-
-.byAddressView .residentPhone {
-    display: flex;
-    margin-left: 20px;
-}
-
-.byAddressView .phoneType {
-    width: 50px;
-}
-
-.byAddressView .phoneNumber {
-    width: 100px;
-}
-
-.byAddressView .residentEmail {
-    display: flex;
-    margin-left: 20px;
-}
-
-.byAddressView .emailLabel {
-    width: 50px;
-}
-
-.byAddressView .emailAddress {
-    width: 150px;
-}
-
 mat-spinner {
     margin-top: 15px;
 }
