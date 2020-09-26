@@ -1,0 +1,8 @@
+.action-bar>button {
+    margin-left: 5px;
+}
+
+.residents-container {
+    width: fit-content;
+    margin-top: 10px;
+}

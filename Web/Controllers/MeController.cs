@@ -41,6 +41,7 @@ namespace Web.Controllers
                 Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value,
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
                 Roles = new List<User.Role>(),
+                OwnedHomes = new List<Home>(),
                 UniqueId = uniqueId
             };
 

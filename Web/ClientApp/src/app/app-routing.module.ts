@@ -8,21 +8,26 @@ import { AuthGuard } from './auth.guard';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
 import { RoleGuard } from './role.guard';
 import { ProfileComponent } from './components/profile/profile.component';
-import { MyinfoComponent } from './myinfo/myinfo.component';
-import { DirectoryComponent } from './directory/directory.component';
-import { UsersComponent } from './users/users.component';
-import { HomesComponent } from './homes/homes.component';
+import { MyinfoComponent } from './components/myinfo/myinfo.component';
+import { DirectoryComponent } from './components/directory/directory.component';
+import { ManageComponent } from './components/manage/manage.component';
+import { ManageUsersComponent } from './components/manage-users/manage-users.component';
+import { ManageHomesComponent } from './components/manage-homes/manage-homes.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
   { path: 'about', component: AboutComponent },
-  { path: 'directory', component: DirectoryComponent, },
+  { path: 'directory', component: DirectoryComponent },
   { path: 'news', component: NewsComponent },
   { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { requiredRole: 'Resident' } },
   { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard] },
   { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] },
-  { path: 'users', component: UsersComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } },
-  { path: 'homes', component: HomesComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } },
+  {
+    path: 'manage', component: ManageComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' }, children: [
+      { path: 'users', component: ManageUsersComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } },
+      { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } }
+    ]
+  },
   { path: 'unauthorized', component: UnauthorizedComponent }
 ];
 

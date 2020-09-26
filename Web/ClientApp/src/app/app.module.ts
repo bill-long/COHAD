@@ -9,6 +9,14 @@ import { MatSortModule } from '@angular/material/sort';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatGridListModule } from '@angular/material/grid-list';
+import { MatIconModule } from '@angular/material/icon';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSelectModule } from '@angular/material/select';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -22,14 +30,20 @@ import { DocumentsComponent } from './components/documents/documents.component';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
 import { ProfileComponent } from './components/profile/profile.component';
-import { ReactiveFormsModule } from '@angular/forms';
+import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { OAuthModule } from 'angular-oauth2-oidc';
-import { MyinfoComponent } from './myinfo/myinfo.component';
+import { MyinfoComponent } from './components/myinfo/myinfo.component';
 import { dispatcher, Action, initialState, initialStateValue, applicationState, applicationStateFactory } from './state';
 import { Subject } from 'rxjs';
-import { DirectoryComponent } from './directory/directory.component';
-import { UsersComponent } from './users/users.component';
-import { HomesComponent } from './homes/homes.component';
+import { DirectoryComponent } from './components/directory/directory.component';
+import { ManageComponent } from './components/manage/manage.component';
+import { UserComponent } from './components/user/user.component';
+import { ManageUsersComponent } from './components/manage-users/manage-users.component';
+import { ManageHomesComponent } from './components/manage-homes/manage-homes.component';
+import { EditHomeComponent } from './components/edit-home/edit-home.component';
+import { EditResidentComponent } from './components/edit-resident/edit-resident.component';
+import { NgxMaskModule } from 'ngx-mask';
+import { PhoneNumberInputComponent } from './components/phone-number-input/phone-number-input.component'
 
 @NgModule({
   declarations: [
@@ -44,14 +58,20 @@ import { HomesComponent } from './homes/homes.component';
     ProfileComponent,
     MyinfoComponent,
     DirectoryComponent,
-    UsersComponent,
-    HomesComponent
+    ManageComponent,
+    UserComponent,
+    ManageUsersComponent,
+    ManageHomesComponent,
+    EditHomeComponent,
+    EditResidentComponent,
+    PhoneNumberInputComponent
   ],
   imports: [
     BrowserModule,
     AppRoutingModule,
     BrowserAnimationsModule,
     HttpClientModule,
+    FormsModule,
     ReactiveFormsModule,
     OAuthModule.forRoot({
       resourceServer: {
@@ -61,6 +81,7 @@ import { HomesComponent } from './homes/homes.component';
         ]
       }
     }),
+    NgxMaskModule.forRoot(),
     MatToolbarModule,
     MatButtonModule,
     MatMenuModule,
@@ -68,7 +89,15 @@ import { HomesComponent } from './homes/homes.component';
     MatSortModule,
     MatFormFieldModule,
     MatInputModule,
-    MatButtonToggleModule
+    MatButtonToggleModule,
+    MatProgressSpinnerModule,
+    MatSidenavModule,
+    MatGridListModule,
+    MatIconModule,
+    MatChipsModule,
+    MatAutocompleteModule,
+    MatCheckboxModule,
+    MatSelectModule
   ],
   providers: [
     { provide: dispatcher, useValue: new Subject<Action>() },

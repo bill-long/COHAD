@@ -11,6 +11,8 @@ using Web.UpdateModels;
 
 namespace Web.Controllers
 {
+    [Route("api/[controller]")]
+    [ApiController]
     [Authorize(Policy = "Committee")]
     public class HomeController : ControllerBase
     {

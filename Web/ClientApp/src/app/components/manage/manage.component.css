@@ -1,0 +1,13 @@
+.example-container {
+    min-height: 80vh;
+    margin: 10px;
+}
+
+.side-nav-button {
+    width: 150px;
+    margin: 2px;
+}
+
+.drawer-content-wrapper {
+    margin-left: 15px;
+}

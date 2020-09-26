@@ -6,7 +6,7 @@
 }
 
 .content-area {
-    width: 800px;
+    width: fit-content;
 }
 
 .user-attributes-grid {

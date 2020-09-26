@@ -1,8 +1,7 @@
 import { Injectable, Inject } from '@angular/core';
 import { ApiUser } from '../models';
-import { Observable, ReplaySubject, Observer } from 'rxjs';
+import { Observable, Observer } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
-import { Router } from '@angular/router';
 import { applicationState, ApplicationState, dispatcher, Action, LoadUserCompleted, LoadUser } from '../state';
 import { map, filter, distinctUntilChanged } from 'rxjs/operators';
 
@@ -14,8 +13,7 @@ export class MeService {
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>,
-    private httpClient: HttpClient,
-    private router: Router) {
+    private httpClient: HttpClient) {
 
     // When the auth state changes, update the ApiUser
     this.appState.pipe(map(s => s.authUser?.accessToken), filter(t => t != null), distinctUntilChanged()).subscribe(accessToken => {

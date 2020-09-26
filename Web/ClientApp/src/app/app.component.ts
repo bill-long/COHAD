@@ -1,6 +1,9 @@
 import { Component } from '@angular/core';
 import { AuthService } from './services/auth.service';
 import { MeService } from './services/me.service';
+import { DirectoryService } from './services/directory.service';
+import { UserService } from './services/user.service';
+import { HomeService } from './services/home.service';
 
 @Component({
   selector: 'app-root',
@@ -8,5 +11,10 @@ import { MeService } from './services/me.service';
   styleUrls: ['./app.component.css']
 })
 export class AppComponent {
-  constructor(private authService: AuthService, private meService: MeService) { }
+  constructor(
+    private authService: AuthService,
+    private meService: MeService,
+    private dirService: DirectoryService,
+    private userService: UserService,
+    private homeService: HomeService) { }
 }

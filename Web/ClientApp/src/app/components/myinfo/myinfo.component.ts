@@ -1,5 +1,5 @@
 import { Component, OnInit, Inject } from '@angular/core';
-import { applicationState, ApplicationState } from '../state';
+import { applicationState, ApplicationState } from '../../state';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
