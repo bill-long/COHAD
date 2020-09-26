@@ -30,3 +30,15 @@
 .action-bar>button {
     margin-left: 5px;
 }
+
+.mat-input-element:disabled {
+    color: black;
+}
+
+.phoneType {
+    width: 100px;
+}
+
+.emailInput {
+    width: 220px;
+}

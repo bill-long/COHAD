@@ -29,6 +29,8 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
 
   focusedHome: Home = null;
 
+  editEnabled = false;
+
   homeFilter = new FormControl();
 
   constructor(
@@ -43,10 +45,10 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
       }
     });
 
-    const filteredHomes$ = combineLatest(
+    const filteredHomes$ = combineLatest([
       this.homeFilter.valueChanges.pipe(debounceTime(200), startWith('')),
       allHomes$
-    ).pipe(map(([f, h]) => {
+    ]).pipe(map(([f, h]) => {
       if (f.length < 1) {
         return h;
       }
@@ -54,7 +56,9 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
       f = f.toLowerCase();
 
       return h.filter(home => this.isFilterMatch(f, home));
-    })).subscribe(h => this.dataSource.data = h);
+    }));
+
+    filteredHomes$.subscribe(h => this.dataSource.data = h);
   }
 
   ngAfterViewInit(): void {

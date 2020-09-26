@@ -13,7 +13,7 @@ namespace Web.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "Committee")]
+    [Authorize(Policy = "Resident")]
     public class HomeController : ControllerBase
     {
         private readonly CohadWebDbContext _dbContext;
@@ -26,6 +26,7 @@ namespace Web.Controllers
         /// <summary>
         /// Gets all homes that exist.
         /// </summary>
+        [Authorize(Policy = "Committee")]
         public async Task<IEnumerable<Home>> Get()
         {
             return await _dbContext.Homes.ToListAsync();
@@ -38,14 +39,16 @@ namespace Web.Controllers
         /// </summary>
         /// <param name="updatedHome"></param>
         /// <returns></returns>
-        [Authorize(Policy = "Resident")]
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] UpdatedHome updatedHome)
         {
             var apiUser =
                 await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
 
-            if (apiUser.OwnedHomes.FirstOrDefault(h => h.Id == updatedHome.Id) == null)
+            // Necessary because Cosmos doesn't support Include() yet.
+            var allHomes = await _dbContext.Homes.ToListAsync();
+
+            if (apiUser.OwnedHomes?.FirstOrDefault(h => h.Id == updatedHome.Id) == null)
             {
                 // This user doesn't own this home. Check roles.
                 if (!apiUser.Roles.Contains(Models.User.Role.Committee))

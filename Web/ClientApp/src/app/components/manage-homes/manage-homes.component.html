@@ -46,4 +46,7 @@
     <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
 </table>
 
-<app-edit-home *ngIf="focusedHome != null" [home]="focusedHome" (doneEvent)="focusedHome = null"></app-edit-home>
+<app-edit-home *ngIf="focusedHome != null" [home]="focusedHome" (doneEvent)="focusedHome = null; editEnabled = false;"
+    [editEnabled]="editEnabled"></app-edit-home>
+<button *ngIf="focusedHome != null && !editEnabled" mat-flat-button color="primary" (click)="editEnabled = true">Edit
+    Details</button>

@@ -11,6 +11,8 @@ export class PhoneNumberInputComponent implements OnInit {
 
   @Input() phoneNumber: PhoneNumber;
 
+  @Input() editEnabled: boolean;
+
   phoneNumberControl = new FormControl();
 
   phoneNumberString: string;
@@ -37,6 +39,10 @@ export class PhoneNumberInputComponent implements OnInit {
         this.phoneNumberControl.setErrors({ invalidPhoneFormat: true });
       }
     });
+  }
+
+  getPhoneString() {
+    return `(${this.phoneNumber.areaCode}) ${this.phoneNumber.prefix}-${('0000' + this.phoneNumber.lineNumber).slice(-4)}`;
   }
 
 }

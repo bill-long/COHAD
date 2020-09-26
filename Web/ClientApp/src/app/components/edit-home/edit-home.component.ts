@@ -1,5 +1,6 @@
 import { Component, OnInit, Input, Output, EventEmitter } from '@angular/core';
 import { Home, Resident } from 'src/app/models';
+import { HomeService } from 'src/app/services/home.service';
 
 @Component({
   selector: 'app-edit-home',
@@ -10,13 +11,15 @@ export class EditHomeComponent implements OnInit {
 
   @Input() home: Home;
 
+  @Input() editEnabled: boolean;
+
   @Output() doneEvent = new EventEmitter<void>();
 
   homeCopy: Home;
 
   saveInProgress = false;
 
-  constructor() { }
+  constructor(private homeService: HomeService) { }
 
   ngOnInit(): void {
     this.homeCopy = JSON.parse(JSON.stringify(this.home));
@@ -45,7 +48,8 @@ export class EditHomeComponent implements OnInit {
   }
 
   save() {
-    console.log('Would have saved', this.homeCopy);
+    console.log('Saving', this.homeCopy);
+    this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe(r => this.doneEvent.next());
   }
 
 }
