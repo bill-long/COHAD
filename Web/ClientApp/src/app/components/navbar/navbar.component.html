@@ -1,19 +1,38 @@
 <mat-toolbar color="primary">
-  <span class="badge"> COHAD </span>
-  <div>
-    <a mat-flat-button color="primary" routerLink="" routerLinkActive="mat-accent"
-      [routerLinkActiveOptions]="{exact: true}">Home</a>
-    <a mat-flat-button color="primary" *ngIf="(user$ | async)?.roles.includes('Resident')" routerLink="directory"
-      routerLinkActive="mat-accent">Directory</a>
-    <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="user$ | async">My
-      Info</a>
-    <a mat-flat-button color="primary" *ngIf="(user$ | async)?.roles.includes('Committee')" routerLink="manage"
-      routerLinkActive="mat-accent">Manage</a>
-    <button mat-flat-button color="primary" *ngIf="user$ | async as user"
-      [matMenuTriggerFor]="userMenu">{{user.email}}</button>
-    <mat-menu #userMenu="matMenu">
-      <button mat-menu-item (click)="logout()" [disabled]="disabled">Sign Out</button>
+  <div fxLayout fxHide.lt-md="true">
+    <span class="badge"> COHAD </span>
+    <div>
+      <a mat-flat-button color="primary" routerLink="" routerLinkActive="mat-accent"
+        [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a mat-flat-button color="primary" *ngIf="(user$ | async)?.roles.includes('Resident')" routerLink="directory"
+        routerLinkActive="mat-accent">Directory</a>
+      <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="user$ | async">My
+        Info</a>
+      <a mat-flat-button color="primary" *ngIf="(user$ | async)?.roles.includes('Committee')" routerLink="manage"
+        routerLinkActive="mat-accent">Manage</a>
+      <button mat-flat-button color="primary" *ngIf="user$ | async as user"
+        [matMenuTriggerFor]="userMenu">{{user.email}}</button>
+      <mat-menu #userMenu="matMenu">
+        <button mat-menu-item (click)="logout()" [disabled]="disabled">Sign Out</button>
+      </mat-menu>
+      <button mat-button *ngIf="!(user$ | async)" (click)="login()" [disabled]="disabled">Sign In</button>
+    </div>
+  </div>
+  <div fxHide.gt-sm="true">
+    <button mat-flat-button color="primary" [matMenuTriggerFor]="hamburgerMenu">
+      <mat-icon>menu</mat-icon>
+    </button>
+    <mat-menu #hamburgerMenu="matMenu">
+      <a mat-menu-item color="primary" routerLink="" routerLinkActive="mat-accent"
+        [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a mat-menu-item color="primary" *ngIf="(user$ | async)?.roles.includes('Resident')" routerLink="directory"
+        routerLinkActive="mat-accent">Directory</a>
+      <a mat-menu-item color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="user$ | async">My
+        Info</a>
+      <a mat-menu-item color="primary" *ngIf="(user$ | async)?.roles.includes('Committee')" routerLink="manage"
+        routerLinkActive="mat-accent">Manage</a>
+      <button mat-menu-item color="primary" *ngIf="user$ | async as user"
+        [matMenuTriggerFor]="userMenu">{{user.email}}</button>
     </mat-menu>
-    <button mat-button *ngIf="!(user$ | async)" (click)="login()" [disabled]="disabled">Sign In</button>
   </div>
 </mat-toolbar>
