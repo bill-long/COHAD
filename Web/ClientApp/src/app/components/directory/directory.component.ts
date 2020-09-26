@@ -15,19 +15,13 @@ export class DirectoryComponent implements OnInit {
 
   directoryData: Observable<DirectoryHome[]>;
 
-  directoryDataSortedByAddress: Observable<DirectoryHome[]>;
-
   directoryDataSortedBySurname: Observable<DirectoryHome[]>;
-
-  filteredSortedByAddress: Observable<DirectoryHome[]>;
 
   filteredSortedBySurname: Observable<DirectoryHome[]>;
 
   showSpinner: Observable<boolean>;
 
   homeFilter = new FormControl('');
-
-  viewToggle = new FormControl('bySurname');
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -44,42 +38,16 @@ export class DirectoryComponent implements OnInit {
       }
     });
 
-    this.directoryDataSortedByAddress = this.directoryData.pipe(map(homes => {
-      const sorted = [...homes].sort((a, b) => {
-        let streetSort = a.streetName.localeCompare(b.streetName);
-        if (streetSort !== 0) {
-          return streetSort;
-        }
-
-        return a.streetNumber - b.streetNumber;
-      });
-
-      return sorted;
-    }));
-
     this.directoryDataSortedBySurname = this.directoryData.pipe(map(homes => {
       const sorted = [...homes].sort((a, b) => this.getSurname(a).localeCompare(this.getSurname(b)));
 
       return sorted;
     }));
 
-    this.filteredSortedByAddress = combineLatest(
-      this.homeFilter.valueChanges.pipe(debounceTime(200), startWith('')),
-      this.directoryDataSortedByAddress
-    ).pipe(map(([f, h]) => {
-      if (f.length < 1) {
-        return h;
-      }
-
-      f = f.toLowerCase();
-
-      return h.filter(home => this.isFilterMatch(f, home));
-    }));
-
-    this.filteredSortedBySurname = combineLatest(
+    this.filteredSortedBySurname = combineLatest([
       this.homeFilter.valueChanges.pipe(debounceTime(200), startWith('')),
       this.directoryDataSortedBySurname
-    ).pipe(map(([f, h]) => {
+    ]).pipe(map(([f, h]) => {
       if (f.length < 1) {
         return h;
       }
