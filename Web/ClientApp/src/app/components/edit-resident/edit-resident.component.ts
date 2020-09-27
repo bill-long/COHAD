@@ -29,7 +29,7 @@ export class EditResidentComponent implements OnInit {
 
   deletePhone(phone: PhoneNumber) {
     const index = this.resident.phoneNumbers.indexOf(phone);
-    this.resident.phoneNumbers.splice(index);
+    this.resident.phoneNumbers.splice(index, 1);
   }
 
   addEmail() {
@@ -42,7 +42,7 @@ export class EditResidentComponent implements OnInit {
 
   deleteEmail(email: EmailAddress) {
     const index = this.resident.emailAddresses.indexOf(email);
-    this.resident.emailAddresses.splice(index);
+    this.resident.emailAddresses.splice(index, 1);
   }
 
 }
