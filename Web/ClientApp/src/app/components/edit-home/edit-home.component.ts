@@ -40,9 +40,9 @@ export class EditHomeComponent implements OnInit {
     });
   }
 
-  deleteResident(resident: Resident) {
+  deleteResident(event, resident: Resident) {
     const index = this.homeCopy.residents.indexOf(resident);
-    this.homeCopy.residents.splice(index);
+    this.homeCopy.residents.splice(index, 1);
   }
 
   addEmail() {
