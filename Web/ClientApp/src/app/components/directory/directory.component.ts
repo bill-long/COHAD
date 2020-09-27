@@ -1,7 +1,6 @@
-import { Component, OnInit, Inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, combineLatest, Subject } from 'rxjs';
-import { startWith, debounceTime, map, shareReplay, take, delay } from 'rxjs/operators';
+import { Component, OnInit, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Observable, combineLatest, Subject, ReplaySubject } from 'rxjs';
+import { startWith, debounceTime, map, shareReplay, take, delay, withLatestFrom } from 'rxjs/operators';
 import { FormControl } from '@angular/forms';
 import { DirectoryHome } from '../../models';
 import { applicationState, ApplicationState, Action, dispatcher, LoadDirectory } from 'src/app/state';
@@ -9,15 +8,12 @@ import { applicationState, ApplicationState, Action, dispatcher, LoadDirectory }
 @Component({
   selector: 'app-directory',
   templateUrl: './directory.component.html',
-  styleUrls: ['./directory.component.css']
+  styleUrls: ['./directory.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class DirectoryComponent implements OnInit {
 
-  directoryData: Observable<DirectoryHome[]>;
-
-  directoryDataSortedBySurname: Observable<DirectoryHome[]>;
-
-  filteredSortedBySurname: Observable<DirectoryHome[]>;
+  itemsToRender: Observable<DirectoryHome[]>;
 
   showSpinner: Observable<boolean>;
 
@@ -28,25 +24,25 @@ export class DirectoryComponent implements OnInit {
     @Inject(dispatcher) private dispatcher: Subject<Action>) { }
 
   ngOnInit(): void {
-    this.directoryData = this.appState.pipe(delay(5), map(s => s.directory));
+    const directoryData = this.appState.pipe(delay(5), map(s => s.directory));
 
     this.showSpinner = this.appState.pipe(map(s => s.operationsInProgress > 0));
 
-    this.directoryData.pipe(take(1)).subscribe(data => {
+    directoryData.pipe(take(1)).subscribe(data => {
       if (data == null || data.length < 1) {
         this.dispatcher.next(new LoadDirectory());
       }
     });
 
-    this.directoryDataSortedBySurname = this.directoryData.pipe(map(homes => {
+    const directoryDataSortedBySurname = directoryData.pipe(map(homes => {
       const sorted = [...homes].sort((a, b) => this.getSurname(a).localeCompare(this.getSurname(b)));
 
       return sorted;
     }));
 
-    this.filteredSortedBySurname = combineLatest([
+    const filteredSortedBySurname = combineLatest([
       this.homeFilter.valueChanges.pipe(debounceTime(200), startWith('')),
-      this.directoryDataSortedBySurname
+      directoryDataSortedBySurname
     ]).pipe(map(([f, h]) => {
       if (f.length < 1) {
         return h;
@@ -56,6 +52,17 @@ export class DirectoryComponent implements OnInit {
 
       return h.filter(home => this.isFilterMatch(f, home));
     }));
+
+    const numberOfItemsToRender = new ReplaySubject<number>(1);
+    numberOfItemsToRender.next(20);
+
+    this.itemsToRender = combineLatest([filteredSortedBySurname, numberOfItemsToRender]).pipe(map(([homes, count]) => homes.slice(0, count)));
+
+    combineLatest([this.itemsToRender, filteredSortedBySurname]).pipe(delay(5)).subscribe(([rendered, all]) => {
+      if (rendered.length < all.length) {
+        numberOfItemsToRender.next(rendered.length + 20);
+      }
+    });
   }
 
   isFilterMatch(f: string, home: DirectoryHome) {
