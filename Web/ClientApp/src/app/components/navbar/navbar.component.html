@@ -31,6 +31,7 @@
         Info</a>
       <a mat-menu-item color="primary" *ngIf="(user$ | async)?.roles.includes('Committee')" routerLink="manage"
         routerLinkActive="mat-accent">Manage</a>
+      <button mat-button *ngIf="!(user$ | async)" (click)="login()" [disabled]="disabled">Sign In</button>
       <button mat-menu-item color="primary" *ngIf="user$ | async as user"
         [matMenuTriggerFor]="userMenu">{{user.email}}</button>
     </mat-menu>
