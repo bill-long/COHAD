@@ -14,7 +14,7 @@
                 </tr>
             </thead>
             <tbody>
-                <ng-container *ngFor="let home of (filteredSortedBySurname | async)">
+                <ng-container *ngFor="let home of (itemsToRender | async)">
                     <tr *ngIf="home.residents?.length">
                         <td colspan="2"><span class="surname">{{getSurname(home)}}</span>, {{getGivenNames(home)}}</td>
                         <td class="align-right">
