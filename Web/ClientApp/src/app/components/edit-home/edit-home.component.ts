@@ -13,6 +13,8 @@ export class EditHomeComponent implements OnInit {
 
   @Input() editEnabled: boolean;
 
+  @Input() reloadAllOnSave: boolean;
+
   @Output() doneEvent = new EventEmitter<void>();
 
   homeCopy: Home;
@@ -43,13 +45,34 @@ export class EditHomeComponent implements OnInit {
     this.homeCopy.residents.splice(index);
   }
 
+  addEmail() {
+    this.homeCopy.emailAddress = { address: '', visibleInDirectory: true, groupEmailOptedIn: true };
+  }
+
+  deleteEmail() {
+    this.homeCopy.emailAddress = null;
+  }
+
+  addPhone() {
+    this.homeCopy.phoneNumber = { type: 'Home', areaCode: null, prefix: null, lineNumber: null, visibleInDirectory: true };
+  }
+
+  deletePhone() {
+    this.homeCopy.phoneNumber = null;
+  }
+
   cancel() {
+    this.homeCopy = JSON.parse(JSON.stringify(this.home));
     this.doneEvent.next();
   }
 
   save() {
     console.log('Saving', this.homeCopy);
-    this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe(r => this.doneEvent.next());
+    if (this.reloadAllOnSave) {
+      this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe(r => this.doneEvent.next());
+    } else {
+      this.homeService.saveHomeAndReloadMine(this.homeCopy).subscribe(r => this.doneEvent.next());
+    }
   }
 
 }

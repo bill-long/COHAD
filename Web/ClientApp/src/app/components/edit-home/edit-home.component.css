@@ -6,3 +6,29 @@
     width: fit-content;
     margin-top: 10px;
 }
+
+.contact-info {
+    display: flex;
+}
+
+.contact-options {
+    display: flex;
+    flex-direction: column;
+    margin-left: 5px;
+}
+
+.filler {
+    flex: 1;
+}
+
+.mat-input-element:disabled {
+    color: black;
+}
+
+.phoneType {
+    width: 100px;
+}
+
+.emailInput {
+    width: 220px;
+}

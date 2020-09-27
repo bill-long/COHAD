@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@angular/core';
-import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted, LoadUser } from '../state';
+import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted, LoadDirectory, LoadUser } from '../state';
 import { Observable, Subject } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { filter, switchMap } from 'rxjs/operators';
@@ -27,6 +27,7 @@ export class HomeService {
     const obs = new Observable<boolean>(o => {
       this.httpClient.put('api/home', home).subscribe(result => {
         this.dispatcher.next(new LoadAllHomes());
+        this.dispatcher.next(new LoadDirectory());
         o.next(true);
         o.complete();
       }, err => {
@@ -43,6 +44,7 @@ export class HomeService {
     const obs = new Observable<boolean>(o => {
       this.httpClient.put('api/home', home).subscribe(result => {
         this.dispatcher.next(new LoadUser());
+        this.dispatcher.next(new LoadDirectory());
         o.next(true);
         o.complete();
       }, err => {
