@@ -3,7 +3,7 @@ import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Router, NavigationStart } from '@angular/router';
 import { applicationState, ApplicationState, dispatcher, Action, Login, Logout } from 'src/app/state';
-import { ApiUser } from 'src/app/models';
+import { ApiUser, AuthUser } from 'src/app/models';
 
 @Component({
   selector: 'app-navbar',
@@ -41,8 +41,12 @@ export class NavbarComponent implements OnInit {
     this.dispatcher.next(new Logout());
   }
 
-  get user$(): Observable<ApiUser> {
+  get apiUser$(): Observable<ApiUser> {
     return this.appState.pipe(map(s => s.apiUser));
+  }
+
+  get authUser$(): Observable<AuthUser> {
+    return this.appState.pipe(map(s => s.authUser));
   }
 
 }
