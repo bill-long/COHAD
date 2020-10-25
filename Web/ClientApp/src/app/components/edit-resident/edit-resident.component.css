@@ -5,17 +5,7 @@
     width: 100%;
 }
 
-.resident-top-line {
-    display: flex;
-}
-
-.contact-info {
-    display: flex;
-}
-
 .contact-options {
-    display: flex;
-    flex-direction: column;
     margin-left: 5px;
 }
 

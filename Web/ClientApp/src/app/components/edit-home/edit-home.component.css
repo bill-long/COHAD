@@ -13,7 +13,6 @@
 
 .contact-options {
     display: flex;
-    flex-direction: column;
     margin-left: 5px;
 }
 
@@ -31,4 +30,8 @@
 
 .emailInput {
     width: 220px;
+}
+
+.container {
+    display: flex;
 }
