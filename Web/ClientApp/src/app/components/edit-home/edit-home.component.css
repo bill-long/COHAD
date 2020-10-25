@@ -13,6 +13,7 @@
 
 .contact-options {
     display: flex;
+    flex-direction: column;
     margin-left: 5px;
 }
 
