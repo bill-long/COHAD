@@ -90,5 +90,7 @@ export interface AuditLogEntry {
     time: string;
     userId: string;
     userDisplayName: string;
+    subjectId: string;
+    subjectName: string;
     action: string;
 }

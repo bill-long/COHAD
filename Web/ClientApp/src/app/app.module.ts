@@ -44,7 +44,9 @@ import { ManageHomesComponent } from './components/manage-homes/manage-homes.com
 import { EditHomeComponent } from './components/edit-home/edit-home.component';
 import { EditResidentComponent } from './components/edit-resident/edit-resident.component';
 import { NgxMaskModule } from 'ngx-mask';
-import { PhoneNumberInputComponent } from './components/phone-number-input/phone-number-input.component'
+import { PhoneNumberInputComponent } from './components/phone-number-input/phone-number-input.component';
+import { SendEmailComponent } from './components/send-email/send-email.component';
+import { AuditLogComponent } from './components/audit-log/audit-log.component'
 
 @NgModule({
   declarations: [
@@ -65,7 +67,9 @@ import { PhoneNumberInputComponent } from './components/phone-number-input/phone
     ManageHomesComponent,
     EditHomeComponent,
     EditResidentComponent,
-    PhoneNumberInputComponent
+    PhoneNumberInputComponent,
+    SendEmailComponent,
+    AuditLogComponent
   ],
   imports: [
     BrowserModule,
