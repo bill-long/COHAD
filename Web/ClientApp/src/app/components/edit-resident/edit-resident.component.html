@@ -1,5 +1,5 @@
 <div class="resident-wrapper">
-    <div class="resident-top-line">
+    <div class="resident-top-line" fxLayout="row wrap">
         <mat-form-field appearance="fill">
             <mat-label>Given Name</mat-label>
             <input matInput [(ngModel)]="resident.givenName" [disabled]="!editEnabled">
@@ -18,25 +18,27 @@
         </button>
     </div>
 
-    <div class="contact-info" *ngFor="let emailAddress of resident.emailAddresses">
+    <div class="contact-info" *ngFor="let emailAddress of resident.emailAddresses" fxLayout="row" fxFlexAlign="center">
         <button mat-icon-button color="warn" aria-label="delete email" title="Delete email address"
-            (click)="deleteEmail(emailAddress)" *ngIf="editEnabled">
+            (click)="deleteEmail(emailAddress)" *ngIf="editEnabled" fxFlexAlign="center">
             <mat-icon>delete</mat-icon>
         </button>
-        <mat-form-field appearance="fill" class="emailInput">
-            <mat-label>Email</mat-label>
-            <input matInput [(ngModel)]="emailAddress.address" [disabled]="!editEnabled">
-        </mat-form-field>
-        <div class="contact-options">
-            <mat-checkbox [(ngModel)]="emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in directory
-            </mat-checkbox>
-            <mat-checkbox [(ngModel)]="emailAddress.groupEmailOptedIn" [disabled]="!editEnabled">Receive neighborhood
-                emails at this address
-            </mat-checkbox>
+        <div fxLayout="row wrap">
+            <mat-form-field appearance="fill" class="emailInput">
+                <mat-label>Email</mat-label>
+                <input matInput [(ngModel)]="emailAddress.address" [disabled]="!editEnabled">
+            </mat-form-field>
+            <div class="contact-options" fxLayout="column">
+                <mat-checkbox [(ngModel)]="emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in directory
+                </mat-checkbox>
+                <mat-checkbox [(ngModel)]="emailAddress.groupEmailOptedIn" [disabled]="!editEnabled">Receive COHAD
+                    emails
+                </mat-checkbox>
+            </div>
         </div>
     </div>
 
-    <div class="contact-info" *ngFor="let phoneNumber of resident.phoneNumbers">
+    <div class="contact-info" *ngFor="let phoneNumber of resident.phoneNumbers" fxLayout="row wrap">
         <button mat-icon-button color="warn" aria-label="delete phone number" title="Delete phone number"
             (click)="deletePhone(phoneNumber)" *ngIf="editEnabled">
             <mat-icon>delete</mat-icon>
