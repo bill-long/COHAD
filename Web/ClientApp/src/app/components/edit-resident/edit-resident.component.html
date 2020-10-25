@@ -1,4 +1,13 @@
 <div class="resident-wrapper">
+
+    <div fxLayout="row">
+        <div class="filler"></div>
+        <button mat-icon-button color="warn" aria-label="delete resident" title="Delete resident"
+            (click)="deleteResident.next()" *ngIf="editEnabled">
+            <mat-icon>delete</mat-icon>
+        </button>
+    </div>
+
     <div class="resident-top-line" fxLayout="row wrap">
         <mat-form-field appearance="fill">
             <mat-label>Given Name</mat-label>
@@ -9,18 +18,12 @@
             <mat-label>Surname</mat-label>
             <input matInput [(ngModel)]="resident.surname" [disabled]="!editEnabled">
         </mat-form-field>
-
-        <div class="filler"></div>
-
-        <button mat-icon-button color="warn" aria-label="delete resident" title="Delete resident"
-            (click)="deleteResident.next()" *ngIf="editEnabled">
-            <mat-icon>delete</mat-icon>
-        </button>
     </div>
 
-    <div class="contact-info" *ngFor="let emailAddress of resident.emailAddresses" fxLayout="row" fxFlexAlign="center">
+    <div class="contact-info" *ngFor="let emailAddress of resident.emailAddresses" fxLayout="row"
+        [ngClass]="{ 'outline': editEnabled }">
         <button mat-icon-button color="warn" aria-label="delete email" title="Delete email address"
-            (click)="deleteEmail(emailAddress)" *ngIf="editEnabled" fxFlexAlign="center">
+            (click)="deleteEmail(emailAddress)" *ngIf="editEnabled">
             <mat-icon>delete</mat-icon>
         </button>
         <div fxLayout="row wrap">
@@ -38,23 +41,26 @@
         </div>
     </div>
 
-    <div class="contact-info" *ngFor="let phoneNumber of resident.phoneNumbers" fxLayout="row wrap">
+    <div class="contact-info" *ngFor="let phoneNumber of resident.phoneNumbers" fxLayout="row"
+        [ngClass]="{ 'outline': editEnabled }">
         <button mat-icon-button color="warn" aria-label="delete phone number" title="Delete phone number"
             (click)="deletePhone(phoneNumber)" *ngIf="editEnabled">
             <mat-icon>delete</mat-icon>
         </button>
-        <mat-form-field appearance="fill" class="phoneType">
-            <mat-label>Type</mat-label>
-            <mat-select [(ngModel)]="phoneNumber.type" [disabled]="!editEnabled">
-                <mat-option value="Mobile">Mobile</mat-option>
-                <mat-option value="Home">Home</mat-option>
-                <mat-option value="Work">Work</mat-option>
-            </mat-select>
-        </mat-form-field>
-        <app-phone-number-input [phoneNumber]="phoneNumber" [editEnabled]="editEnabled"></app-phone-number-input>
-        <div class="contact-options">
-            <mat-checkbox [(ngModel)]="phoneNumber.visibleInDirectory" [disabled]="!editEnabled">Show in directory
-            </mat-checkbox>
+        <div fxLayout="row wrap">
+            <mat-form-field appearance="fill" class="phoneType">
+                <mat-label>Type</mat-label>
+                <mat-select [(ngModel)]="phoneNumber.type" [disabled]="!editEnabled">
+                    <mat-option value="Mobile">Mobile</mat-option>
+                    <mat-option value="Home">Home</mat-option>
+                    <mat-option value="Work">Work</mat-option>
+                </mat-select>
+            </mat-form-field>
+            <app-phone-number-input [phoneNumber]="phoneNumber" [editEnabled]="editEnabled"></app-phone-number-input>
+            <div class="contact-options">
+                <mat-checkbox [(ngModel)]="phoneNumber.visibleInDirectory" [disabled]="!editEnabled">Show in directory
+                </mat-checkbox>
+            </div>
         </div>
     </div>
 
