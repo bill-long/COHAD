@@ -1,13 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { FormBuilder, FormControl, FormGroup } from '@angular/forms';
-
-// Use div instead of p
 import Quill from 'quill';
-const Block = Quill.import('blots/block');
-class MyBlock extends Block { }
-MyBlock.tagName = 'DIV';
-Quill.register('blots/block', MyBlock, true);
 
 @Component({
   selector: 'app-send-email',
@@ -23,7 +17,12 @@ export class SendEmailComponent implements OnInit {
   sendSucceeded = false;
   errorText: string;
 
-  constructor(private httpClient: HttpClient) { }
+  constructor(private httpClient: HttpClient) {
+    const Block = Quill.import('blots/block');
+    class MyBlock extends Block { }
+    MyBlock.tagName = 'DIV';
+    Quill.register('blots/block', MyBlock, true);
+  }
 
   ngOnInit(): void { }
 
