@@ -94,3 +94,8 @@ export interface AuditLogEntry {
     subjectName: string;
     action: string;
 }
+
+export interface EmailInfo {
+    subject: string;
+    htmlBody: string;
+}
