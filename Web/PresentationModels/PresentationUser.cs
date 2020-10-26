@@ -16,7 +16,6 @@ namespace Web.PresentationModels
         public string IdentityProvider { get; private set; }
         public List<string> Roles { get; private set; }
         public List<Home> OwnedHomes { get; private set; }
-        public List<AuditLogEntry> AuditLog { get; private set; }
 
         public static PresentationUser FromStorageModel(Models.User user)
         {
@@ -29,8 +28,7 @@ namespace Web.PresentationModels
                 Email = user.Emails,
                 IdentityProvider = user.IdentityProvider,
                 Roles = user.Roles.Select(r => r.ToString()).ToList(),
-                OwnedHomes = user.OwnedHomes,
-                AuditLog = user.AuditLog
+                OwnedHomes = user.OwnedHomes
             };
         }
     }

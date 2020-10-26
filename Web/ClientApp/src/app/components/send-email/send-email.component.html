@@ -1,0 +1,12 @@
+<h4>Send Neighborhood Email</h4>
+<mat-form-field appearance="fill">
+    <mat-label>Subject</mat-label>
+    <input matInput [(ngModel)]="subject" [disabled]="!editEnabled">
+</mat-form-field>
+<div class="editor-wrapper">
+    <quill-editor [readOnly]="!editEnabled" [(ngModel)]="htmlBody"></quill-editor>
+</div>
+<button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail()" [disabled]="!editEnabled">Send
+    Email</button>
+<div *ngIf="sendSucceeded">Email was sent!</div>
+<button *ngIf="sendSucceeded" mat-flat-button color="primary" (click)="sendNew()">Compose a new email</button>

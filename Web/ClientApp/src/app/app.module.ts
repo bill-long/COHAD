@@ -19,6 +19,8 @@ import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 
+import { QuillModule } from 'ngx-quill';
+
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { HomeComponent } from './components/home/home.component';
@@ -44,7 +46,9 @@ import { ManageHomesComponent } from './components/manage-homes/manage-homes.com
 import { EditHomeComponent } from './components/edit-home/edit-home.component';
 import { EditResidentComponent } from './components/edit-resident/edit-resident.component';
 import { NgxMaskModule } from 'ngx-mask';
-import { PhoneNumberInputComponent } from './components/phone-number-input/phone-number-input.component'
+import { PhoneNumberInputComponent } from './components/phone-number-input/phone-number-input.component';
+import { SendEmailComponent } from './components/send-email/send-email.component';
+import { AuditLogComponent } from './components/audit-log/audit-log.component'
 
 @NgModule({
   declarations: [
@@ -65,7 +69,9 @@ import { PhoneNumberInputComponent } from './components/phone-number-input/phone
     ManageHomesComponent,
     EditHomeComponent,
     EditResidentComponent,
-    PhoneNumberInputComponent
+    PhoneNumberInputComponent,
+    SendEmailComponent,
+    AuditLogComponent
   ],
   imports: [
     BrowserModule,
@@ -80,6 +86,29 @@ import { PhoneNumberInputComponent } from './components/phone-number-input/phone
         sendAccessToken: true,
         allowedUrls: [
           'api/'
+        ]
+      }
+    }),
+    QuillModule.forRoot({
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline', 'strike'],        // toggled buttons
+          ['blockquote', 'code-block'],
+
+          [{ 'header': 1 }, { 'header': 2 }],               // custom button values
+          [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+          [{ 'indent': '-1' }, { 'indent': '+1' }],          // outdent/indent
+
+          [{ 'size': ['small', false, 'large', 'huge'] }],  // custom dropdown
+          [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+
+          [{ 'color': [] }, { 'background': [] }],          // dropdown with defaults from theme
+          [{ 'font': [] }],
+          [{ 'align': [] }],
+
+          ['clean'],                                         // remove formatting button
+
+          ['link', 'image']
         ]
       }
     }),

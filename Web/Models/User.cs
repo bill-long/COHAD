@@ -28,8 +28,6 @@ namespace Web.Models
 
         public List<Home> OwnedHomes { get; set; }
 
-        public List<AuditLogEntry> AuditLog { get; set; }
-
         public enum Role
         {
             Resident,

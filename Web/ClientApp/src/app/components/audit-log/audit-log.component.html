@@ -1,0 +1,14 @@
+<table mat-table [dataSource]="dataSource" matSort>
+
+    <ng-container matColumnDef="time">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header> Time </th>
+        <td mat-cell *matCellDef="let auditEntry"> {{auditEntry.time | date:'medium'}} </td>
+    </ng-container>
+    <mat-text-column name="subjectId"></mat-text-column>
+    <mat-text-column name="subjectName"></mat-text-column>
+    <mat-text-column name="userDisplayName"></mat-text-column>
+    <mat-text-column name="action"></mat-text-column>
+
+    <tr mat-header-row *matHeaderRowDef="columnsToDisplay"></tr>
+    <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
+</table>

@@ -13,6 +13,8 @@ import { DirectoryComponent } from './components/directory/directory.component';
 import { ManageComponent } from './components/manage/manage.component';
 import { ManageUsersComponent } from './components/manage-users/manage-users.component';
 import { ManageHomesComponent } from './components/manage-homes/manage-homes.component';
+import { SendEmailComponent } from './components/send-email/send-email.component';
+import { AuditLogComponent } from './components/audit-log/audit-log.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
@@ -25,7 +27,9 @@ const routes: Routes = [
   {
     path: 'manage', component: ManageComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' }, children: [
       { path: 'users', component: ManageUsersComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } },
-      { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } }
+      { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } },
+      { path: 'send-email', component: SendEmailComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } },
+      { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { requiredRole: 'Committee' } }
     ]
   },
   { path: 'unauthorized', component: UnauthorizedComponent }

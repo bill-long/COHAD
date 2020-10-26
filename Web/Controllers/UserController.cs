@@ -71,9 +71,11 @@ namespace Web.Controllers
             storedUser.Surname = updatedUser.Surname;
             storedUser.StreetAddress = updatedUser.StreetAddress;
 
-            storedUser.AuditLog ??= new List<AuditLogEntry>();
-            storedUser.AuditLog.Insert(0, new AuditLogEntry
+            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
             {
+                Id = Guid.NewGuid(),
+                SubjectId = storedUser.UniqueId,
+                SubjectName = storedUser.Emails,
                 Action = "Updated user properties.",
                 Time = DateTime.UtcNow,
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
@@ -118,9 +120,11 @@ namespace Web.Controllers
 
             user.OwnedHomes.Add(home);
 
-            user.AuditLog ??= new List<AuditLogEntry>();
-            user.AuditLog.Insert(0, new AuditLogEntry
+            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
             {
+                Id = Guid.NewGuid(),
+                SubjectId = user.UniqueId,
+                SubjectName = user.Emails,
                 Action = "Assigned a home to this user.",
                 Time = DateTime.UtcNow,
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
@@ -163,9 +167,11 @@ namespace Web.Controllers
 
             user.OwnedHomes = user.OwnedHomes.Where(h => h.Id != homeId).ToList();
 
-            user.AuditLog ??= new List<AuditLogEntry>();
-            user.AuditLog.Insert(0, new AuditLogEntry
+            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
             {
+                Id = Guid.NewGuid(),
+                SubjectId = user.UniqueId,
+                SubjectName = user.Emails,
                 Action = "Removed a home from this user.",
                 Time = DateTime.UtcNow,
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
@@ -209,9 +215,11 @@ namespace Web.Controllers
 
             userToModify.Roles.Add(roleToAdd);
 
-            userToModify.AuditLog ??= new List<AuditLogEntry>();
-            userToModify.AuditLog.Insert(0, new AuditLogEntry
+            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
             {
+                Id = Guid.NewGuid(),
+                SubjectId = userToModify.UniqueId,
+                SubjectName = userToModify.Emails,
                 Action = $"Added role {roleToAdd} to this user.",
                 Time = DateTime.UtcNow,
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
@@ -255,9 +263,11 @@ namespace Web.Controllers
 
             userToModify.Roles.Remove(roleToRemove);
 
-            userToModify.AuditLog ??= new List<AuditLogEntry>();
-            userToModify.AuditLog.Insert(0, new AuditLogEntry
+            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
             {
+                Id = Guid.NewGuid(),
+                SubjectId = userToModify.UniqueId,
+                SubjectName = userToModify.Emails,
                 Action = $"Removed role {roleToRemove} from this user.",
                 Time = DateTime.UtcNow,
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",

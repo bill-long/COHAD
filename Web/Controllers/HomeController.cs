@@ -69,9 +69,11 @@ namespace Web.Controllers
             storedHome.PhoneNumber = updatedHome.PhoneNumber;
             storedHome.Residents = updatedHome.Residents;
 
-            storedHome.AuditLog ??= new List<AuditLogEntry>();
-            storedHome.AuditLog.Insert(0, new AuditLogEntry
+            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
             {
+                Id = Guid.NewGuid(),
+                SubjectId = storedHome.Id.ToString(),
+                SubjectName = $"{storedHome.StreetNumber} {storedHome.StreetName}",
                 Action = "Updated home information.",
                 Time = DateTime.UtcNow,
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
