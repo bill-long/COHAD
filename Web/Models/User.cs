@@ -31,8 +31,10 @@ namespace Web.Models
         public enum Role
         {
             Resident,
-            Committee,
-            Administrator
+            Administrator,
+            SocialCommittee,
+            GardenClub,
+            Board
         }
 
         public static string GetUniqueIdFromClaims(IEnumerable<Claim> claims)

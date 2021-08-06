@@ -16,7 +16,7 @@ namespace Web.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "Committee")]
+    [Authorize(Policy = "Administrator")]
     public class EmailController : ControllerBase
     {
         private readonly CohadWebDbContext _dbContext;
@@ -33,19 +33,44 @@ namespace Web.Controllers
             };
         }
 
-        [HttpPut]
-        public async Task<IActionResult> SendEmail([FromBody] EmailInfo emailInfo)
+        [HttpPut("from-board")]
+        [Authorize(Policy = "Board")]
+        public async Task<IActionResult> SendEmailFromBoard([FromBody] EmailInfo emailInfo)
+        {
+            await SendEmail("board@cohad.org", "COHAD Board", emailInfo.Subject, emailInfo.HtmlBody);
+
+            return Ok();
+        }
+
+        [HttpPut("from-social")]
+        [Authorize(Policy = "SocialCommittee")]
+        public async Task<IActionResult> SendEmailFromSocialCommittee([FromBody] EmailInfo emailInfo)
+        {
+            await SendEmail("social@cohad.org", "COHAD Social Committee", emailInfo.Subject, emailInfo.HtmlBody);
+
+            return Ok();
+        }
+
+        [HttpPut("from-garden")]
+        [Authorize(Policy = "GardenClub")]
+        public async Task<IActionResult> SendEmailFromGardenClub([FromBody] EmailInfo emailInfo)
+        {
+            await SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo.Subject, emailInfo.HtmlBody);
+
+            return Ok();
+        }
+
+        private async Task SendEmail(string fromEmail, string fromDisplay, string subject, string htmlBody)
         {
             var message = new MailMessage
             {
-                From = new MailAddress("board@cohad.org", "Canyon Oaks HOA"),
-                Subject = emailInfo.Subject,
+                From = new MailAddress(fromEmail, fromDisplay),
+                Subject = subject,
                 IsBodyHtml = true,
-                Body = emailInfo.HtmlBody
+                Body = htmlBody
             };
 
-            message.ReplyToList.Add(new MailAddress("board@cohad.org", "COHAD Board"));
-            message.ReplyToList.Add(new MailAddress("redacted@example.com", "Judy Johannesen"));
+            message.ReplyToList.Add(new MailAddress(fromEmail, fromDisplay));
 
             var homes = await _dbContext.Homes.ToListAsync();
             var bccAddresses =
@@ -68,8 +93,6 @@ namespace Web.Controllers
             };
 
             smtpClient.Send(message);
-
-            return Ok();
         }
     }
 }
