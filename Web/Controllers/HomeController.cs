@@ -51,7 +51,7 @@ namespace Web.Controllers
             if (apiUser.OwnedHomes?.FirstOrDefault(h => h.Id == updatedHome.Id) == null)
             {
                 // This user doesn't own this home. Check roles.
-                if (!apiUser.Roles.Contains(Models.User.Role.Committee))
+                if (!apiUser.Roles.Contains(Models.User.Role.Administrator))
                 {
                     return Forbid();
                 }
