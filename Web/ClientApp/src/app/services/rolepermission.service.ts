@@ -4,7 +4,7 @@ export const rolePermissions = {
     manageHomesRoles: ['Administrator'],
     manageEmailRoles: ['Administrator', 'WelcomeCommittee', 'GardenClub', 'Board'],
     manageAuditLogRoles: ['Administrator'],
-    sendEmailAsBoard: ['Administrator', 'Board'],
-    sendEmailAsWelcomeCommittee: ['Administrator', 'WelcomeCommittee'],
-    sendEmailAsGardenClub: ['Administrator', 'GardenClub']
+    sendEmailAsBoard: ['Board'],
+    sendEmailAsWelcomeCommittee: ['WelcomeCommittee'],
+    sendEmailAsGardenClub: ['GardenClub']
 }
