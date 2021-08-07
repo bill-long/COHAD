@@ -16,7 +16,7 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
 
   dataSource = new MatTableDataSource<Home>();
 
-  @ViewChild(MatSort) sort: MatSort;
+  @ViewChild(MatSort) sort!: MatSort;
 
   columnsToDisplay = [
     'streetNumber',
@@ -27,7 +27,7 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
     'actions'
   ];
 
-  focusedHome: Home = null;
+  focusedHome: Home | null = null;
 
   editEnabled = false;
 

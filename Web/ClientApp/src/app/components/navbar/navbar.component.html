@@ -7,11 +7,11 @@
       <span *ngIf="(authUser$ | async)?.identityClaims?.emails && !(apiUser$ | async)"
         class="mat-body getting-details">Getting
         details...</span>
-      <a mat-flat-button color="primary" *ngIf="(apiUser$ | async)?.roles.includes('Resident')" routerLink="directory"
+      <a mat-flat-button color="primary" *ngIf="(apiUser$ | async)?.roles?.includes('Resident')" routerLink="directory"
         routerLinkActive="mat-accent">Directory</a>
       <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="apiUser$ | async">My
         Info</a>
-      <a mat-flat-button color="primary" *ngIf="(apiUser$ | async)?.roles.includes('Committee')" routerLink="manage"
+      <a mat-flat-button color="primary" *ngIf="manageVisible$ | async" routerLink="manage"
         routerLinkActive="mat-accent">Manage</a>
       <button mat-flat-button color="primary" *ngIf="(authUser$ | async)?.identityClaims?.emails as emails"
         [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
@@ -31,11 +31,11 @@
         [routerLinkActiveOptions]="{exact: true}">Home</a>
       <span *ngIf="(authUser$ | async)?.identityClaims?.emails && !(apiUser$ | async)" class="mat-body">Getting
         details...</span>
-      <a mat-menu-item color="primary" *ngIf="(apiUser$ | async)?.roles.includes('Resident')" routerLink="directory"
+      <a mat-menu-item color="primary" *ngIf="(apiUser$ | async)?.roles?.includes('Resident')" routerLink="directory"
         routerLinkActive="mat-accent">Directory</a>
       <a mat-menu-item color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="apiUser$ | async">My
         Info</a>
-      <a mat-menu-item color="primary" *ngIf="(apiUser$ | async)?.roles.includes('Committee')" routerLink="manage"
+      <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage"
         routerLinkActive="mat-accent">Manage</a>
       <button mat-button *ngIf="!(authUser$ | async)?.identityClaims?.emails" (click)="login()"
         [disabled]="disabled">Sign In</button>

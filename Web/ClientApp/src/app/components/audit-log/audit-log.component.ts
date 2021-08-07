@@ -14,7 +14,7 @@ export class AuditLogComponent implements OnInit {
 
   dataSource = new MatTableDataSource<AuditLogEntry>();
 
-  @ViewChild(MatSort) sort: MatSort;
+  @ViewChild(MatSort, { static: false }) sort!: MatSort;
 
   columnsToDisplay = [
     'time',
@@ -28,6 +28,10 @@ export class AuditLogComponent implements OnInit {
 
   ngOnInit(): void {
     this.httpClient.get<AuditLogEntry[]>('api/auditlog').subscribe(r => this.dataSource.data = r);
+  }
+
+  ngAfterViewInit() {
+    this.dataSource.sort = this.sort;
   }
 
 }

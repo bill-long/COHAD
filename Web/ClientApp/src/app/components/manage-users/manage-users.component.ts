@@ -11,11 +11,11 @@ import { ApiUser, Home } from 'src/app/models';
   templateUrl: './manage-users.component.html',
   styleUrls: ['./manage-users.component.css']
 })
-export class ManageUsersComponent implements OnInit, AfterViewInit {
+export class ManageUsersComponent implements AfterViewInit {
 
   dataSource = new MatTableDataSource<ApiUser>();
 
-  @ViewChild(MatSort) sort: MatSort;
+  @ViewChild(MatSort) sort!: MatSort;
 
   columnsToDisplay = [
     'givenName',
@@ -28,15 +28,13 @@ export class ManageUsersComponent implements OnInit, AfterViewInit {
     'actions'
   ];
 
-  focusedUser: ApiUser = null;
+  focusedUser: ApiUser | null = null;
 
   allHomes$: Observable<Home[]>;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    @Inject(dispatcher) private dispatcher: Observer<Action>) { }
-
-  ngOnInit(): void {
+    @Inject(dispatcher) private dispatcher: Observer<Action>) {
     const allUsers$ = this.appState.pipe(map(s => s.allUsers));
     allUsers$.pipe(take(1)).subscribe(u => {
       if (u.length < 1) {

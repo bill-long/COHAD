@@ -4,6 +4,7 @@ import { map } from 'rxjs/operators';
 import { Router, NavigationStart } from '@angular/router';
 import { applicationState, ApplicationState, dispatcher, Action, Login, Logout } from 'src/app/state';
 import { ApiUser, AuthUser } from 'src/app/models';
+import { rolePermissions } from 'src/app/services/rolepermission.service';
 
 @Component({
   selector: 'app-navbar',
@@ -41,12 +42,16 @@ export class NavbarComponent implements OnInit {
     this.dispatcher.next(new Logout());
   }
 
-  get apiUser$(): Observable<ApiUser> {
+  get apiUser$(): Observable<ApiUser | null> {
     return this.appState.pipe(map(s => s.apiUser));
   }
 
-  get authUser$(): Observable<AuthUser> {
+  get authUser$(): Observable<AuthUser | null> {
     return this.appState.pipe(map(s => s.authUser));
+  }
+
+  get manageVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0))
   }
 
 }

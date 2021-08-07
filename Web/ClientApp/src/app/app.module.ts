@@ -32,7 +32,6 @@ import { NewsComponent } from './components/news/news.component';
 import { DocumentsComponent } from './components/documents/documents.component';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
-import { ProfileComponent } from './components/profile/profile.component';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { OAuthModule } from 'angular-oauth2-oidc';
 import { MyinfoComponent } from './components/myinfo/myinfo.component';
@@ -60,7 +59,6 @@ import { AuditLogComponent } from './components/audit-log/audit-log.component'
     NewsComponent,
     DocumentsComponent,
     UnauthorizedComponent,
-    ProfileComponent,
     MyinfoComponent,
     DirectoryComponent,
     ManageComponent,

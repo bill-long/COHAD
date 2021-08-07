@@ -10,7 +10,7 @@ import { map } from 'rxjs/operators';
 })
 export class MyinfoComponent implements OnInit {
 
-  editEnabled: false;
+  editEnabled: boolean = false;
 
   constructor(@Inject(applicationState) private appState: Observable<ApplicationState>) { }
 

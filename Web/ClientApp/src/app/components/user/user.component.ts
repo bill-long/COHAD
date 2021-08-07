@@ -17,21 +17,21 @@ import { applicationState, ApplicationState } from 'src/app/state';
 })
 export class UserComponent implements OnInit {
 
-  @Input() apiUser: ApiUser;
+  @Input() apiUser!: ApiUser;
 
-  @Input() allHomes: Home[];
+  @Input() allHomes!: Home[];
 
   @Output() doneEvent = new EventEmitter<void>();
 
-  apiUserCopy: ApiUser;
+  apiUserCopy!: ApiUser;
 
-  filteredHomes: Observable<Home[]>;
+  filteredHomes!: Observable<Home[]>;
 
   homeControl = new FormControl();
 
   roleControl = new FormControl();
 
-  allRoles = ['Resident', 'Committee'];
+  allRoles = ['Resident', 'SocialCommittee', 'GardenClub'];
 
   separatorKeyCodes: number[] = [ENTER, COMMA];
 
@@ -39,9 +39,9 @@ export class UserComponent implements OnInit {
 
   saveInProgress = false;
 
-  @ViewChild('homeInput') homeInput: ElementRef<HTMLInputElement>;
+  @ViewChild('homeInput') homeInput!: ElementRef<HTMLInputElement>;
 
-  @ViewChild('roleInput') roleInput: ElementRef<HTMLInputElement>;
+  @ViewChild('roleInput') roleInput!: ElementRef<HTMLInputElement>;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -61,7 +61,7 @@ export class UserComponent implements OnInit {
     );
 
     this.appState.pipe(map(s => s.apiUser)).subscribe(u => {
-      if (u.roles.includes('Administrator')) {
+      if (u?.roles.includes('Administrator')) {
         this.allRoles.push('Administrator');
       }
     })
@@ -91,7 +91,7 @@ export class UserComponent implements OnInit {
     }
 
     if (event.input) {
-      event.input.value = null;
+      event.input.value = '';
     }
 
     this.homeControl.setValue(null);
@@ -106,7 +106,7 @@ export class UserComponent implements OnInit {
       this.apiUserCopy.ownedHomes.push(event.option.value);
     }
 
-    this.homeInput.nativeElement.value = null;
+    this.homeInput.nativeElement.value = '';
     this.homeControl.setValue(null);
   }
 
@@ -126,7 +126,7 @@ export class UserComponent implements OnInit {
     }
 
     if (event.input) {
-      event.input.value = null;
+      event.input.value = '';
     }
 
     this.roleControl.setValue(null);
@@ -141,7 +141,7 @@ export class UserComponent implements OnInit {
       this.apiUserCopy.roles.push(event.option.value);
     }
 
-    this.roleInput.nativeElement.value = null;
+    this.roleInput.nativeElement.value = '';
     this.roleControl.setValue(null);
   }
 

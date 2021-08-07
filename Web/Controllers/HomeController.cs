@@ -26,7 +26,7 @@ namespace Web.Controllers
         /// <summary>
         /// Gets all homes that exist.
         /// </summary>
-        [Authorize(Policy = "Committee")]
+        [Authorize(Policy = "Administrator")]
         public async Task<IEnumerable<Home>> Get()
         {
             return await _dbContext.Homes.ToListAsync();

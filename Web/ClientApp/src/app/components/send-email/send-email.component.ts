@@ -10,12 +10,12 @@ import Quill from 'quill';
 })
 export class SendEmailComponent implements OnInit {
 
-  subject: string;
-  htmlBody: string;
-  formGroup: FormGroup;
+  subject!: string;
+  htmlBody!: string;
+  formGroup!: FormGroup;
   editEnabled = true;
   sendSucceeded = false;
-  errorText: string;
+  errorText!: string | null;
 
   constructor(private httpClient: HttpClient) {
     const Block = Quill.import('blots/block');

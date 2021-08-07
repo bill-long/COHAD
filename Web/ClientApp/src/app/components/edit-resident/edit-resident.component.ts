@@ -8,9 +8,9 @@ import { Resident, PhoneNumber, EmailAddress } from 'src/app/models';
 })
 export class EditResidentComponent implements OnInit {
 
-  @Input() resident: Resident;
+  @Input() resident!: Resident;
 
-  @Input() editEnabled: boolean;
+  @Input() editEnabled!: boolean;
 
   @Output() deleteResident = new EventEmitter<void>();
 
@@ -37,7 +37,7 @@ export class EditResidentComponent implements OnInit {
       this.resident.emailAddresses = [];
     }
 
-    this.resident.emailAddresses.push({ address: null, visibleInDirectory: true, groupEmailOptedIn: true });
+    this.resident.emailAddresses.push({ address: '', visibleInDirectory: true, groupEmailOptedIn: true });
   }
 
   deleteEmail(email: EmailAddress) {
