@@ -9,11 +9,11 @@ import { AuthService } from 'src/app/services/auth.service';
             <div>
                 <ul>
                     <li>
-                        When you register on this site, we collect your name and email address.
-                        We then associate that information with your street address in Canyon Oaks.
+                        When you register on this site, we collect your name, email address,
+                        and street address in Canyon Oaks.
                     </li>
                     <li>
-                        Once we associate your account with your street address, your account is
+                        Once we confirm that you live in Canyon Oaks, your account is
                         able to view the neighborhood directory. Only residents of
                         Canyon Oaks may view this directory.
                     </li>
