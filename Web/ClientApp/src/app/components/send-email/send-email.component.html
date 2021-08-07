@@ -1,8 +1,20 @@
 <h4>Send Neighborhood Email</h4>
-<mat-form-field appearance="fill">
-    <mat-label>Subject</mat-label>
-    <input matInput [(ngModel)]="subject" [disabled]="!editEnabled">
-</mat-form-field>
+<div>
+    <mat-form-field appearance="fill">
+        <mat-label>From</mat-label>
+        <mat-select [(value)]="senderEndpoint">
+            <mat-option *ngIf="canSendFromBoard | async" [value]="'from-board'">COHAD Board</mat-option>
+            <mat-option *ngIf="canSendFromWelcomeCommittee | async" [value]="'from-welcome'">COHAD Welcome Committee</mat-option>
+            <mat-option *ngIf="canSendFromGardenClub | async" [value]="'from-garden'">COHAD Garden Club</mat-option>
+        </mat-select>
+    </mat-form-field>
+</div>
+<div>
+    <mat-form-field appearance="fill">
+        <mat-label>Subject</mat-label>
+        <input matInput [(ngModel)]="subject" [disabled]="!editEnabled">
+    </mat-form-field>
+</div>
 <div class="editor-wrapper">
     <quill-editor [readOnly]="!editEnabled" [(ngModel)]="htmlBody"></quill-editor>
 </div>

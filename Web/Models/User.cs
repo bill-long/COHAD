@@ -32,7 +32,7 @@ namespace Web.Models
         {
             Resident,
             Administrator,
-            SocialCommittee,
+            WelcomeCommittee,
             GardenClub,
             Board
         }

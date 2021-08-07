@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Web.Configuration;
+using Web.Models;
 using Web.Repository;
 using Web.UpdateModels;
 
@@ -37,16 +38,24 @@ namespace Web.Controllers
         [Authorize(Policy = "Board")]
         public async Task<IActionResult> SendEmailFromBoard([FromBody] EmailInfo emailInfo)
         {
-            await SendEmail("board@cohad.org", "COHAD Board", emailInfo.Subject, emailInfo.HtmlBody);
+            var homes = await _dbContext.Homes.ToListAsync();
+            var bccAddresses =
+                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.GroupEmailOptedIn))).ToList();
+
+            await SendEmail("board@cohad.org", "COHAD Board", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
 
             return Ok();
         }
 
-        [HttpPut("from-social")]
-        [Authorize(Policy = "SocialCommittee")]
-        public async Task<IActionResult> SendEmailFromSocialCommittee([FromBody] EmailInfo emailInfo)
+        [HttpPut("from-welcome")]
+        [Authorize(Policy = "WelcomeCommittee")]
+        public async Task<IActionResult> SendEmailFromWelcomeCommittee([FromBody] EmailInfo emailInfo)
         {
-            await SendEmail("social@cohad.org", "COHAD Social Committee", emailInfo.Subject, emailInfo.HtmlBody);
+            var homes = await _dbContext.Homes.ToListAsync();
+            var bccAddresses =
+                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.WelcomeEmailOptedIn))).ToList();
+
+            await SendEmail("welcome@cohad.org", "COHAD Welcome Committee", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
 
             return Ok();
         }
@@ -55,12 +64,16 @@ namespace Web.Controllers
         [Authorize(Policy = "GardenClub")]
         public async Task<IActionResult> SendEmailFromGardenClub([FromBody] EmailInfo emailInfo)
         {
-            await SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo.Subject, emailInfo.HtmlBody);
+            var homes = await _dbContext.Homes.ToListAsync();
+            var bccAddresses =
+                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.GardenClubEmailOptedIn))).ToList();
+
+            await SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
 
             return Ok();
         }
 
-        private async Task SendEmail(string fromEmail, string fromDisplay, string subject, string htmlBody)
+        private async Task SendEmail(string fromEmail, string fromDisplay, string subject, string htmlBody, List<EmailAddress> bccList)
         {
             var message = new MailMessage
             {
@@ -73,13 +86,10 @@ namespace Web.Controllers
             message.ReplyToList.Add(new MailAddress(fromEmail, fromDisplay));
 
             var homes = await _dbContext.Homes.ToListAsync();
-            var bccAddresses =
-                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.GroupEmailOptedIn))).ToList();
-
 #if DEBUG
             message.Bcc.Add("bill@selfish.net");
 #else
-            foreach (var email in bccAddresses)
+            foreach (var email in bccList)
             {
                 message.Bcc.Add(email.Address);
             }

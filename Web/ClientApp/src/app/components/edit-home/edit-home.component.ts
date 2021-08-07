@@ -46,7 +46,7 @@ export class EditHomeComponent implements OnInit {
   }
 
   addEmail() {
-    this.homeCopy.emailAddress = { address: '', visibleInDirectory: true, groupEmailOptedIn: true };
+    this.homeCopy.emailAddress = { address: '', visibleInDirectory: true, groupEmailOptedIn: true, welcomeEmailOptedIn: true, gardenClubEmailOptedIn: true };
   }
 
   deleteEmail() {

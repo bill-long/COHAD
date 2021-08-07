@@ -83,6 +83,8 @@ export interface EmailAddress {
     address: string;
     visibleInDirectory: boolean;
     groupEmailOptedIn: boolean;
+    welcomeEmailOptedIn: boolean;
+    gardenClubEmailOptedIn: boolean;
 }
 
 export interface AuditLogEntry {

@@ -31,7 +31,7 @@ export class UserComponent implements OnInit {
 
   roleControl = new FormControl();
 
-  allRoles = ['Resident', 'SocialCommittee', 'GardenClub'];
+  allRoles = ['Resident', 'WelcomeCommittee', 'GardenClub'];
 
   separatorKeyCodes: number[] = [ENTER, COMMA];
 
