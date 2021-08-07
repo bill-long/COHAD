@@ -2,24 +2,19 @@
   <div fxLayout fxHide.lt-md="true">
     <span class="badge"> COHAD </span>
     <div>
-      <a mat-flat-button color="primary" routerLink="" routerLinkActive="mat-accent"
-        [routerLinkActiveOptions]="{exact: true}">Home</a>
-      <span *ngIf="(authUser$ | async)?.identityClaims?.emails && !(apiUser$ | async)"
-        class="mat-body getting-details">Getting
-        details...</span>
-      <a mat-flat-button color="primary" *ngIf="(apiUser$ | async)?.roles?.includes('Resident')" routerLink="directory"
-        routerLinkActive="mat-accent">Directory</a>
+      <a mat-flat-button color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a *ngIf="!(apiUser$ | async)" mat-flat-button color="primary" routerLink="privacy" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Privacy
+        Policy</a>
+      <span *ngIf="(authUser$ | async)?.identityClaims?.emails && !(apiUser$ | async)" class="mat-body getting-details">Getting details...</span>
+      <a mat-flat-button color="primary" *ngIf="(apiUser$ | async)?.roles?.includes('Resident')" routerLink="directory" routerLinkActive="mat-accent">Directory</a>
       <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="apiUser$ | async">My
         Info</a>
-      <a mat-flat-button color="primary" *ngIf="manageVisible$ | async" routerLink="manage"
-        routerLinkActive="mat-accent">Manage</a>
-      <button mat-flat-button color="primary" *ngIf="(authUser$ | async)?.identityClaims?.emails as emails"
-        [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
+      <a mat-flat-button color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent">Manage</a>
+      <button mat-flat-button color="primary" *ngIf="(authUser$ | async)?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
       <mat-menu #userMenu="matMenu">
         <button mat-menu-item (click)="logout()" [disabled]="disabled">Sign Out</button>
       </mat-menu>
-      <button mat-button *ngIf="!(authUser$ | async)?.identityClaims?.emails" (click)="login()"
-        [disabled]="disabled">Sign In</button>
+      <button mat-button *ngIf="!(authUser$ | async)?.identityClaims?.emails" (click)="login()" [disabled]="disabled">Sign In</button>
     </div>
   </div>
   <div fxHide.gt-sm="true">
@@ -27,20 +22,15 @@
       <mat-icon>menu</mat-icon>
     </button>
     <mat-menu #hamburgerMenu="matMenu">
-      <a mat-menu-item color="primary" routerLink="" routerLinkActive="mat-accent"
-        [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a mat-menu-item color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
       <span *ngIf="(authUser$ | async)?.identityClaims?.emails && !(apiUser$ | async)" class="mat-body">Getting
         details...</span>
-      <a mat-menu-item color="primary" *ngIf="(apiUser$ | async)?.roles?.includes('Resident')" routerLink="directory"
-        routerLinkActive="mat-accent">Directory</a>
+      <a mat-menu-item color="primary" *ngIf="(apiUser$ | async)?.roles?.includes('Resident')" routerLink="directory" routerLinkActive="mat-accent">Directory</a>
       <a mat-menu-item color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="apiUser$ | async">My
         Info</a>
-      <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage"
-        routerLinkActive="mat-accent">Manage</a>
-      <button mat-button *ngIf="!(authUser$ | async)?.identityClaims?.emails" (click)="login()"
-        [disabled]="disabled">Sign In</button>
-      <button mat-menu-item color="primary" *ngIf="(authUser$ | async)?.identityClaims?.emails as emails"
-        [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
+      <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent">Manage</a>
+      <button mat-button *ngIf="!(authUser$ | async)?.identityClaims?.emails" (click)="login()" [disabled]="disabled">Sign In</button>
+      <button mat-menu-item color="primary" *ngIf="(authUser$ | async)?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
     </mat-menu>
   </div>
 </mat-toolbar>

@@ -15,9 +15,11 @@ import { ManageHomesComponent } from './components/manage-homes/manage-homes.com
 import { SendEmailComponent } from './components/send-email/send-email.component';
 import { AuditLogComponent } from './components/audit-log/audit-log.component';
 import { rolePermissions } from './services/rolepermission.service';
+import { PrivacyComponent } from './components/privacy/privacy.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
+  { path: 'privacy', component: PrivacyComponent },
   { path: 'about', component: AboutComponent },
   { path: 'directory', component: DirectoryComponent },
   { path: 'news', component: NewsComponent },
