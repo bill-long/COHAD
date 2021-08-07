@@ -2,8 +2,7 @@
 
     <div fxLayout="row">
         <div class="filler"></div>
-        <button mat-icon-button color="warn" aria-label="delete resident" title="Delete resident"
-            (click)="deleteResident.next()" *ngIf="editEnabled">
+        <button mat-icon-button color="warn" aria-label="delete resident" title="Delete resident" (click)="deleteResident.next()" *ngIf="editEnabled">
             <mat-icon>delete</mat-icon>
         </button>
     </div>
@@ -20,10 +19,8 @@
         </mat-form-field>
     </div>
 
-    <div class="contact-info" *ngFor="let emailAddress of resident.emailAddresses" fxLayout="row"
-        [ngClass]="{ 'outline': editEnabled }">
-        <button mat-icon-button color="warn" aria-label="delete email" title="Delete email address"
-            (click)="deleteEmail(emailAddress)" *ngIf="editEnabled">
+    <div class="contact-info" *ngFor="let emailAddress of resident.emailAddresses" fxLayout="row" [ngClass]="{ 'outline': editEnabled }">
+        <button mat-icon-button color="warn" aria-label="delete email" title="Delete email address" (click)="deleteEmail(emailAddress)" *ngIf="editEnabled">
             <mat-icon>delete</mat-icon>
         </button>
         <div fxLayout="row wrap">
@@ -32,19 +29,16 @@
                 <input matInput [(ngModel)]="emailAddress.address" [disabled]="!editEnabled">
             </mat-form-field>
             <div class="contact-options" fxLayout="column">
-                <mat-checkbox [(ngModel)]="emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in directory
-                </mat-checkbox>
-                <mat-checkbox [(ngModel)]="emailAddress.groupEmailOptedIn" [disabled]="!editEnabled">Receive COHAD
-                    emails
-                </mat-checkbox>
+                <mat-checkbox [(ngModel)]="emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in directory</mat-checkbox>
+                <mat-checkbox [(ngModel)]="emailAddress.boardEmailOptedIn" [disabled]="!editEnabled">Receive Board emails</mat-checkbox>
+                <mat-checkbox [(ngModel)]="emailAddress.welcomeEmailOptedIn" [disabled]="!editEnabled">Receive Welcome emails</mat-checkbox>
+                <mat-checkbox [(ngModel)]="emailAddress.gardenClubEmailOptedIn" [disabled]="!editEnabled">Receive Garden Club emails</mat-checkbox>
             </div>
         </div>
     </div>
 
-    <div class="contact-info" *ngFor="let phoneNumber of resident.phoneNumbers" fxLayout="row"
-        [ngClass]="{ 'outline': editEnabled }">
-        <button mat-icon-button color="warn" aria-label="delete phone number" title="Delete phone number"
-            (click)="deletePhone(phoneNumber)" *ngIf="editEnabled">
+    <div class="contact-info" *ngFor="let phoneNumber of resident.phoneNumbers" fxLayout="row" [ngClass]="{ 'outline': editEnabled }">
+        <button mat-icon-button color="warn" aria-label="delete phone number" title="Delete phone number" (click)="deletePhone(phoneNumber)" *ngIf="editEnabled">
             <mat-icon>delete</mat-icon>
         </button>
         <div fxLayout="row wrap">

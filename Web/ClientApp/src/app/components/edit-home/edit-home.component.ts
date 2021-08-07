@@ -9,15 +9,15 @@ import { HomeService } from 'src/app/services/home.service';
 })
 export class EditHomeComponent implements OnInit {
 
-  @Input() home: Home;
+  @Input() home!: Home;
 
-  @Input() editEnabled: boolean;
+  @Input() editEnabled!: boolean;
 
-  @Input() reloadAllOnSave: boolean;
+  @Input() reloadAllOnSave!: boolean;
 
   @Output() doneEvent = new EventEmitter<void>();
 
-  homeCopy: Home;
+  homeCopy!: Home;
 
   saveInProgress = false;
 
@@ -40,13 +40,13 @@ export class EditHomeComponent implements OnInit {
     });
   }
 
-  deleteResident(event, resident: Resident) {
+  deleteResident(event: any, resident: Resident) {
     const index = this.homeCopy.residents.indexOf(resident);
     this.homeCopy.residents.splice(index, 1);
   }
 
   addEmail() {
-    this.homeCopy.emailAddress = { address: '', visibleInDirectory: true, groupEmailOptedIn: true };
+    this.homeCopy.emailAddress = { address: '', visibleInDirectory: true, boardEmailOptedIn: true, welcomeEmailOptedIn: true, gardenClubEmailOptedIn: true };
   }
 
   deleteEmail() {

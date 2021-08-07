@@ -11,12 +11,10 @@
             <input matInput [(ngModel)]="homeCopy.emailAddress.address" [disabled]="!editEnabled">
         </mat-form-field>
         <div class="contact-options">
-            <mat-checkbox [(ngModel)]="homeCopy.emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in
-                directory
-            </mat-checkbox>
-            <mat-checkbox [(ngModel)]="homeCopy.emailAddress.groupEmailOptedIn" [disabled]="!editEnabled">Receive
-                COHAD emails
-            </mat-checkbox>
+            <mat-checkbox [(ngModel)]="homeCopy.emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in directory</mat-checkbox>
+            <mat-checkbox [(ngModel)]="homeCopy.emailAddress.boardEmailOptedIn" [disabled]="!editEnabled">Receive Board emails</mat-checkbox>
+            <mat-checkbox [(ngModel)]="homeCopy.emailAddress.welcomeEmailOptedIn" [disabled]="!editEnabled">Receive Welcome emails</mat-checkbox>
+            <mat-checkbox [(ngModel)]="homeCopy.emailAddress.gardenClubEmailOptedIn" [disabled]="!editEnabled">Receive Garden Club emails</mat-checkbox>
         </div>
     </div>
 

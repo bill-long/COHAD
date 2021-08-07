@@ -9,7 +9,7 @@ import { AuthService } from 'src/app/services/auth.service';
 })
 export class DocumentsComponent implements OnInit {
 
-  folders: { name: string, children: { name: string}[] }[];
+  folders!: { name: string, children: { name: string}[] }[];
 
   constructor(private httpClient: HttpClient, private authService: AuthService) {
     httpClient.get('api/document').subscribe((r: any) => this.folders = r.children);

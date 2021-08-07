@@ -1,4 +1,9 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, Inject, OnInit } from '@angular/core';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+import { ApiUser } from 'src/app/models';
+import { rolePermissions } from 'src/app/services/rolepermission.service';
+import { ApplicationState, applicationState } from 'src/app/state';
 
 @Component({
   selector: 'app-manage',
@@ -7,9 +12,29 @@ import { Component, OnInit } from '@angular/core';
 })
 export class ManageComponent implements OnInit {
 
-  constructor() { }
+  constructor(@Inject(applicationState) private appState: Observable<ApplicationState>) { }
 
   ngOnInit(): void {
+  }
+
+  get apiUser$(): Observable<ApiUser | null> {
+    return this.appState.pipe(map(s => s.apiUser));
+  }
+
+  get manageUsersVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageUsersRoles.includes(r)).length > 0))
+  }
+
+  get manageHomesVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageHomesRoles.includes(r)).length > 0))
+  }
+
+  get manageEmailVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageEmailRoles.includes(r)).length > 0))
+  }
+
+  get manageAuditVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageAuditLogRoles.includes(r)).length > 0))
   }
 
 }

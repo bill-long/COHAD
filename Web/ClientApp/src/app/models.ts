@@ -11,7 +11,6 @@ export interface ApiUser {
     email: string;
     streetAddress: string;
     roles: string[];
-    promotionState: number;
     ownedHomes: Home[];
 }
 
@@ -59,8 +58,8 @@ export interface Home {
     id: string;
     streetNumber: number;
     streetName: string;
-    phoneNumber: PhoneNumber;
-    emailAddress: EmailAddress;
+    phoneNumber: PhoneNumber | null;
+    emailAddress: EmailAddress | null;
     residents: Resident[];
     auditLog: AuditLogEntry[];
 }
@@ -73,9 +72,9 @@ export interface Resident {
 }
 
 export interface PhoneNumber {
-    areaCode: number;
-    prefix: number;
-    lineNumber: number;
+    areaCode: number | null;
+    prefix: number | null;
+    lineNumber: number | null;
     type: string;
     visibleInDirectory: boolean;
 }
@@ -83,7 +82,9 @@ export interface PhoneNumber {
 export interface EmailAddress {
     address: string;
     visibleInDirectory: boolean;
-    groupEmailOptedIn: boolean;
+    boardEmailOptedIn: boolean;
+    welcomeEmailOptedIn: boolean;
+    gardenClubEmailOptedIn: boolean;
 }
 
 export interface AuditLogEntry {

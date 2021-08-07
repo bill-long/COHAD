@@ -13,9 +13,9 @@ import { Component, OnInit, Input } from '@angular/core';
 })
 export class HeaderComponent implements OnInit {
 
-  title: string;
-  subtitles: string[];
-  imagePath: string;
+  title!: string;
+  subtitles!: string[];
+  imagePath!: string;
 
   constructor() { }
 

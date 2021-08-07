@@ -52,5 +52,5 @@
     <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
 </table>
 
-<app-user *ngIf="focusedUser != null" [apiUser]="focusedUser" [allHomes]="allHomes$ | async"
+<app-user *ngIf="focusedUser != null" [apiUser]="focusedUser" [allHomes]="(allHomes$ | async)!"
     (doneEvent)="focusedUser = null"></app-user>

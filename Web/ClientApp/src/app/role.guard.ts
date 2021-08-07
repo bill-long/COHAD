@@ -10,7 +10,7 @@ export class RoleGuard implements CanActivate {
 
     canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot) {
         return this.appState.pipe(map(s => s.apiUser), map(me => {
-            if (me != null && me.roles.includes(route.data["requiredRole"])) return true;
+            if (me != null && me.roles.filter(r => route.data["allowedRoles"].includes(r)).length > 0) return true;
             this.router.navigate(['/']);
             return false;
         }));

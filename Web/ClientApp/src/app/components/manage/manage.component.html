@@ -1,12 +1,12 @@
 <mat-drawer-container class="example-container">
     <mat-drawer class="side-drawer" mode="side" opened>
-        <div><a mat-flat-button class="side-nav-button" color="primary" routerLink="users"
+        <div *ngIf="manageUsersVisible$ | async"><a mat-flat-button class="side-nav-button" color="primary" routerLink="users"
                 routerLinkActive="mat-accent">Users</a></div>
-        <div><a mat-flat-button class="side-nav-button" color="primary" routerLink="homes"
+        <div *ngIf="manageHomesVisible$ | async"><a mat-flat-button class="side-nav-button" color="primary" routerLink="homes"
                 routerLinkActive="mat-accent">Homes</a></div>
-        <div><a mat-flat-button class="side-nav-button" color="primary" routerLink="send-email"
+        <div *ngIf="manageEmailVisible$ | async"><a mat-flat-button class="side-nav-button" color="primary" routerLink="send-email"
                 routerLinkActive="mat-accent">Send Email</a></div>
-        <div><a mat-flat-button class="side-nav-button" color="primary" routerLink="audit-log"
+        <div *ngIf="manageAuditVisible$ | async"><a mat-flat-button class="side-nav-button" color="primary" routerLink="audit-log"
                 routerLinkActive="mat-accent">Audit Log</a></div>
     </mat-drawer>
     <mat-drawer-content>

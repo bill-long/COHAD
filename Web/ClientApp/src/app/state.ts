@@ -6,8 +6,8 @@ import { ApiUser, AuthUser, Home, DirectoryHome } from './models';
 export interface ApplicationState {
     allHomes: Home[],
     allUsers: ApiUser[],
-    authUser: AuthUser,
-    apiUser: ApiUser,
+    authUser: AuthUser | null,
+    apiUser: ApiUser | null,
     directory: DirectoryHome[],
     operationsInProgress: number
 }
@@ -37,7 +37,7 @@ export class LoadDirectoryCompleted { constructor(public data: DirectoryHome[]) 
 
 export class LoadUser { }
 
-export class LoadUserCompleted { constructor(public user: ApiUser) { } }
+export class LoadUserCompleted { constructor(public user: ApiUser | null) { } }
 
 export class Login { }
 
@@ -123,6 +123,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
             } else if (action instanceof Login) {
                 newState = state;
             } else if (action instanceof Logout) {
+                newState = state;
+            } else {
                 newState = state;
             }
 

@@ -11,7 +11,7 @@ import { applicationState, ApplicationState, Action, dispatcher, LoadDirectory }
   styleUrls: ['./directory.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class DirectoryComponent implements OnInit {
+export class DirectoryComponent {
 
   itemsToRender: Observable<DirectoryHome[]>;
 
@@ -21,9 +21,7 @@ export class DirectoryComponent implements OnInit {
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    @Inject(dispatcher) private dispatcher: Subject<Action>) { }
-
-  ngOnInit(): void {
+    @Inject(dispatcher) private dispatcher: Subject<Action>) {
     const directoryData = this.appState.pipe(delay(5), map(s => s.directory));
 
     this.showSpinner = this.appState.pipe(map(s => s.operationsInProgress > 0));

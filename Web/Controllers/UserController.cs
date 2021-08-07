@@ -14,7 +14,7 @@ namespace Web.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "Committee")]
+    [Authorize(Policy = "Administrator")]
     public class UserController : ControllerBase
     {
         private readonly CohadWebDbContext _dbContext;
@@ -54,7 +54,7 @@ namespace Web.Controllers
             if (updatedUser.UniqueId != apiUser.UniqueId)
             {
                 // The authenticated user is trying to update some other user. Check roles.
-                if (!apiUser.Roles.Contains(Models.User.Role.Committee))
+                if (!apiUser.Roles.Contains(Models.User.Role.Administrator))
                 {
                     return Forbid();
                 }
@@ -183,7 +183,6 @@ namespace Web.Controllers
             return Ok();
         }
 
-        [Authorize(Policy = "Committee")]
         [HttpPut("{userId}/roles/add/{roleName}")]
         public async Task<IActionResult> AddUserRole(string userId, string roleName)
         {
@@ -199,15 +198,6 @@ namespace Web.Controllers
             if (!Enum.TryParse<Models.User.Role>(roleName, out var roleToAdd))
             {
                 return BadRequest();
-            }
-
-            if (roleToAdd == Models.User.Role.Administrator || roleToAdd == Models.User.Role.Committee)
-            {
-                // Only administrators can do this
-                if (!apiUser.Roles.Contains(Models.User.Role.Administrator))
-                {
-                    return Forbid();
-                }
             }
 
             // Not sure why this is necessary, but it doesn't detect role changes otherwise
@@ -231,7 +221,6 @@ namespace Web.Controllers
             return Ok();
         }
 
-        [Authorize(Policy = "Committee")]
         [HttpPut("{userId}/roles/remove/{roleName}")]
         public async Task<IActionResult> RemoveUserRole(string userId, string roleName)
         {
@@ -249,13 +238,9 @@ namespace Web.Controllers
                 return BadRequest();
             }
 
-            if (roleToRemove == Models.User.Role.Administrator || roleToRemove == Models.User.Role.Committee)
+            if (roleToRemove == Models.User.Role.Administrator)
             {
-                // Only administrators can do this
-                if (!apiUser.Roles.Contains(Models.User.Role.Administrator))
-                {
-                    return Forbid();
-                }
+                return Forbid();
             }
 
             // Not sure why this is necessary, but it doesn't detect role changes otherwise

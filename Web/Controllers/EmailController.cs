@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Web.Configuration;
+using Web.Models;
 using Web.Repository;
 using Web.UpdateModels;
 
@@ -16,7 +17,7 @@ namespace Web.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "Committee")]
+    [Authorize(Policy = "Administrator")]
     public class EmailController : ControllerBase
     {
         private readonly CohadWebDbContext _dbContext;
@@ -33,28 +34,65 @@ namespace Web.Controllers
             };
         }
 
-        [HttpPut]
-        public async Task<IActionResult> SendEmail([FromBody] EmailInfo emailInfo)
+        [HttpPut("from-board")]
+        [Authorize(Policy = "Board")]
+        public async Task<IActionResult> SendEmailFromBoard([FromBody] EmailInfo emailInfo)
+        {
+            var homes = await _dbContext.Homes.ToListAsync();
+            var bccAddresses =
+                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.BoardEmailOptedIn))).ToList();
+            bccAddresses.AddRange(homes.Select(h => h.EmailAddress).Where(e => e != null && e.BoardEmailOptedIn));
+
+            await SendEmail("board@cohad.org", "COHAD Board", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
+
+            return Ok();
+        }
+
+        [HttpPut("from-welcome")]
+        [Authorize(Policy = "WelcomeCommittee")]
+        public async Task<IActionResult> SendEmailFromWelcomeCommittee([FromBody] EmailInfo emailInfo)
+        {
+            var homes = await _dbContext.Homes.ToListAsync();
+            var bccAddresses =
+                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.WelcomeEmailOptedIn))).ToList();
+            bccAddresses.AddRange(homes.Select(h => h.EmailAddress).Where(e => e != null && e.WelcomeEmailOptedIn));
+
+            await SendEmail("welcome@cohad.org", "COHAD Welcome Committee", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
+
+            return Ok();
+        }
+
+        [HttpPut("from-garden")]
+        [Authorize(Policy = "GardenClub")]
+        public async Task<IActionResult> SendEmailFromGardenClub([FromBody] EmailInfo emailInfo)
+        {
+            var homes = await _dbContext.Homes.ToListAsync();
+            var bccAddresses =
+                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.GardenClubEmailOptedIn))).ToList();
+            bccAddresses.AddRange(homes.Select(h => h.EmailAddress).Where(e => e != null && e.GardenClubEmailOptedIn));
+
+            await SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
+
+            return Ok();
+        }
+
+        private async Task SendEmail(string fromEmail, string fromDisplay, string subject, string htmlBody, List<EmailAddress> bccList)
         {
             var message = new MailMessage
             {
-                From = new MailAddress("board@cohad.org", "Canyon Oaks HOA"),
-                Subject = emailInfo.Subject,
+                From = new MailAddress(fromEmail, fromDisplay),
+                Subject = subject,
                 IsBodyHtml = true,
-                Body = emailInfo.HtmlBody
+                Body = htmlBody
             };
 
-            message.ReplyToList.Add(new MailAddress("board@cohad.org", "COHAD Board"));
-            message.ReplyToList.Add(new MailAddress("redacted@example.com", "Judy Johannesen"));
+            message.ReplyToList.Add(new MailAddress(fromEmail, fromDisplay));
 
             var homes = await _dbContext.Homes.ToListAsync();
-            var bccAddresses =
-                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.GroupEmailOptedIn))).ToList();
-
 #if DEBUG
             message.Bcc.Add("bill@selfish.net");
 #else
-            foreach (var email in bccAddresses)
+            foreach (var email in bccList)
             {
                 message.Bcc.Add(email.Address);
             }
@@ -68,8 +106,6 @@ namespace Web.Controllers
             };
 
             smtpClient.Send(message);
-
-            return Ok();
         }
     }
 }

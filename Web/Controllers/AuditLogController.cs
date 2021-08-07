@@ -12,7 +12,7 @@ namespace Web.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "Committee")]
+    [Authorize(Policy = "Administrator")]
     public class AuditLogController : ControllerBase
     {
         private readonly CohadWebDbContext _dbContext;

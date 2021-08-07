@@ -9,13 +9,13 @@ import { FormControl } from '@angular/forms';
 })
 export class PhoneNumberInputComponent implements OnInit {
 
-  @Input() phoneNumber: PhoneNumber;
+  @Input() phoneNumber!: PhoneNumber;
 
-  @Input() editEnabled: boolean;
+  @Input() editEnabled!: boolean;
 
   phoneNumberControl = new FormControl();
 
-  phoneNumberString: string;
+  phoneNumberString!: string;
 
   valid = false;
 
