@@ -68,7 +68,7 @@ namespace Web.Data
 
             if (!string.IsNullOrEmpty(email))
             {
-                emails.Add(new EmailAddress {Address = email, GroupEmailOptedIn = true, VisibleInDirectory = true});
+                emails.Add(new EmailAddress {Address = email, BoardEmailOptedIn = true, VisibleInDirectory = true});
             }
 
             var phoneNumbers = new List<PhoneNumber>();

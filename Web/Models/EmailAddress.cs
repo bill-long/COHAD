@@ -8,10 +8,12 @@ namespace Web.Models
 
         public bool VisibleInDirectory { get; set; }
 
+        public bool GroupEmailOptedIn { get; set; }
+
         /// <summary>
         /// Whether Board emails should be sent to this address.
         /// </summary>
-        public bool GroupEmailOptedIn { get; set; }
+        public bool BoardEmailOptedIn { get; set; }
 
         /// <summary>
         /// Whether Welcome emails should be sent to this address.

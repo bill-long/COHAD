@@ -40,7 +40,8 @@ namespace Web.Controllers
         {
             var homes = await _dbContext.Homes.ToListAsync();
             var bccAddresses =
-                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.GroupEmailOptedIn))).ToList();
+                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.BoardEmailOptedIn))).ToList();
+            bccAddresses.AddRange(homes.Select(h => h.EmailAddress).Where(e => e != null && e.BoardEmailOptedIn));
 
             await SendEmail("board@cohad.org", "COHAD Board", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
 
@@ -54,6 +55,7 @@ namespace Web.Controllers
             var homes = await _dbContext.Homes.ToListAsync();
             var bccAddresses =
                 homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.WelcomeEmailOptedIn))).ToList();
+            bccAddresses.AddRange(homes.Select(h => h.EmailAddress).Where(e => e != null && e.WelcomeEmailOptedIn));
 
             await SendEmail("welcome@cohad.org", "COHAD Welcome Committee", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
 
@@ -67,6 +69,7 @@ namespace Web.Controllers
             var homes = await _dbContext.Homes.ToListAsync();
             var bccAddresses =
                 homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.GardenClubEmailOptedIn))).ToList();
+            bccAddresses.AddRange(homes.Select(h => h.EmailAddress).Where(e => e != null && e.GardenClubEmailOptedIn));
 
             await SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
 

@@ -30,7 +30,7 @@
             </mat-form-field>
             <div class="contact-options" fxLayout="column">
                 <mat-checkbox [(ngModel)]="emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in directory</mat-checkbox>
-                <mat-checkbox [(ngModel)]="emailAddress.groupEmailOptedIn" [disabled]="!editEnabled">Receive Board emails</mat-checkbox>
+                <mat-checkbox [(ngModel)]="emailAddress.boardEmailOptedIn" [disabled]="!editEnabled">Receive Board emails</mat-checkbox>
                 <mat-checkbox [(ngModel)]="emailAddress.welcomeEmailOptedIn" [disabled]="!editEnabled">Receive Welcome emails</mat-checkbox>
                 <mat-checkbox [(ngModel)]="emailAddress.gardenClubEmailOptedIn" [disabled]="!editEnabled">Receive Garden Club emails</mat-checkbox>
             </div>

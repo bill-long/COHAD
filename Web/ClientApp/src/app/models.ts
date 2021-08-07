@@ -82,7 +82,7 @@ export interface PhoneNumber {
 export interface EmailAddress {
     address: string;
     visibleInDirectory: boolean;
-    groupEmailOptedIn: boolean;
+    boardEmailOptedIn: boolean;
     welcomeEmailOptedIn: boolean;
     gardenClubEmailOptedIn: boolean;
 }
