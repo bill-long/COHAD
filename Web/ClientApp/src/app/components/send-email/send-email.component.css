@@ -2,3 +2,7 @@
     max-width: 800px;
     min-height: 200px;
 }
+
+button {
+    margin-top: 5px;
+}

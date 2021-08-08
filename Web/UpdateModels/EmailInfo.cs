@@ -5,5 +5,7 @@
         public string Subject { get; set; }
 
         public string HtmlBody { get; set; }
+
+        public bool IsTestEmail { get; set; }
     }
 }

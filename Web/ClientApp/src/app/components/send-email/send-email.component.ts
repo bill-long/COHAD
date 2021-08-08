@@ -17,6 +17,7 @@ export class SendEmailComponent {
   subject!: string;
   htmlBody!: string;
   editEnabled = true;
+  testSucceeded = false;
   sendSucceeded = false;
   errorText!: string | null;
 
@@ -49,15 +50,24 @@ export class SendEmailComponent {
     return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsGardenClub.includes(r)).length > 0));
   }
 
-  sendEmail() {
+  sendEmail(isTest: boolean) {
     this.editEnabled = false;
+    if (isTest) {
+      this.testSucceeded = false;
+    }
 
     this.httpClient.put(`api/email/${this.senderEndpoint}`, {
       subject: this.subject,
-      htmlBody: this.htmlBody
+      htmlBody: this.htmlBody,
+      isTestEmail: isTest
     }).subscribe(r => {
       this.errorText = null;
-      this.sendSucceeded = true;
+      if (isTest) {
+        this.testSucceeded = true;
+        this.editEnabled = true;
+      } else {
+        this.sendSucceeded = true;
+      }
     }, err => {
       this.errorText = err.toString();
     });
@@ -68,6 +78,7 @@ export class SendEmailComponent {
     this.htmlBody = '';
     this.editEnabled = true;
     this.sendSucceeded = false;
+    this.testSucceeded = false;
   }
 
 }
