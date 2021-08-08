@@ -1,11 +1,25 @@
+.delete-resident {
+    display: flex;
+    flex-direction: row;
+}
+
+.info-container {
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.info-container > div {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
 .resident-wrapper {
     background: white;
     margin-bottom: 10px;
     padding: 10px;
-}
-
-.contact-info {
-    margin-top: 10px;
 }
 
 .outline {
@@ -14,6 +28,8 @@
 
 .contact-options {
     margin-left: 5px;
+    display: flex;
+    flex-direction: column;
 }
 
 .filler {
