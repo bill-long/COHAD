@@ -38,12 +38,9 @@ namespace Web.Controllers
         [Authorize(Policy = "Board")]
         public async Task<IActionResult> SendEmailFromBoard([FromBody] EmailInfo emailInfo)
         {
-            var homes = await _dbContext.Homes.ToListAsync();
-            var bccAddresses =
-                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.BoardEmailOptedIn))).ToList();
-            bccAddresses.AddRange(homes.Select(h => h.EmailAddress).Where(e => e != null && e.BoardEmailOptedIn));
+            await AuditEmail("Board", emailInfo);
 
-            await SendEmail("board@cohad.org", "COHAD Board", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
+            await SendEmail("board@cohad.org", "COHAD Board", emailInfo, e => e != null && e.BoardEmailOptedIn);
 
             return Ok();
         }
@@ -52,12 +49,9 @@ namespace Web.Controllers
         [Authorize(Policy = "WelcomeCommittee")]
         public async Task<IActionResult> SendEmailFromWelcomeCommittee([FromBody] EmailInfo emailInfo)
         {
-            var homes = await _dbContext.Homes.ToListAsync();
-            var bccAddresses =
-                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.WelcomeEmailOptedIn))).ToList();
-            bccAddresses.AddRange(homes.Select(h => h.EmailAddress).Where(e => e != null && e.WelcomeEmailOptedIn));
+            await AuditEmail("Welcome Committee", emailInfo);
 
-            await SendEmail("welcome@cohad.org", "COHAD Welcome Committee", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
+            await SendEmail("welcome@cohad.org", "COHAD Welcome Committee", emailInfo, e => e != null && e.WelcomeEmailOptedIn);
 
             return Ok();
         }
@@ -66,24 +60,37 @@ namespace Web.Controllers
         [Authorize(Policy = "GardenClub")]
         public async Task<IActionResult> SendEmailFromGardenClub([FromBody] EmailInfo emailInfo)
         {
-            var homes = await _dbContext.Homes.ToListAsync();
-            var bccAddresses =
-                homes.SelectMany(h => h.Residents.SelectMany(r => r.EmailAddresses.Where(e => e.GardenClubEmailOptedIn))).ToList();
-            bccAddresses.AddRange(homes.Select(h => h.EmailAddress).Where(e => e != null && e.GardenClubEmailOptedIn));
+            await AuditEmail("Garden Club", emailInfo);
 
-            await SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo.Subject, emailInfo.HtmlBody, bccAddresses);
+            await SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo, e => e != null && e.GardenClubEmailOptedIn);
 
             return Ok();
         }
 
-        private async Task SendEmail(string fromEmail, string fromDisplay, string subject, string htmlBody, List<EmailAddress> bccList)
+        private async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, Func<EmailAddress, bool> recipientFilter)
         {
+            List<string> bccList = null;
+
+            var subject = emailInfo.Subject;
+
+            if (emailInfo.IsTestEmail)
+            {
+                var apiUser =
+                    await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+                bccList = new List<string> { apiUser.Emails };
+                subject = $"Test: {subject}";
+            }
+            else
+            {
+                bccList = await GetAllEmailsMatchingFilter(recipientFilter);
+            }
+
             var message = new MailMessage
             {
                 From = new MailAddress(fromEmail, fromDisplay),
                 Subject = subject,
                 IsBodyHtml = true,
-                Body = htmlBody
+                Body = emailInfo.HtmlBody
             };
 
             message.ReplyToList.Add(new MailAddress(fromEmail, fromDisplay));
@@ -94,7 +101,7 @@ namespace Web.Controllers
 #else
             foreach (var email in bccList)
             {
-                message.Bcc.Add(email.Address);
+                message.Bcc.Add(email);
             }
 #endif
 
@@ -106,6 +113,49 @@ namespace Web.Controllers
             };
 
             smtpClient.Send(message);
+        }
+
+        private async Task AuditEmail(string from, EmailInfo emailInfo)
+        {
+            var apiUser =
+                await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+
+            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
+            {
+                Id = Guid.NewGuid(),
+                SubjectId = "",
+                SubjectName = $"Email recipient: {(emailInfo.IsTestEmail ? apiUser.Emails : "Neighborhood")}",
+                Action = $"Sent email from {from}",
+                Time = DateTime.UtcNow,
+                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                UserId = apiUser.UniqueId
+            });
+        }
+
+        private async Task<List<string>> GetAllEmailsMatchingFilter(Func<EmailAddress, bool> filter)
+        {
+            var bccAddresses = new List<string>();
+            var homes = await _dbContext.Homes.ToListAsync();
+
+            bccAddresses.AddRange(
+                homes.SelectMany(
+                    h => h.Residents.SelectMany(
+                        r => r.EmailAddresses
+                            .Where(filter)
+                        )
+                    ).Select(e => e.Address)
+                );
+
+            bccAddresses.AddRange(
+                homes.Select(
+                    h => h.EmailAddress)
+                    .Where(filter)
+                    .Select(e => e.Address)
+                );
+
+            bccAddresses = bccAddresses.Distinct().ToList();
+
+            return bccAddresses;
         }
     }
 }

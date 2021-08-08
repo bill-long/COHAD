@@ -99,4 +99,5 @@ export interface AuditLogEntry {
 export interface EmailInfo {
     subject: string;
     htmlBody: string;
+    isTestEmail: boolean;
 }
