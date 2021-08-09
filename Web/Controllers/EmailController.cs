@@ -130,6 +130,8 @@ namespace Web.Controllers
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
                 UserId = apiUser.UniqueId
             });
+
+            await _dbContext.SaveChangesAsync();
         }
 
         private async Task<List<string>> GetAllEmailsMatchingFilter(Func<EmailAddress, bool> filter)
