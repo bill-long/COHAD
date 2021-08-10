@@ -17,7 +17,6 @@ namespace Web.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "Administrator")]
     public class EmailController : ControllerBase
     {
         private readonly CohadWebDbContext _dbContext;
