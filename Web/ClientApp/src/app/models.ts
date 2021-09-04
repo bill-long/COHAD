@@ -85,6 +85,7 @@ export interface EmailAddress {
     boardEmailOptedIn: boolean;
     welcomeEmailOptedIn: boolean;
     gardenClubEmailOptedIn: boolean;
+    socialCommitteeEmailOptedIn: boolean;
 }
 
 export interface AuditLogEntry {

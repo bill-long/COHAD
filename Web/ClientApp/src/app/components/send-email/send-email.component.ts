@@ -50,6 +50,10 @@ export class SendEmailComponent {
     return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsGardenClub.includes(r)).length > 0));
   }
 
+  get canSendFromSocialCommittee(): Observable<boolean> {
+    return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsSocialCommittee.includes(r)).length > 0));
+  }
+
   sendEmail(isTest: boolean) {
     this.editEnabled = false;
     if (isTest) {

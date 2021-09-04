@@ -77,6 +77,7 @@ namespace Web
                 options.AddPolicy("WelcomeCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.WelcomeCommittee)));
                 options.AddPolicy("GardenClub", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.GardenClub)));
                 options.AddPolicy("Board", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Board)));
+                options.AddPolicy("SocialCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.SocialCommittee)));
             });
 
             services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();

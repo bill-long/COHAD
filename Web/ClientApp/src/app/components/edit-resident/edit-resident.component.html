@@ -29,6 +29,7 @@
                 <mat-checkbox [(ngModel)]="emailAddress.boardEmailOptedIn" [disabled]="!editEnabled" matTooltip="Annual Meeting announcements and other neighborhood business">Receive Board emails</mat-checkbox>
                 <mat-checkbox [(ngModel)]="emailAddress.welcomeEmailOptedIn" [disabled]="!editEnabled" matTooltip="New arrivals in the neighborhood">Receive Welcome emails</mat-checkbox>
                 <mat-checkbox [(ngModel)]="emailAddress.gardenClubEmailOptedIn" [disabled]="!editEnabled" matTooltip="Garden Club meetings and events">Receive Garden Club emails</mat-checkbox>
+                <mat-checkbox [(ngModel)]="emailAddress.socialCommitteeEmailOptedIn" [disabled]="!editEnabled" matTooltip="Social Committee events">Receive Social Committee emails</mat-checkbox>
             </div>
         </div>
         <button mat-icon-button color="warn" aria-label="delete email" matTooltip="Delete email address" (click)="deleteEmail(emailAddress)" *ngIf="editEnabled">
