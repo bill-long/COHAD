@@ -6,5 +6,6 @@ export const rolePermissions = {
     manageAuditLogRoles: ['Administrator'],
     sendEmailAsBoard: ['Board'],
     sendEmailAsWelcomeCommittee: ['WelcomeCommittee'],
-    sendEmailAsGardenClub: ['GardenClub']
+    sendEmailAsGardenClub: ['GardenClub'],
+    sendEmailAsSocialCommittee: ['SocialCommittee']
 }

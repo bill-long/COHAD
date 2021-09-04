@@ -8,8 +8,6 @@ namespace Web.Models
 
         public bool VisibleInDirectory { get; set; }
 
-        public bool GroupEmailOptedIn { get; set; }
-
         /// <summary>
         /// Whether Board emails should be sent to this address.
         /// </summary>
@@ -24,5 +22,10 @@ namespace Web.Models
         /// Whether Garden Club emails should be sent to this address.
         /// </summary>
         public bool GardenClubEmailOptedIn { get; set; }
+
+        /// <summary>
+        /// Whether Social Committee emails should be sent to this address.
+        /// </summary>
+        public bool SocialCommitteeEmailOptedIn { get; set; }
     }
 }

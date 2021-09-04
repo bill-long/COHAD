@@ -57,6 +57,17 @@ namespace Web.Controllers
 
         [HttpPut("from-garden")]
         [Authorize(Policy = "GardenClub")]
+        public async Task<IActionResult> SendEmailFromSocialCommittee([FromBody] EmailInfo emailInfo)
+        {
+            await AuditEmail("Social Committee", emailInfo);
+
+            await SendEmail("social@cohad.org", "COHAD Social Committee", emailInfo, e => e != null && e.SocialCommitteeEmailOptedIn);
+
+            return Ok();
+        }
+
+        [HttpPut("from-social")]
+        [Authorize(Policy = "SocialCommittee")]
         public async Task<IActionResult> SendEmailFromGardenClub([FromBody] EmailInfo emailInfo)
         {
             await AuditEmail("Garden Club", emailInfo);
