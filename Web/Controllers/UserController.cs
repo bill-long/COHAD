@@ -29,8 +29,6 @@ namespace Web.Controllers
 
             var allHomes = await _dbContext.Homes.ToListAsync();
 
-            await _dbContext.SaveChangesAsync();
-
             return allUsers.Select(PresentationUser.FromStorageModel);
         }
 

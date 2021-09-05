@@ -59,9 +59,9 @@ namespace Web.Controllers
         [Authorize(Policy = "GardenClub")]
         public async Task<IActionResult> SendEmailFromSocialCommittee([FromBody] EmailInfo emailInfo)
         {
-            await AuditEmail("Social Committee", emailInfo);
+            await AuditEmail("Garden Club", emailInfo);
 
-            await SendEmail("social@cohad.org", "COHAD Social Committee", emailInfo, e => e != null && e.SocialCommitteeEmailOptedIn);
+            await SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo, e => e != null && e.GardenClubEmailOptedIn);
 
             return Ok();
         }
@@ -70,9 +70,9 @@ namespace Web.Controllers
         [Authorize(Policy = "SocialCommittee")]
         public async Task<IActionResult> SendEmailFromGardenClub([FromBody] EmailInfo emailInfo)
         {
-            await AuditEmail("Garden Club", emailInfo);
+            await AuditEmail("Social Committee", emailInfo);
 
-            await SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo, e => e != null && e.GardenClubEmailOptedIn);
+            await SendEmail("social@cohad.org", "COHAD Social Committee", emailInfo, e => e != null && e.SocialCommitteeEmailOptedIn);
 
             return Ok();
         }
