@@ -20,11 +20,11 @@
     <quill-editor [readOnly]="!editEnabled" [(ngModel)]="htmlBody"></quill-editor>
 </div>
 <div>
-    <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(true)" [disabled]="!editEnabled">Send Test Email</button>
+    <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(true)" [disabled]="!editEnabled">Send Test Email To {{apiUserEmail | async}}</button>
     <div *ngIf="testSucceeded">Test email was sent!</div>
 </div>
 <div>
-    <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(false)" [disabled]="!editEnabled">Send Email</button>
+    <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(false)" [disabled]="!editEnabled">Send Email To Neighborhood</button>
     <div *ngIf="sendSucceeded">Email was sent!</div>
 </div>
 <button *ngIf="sendSucceeded" mat-flat-button color="primary" (click)="sendNew()">Compose a new email</button>
