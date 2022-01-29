@@ -35,6 +35,8 @@ export class SendEmailComponent {
       this.senderEndpoint = "from-welcome";
     } else if (this.canSendFromGardenClub) {
       this.senderEndpoint = "from-garden";
+    } else if (this.canSendFromSocialCommittee) {
+      this.senderEndpoint = "from-social";
     }
   }
 
