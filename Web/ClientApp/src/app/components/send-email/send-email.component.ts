@@ -1,8 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, Inject } from '@angular/core';
 import Quill from 'quill';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { combineLatest, Observable, zip } from 'rxjs';
+import { map, take } from 'rxjs/operators';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { applicationState, ApplicationState } from 'src/app/state';
 
@@ -29,15 +29,19 @@ export class SendEmailComponent {
     class MyBlock extends Block { }
     MyBlock.tagName = 'DIV';
     Quill.register('blots/block', MyBlock, true);
-    if (this.canSendFromBoard) {
-      this.senderEndpoint = "from-board";
-    } else if (this.canSendFromWelcomeCommittee) {
-      this.senderEndpoint = "from-welcome";
-    } else if (this.canSendFromGardenClub) {
-      this.senderEndpoint = "from-garden";
-    } else if (this.canSendFromSocialCommittee) {
-      this.senderEndpoint = "from-social";
-    }
+    zip(this.canSendFromBoard, this.canSendFromGardenClub, this.canSendFromSocialCommittee, this.canSendFromWelcomeCommittee)
+    .pipe(take(1))
+    .subscribe(([board, garden, social, welcome]) => {
+      if (board) {
+        this.senderEndpoint = "from-board";
+      } else if (garden) {
+        this.senderEndpoint = "from-garden";
+      } else if (social) {
+        this.senderEndpoint = "from-social";
+      } else if (welcome) {
+        this.senderEndpoint = "from-welcome";
+      }
+    });
   }
 
   get canSendFromBoard(): Observable<boolean> {
