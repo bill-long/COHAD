@@ -56,6 +56,10 @@ export class SendEmailComponent {
     return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsSocialCommittee.includes(r)).length > 0));
   }
 
+  get apiUserEmail(): Observable<string> {
+    return this.appState.pipe(map(s => s.apiUser?.email || ''));
+  }
+
   sendEmail(isTest: boolean) {
     this.editEnabled = false;
     if (isTest) {
