@@ -33,7 +33,17 @@ export class DirectoryComponent {
     });
 
     const directoryDataSortedBySurname = directoryData.pipe(map(homes => {
-      const sorted = [...homes].sort((a, b) => this.getSurname(a).localeCompare(this.getSurname(b)));
+      const sorted = [...homes].sort((a, b) => {
+        let surnameA = this.getSurname(a);
+        let surnameB = this.getSurname(b);
+        if (surnameA !== '' && surnameB != '') {
+          return this.getSurname(a).localeCompare(this.getSurname(b));
+        } else {
+          if (surnameA === surnameB) return 0;
+          if (surnameA === '') return 1;
+          return -1;
+        }
+      });
 
       return sorted;
     }));
