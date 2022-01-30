@@ -65,6 +65,18 @@ namespace Web.Controllers
                 return NotFound();
             }
 
+            // Make sure emails are valid
+            foreach (var resident in updatedHome.Residents)
+            {
+                if (resident.EmailAddresses != null && resident.EmailAddresses.Any())
+                {
+                    resident.EmailAddresses =
+                        resident.EmailAddresses
+                            .Where(e => !string.IsNullOrEmpty(e.Address) && e.Address.Contains("@", StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                }
+            }
+
             storedHome.EmailAddress = updatedHome.EmailAddress;
             storedHome.PhoneNumber = updatedHome.PhoneNumber;
             storedHome.Residents = updatedHome.Residents;
