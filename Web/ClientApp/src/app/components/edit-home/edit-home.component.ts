@@ -9,7 +9,7 @@ import { HomeService } from 'src/app/services/home.service';
 })
 export class EditHomeComponent implements OnInit {
 
-  @Input() home!: Home;
+  @Input() home!: Home | null;
 
   @Input() editEnabled!: boolean;
 
