@@ -6,6 +6,7 @@ import { MatSort } from '@angular/material/sort';
 import { Observable, Observer, combineLatest } from 'rxjs';
 import { map, take, debounceTime, startWith } from 'rxjs/operators';
 import { FormControl } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 
 @Component({
   selector: 'app-manage-homes',
@@ -27,7 +28,11 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
     'actions'
   ];
 
-  focusedHome: Home | null = null;
+  focusedHome$: Observable<Home | null>;
+
+  allHomes$: Observable<Home[]>;
+
+  filteredHomes$: Observable<Home[]>;
 
   editEnabled = false;
 
@@ -35,19 +40,15 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    @Inject(dispatcher) private dispatcher: Observer<Action>) { }
+    @Inject(dispatcher) private dispatcher: Observer<Action>,
+    private route: ActivatedRoute,
+    private router: Router
+  ) {
+    this.allHomes$ = this.appState.pipe(map(s => s.allHomes));
 
-  ngOnInit(): void {
-    const allHomes$ = this.appState.pipe(map(s => s.allHomes));
-    allHomes$.pipe(take(1)).subscribe(h => {
-      if (h.length < 1) {
-        this.dispatcher.next(new LoadAllHomes());
-      }
-    });
-
-    const filteredHomes$ = combineLatest([
+    this.filteredHomes$ = combineLatest([
       this.homeFilter.valueChanges.pipe(debounceTime(200), startWith('')),
-      allHomes$
+      this.allHomes$
     ]).pipe(map(([f, h]) => {
       if (f.length < 1) {
         return h;
@@ -58,7 +59,30 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
       return h.filter(home => this.isFilterMatch(f, home));
     }));
 
-    filteredHomes$.subscribe(h => this.dataSource.data = h);
+    this.focusedHome$ = combineLatest([this.allHomes$, this.route.paramMap]).pipe(
+      map(([homes, pmap]) => {
+        let homeId = pmap.get('id');
+        if (homeId) {
+          let home = homes.find(h => h.id === homeId);
+          if (home) {
+            return home;
+          }
+        }
+
+        return null;
+      }));
+  }
+
+  ngOnInit(): void {
+    this.allHomes$.pipe(take(1)).subscribe(h => {
+      if (h.length < 1) {
+        this.dispatcher.next(new LoadAllHomes());
+      }
+    });
+
+    this.filteredHomes$.subscribe(h => {
+      this.dataSource.data = h;
+    });
   }
 
   ngAfterViewInit(): void {
@@ -73,6 +97,15 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
         r.emailAddresses.filter(e => e.address.toLowerCase().includes(f)).length > 0 ||
         r.phoneNumbers.filter(p => `(${p.areaCode}) ${p.prefix}-${p.lineNumber} ${p.type}`.toLowerCase().includes(f)).length > 0
       ).length > 0;
+  }
+
+  focusHome(homeId: string): void {
+    this.router.navigate(['/manage/homes', { id: homeId }]);
+  }
+
+  unfocusHome(): void {
+    this.editEnabled = false;
+    this.router.navigate(['/manage/homes']);
   }
 
 }

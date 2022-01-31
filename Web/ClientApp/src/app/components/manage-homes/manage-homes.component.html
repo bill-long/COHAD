@@ -1,9 +1,9 @@
-<mat-form-field appearance="fill" fxHide="{{ focusedHome != null }}">
+<mat-form-field appearance="fill" fxHide="{{ (focusedHome$ | async) != null }}">
     <mat-label>Search</mat-label>
     <input matInput [formControl]="homeFilter">
 </mat-form-field>
 
-<table mat-table [dataSource]="dataSource" matSort fxHide="{{ focusedHome != null }}">
+<table mat-table [dataSource]="dataSource" matSort fxHide="{{ (focusedHome$ | async) != null }}">
 
     <ng-container matColumnDef="streetNumber">
         <th mat-header-cell *matHeaderCellDef mat-sort-header> Street Number </th>
@@ -36,7 +36,7 @@
     <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let home">
-            <button mat-icon-button color="primary" aria-label="Edit" (click)="focusedHome = home">
+            <button mat-icon-button color="primary" aria-label="Edit" (click)="focusHome(home.id)">
                 <mat-icon>edit</mat-icon>
             </button>
         </td>
@@ -46,7 +46,7 @@
     <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
 </table>
 
-<app-edit-home *ngIf="focusedHome != null" [home]="focusedHome" (doneEvent)="focusedHome = null; editEnabled = false;"
+<app-edit-home *ngIf="(focusedHome$ | async) != null" [home]="(focusedHome$ | async)" (doneEvent)="unfocusHome()"
     [editEnabled]="editEnabled" [reloadAllOnSave]="true"></app-edit-home>
-<button *ngIf="focusedHome != null && !editEnabled" mat-flat-button color="primary" (click)="editEnabled = true">Edit
+<button *ngIf="(focusedHome$ | async) != null && !editEnabled" mat-flat-button color="primary" (click)="editEnabled = true">Edit
     Details</button>

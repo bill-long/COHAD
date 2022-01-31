@@ -72,7 +72,7 @@ namespace Web.Controllers
                 {
                     resident.EmailAddresses =
                         resident.EmailAddresses
-                            .Where(e => !string.IsNullOrEmpty(e.Address) && e.Address.Contains("@", StringComparison.OrdinalIgnoreCase))
+                            .Where(e => !string.IsNullOrWhiteSpace(e.Address) && e.Address.Contains("@", StringComparison.OrdinalIgnoreCase))
                             .ToList();
                 }
             }

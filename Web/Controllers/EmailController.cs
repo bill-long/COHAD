@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using MailKit;
 using MailKit.Net.Smtp;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -81,7 +83,7 @@ namespace Web.Controllers
 
         private async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, Func<EmailAddress, bool> recipientFilter)
         {
-            List<string> bccList = null;
+            List<string> bccList = await GetAllEmailsMatchingFilter(recipientFilter);
 
             var subject = emailInfo.Subject;
 
@@ -91,10 +93,6 @@ namespace Web.Controllers
                     await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
                 bccList = new List<string> { apiUser.Emails };
                 subject = $"Test: {subject}";
-            }
-            else
-            {
-                bccList = await GetAllEmailsMatchingFilter(recipientFilter);
             }
 
             var message = new MimeMessage();
@@ -112,7 +110,39 @@ namespace Web.Controllers
                 message.Bcc.Add(new MailboxAddress(null, email));
             }
 #endif
-            using var smtpClient = new SmtpClient();
+            var memoryStream = new MemoryStream();
+            var logger = new ProtocolLogger(memoryStream);
+            try
+            {
+                DoSmtpSend(message, logger);
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = new MimeMessage();
+                errorMessage.From.Add(new MailboxAddress("", "bill@cohad.org"));
+                errorMessage.To.Add(new MailboxAddress("", "bill@cohad.org"));
+                errorMessage.Subject = "SendEmail failed";
+                var bodyBuilder = new BodyBuilder();
+                bodyBuilder.Attachments.Add("MailKitProtocolLog.txt", memoryStream.ToArray());
+                bodyBuilder.TextBody = $"SendEmail failed. Protocol log attached. Exception:\n{ex}";
+                errorMessage.Body = bodyBuilder.ToMessageBody();
+
+                try
+                {
+                    DoSmtpSend(errorMessage);
+                }
+                catch
+                {
+                    // Supress exceptions sending the error
+                }
+
+                throw;
+            }
+        }
+
+        private void DoSmtpSend(MimeMessage message, ProtocolLogger logger = null)
+        {
+            using var smtpClient = logger != null ? new SmtpClient(logger) : new SmtpClient();
             smtpClient.Connect(_options.SmtpHost, 587, MailKit.Security.SecureSocketOptions.StartTls);
             smtpClient.Authenticate(_options.SmtpUser, _options.SmtpPassword);
             smtpClient.Send(message);
@@ -158,7 +188,7 @@ namespace Web.Controllers
                     .Select(e => e.Address)
                 );
 
-            bccAddresses = bccAddresses.Distinct().ToList();
+            bccAddresses = bccAddresses.Distinct().Where(e => !string.IsNullOrWhiteSpace(e)).ToList();
 
             return bccAddresses;
         }

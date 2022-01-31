@@ -26,5 +26,9 @@
 <div>
     <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(false)" [disabled]="!editEnabled">Send Email To Neighborhood</button>
     <div *ngIf="sendSucceeded">Email was sent!</div>
+    <div *ngIf="errorText != null">
+      <div>Error occurred. Detailed error information:</div>
+      <pre>{{errorText}}</pre>
+    </div>
 </div>
 <button *ngIf="sendSucceeded" mat-flat-button color="primary" (click)="sendNew()">Compose a new email</button>
