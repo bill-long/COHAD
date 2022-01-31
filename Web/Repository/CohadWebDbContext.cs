@@ -19,8 +19,8 @@ namespace Web.Repository
 
             modelBuilder.Entity<User>().Property(u => u.Roles)
                 .HasConversion(
-                    v => JsonSerializer.Serialize(v, default),
-                    v => JsonSerializer.Deserialize<List<User.Role>>(v, default));
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions) default),
+                    v => JsonSerializer.Deserialize<List<User.Role>>(v, (JsonSerializerOptions) default));
 
             modelBuilder.Entity<Home>().ToContainer("Homes");
 
@@ -29,18 +29,18 @@ namespace Web.Repository
 
             modelBuilder.Entity<Home>().Property(h => h.Residents)
                 .HasConversion(
-                v => JsonSerializer.Serialize(v, default),
-                v => JsonSerializer.Deserialize<List<Resident>>(v, default));
+                v => JsonSerializer.Serialize(v, (JsonSerializerOptions) default),
+                v => JsonSerializer.Deserialize<List<Resident>>(v, (JsonSerializerOptions) default));
 
             modelBuilder.Entity<Home>().Property(h => h.PhoneNumber)
                 .HasConversion(
-                    v => JsonSerializer.Serialize(v, default),
-                    v => JsonSerializer.Deserialize<PhoneNumber>(v, default));
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions) default),
+                    v => JsonSerializer.Deserialize<PhoneNumber>(v, (JsonSerializerOptions) default));
 
             modelBuilder.Entity<Home>().Property(h => h.EmailAddress)
                 .HasConversion(
-                    v => JsonSerializer.Serialize(v, default),
-                    v => JsonSerializer.Deserialize<EmailAddress>(v, default));
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions) default),
+                    v => JsonSerializer.Deserialize<EmailAddress>(v, (JsonSerializerOptions) default));
 
             modelBuilder.Entity<NewAuditLogEntry>().ToContainer("AuditLog");
 

@@ -1,13 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Net.Mail;
+using System.Text;
 using System.Threading.Tasks;
+using MailKit.Net.Smtp;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using MimeKit;
+using MimeKit.Utils;
 using Web.Configuration;
 using Web.Models;
 using Web.Repository;
@@ -95,33 +97,24 @@ namespace Web.Controllers
                 bccList = await GetAllEmailsMatchingFilter(recipientFilter);
             }
 
-            var message = new MailMessage
-            {
-                From = new MailAddress(fromEmail, fromDisplay),
-                Subject = subject,
-                IsBodyHtml = true,
-                Body = emailInfo.HtmlBody
-            };
-
-            message.ReplyToList.Add(new MailAddress(fromEmail, fromDisplay));
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(fromDisplay, fromEmail));
+            message.Subject = subject;
+            message.Body = ConvertImageFormat(emailInfo.HtmlBody);
+            message.ReplyTo.Add(new MailboxAddress(fromDisplay, fromEmail));
 
             var homes = await _dbContext.Homes.ToListAsync();
 #if DEBUG
-            message.Bcc.Add("bill@selfish.net");
+            message.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
 #else
             foreach (var email in bccList)
             {
-                message.Bcc.Add(email);
+                message.Bcc.Add(new MailboxAddress(null, email));
             }
 #endif
-
-            var smtpClient = new SmtpClient(_options.SmtpHost)
-            {
-                Port = 587,
-                EnableSsl = true,
-                Credentials = new NetworkCredential(_options.SmtpUser, _options.SmtpPassword)
-            };
-
+            using var smtpClient = new SmtpClient();
+            smtpClient.Connect(_options.SmtpHost, 587, MailKit.Security.SecureSocketOptions.StartTls);
+            smtpClient.Authenticate(_options.SmtpUser, _options.SmtpPassword);
             smtpClient.Send(message);
         }
 
@@ -168,6 +161,58 @@ namespace Web.Controllers
             bccAddresses = bccAddresses.Distinct().ToList();
 
             return bccAddresses;
+        }
+
+        private MimeEntity ConvertImageFormat(string htmlBody)
+        {
+            var imageStart = "<img src=\"data:";
+            var imageEnd = "\">";
+
+            var bodyBuilder = new BodyBuilder();
+            var sb = new StringBuilder();
+
+            var imageCount = 0;
+            int position = 0;
+            while (position < htmlBody.Length)
+            {
+                var nextImageStart = htmlBody.IndexOf(imageStart, position);
+                if (nextImageStart < 0)
+                {
+                    sb.Append(htmlBody.AsSpan(position));
+                    break;
+                }
+                else
+                {
+                    sb.Append(htmlBody.AsSpan(position, nextImageStart - position));
+
+                    var imageTypeStartPos = nextImageStart + imageStart.Length;
+                    var imageTypeEndPos = htmlBody.IndexOf(';', imageTypeStartPos);
+                    var imageType = htmlBody[imageTypeStartPos..imageTypeEndPos];
+                    var imageExtension = imageType.AsSpan(imageType.IndexOf('/') + 1);
+
+                    var encodingStartPos = imageTypeEndPos + 1;
+                    var encodingEndPos = htmlBody.IndexOf(',', encodingStartPos);
+                    var encoding = htmlBody[encodingStartPos..encodingEndPos];
+                    if (encoding != "base64")
+                    {
+                        throw new InvalidOperationException($"Unsupported image encoding: {encoding}");
+                    }
+
+                    var base64Start = encodingEndPos + 1;
+                    var base64End = htmlBody.IndexOf(imageEnd, base64Start);
+                    var base64 = htmlBody[base64Start..base64End];
+                    var imageBytes = Convert.FromBase64String(base64);
+
+                    var imageResource = bodyBuilder.LinkedResources.Add($"image{imageCount++}.{imageExtension}", imageBytes);
+                    imageResource.ContentId = MimeUtils.GenerateMessageId();
+                    sb.Append($"<img src=\"cid:{imageResource.ContentId}\">");
+
+                    position = base64End + imageEnd.Length;
+                }
+            }
+
+            bodyBuilder.HtmlBody = sb.ToString();
+            return bodyBuilder.ToMessageBody();
         }
     }
 }
