@@ -83,7 +83,8 @@ export class SendEmailComponent {
         this.sendSucceeded = true;
       }
     }, err => {
-      this.errorText = err.toString();
+      this.errorText = err.error;
+      this.editEnabled = true;
     });
   }
 
