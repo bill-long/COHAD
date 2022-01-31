@@ -158,7 +158,7 @@ namespace Web.Controllers
                     .Select(e => e.Address)
                 );
 
-            bccAddresses = bccAddresses.Distinct().ToList();
+            bccAddresses = bccAddresses.Distinct().Where(e => !string.IsNullOrWhiteSpace(e)).ToList();
 
             return bccAddresses;
         }
