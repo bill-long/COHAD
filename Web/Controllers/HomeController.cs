@@ -45,10 +45,7 @@ namespace Web.Controllers
             var apiUser =
                 await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
 
-            // Necessary because Cosmos doesn't support Include() yet.
-            var allHomes = await _dbContext.Homes.ToListAsync();
-
-            if (apiUser.OwnedHomes?.FirstOrDefault(h => h.Id == updatedHome.Id) == null)
+            if (apiUser.OwnedHomeIds?.FirstOrDefault(homeId => homeId == updatedHome.Id) == null)
             {
                 // This user doesn't own this home. Check roles.
                 if (!apiUser.Roles.Contains(Models.User.Role.Administrator))

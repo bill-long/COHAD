@@ -30,9 +30,11 @@ namespace Web.Controllers
             var user = await _userRepository.Users.FindAsync(uniqueId);
             if (user != null)
             {
-                // This is necessary to resolve OwnedHomes since Cosmos does not support Includes yet
-                var allHomes = await _userRepository.Homes.ToListAsync();
-                return PresentationUser.FromStorageModel(user);
+                // Includes are not supported, and we don't want this to be an owned type, so we're manually handling these references
+                // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
+                // See also https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
+                var ownedHomes = user.OwnedHomeIds == null ? new List<Home>() : await _userRepository.Homes.Where(h => user.OwnedHomeIds.Contains(h.Id)).ToListAsync();
+                return PresentationUser.FromStorageModel(user, ownedHomes);
             }
 
             var newUser = new User
@@ -44,13 +46,13 @@ namespace Web.Controllers
                 Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value,
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
                 Roles = new List<User.Role>(),
-                OwnedHomes = new List<Home>(),
+                OwnedHomeIds = new List<System.Guid>(),
                 UniqueId = uniqueId
             };
 
             await _userRepository.Users.AddAsync(newUser);
             await _userRepository.SaveChangesAsync();
-            return PresentationUser.FromStorageModel(newUser);
+            return PresentationUser.FromStorageModel(newUser, new List<Home>());
         }
     }
 }

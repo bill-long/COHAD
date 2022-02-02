@@ -12,10 +12,19 @@ namespace Web.Repository
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<List<Guid>>().HasNoKey();
+
             modelBuilder.Entity<User>().ToContainer("Users");
 
             modelBuilder.Entity<User>()
                 .HasKey(u => u.UniqueId);
+
+            // EF Core insists on establishing a relationship for this list of GUIDs,
+            // so we convert it to stop that behavior.
+            modelBuilder.Entity<User>().Property(u => u.OwnedHomeIds)
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions)default),
+                    v => JsonSerializer.Deserialize<List<Guid>>(v, (JsonSerializerOptions)default));
 
             modelBuilder.Entity<User>().Property(u => u.Roles)
                 .HasConversion(
