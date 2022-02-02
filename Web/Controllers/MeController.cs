@@ -33,7 +33,7 @@ namespace Web.Controllers
                 // Includes are not supported, and we don't want this to be an owned type, so we're manually handling these references
                 // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
                 // See also https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
-                var ownedHomes = await _userRepository.Homes.Where(h => user.OwnedHomeIds.Contains(h.Id)).ToListAsync();
+                var ownedHomes = user.OwnedHomeIds == null ? new List<Home>() : await _userRepository.Homes.Where(h => user.OwnedHomeIds.Contains(h.Id)).ToListAsync();
                 return PresentationUser.FromStorageModel(user, ownedHomes);
             }
 

@@ -29,7 +29,7 @@ namespace Web.Controllers
 
             var allHomes = await _dbContext.Homes.ToListAsync();
 
-            return allUsers.Select(u => PresentationUser.FromStorageModel(u, allHomes.Where(h => u.OwnedHomeIds.Contains(h.Id)).ToList()));
+            return allUsers.Select(u => PresentationUser.FromStorageModel(u, allHomes.Where(h => u.OwnedHomeIds != null && u.OwnedHomeIds.Contains(h.Id)).ToList()));
         }
 
         /// <summary>
