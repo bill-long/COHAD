@@ -17,7 +17,7 @@ namespace Web.PresentationModels
         public List<string> Roles { get; private set; }
         public List<Home> OwnedHomes { get; private set; }
 
-        public static PresentationUser FromStorageModel(Models.User user)
+        public static PresentationUser FromStorageModel(Models.User user, List<Models.Home> ownedHomes)
         {
             return new PresentationUser
             {
@@ -28,7 +28,7 @@ namespace Web.PresentationModels
                 Email = user.Emails,
                 IdentityProvider = user.IdentityProvider,
                 Roles = user.Roles.Select(r => r.ToString()).ToList(),
-                OwnedHomes = user.OwnedHomes
+                OwnedHomes = ownedHomes
             };
         }
     }

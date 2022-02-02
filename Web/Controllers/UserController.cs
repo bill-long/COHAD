@@ -29,7 +29,7 @@ namespace Web.Controllers
 
             var allHomes = await _dbContext.Homes.ToListAsync();
 
-            return allUsers.Select(PresentationUser.FromStorageModel);
+            return allUsers.Select(u => PresentationUser.FromStorageModel(u, allHomes.Where(h => u.OwnedHomeIds.Contains(h.Id)).ToList()));
         }
 
         /// <summary>
@@ -99,26 +99,21 @@ namespace Web.Controllers
             var apiUser = await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
 
             var user = await _dbContext.Users.FindAsync(userId);
-
-            // We have to do this to resolve OwnedHomes because Include is not supported yet:
-            // https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
-            var allHomes = await _dbContext.Homes.ToListAsync();
-
             var home = await _dbContext.Homes.FindAsync(homeId);
-
             if (user == null || home == null)
             {
                 return NotFound();
             }
 
-            user.OwnedHomes ??= new List<Home>();
+            user.OwnedHomeIds ??= new List<Guid>();
 
-            if (user.OwnedHomes.FirstOrDefault(h => h.Id == home.Id) != null)
+            if (user.OwnedHomeIds.Contains(home.Id))
             {
                 return Conflict("The specified user is already an owner of the specified home.");
             }
 
-            user.OwnedHomes.Add(home);
+            _dbContext.Users.Update(user);
+            user.OwnedHomeIds.Add(home.Id);
 
             await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
             {
@@ -146,26 +141,21 @@ namespace Web.Controllers
         public async Task<IActionResult> RemoveOwnedHome(string userId, Guid homeId)
         {
             var apiUser = await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
-
             var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.UniqueId == userId);
-
-            // We have to do this to resolve OwnedHomes because Include is not supported yet:
-            // https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
-            var allHomes = await _dbContext.Homes.ToListAsync();
-
             if (user == null)
             {
                 return NotFound();
             }
 
-            user.OwnedHomes ??= new List<Home>();
+            user.OwnedHomeIds ??= new List<Guid>();
 
-            if (user.OwnedHomes.FirstOrDefault(h => h.Id == homeId) == null)
+            if (!user.OwnedHomeIds.Contains(homeId))
             {
                 return Conflict("The specified user is not an owner of the specified home.");
             }
 
-            user.OwnedHomes = user.OwnedHomes.Where(h => h.Id != homeId).ToList();
+            _dbContext.Users.Update(user);
+            user.OwnedHomeIds = user.OwnedHomeIds.Where(h => h != homeId).ToList();
 
             await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
             {
@@ -216,7 +206,7 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            var result = await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync();
 
             return Ok();
         }

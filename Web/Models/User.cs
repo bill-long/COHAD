@@ -26,7 +26,7 @@ namespace Web.Models
 
         public string UniqueId { get; set; }
 
-        public List<Home> OwnedHomes { get; set; }
+        public List<Guid> OwnedHomeIds { get; set; }
 
         public enum Role
         {
