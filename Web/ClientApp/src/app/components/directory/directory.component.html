@@ -1,57 +1,108 @@
 <div class="outerWrapper">
-    <div>
-        <mat-form-field appearance="fill">
-            <mat-label>Search</mat-label>
-            <input matInput [formControl]="homeFilter">
-        </mat-form-field>
+  <div>
+    <mat-form-field appearance="fill">
+      <mat-label>Search</mat-label>
+      <input matInput [formControl]="homeFilter">
+    </mat-form-field>
 
-        <table class="by-surname" ngClass.gt-sm="large-text">
-            <thead>
-                <tr>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                <ng-container *ngFor="let home of (itemsToRender | async)">
-                    <tr *ngIf="home.residents?.length">
-                        <td colspan="2"><span class="surname">{{getSurname(home)}}</span>, {{getGivenNames(home)}}</td>
-                        <td class="align-right">
-                            <div class="homePhone" *ngIf="home.phoneNumber">({{home.phoneNumber.areaCode}})
-                                {{home.phoneNumber.prefix}}-{{('0000' + home.phoneNumber.lineNumber).slice(-4)}}</div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="3">{{home.streetNumber}} {{home.streetName}}</td>
-                    </tr>
-                    <tr *ngIf="home.emailAddress">
-                        <td colspan="3">Email: {{home.emailAddress.address}}</td>
-                    </tr>
-                    <ng-container *ngFor="let resident of home.residents">
-                        <ng-container *ngFor="let email of resident.emailAddresses">
-                            <tr>
-                                <td>{{resident.givenName}} Email:</td>
-                                <td colspan="2">{{email.address}}</td>
-                            </tr>
-                        </ng-container>
-                        <ng-container *ngFor="let phoneNumber of resident.phoneNumbers">
-                            <tr>
-                                <td colspan="2">{{resident.givenName}} {{phoneNumber.type}}:</td>
-                                <td class="align-right">
-                                    <div class="phoneNumber">({{phoneNumber.areaCode}})
-                                        {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
-                                    </div>
-                                </td>
-                            </tr>
-                        </ng-container>
-                    </ng-container>
-                    <tr class="spacer-row"></tr>
+    <mat-list>
+      <mat-list-item *ngFor="let home of (itemsToRender | async)">
+        <div style="width: 100%;">
+          <div style="width: 100%;">
+            <div class="home" *ngIf="home.residents?.length">
+              <div matLine>
+                <div class="info-line">
+                  <span class="names"><span class="surname">{{getSurname(home)}}</span>, {{getGivenNames(home)}}</span>
+                  <span class="home-phone align-right" *ngIf="home.phoneNumber">({{home.phoneNumber.areaCode}})
+                    {{home.phoneNumber.prefix}}-{{('0000' + home.phoneNumber.lineNumber).slice(-4)}}</span>
+                </div>
+              </div>
+              <div matLine>
+                <div class="info-line">
+                  {{home.streetNumber}} {{home.streetName}}
+                </div>
+              </div>
+              <div matLine>
+                <div class="email-line" *ngIf="home.emailAddress">
+                  <span>Email:</span>
+                  <span>{{home.emailAddress.address}}</span>
+                </div>
+              </div>
+              <ng-container *ngFor="let resident of home.residents">
+                <ng-container *ngFor="let email of resident.emailAddresses">
+                  <div matLine>
+                    <div class="email-line">
+                      <span>{{resident.givenName}} Email:</span>
+                      <span>{{email.address}}</span>
+                    </div>
+                  </div>
                 </ng-container>
-            </tbody>
-        </table>
+                <ng-container *ngFor="let phoneNumber of resident.phoneNumbers">
+                  <div matLine>
+                    <div class="info-line">
+                      <span>{{resident.givenName}} {{phoneNumber.type}}:</span>
+                      <span>
+                        <div class="phoneNumber">({{phoneNumber.areaCode}})
+                          {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+                        </div>
+                      </span>
+                    </div>
+                  </div>
+                </ng-container>
+              </ng-container>
+            </div>
+          </div>
+        </div>
+      </mat-list-item>
+    </mat-list>
 
-        <mat-spinner *ngIf="showSpinner | async"></mat-spinner>
-    </div>
+    <table class="by-surname" ngClass.gt-sm="large-text">
+      <thead>
+        <tr>
+          <th></th>
+          <th></th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <ng-container *ngFor="let home of (itemsToRender | async)">
+          <tr *ngIf="home.residents?.length">
+            <td colspan="2"><span class="surname">{{getSurname(home)}}</span>, {{getGivenNames(home)}}</td>
+            <td class="align-right">
+              <div class="homePhone" *ngIf="home.phoneNumber">({{home.phoneNumber.areaCode}})
+                {{home.phoneNumber.prefix}}-{{('0000' + home.phoneNumber.lineNumber).slice(-4)}}</div>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="3">{{home.streetNumber}} {{home.streetName}}</td>
+          </tr>
+          <tr *ngIf="home.emailAddress">
+            <td colspan="3">Email: {{home.emailAddress.address}}</td>
+          </tr>
+          <ng-container *ngFor="let resident of home.residents">
+            <ng-container *ngFor="let email of resident.emailAddresses">
+              <tr>
+                <td>{{resident.givenName}} Email:</td>
+                <td colspan="2">{{email.address}}</td>
+              </tr>
+            </ng-container>
+            <ng-container *ngFor="let phoneNumber of resident.phoneNumbers">
+              <tr>
+                <td colspan="2">{{resident.givenName}} {{phoneNumber.type}}:</td>
+                <td class="align-right">
+                  <div class="phoneNumber">({{phoneNumber.areaCode}})
+                    {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+                  </div>
+                </td>
+              </tr>
+            </ng-container>
+          </ng-container>
+          <tr class="spacer-row"></tr>
+        </ng-container>
+      </tbody>
+    </table>
+
+    <mat-spinner *ngIf="showSpinner | async"></mat-spinner>
+  </div>
 
 </div>

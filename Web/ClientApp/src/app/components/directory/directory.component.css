@@ -1,46 +1,75 @@
 mat-form-field {
-    margin-top: 15px;
-    width: 100%;
+  margin-top: 15px;
+  width: 100%;
 }
 
 .outerWrapper {
-    display: flex;
-    justify-content: center;
+  display: flex;
+  justify-content: center;
+}
+
+.surname {
+  font-weight: bold;
+}
+
+.home {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.info-line {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  font-size: large;
+  margin-bottom: 5px;
+}
+
+.email-line {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  font-size: large;
+  margin-bottom: 5px;
+}
+
+.home-phone {
+  font-weight: bold;
 }
 
 table {
-    width: 100%;
-    margin-top: 15px;
+  width: 100%;
+  margin-top: 15px;
 }
 
 th {
-    width: 100px;
+  width: 100px;
 }
 
 .spacer-row {
-    height: 15px;
+  height: 15px;
 }
 
 .by-surname .surname {
-    font-weight: bold;
+  font-weight: bold;
 }
 
 .by-surname .homePhone {
-    font-weight: bold;
+  font-weight: bold;
 }
 
 .large-text {
-    font-size: large;
+  font-size: large;
 }
 
 .large-text th {
-    width: 200px;
+  width: 200px;
 }
 
 .align-right {
-    text-align: right;
+  text-align: right;
 }
 
 mat-spinner {
-    margin-top: 15px;
+  margin-top: 15px;
 }

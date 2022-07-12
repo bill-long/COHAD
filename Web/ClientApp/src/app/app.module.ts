@@ -19,6 +19,7 @@ import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatListModule } from '@angular/material/list';
 
 import { QuillModule } from 'ngx-quill';
 
@@ -128,7 +129,8 @@ import { AuditLogComponent } from './components/audit-log/audit-log.component'
     MatAutocompleteModule,
     MatCheckboxModule,
     MatSelectModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatListModule
   ],
   providers: [
     { provide: dispatcher, useValue: new Subject<Action>() },
