@@ -1,6 +1,6 @@
 import { Component, OnInit, Input } from '@angular/core';
 import { PhoneNumber } from 'src/app/models';
-import { FormControl } from '@angular/forms';
+import { UntypedFormControl } from '@angular/forms';
 
 @Component({
   selector: 'app-phone-number-input',
@@ -13,7 +13,7 @@ export class PhoneNumberInputComponent implements OnInit {
 
   @Input() editEnabled!: boolean;
 
-  phoneNumberControl = new FormControl();
+  phoneNumberControl = new UntypedFormControl();
 
   phoneNumberString!: string;
 

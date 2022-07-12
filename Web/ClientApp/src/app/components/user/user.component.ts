@@ -1,7 +1,7 @@
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
 import { Component, OnInit, Input, ElementRef, ViewChild, ViewEncapsulation, Output, EventEmitter, Inject } from '@angular/core';
 import { ApiUser, Home } from 'src/app/models';
-import { FormControl } from '@angular/forms';
+import { UntypedFormControl } from '@angular/forms';
 import { MatChipInputEvent } from '@angular/material/chips';
 import { MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { Observable } from 'rxjs';
@@ -27,9 +27,9 @@ export class UserComponent implements OnInit {
 
   filteredHomes!: Observable<Home[]>;
 
-  homeControl = new FormControl();
+  homeControl = new UntypedFormControl();
 
-  roleControl = new FormControl();
+  roleControl = new UntypedFormControl();
 
   allRoles = ['Resident', 'WelcomeCommittee', 'GardenClub', 'SocialCommittee'];
 
