@@ -12,62 +12,42 @@ mat-form-field {
   font-weight: bold;
 }
 
-.home {
-  display: flex;
-  flex-direction: column;
+.small-screen {
   width: 100%;
 }
 
-.info-line {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
+.large-screen {
+  width: 614px;
   font-size: large;
+}
+
+.home {
+  margin-bottom: 15px;
+  break-inside: avoid;
+}
+
+.info-line > :first-child {
+  float: left;
   margin-bottom: 5px;
 }
 
-.email-line {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  font-size: large;
-  margin-bottom: 5px;
+.info-line > :last-child {
+  float: right;
+  text-align: right;
+}
+
+.clear {
+  clear: both;
+}
+
+.email-line > div {
+  width: 33%;
+  float: left;
+  text-align: inherit;
 }
 
 .home-phone {
   font-weight: bold;
-}
-
-table {
-  width: 100%;
-  margin-top: 15px;
-}
-
-th {
-  width: 100px;
-}
-
-.spacer-row {
-  height: 15px;
-}
-
-.by-surname .surname {
-  font-weight: bold;
-}
-
-.by-surname .homePhone {
-  font-weight: bold;
-}
-
-.large-text {
-  font-size: large;
-}
-
-.large-text th {
-  width: 200px;
-}
-
-.align-right {
-  text-align: right;
 }
 
 mat-spinner {
