@@ -1,6 +1,6 @@
 import { Component, Inject } from "@angular/core";
 import { map, Observable, Subject } from "rxjs";
-import { Action, ApplicationState, applicationState, dispatcher, SetPrintDirectoryBackCover, SetPrintDirectoryFrontCover, SetPrintDirectoryLeftMap, SetPrintDirectoryRightMap } from "src/app/state";
+import { Action, ApplicationState, applicationState, dispatcher, SetPrintDirectoryAddExtraPageBreak, SetPrintDirectoryBackCover, SetPrintDirectoryFrontCover, SetPrintDirectoryLeftMap, SetPrintDirectoryRightMap } from "src/app/state";
 
 @Component({
   selector: 'app-manage-printdirectory',
@@ -8,17 +8,18 @@ import { Action, ApplicationState, applicationState, dispatcher, SetPrintDirecto
   styleUrls: ['./manage-printdirectory.component.css']
 })
 export class ManagePrintDirectoryComponent {
-  printDirectoryImages: Observable<{
+  printDirectorySettings: Observable<{
     frontCoverDataUrl: string | null,
     mapLeftDataUrl: string | null,
     mapRightDataUrl: string | null,
-    backCoverDataUrl: string | null
+    backCoverDataUrl: string | null,
+    addExtraPageBreak: boolean
   }>;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Subject<Action>) {
-      this.printDirectoryImages = this.appState.pipe(map(s => s.printDirectoryImages));
+      this.printDirectorySettings = this.appState.pipe(map(s => s.printDirectorySettings));
     }
 
   dragOver(event: any) {
@@ -53,6 +54,10 @@ export class ManagePrintDirectoryComponent {
 
   async backCoverDrop(event: any) {
     this.dispatcher.next(new SetPrintDirectoryBackCover(await this.handleDrop(event)));
+  }
+
+  addExtraPageBreakChanged(event: any) {
+    this.dispatcher.next(new SetPrintDirectoryAddExtraPageBreak(event.checked));
   }
 
   showPrintDirectory() {

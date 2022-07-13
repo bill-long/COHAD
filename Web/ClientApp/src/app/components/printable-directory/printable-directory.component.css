@@ -20,3 +20,13 @@ img {
   break-inside: avoid;
   break-after: always;
 }
+
+.full-page {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  object-fit: cover;
+  break-inside: avoid;
+  break-after: always;
+}

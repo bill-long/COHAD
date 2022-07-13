@@ -1,7 +1,8 @@
 <div>
-  <img src="{{(printDirectoryImages | async)?.frontCoverDataUrl}}" alt="front cover" class="front-cover-image">
-  <img src="{{(printDirectoryImages | async)?.mapLeftDataUrl}}" alt="map left" class="map-left-image">
-  <img src="{{(printDirectoryImages | async)?.mapRightDataUrl}}" alt="map right" class="map-right-image">
+  <img class="full-page" src="{{(printDirectorySettings | async)?.frontCoverDataUrl}}" alt="front cover">
+  <img class="full-page" src="{{(printDirectorySettings | async)?.mapLeftDataUrl}}" alt="map left">
+  <img class="full-page" src="{{(printDirectorySettings | async)?.mapRightDataUrl}}" alt="map right">
   <app-directory [hideSearch]="true"></app-directory>
-  <img src="{{(printDirectoryImages | async)?.backCoverDataUrl}}" alt="back cover" class="back-cover-image">
+  <div class="full-page" *ngIf="(printDirectorySettings | async)?.addExtraPageBreak"></div>
+  <img src="{{(printDirectorySettings | async)?.backCoverDataUrl}}" alt="back cover">
 </div>

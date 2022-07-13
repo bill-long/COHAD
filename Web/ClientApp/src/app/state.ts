@@ -10,11 +10,12 @@ export interface ApplicationState {
     apiUser: ApiUser | null,
     directory: DirectoryHome[],
     operationsInProgress: number,
-    printDirectoryImages: {
+    printDirectorySettings: {
         frontCoverDataUrl: string | null,
         mapLeftDataUrl: string | null,
         mapRightDataUrl: string | null,
-        backCoverDataUrl: string | null
+        backCoverDataUrl: string | null,
+        addExtraPageBreak: boolean
     }
 }
 
@@ -25,11 +26,12 @@ export const initialStateValue: ApplicationState = {
     apiUser: null,
     directory: [],
     operationsInProgress: 0,
-    printDirectoryImages: {
+    printDirectorySettings: {
       frontCoverDataUrl: null,
       mapLeftDataUrl: null,
       mapRightDataUrl: null,
-      backCoverDataUrl: null
+      backCoverDataUrl: null,
+      addExtraPageBreak: false
     }
 }
 
@@ -63,6 +65,8 @@ export class SetPrintDirectoryRightMap { constructor(public mapRightDataUrl: str
 
 export class SetPrintDirectoryBackCover { constructor(public backCoverDataUrl: string | null) { } }
 
+export class SetPrintDirectoryAddExtraPageBreak { constructor(public addExtraPageBreak: boolean) { } }
+
 export type Action =
     AuthenticatedUserChanged |
     LoadDirectory |
@@ -74,7 +78,8 @@ export type Action =
     SetPrintDirectoryFrontCover |
     SetPrintDirectoryLeftMap |
     SetPrintDirectoryRightMap |
-    SetPrintDirectoryBackCover;
+    SetPrintDirectoryBackCover |
+    SetPrintDirectoryAddExtraPageBreak;
 
 export const dispatcher = new InjectionToken<Subject<Action>>('dispatcher');
 
@@ -99,7 +104,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress,
-                    printDirectoryImages: state.printDirectoryImages
+                    printDirectorySettings: state.printDirectorySettings
                 };
             } else if (action instanceof LoadAllHomes) {
                 newState = addOperationInProgress(state);
@@ -111,7 +116,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress - 1,
-                    printDirectoryImages: state.printDirectoryImages
+                    printDirectorySettings: state.printDirectorySettings
                 };
             } else if (action instanceof LoadAllUsers) {
                 newState = addOperationInProgress(state);
@@ -123,7 +128,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress - 1,
-                    printDirectoryImages: state.printDirectoryImages
+                    printDirectorySettings: state.printDirectorySettings
                 };
             } else if (action instanceof LoadDirectory) {
                 newState = addOperationInProgress(state);
@@ -135,7 +140,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: action.data,
                     operationsInProgress: state.operationsInProgress - 1,
-                    printDirectoryImages: state.printDirectoryImages
+                    printDirectorySettings: state.printDirectorySettings
                 };
             } else if (action instanceof LoadUser) {
                 newState = addOperationInProgress(state);
@@ -147,7 +152,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: action.user,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress - 1,
-                    printDirectoryImages: state.printDirectoryImages
+                    printDirectorySettings: state.printDirectorySettings
                 };
             } else if (action instanceof Login) {
                 newState = state;
@@ -161,11 +166,12 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress,
-                    printDirectoryImages: {
+                    printDirectorySettings: {
                         frontCoverDataUrl: action.frontCoverDataUrl,
-                        mapLeftDataUrl: state.printDirectoryImages.mapLeftDataUrl,
-                        mapRightDataUrl: state.printDirectoryImages.mapRightDataUrl,
-                        backCoverDataUrl: state.printDirectoryImages.backCoverDataUrl
+                        mapLeftDataUrl: state.printDirectorySettings.mapLeftDataUrl,
+                        mapRightDataUrl: state.printDirectorySettings.mapRightDataUrl,
+                        backCoverDataUrl: state.printDirectorySettings.backCoverDataUrl,
+                        addExtraPageBreak: state.printDirectorySettings.addExtraPageBreak
                     }
                 };
             } else if (action instanceof SetPrintDirectoryLeftMap) {
@@ -176,11 +182,12 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress,
-                    printDirectoryImages: {
-                        frontCoverDataUrl: state.printDirectoryImages.frontCoverDataUrl,
+                    printDirectorySettings: {
+                        frontCoverDataUrl: state.printDirectorySettings.frontCoverDataUrl,
                         mapLeftDataUrl: action.mapLeftDataUrl,
-                        mapRightDataUrl: state.printDirectoryImages.mapRightDataUrl,
-                        backCoverDataUrl: state.printDirectoryImages.backCoverDataUrl
+                        mapRightDataUrl: state.printDirectorySettings.mapRightDataUrl,
+                        backCoverDataUrl: state.printDirectorySettings.backCoverDataUrl,
+                        addExtraPageBreak: state.printDirectorySettings.addExtraPageBreak
                     }
                 };
             } else if (action instanceof SetPrintDirectoryRightMap) {
@@ -191,11 +198,12 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress,
-                    printDirectoryImages: {
-                        frontCoverDataUrl: state.printDirectoryImages.frontCoverDataUrl,
-                        mapLeftDataUrl: state.printDirectoryImages.mapLeftDataUrl,
+                    printDirectorySettings: {
+                        frontCoverDataUrl: state.printDirectorySettings.frontCoverDataUrl,
+                        mapLeftDataUrl: state.printDirectorySettings.mapLeftDataUrl,
                         mapRightDataUrl: action.mapRightDataUrl,
-                        backCoverDataUrl: state.printDirectoryImages.backCoverDataUrl
+                        backCoverDataUrl: state.printDirectorySettings.backCoverDataUrl,
+                        addExtraPageBreak: state.printDirectorySettings.addExtraPageBreak
                     }
                 };
             } else if (action instanceof SetPrintDirectoryBackCover) {
@@ -206,11 +214,28 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress,
-                    printDirectoryImages: {
-                        frontCoverDataUrl: state.printDirectoryImages.frontCoverDataUrl,
-                        mapLeftDataUrl: state.printDirectoryImages.mapLeftDataUrl,
-                        mapRightDataUrl: state.printDirectoryImages.mapRightDataUrl,
-                        backCoverDataUrl: action.backCoverDataUrl
+                    printDirectorySettings: {
+                        frontCoverDataUrl: state.printDirectorySettings.frontCoverDataUrl,
+                        mapLeftDataUrl: state.printDirectorySettings.mapLeftDataUrl,
+                        mapRightDataUrl: state.printDirectorySettings.mapRightDataUrl,
+                        backCoverDataUrl: action.backCoverDataUrl,
+                        addExtraPageBreak: state.printDirectorySettings.addExtraPageBreak
+                    }
+                };
+            } else if (action instanceof SetPrintDirectoryAddExtraPageBreak) {
+                newState = {
+                    allHomes: state.allHomes,
+                    allUsers: state.allUsers,
+                    authUser: state.authUser,
+                    apiUser: state.apiUser,
+                    directory: state.directory,
+                    operationsInProgress: state.operationsInProgress,
+                    printDirectorySettings: {
+                        frontCoverDataUrl: state.printDirectorySettings.frontCoverDataUrl,
+                        mapLeftDataUrl: state.printDirectorySettings.mapLeftDataUrl,
+                        mapRightDataUrl: state.printDirectorySettings.mapRightDataUrl,
+                        backCoverDataUrl: state.printDirectorySettings.backCoverDataUrl,
+                        addExtraPageBreak: action.addExtraPageBreak
                     }
                 };
             } else {
@@ -235,6 +260,6 @@ function addOperationInProgress(state: ApplicationState) {
         apiUser: state.apiUser,
         directory: state.directory,
         operationsInProgress: state.operationsInProgress + 1,
-        printDirectoryImages: state.printDirectoryImages
+        printDirectorySettings: state.printDirectorySettings
     };
 }

@@ -9,16 +9,17 @@ import { Action, ApplicationState, applicationState, dispatcher } from "src/app/
 })
 export class PrintableDirectoryComponent {
 
-  printDirectoryImages: Observable<{
+  printDirectorySettings: Observable<{
     frontCoverDataUrl: string | null,
     mapLeftDataUrl: string | null,
     mapRightDataUrl: string | null,
-    backCoverDataUrl: string | null
+    backCoverDataUrl: string | null,
+    addExtraPageBreak: boolean
   }>;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Subject<Action>) {
-      this.printDirectoryImages = this.appState.pipe(map(s => s.printDirectoryImages));
+      this.printDirectorySettings = this.appState.pipe(map(s => s.printDirectorySettings));
     }
 }
