@@ -1,46 +1,55 @@
 mat-form-field {
-    margin-top: 15px;
-    width: 100%;
+  margin-top: 15px;
+  width: 100%;
 }
 
 .outerWrapper {
-    display: flex;
-    justify-content: center;
+  display: flex;
+  justify-content: center;
 }
 
-table {
-    width: 100%;
-    margin-top: 15px;
+.surname {
+  font-weight: bold;
 }
 
-th {
-    width: 100px;
+.small-screen {
+  width: 100%;
 }
 
-.spacer-row {
-    height: 15px;
+.large-screen {
+  width: 614px;
+  font-size: large;
 }
 
-.by-surname .surname {
-    font-weight: bold;
+.home {
+  padding-top: 30px;
+  break-inside: avoid;
 }
 
-.by-surname .homePhone {
-    font-weight: bold;
+.info-line > :first-child {
+  float: left;
+  margin-bottom: 5px;
 }
 
-.large-text {
-    font-size: large;
+.info-line > :last-child {
+  float: right;
+  text-align: right;
 }
 
-.large-text th {
-    width: 200px;
+.clear {
+  clear: both;
 }
 
-.align-right {
-    text-align: right;
+.email-line > div {
+  width: 33%;
+  float: left;
+  text-align: inherit;
+}
+
+.home-phone {
+  font-weight: bold;
 }
 
 mat-spinner {
-    margin-top: 15px;
+  margin-top: 15px;
 }

@@ -1,7 +1,7 @@
 import { Component, OnInit, ChangeDetectionStrategy, Inject } from '@angular/core';
 import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { Router, NavigationStart } from '@angular/router';
+import { Router, NavigationStart, ActivatedRoute, UrlSegment, NavigationEnd } from '@angular/router';
 import { applicationState, ApplicationState, dispatcher, Action, Login, Logout } from 'src/app/state';
 import { ApiUser, AuthUser } from 'src/app/models';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
@@ -16,6 +16,7 @@ export class NavbarComponent implements OnInit {
 
   disabled = false;
   isNavbarCollapsed = true;
+  isHidden: boolean = false;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -25,6 +26,14 @@ export class NavbarComponent implements OnInit {
     router.events.subscribe(e => {
       if (e instanceof NavigationStart) {
         this.isNavbarCollapsed = true;
+      }
+
+      if (e instanceof NavigationEnd) {
+        if (e.url === '/printable-directory') {
+          this.isHidden = true;
+        } else {
+          this.isHidden = false;
+        }
       }
     });
   }

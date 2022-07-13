@@ -5,7 +5,7 @@ import { Home } from 'src/app/models';
 import { MatSort } from '@angular/material/sort';
 import { Observable, Observer, combineLatest } from 'rxjs';
 import { map, take, debounceTime, startWith } from 'rxjs/operators';
-import { FormControl } from '@angular/forms';
+import { UntypedFormControl } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 @Component({
@@ -36,7 +36,7 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
 
   editEnabled = false;
 
-  homeFilter = new FormControl();
+  homeFilter = new UntypedFormControl();
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,

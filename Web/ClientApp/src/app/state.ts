@@ -9,7 +9,13 @@ export interface ApplicationState {
     authUser: AuthUser | null,
     apiUser: ApiUser | null,
     directory: DirectoryHome[],
-    operationsInProgress: number
+    operationsInProgress: number,
+    printDirectoryImages: {
+        frontCoverDataUrl: string | null,
+        mapLeftDataUrl: string | null,
+        mapRightDataUrl: string | null,
+        backCoverDataUrl: string | null
+    }
 }
 
 export const initialStateValue: ApplicationState = {
@@ -18,7 +24,13 @@ export const initialStateValue: ApplicationState = {
     authUser: null,
     apiUser: null,
     directory: [],
-    operationsInProgress: 0
+    operationsInProgress: 0,
+    printDirectoryImages: {
+      frontCoverDataUrl: null,
+      mapLeftDataUrl: null,
+      mapRightDataUrl: null,
+      backCoverDataUrl: null
+    }
 }
 
 export class AuthenticatedUserChanged { constructor(public authUser: AuthUser) { } }
@@ -43,6 +55,14 @@ export class Login { }
 
 export class Logout { }
 
+export class SetPrintDirectoryFrontCover { constructor(public frontCoverDataUrl: string | null) { } }
+
+export class SetPrintDirectoryLeftMap { constructor(public mapLeftDataUrl: string | null) { } }
+
+export class SetPrintDirectoryRightMap { constructor(public mapRightDataUrl: string | null) { } }
+
+export class SetPrintDirectoryBackCover { constructor(public backCoverDataUrl: string | null) { } }
+
 export type Action =
     AuthenticatedUserChanged |
     LoadDirectory |
@@ -50,7 +70,11 @@ export type Action =
     LoadUser |
     LoadUserCompleted |
     Login |
-    Logout;
+    Logout |
+    SetPrintDirectoryFrontCover |
+    SetPrintDirectoryLeftMap |
+    SetPrintDirectoryRightMap |
+    SetPrintDirectoryBackCover;
 
 export const dispatcher = new InjectionToken<Subject<Action>>('dispatcher');
 
@@ -74,7 +98,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authUser: action.authUser,
                     apiUser: state.apiUser,
                     directory: state.directory,
-                    operationsInProgress: state.operationsInProgress
+                    operationsInProgress: state.operationsInProgress,
+                    printDirectoryImages: state.printDirectoryImages
                 };
             } else if (action instanceof LoadAllHomes) {
                 newState = addOperationInProgress(state);
@@ -85,7 +110,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authUser: state.authUser,
                     apiUser: state.apiUser,
                     directory: state.directory,
-                    operationsInProgress: state.operationsInProgress - 1
+                    operationsInProgress: state.operationsInProgress - 1,
+                    printDirectoryImages: state.printDirectoryImages
                 };
             } else if (action instanceof LoadAllUsers) {
                 newState = addOperationInProgress(state);
@@ -96,7 +122,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authUser: state.authUser,
                     apiUser: state.apiUser,
                     directory: state.directory,
-                    operationsInProgress: state.operationsInProgress - 1
+                    operationsInProgress: state.operationsInProgress - 1,
+                    printDirectoryImages: state.printDirectoryImages
                 };
             } else if (action instanceof LoadDirectory) {
                 newState = addOperationInProgress(state);
@@ -107,7 +134,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authUser: state.authUser,
                     apiUser: state.apiUser,
                     directory: action.data,
-                    operationsInProgress: state.operationsInProgress - 1
+                    operationsInProgress: state.operationsInProgress - 1,
+                    printDirectoryImages: state.printDirectoryImages
                 };
             } else if (action instanceof LoadUser) {
                 newState = addOperationInProgress(state);
@@ -118,12 +146,73 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authUser: state.authUser,
                     apiUser: action.user,
                     directory: state.directory,
-                    operationsInProgress: state.operationsInProgress - 1
+                    operationsInProgress: state.operationsInProgress - 1,
+                    printDirectoryImages: state.printDirectoryImages
                 };
             } else if (action instanceof Login) {
                 newState = state;
             } else if (action instanceof Logout) {
                 newState = state;
+            } else if (action instanceof SetPrintDirectoryFrontCover) {
+                newState = {
+                    allHomes: state.allHomes,
+                    allUsers: state.allUsers,
+                    authUser: state.authUser,
+                    apiUser: state.apiUser,
+                    directory: state.directory,
+                    operationsInProgress: state.operationsInProgress,
+                    printDirectoryImages: {
+                        frontCoverDataUrl: action.frontCoverDataUrl,
+                        mapLeftDataUrl: state.printDirectoryImages.mapLeftDataUrl,
+                        mapRightDataUrl: state.printDirectoryImages.mapRightDataUrl,
+                        backCoverDataUrl: state.printDirectoryImages.backCoverDataUrl
+                    }
+                };
+            } else if (action instanceof SetPrintDirectoryLeftMap) {
+                newState = {
+                    allHomes: state.allHomes,
+                    allUsers: state.allUsers,
+                    authUser: state.authUser,
+                    apiUser: state.apiUser,
+                    directory: state.directory,
+                    operationsInProgress: state.operationsInProgress,
+                    printDirectoryImages: {
+                        frontCoverDataUrl: state.printDirectoryImages.frontCoverDataUrl,
+                        mapLeftDataUrl: action.mapLeftDataUrl,
+                        mapRightDataUrl: state.printDirectoryImages.mapRightDataUrl,
+                        backCoverDataUrl: state.printDirectoryImages.backCoverDataUrl
+                    }
+                };
+            } else if (action instanceof SetPrintDirectoryRightMap) {
+                newState = {
+                    allHomes: state.allHomes,
+                    allUsers: state.allUsers,
+                    authUser: state.authUser,
+                    apiUser: state.apiUser,
+                    directory: state.directory,
+                    operationsInProgress: state.operationsInProgress,
+                    printDirectoryImages: {
+                        frontCoverDataUrl: state.printDirectoryImages.frontCoverDataUrl,
+                        mapLeftDataUrl: state.printDirectoryImages.mapLeftDataUrl,
+                        mapRightDataUrl: action.mapRightDataUrl,
+                        backCoverDataUrl: state.printDirectoryImages.backCoverDataUrl
+                    }
+                };
+            } else if (action instanceof SetPrintDirectoryBackCover) {
+                newState = {
+                    allHomes: state.allHomes,
+                    allUsers: state.allUsers,
+                    authUser: state.authUser,
+                    apiUser: state.apiUser,
+                    directory: state.directory,
+                    operationsInProgress: state.operationsInProgress,
+                    printDirectoryImages: {
+                        frontCoverDataUrl: state.printDirectoryImages.frontCoverDataUrl,
+                        mapLeftDataUrl: state.printDirectoryImages.mapLeftDataUrl,
+                        mapRightDataUrl: state.printDirectoryImages.mapRightDataUrl,
+                        backCoverDataUrl: action.backCoverDataUrl
+                    }
+                };
             } else {
                 newState = state;
             }
@@ -145,6 +234,7 @@ function addOperationInProgress(state: ApplicationState) {
         authUser: state.authUser,
         apiUser: state.apiUser,
         directory: state.directory,
-        operationsInProgress: state.operationsInProgress + 1
+        operationsInProgress: state.operationsInProgress + 1,
+        printDirectoryImages: state.printDirectoryImages
     };
 }

@@ -37,4 +37,8 @@ export class ManageComponent implements OnInit {
     return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageAuditLogRoles.includes(r)).length > 0))
   }
 
+  get printDirectoryVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0))
+  }
+
 }
