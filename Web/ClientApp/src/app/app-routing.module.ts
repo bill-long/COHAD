@@ -16,6 +16,8 @@ import { SendEmailComponent } from './components/send-email/send-email.component
 import { AuditLogComponent } from './components/audit-log/audit-log.component';
 import { rolePermissions } from './services/rolepermission.service';
 import { PrivacyComponent } from './components/privacy/privacy.component';
+import { ManagePrintDirectoryComponent } from './components/manage-printdirectory/manage-printdirectory.component';
+import { PrintableDirectoryComponent } from './components/printable-directory/printable-directory.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
@@ -25,11 +27,13 @@ const routes: Routes = [
   { path: 'news', component: NewsComponent },
   { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
   { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] },
+  { path: 'printable-directory', component: PrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
   {
     path: 'manage', component: ManageComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, children: [
       { path: 'users', component: ManageUsersComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles } },
       { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageHomesRoles } },
       { path: 'send-email', component: SendEmailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles } },
+      { path: 'print-directory', component: ManagePrintDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
       { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageAuditLogRoles } }
     ]
   },

@@ -1,12 +1,12 @@
 <div class="outerWrapper">
   <div>
-    <mat-form-field appearance="fill">
+    <mat-form-field *ngIf="hideSearch !== true" appearance="fill">
       <mat-label>Search</mat-label>
       <input matInput [formControl]="homeFilter">
     </mat-form-field>
 
     <div *ngFor="let home of (itemsToRender | async)">
-      <div class="home" ngClass.gt-sm="large-screen" *ngIf="home.residents?.length">
+      <div class="home" ngClass.gt-sm="large-screen" [ngClass]="{ 'large-screen': hideSearch }" *ngIf="home.residents?.length">
         <div class="info-line">
           <div class="names"><span class="surname">{{getSurname(home)}}</span>, {{getGivenNames(home)}}</div>
           <div>

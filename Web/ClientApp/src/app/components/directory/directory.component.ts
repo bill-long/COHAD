@@ -1,4 +1,4 @@
-import { Component, OnInit, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, Inject, ChangeDetectionStrategy, Input } from '@angular/core';
 import { Observable, combineLatest, Subject, ReplaySubject } from 'rxjs';
 import { startWith, debounceTime, map, shareReplay, take, delay, withLatestFrom } from 'rxjs/operators';
 import { UntypedFormControl } from '@angular/forms';
@@ -18,6 +18,8 @@ export class DirectoryComponent {
   showSpinner: Observable<boolean>;
 
   homeFilter = new UntypedFormControl('');
+
+  @Input() hideSearch: boolean | undefined;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,

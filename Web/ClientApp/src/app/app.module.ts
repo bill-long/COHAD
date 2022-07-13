@@ -49,7 +49,9 @@ import { EditResidentComponent } from './components/edit-resident/edit-resident.
 import { NgxMaskModule } from 'ngx-mask';
 import { PhoneNumberInputComponent } from './components/phone-number-input/phone-number-input.component';
 import { SendEmailComponent } from './components/send-email/send-email.component';
-import { AuditLogComponent } from './components/audit-log/audit-log.component'
+import { AuditLogComponent } from './components/audit-log/audit-log.component';
+import { ManagePrintDirectoryComponent } from './components/manage-printdirectory/manage-printdirectory.component';
+import { PrintableDirectoryComponent } from './components/printable-directory/printable-directory.component';
 
 @NgModule({
   declarations: [
@@ -71,7 +73,9 @@ import { AuditLogComponent } from './components/audit-log/audit-log.component'
     EditResidentComponent,
     PhoneNumberInputComponent,
     SendEmailComponent,
-    AuditLogComponent
+    AuditLogComponent,
+    ManagePrintDirectoryComponent,
+    PrintableDirectoryComponent
   ],
   imports: [
     BrowserModule,
