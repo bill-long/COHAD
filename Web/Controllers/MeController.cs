@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Repository;
+using Web.Services;
+using Web.UpdateModels;
 
 namespace Web.Controllers
 {
@@ -17,10 +19,12 @@ namespace Web.Controllers
     public class MeController : ControllerBase
     {
         private readonly CohadWebDbContext _userRepository;
+        private readonly IEmailService _emailService;
 
-        public MeController(CohadWebDbContext userRepository)
+        public MeController(CohadWebDbContext userRepository, IEmailService emailService)
         {
             _userRepository = userRepository;
+            _emailService = emailService;
         }
 
         [HttpGet]
@@ -52,6 +56,25 @@ namespace Web.Controllers
 
             await _userRepository.Users.AddAsync(newUser);
             await _userRepository.SaveChangesAsync();
+
+            try
+            {
+                await _emailService.SendEmail(
+                    "webservice@cohad.org",
+                    "COHAD Web Service",
+                    new EmailInfo
+                    {
+                        Subject = "New User Registered",
+                        HtmlBody = $"<div>Name: {newUser.GivenName} {newUser.Surname}</div><div>Email: {newUser.Emails}</div><div>Address: {newUser.StreetAddress}</div>"
+                    },
+                    new List<string> { "directory@cohad.org" },
+                    User);
+            }
+            catch
+            {
+                // If the email fails, ignore it, we don't care.
+            }
+
             return PresentationUser.FromStorageModel(newUser, new List<Home>());
         }
     }

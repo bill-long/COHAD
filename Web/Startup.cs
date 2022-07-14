@@ -11,6 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 using Web.Authorization;
 using Web.Models;
 using Web.Repository;
+using Web.Services;
 
 namespace Web
 {
@@ -90,6 +91,8 @@ namespace Web
             // services.AddDbContext<CohadWebDbContext>(options => options.UseInMemoryDatabase("CohadWebDebugDatabase"));
 
             services.AddDbContext<CohadWebDbContext>(options => options.UseCosmos(uri, key, db));
+
+            services.AddScoped<IEmailService, EmailService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
