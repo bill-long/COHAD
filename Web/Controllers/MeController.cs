@@ -61,7 +61,7 @@ namespace Web.Controllers
             {
                 await _emailService.SendEmail(
                     "webservice@cohad.org",
-                    "COHAD Web Service",
+                    "COHAD Web",
                     new EmailInfo
                     {
                         Subject = "New User Registered",
