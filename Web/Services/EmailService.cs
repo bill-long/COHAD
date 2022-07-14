@@ -20,9 +20,9 @@ namespace Web.Services
 {
     public interface IEmailService
     {
-        Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, Func<EmailAddress, bool> recipientFilter, ClaimsPrincipal user);
+        Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, Func<EmailAddress, bool> recipientFilter, string bccDisplayName, ClaimsPrincipal user);
 
-        Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, List<string> BccList, ClaimsPrincipal user);
+        Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, List<string> toList, ClaimsPrincipal user);
     }
 
     public class EmailService : IEmailService
@@ -41,13 +41,18 @@ namespace Web.Services
             };
         }
 
-        public async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, Func<EmailAddress, bool> recipientFilter, ClaimsPrincipal user)
+        public async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, Func<EmailAddress, bool> bccRecipientFilter, string bccDisplayName, ClaimsPrincipal user)
         {
-            List<string> bccList = await GetAllEmailsMatchingFilter(recipientFilter);
-            await SendEmail(fromEmail, fromDisplay, emailInfo, bccList, user);
+            List<string> bccList = await GetAllEmailsMatchingFilter(bccRecipientFilter);
+            await SendEmail(fromEmail, fromDisplay, emailInfo, null, bccList, bccDisplayName, user);
         }
 
-        public async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, List<string> bccList, ClaimsPrincipal user)
+        public async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, List<string> toList, ClaimsPrincipal user)
+        {
+            await SendEmail(fromEmail, fromDisplay, emailInfo, toList, null, null, user);
+        }
+
+        private async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo, List<string> toList, List<string> bccList, string bccDisplayName, ClaimsPrincipal user)
         {
             var subject = emailInfo.Subject;
 
@@ -68,12 +73,37 @@ namespace Web.Services
             var homes = await _dbContext.Homes.ToListAsync();
 #if DEBUG
             message.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
+            message.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
 #else
-            foreach (var email in bccList)
+            if (toList != null && toList.Count > 0)
             {
-                message.Bcc.Add(new MailboxAddress(null, email));
+                foreach (var item in toList)
+                {
+                    message.To.Add(new MailboxAddress("", item));
+                }
+            }
+
+            if (bccList != null && bccList.Count > 0)
+            {
+                foreach (var email in bccList)
+                {
+                    message.Bcc.Add(new MailboxAddress(null, email));
+                }
             }
 #endif
+            if (message.To.Count < 1)
+            {
+                if (!string.IsNullOrEmpty(bccDisplayName))
+                {
+                    message.To.Add(new GroupAddress(bccDisplayName));
+                }
+                else
+                {
+                    // This should only happen during debug/testing
+                    message.To.Add(new GroupAddress("Private Recipients"));
+                }
+            }
+
             var memoryStream = new MemoryStream();
             var logger = new ProtocolLogger(memoryStream);
             try
