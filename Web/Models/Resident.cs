@@ -12,5 +12,14 @@ namespace Web.Models
         public List<EmailAddress> EmailAddresses { get; set; }
 
         public List<PhoneNumber> PhoneNumbers { get; set; }
+
+        public Type ResidentType { get; set; }
+
+        public enum Type
+        {
+            Homeowner,
+            OtherAdult,
+            Child
+        }
     }
 }

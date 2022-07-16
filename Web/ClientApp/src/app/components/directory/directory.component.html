@@ -6,7 +6,7 @@
     </mat-form-field>
 
     <div *ngFor="let home of (itemsToRender | async)">
-      <div class="home" ngClass.gt-sm="large-screen" [ngClass]="{ 'large-screen': hideSearch }" *ngIf="home.residents?.length">
+      <div class="home" ngClass.gt-sm="large-screen" [ngClass]="{ 'large-screen': hideSearch }" *ngIf="getHomeowners(home).length > 0">
         <div class="info-line">
           <div class="names"><span class="surname">{{getSurname(home)}}</span>, {{getGivenNames(home)}}</div>
           <div>
@@ -26,7 +26,7 @@
           <div></div>
         </div>
         <div class="clear"></div>
-        <ng-container *ngFor="let resident of home.residents">
+        <ng-container *ngFor="let resident of getHomeowners(home)">
           <ng-container *ngFor="let email of resident.emailAddresses">
             <div class="info-line email-line">
               <div>{{resident.givenName}} Email:</div>
@@ -41,6 +41,44 @@
               <div class="phoneNumber">({{phoneNumber.areaCode}})
                 {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
               </div>
+            </div>
+            <div class="clear"></div>
+          </ng-container>
+        </ng-container>
+        <ng-container *ngFor="let resident of getOtherAdults(home)">
+          <div class="info-line other-adult">
+            <div>{{resident.givenName}} {{resident.surname}}</div>
+            <div></div>
+          </div>
+          <div class="clear"></div>
+          <ng-container *ngFor="let email of resident.emailAddresses">
+            <div class="info-line email-line">
+              <div>{{resident.givenName}} Email:</div>
+              <div>{{email.address}}</div>
+              <div></div>
+            </div>
+            <div class="clear"></div>
+          </ng-container>
+          <ng-container *ngFor="let phoneNumber of resident.phoneNumbers">
+            <div class="info-line">
+              <div>{{resident.givenName}} {{phoneNumber.type}}:</div>
+              <div class="phoneNumber">({{phoneNumber.areaCode}})
+                {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+              </div>
+            </div>
+            <div class="clear"></div>
+          </ng-container>
+        </ng-container>
+        <ng-container *ngIf="getChildren(home).length > 0">
+          <div class="info-line children-section">
+            <div>Children:</div>
+            <div></div>
+          </div>
+          <div class="clear"></div>
+          <ng-container *ngFor="let resident of getChildren(home)">
+            <div class="info-line">
+              <div>{{resident.givenName}} {{resident.surname}}</div>
+              <div></div>
             </div>
             <div class="clear"></div>
           </ng-container>

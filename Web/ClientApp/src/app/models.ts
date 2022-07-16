@@ -41,6 +41,7 @@ export interface DirectoryResident {
     surname: string;
     emailAddresses: DirectoryEmailAddress[];
     phoneNumbers: DirectoryPhoneNumber[];
+    residentType: number;
 }
 
 export interface DirectoryPhoneNumber {
@@ -69,6 +70,7 @@ export interface Resident {
     surname: string;
     emailAddresses: EmailAddress[];
     phoneNumbers: PhoneNumber[];
+    residentType: number;
 }
 
 export interface PhoneNumber {
