@@ -36,7 +36,8 @@ export class EditHomeComponent implements OnInit {
       givenName: '',
       surname: '',
       emailAddresses: [],
-      phoneNumbers: []
+      phoneNumbers: [],
+      residentType: 0,
     });
   }
 

@@ -3,6 +3,19 @@
     <div class="info-container">
         <div>
             <mat-form-field appearance="fill">
+                <mat-label>Type</mat-label>
+                <mat-select [(ngModel)]="resident.residentType" [disabled]="!editEnabled">
+                    <mat-option [value]="0">Homeowner</mat-option>
+                    <mat-option [value]="1">Other Adult</mat-option>
+                    <mat-option [value]="2">Child</mat-option>
+                </mat-select>
+            </mat-form-field>
+        </div>
+    </div>
+
+    <div class="info-container">
+        <div>
+            <mat-form-field appearance="fill">
                 <mat-label>Given Name</mat-label>
                 <input matInput [(ngModel)]="resident.givenName" [disabled]="!editEnabled">
             </mat-form-field>

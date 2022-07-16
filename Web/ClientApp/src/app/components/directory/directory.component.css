@@ -46,6 +46,14 @@ mat-form-field {
   text-align: inherit;
 }
 
+.other-adult {
+  margin-top: 8px;
+}
+
+.children-section {
+  margin-top: 8px;
+}
+
 .home-phone {
   font-weight: bold;
 }

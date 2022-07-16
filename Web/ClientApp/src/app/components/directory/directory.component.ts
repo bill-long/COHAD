@@ -2,7 +2,7 @@ import { Component, OnInit, Inject, ChangeDetectionStrategy, Input } from '@angu
 import { Observable, combineLatest, Subject, ReplaySubject } from 'rxjs';
 import { startWith, debounceTime, map, shareReplay, take, delay, withLatestFrom } from 'rxjs/operators';
 import { UntypedFormControl } from '@angular/forms';
-import { DirectoryHome } from '../../models';
+import { DirectoryHome, DirectoryResident } from '../../models';
 import { applicationState, ApplicationState, Action, dispatcher, LoadDirectory } from 'src/app/state';
 
 @Component({
@@ -86,7 +86,8 @@ export class DirectoryComponent {
   }
 
   getSurname(home: DirectoryHome) {
-    if (home.residents.length < 1) {
+    let homeowners = this.getHomeowners(home);
+    if (homeowners.length < 1) {
       return '';
     }
 
@@ -94,17 +95,30 @@ export class DirectoryComponent {
   }
 
   getGivenNames(home: DirectoryHome) {
-    if (home.residents.length < 1) {
+    let homeowners = this.getHomeowners(home);
+    if (homeowners.length < 1) {
       return '';
     }
 
-    let given = home.residents[0].givenName;
+    let given = homeowners[0].givenName;
 
-    if (home.residents.length > 1) {
-      given = given + ' and ' + home.residents[1].givenName;
+    if (homeowners.length > 1) {
+      given = given + ' and ' + homeowners[1].givenName;
     }
 
     return given;
+  }
+
+  getHomeowners(home: DirectoryHome): DirectoryResident[] {
+    return home.residents.filter(r => r.residentType === 0);
+  }
+
+  getOtherAdults(home: DirectoryHome) {
+    return home.residents.filter(r => r.residentType === 1);
+  }
+
+  getChildren(home: DirectoryHome) {
+    return home.residents.filter(r => r.residentType === 2);
   }
 
 }
