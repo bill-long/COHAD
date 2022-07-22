@@ -76,7 +76,7 @@ namespace Web.Controllers
 
             storedHome.EmailAddress = updatedHome.EmailAddress;
             storedHome.PhoneNumber = updatedHome.PhoneNumber;
-            storedHome.Residents = updatedHome.Residents;
+            storedHome.Residents = updatedHome.Residents.Where(r => !string.IsNullOrEmpty(r.GivenName)).ToList();
 
             await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
             {

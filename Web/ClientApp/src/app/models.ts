@@ -104,3 +104,19 @@ export interface EmailInfo {
     htmlBody: string;
     isTestEmail: boolean;
 }
+
+export interface PrintableDirectory {
+    id: string;
+    created: string;
+    createdBy: string;
+    lastUpdated: string;
+    lastUpdatedBy: string;
+    frontCoverDataUrl: string;
+    titlePageHTML: string;
+    introductionHTML: string;
+    map1DataUrl: string;
+    map2DataUrl: string;
+    map3DataUrl: string;
+    backCoverDataUrl: string;
+    addExtraPageBreak: boolean;
+}

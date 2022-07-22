@@ -50,8 +50,10 @@ import { NgxMaskModule } from 'ngx-mask';
 import { PhoneNumberInputComponent } from './components/phone-number-input/phone-number-input.component';
 import { SendEmailComponent } from './components/send-email/send-email.component';
 import { AuditLogComponent } from './components/audit-log/audit-log.component';
-import { ManagePrintDirectoryComponent } from './components/manage-printdirectory/manage-printdirectory.component';
+import { ManagePrintableDirectoriesComponent } from './components/manage-printable-directories/manage-printable-directories.component';
+import { RenderedPrintableDirectoryComponent } from './components/rendered-printable-directory/rendered-printable-directory.component';
 import { PrintableDirectoryComponent } from './components/printable-directory/printable-directory.component';
+import { MapComponent } from './components/map/map.component';
 
 @NgModule({
   declarations: [
@@ -74,8 +76,10 @@ import { PrintableDirectoryComponent } from './components/printable-directory/pr
     PhoneNumberInputComponent,
     SendEmailComponent,
     AuditLogComponent,
-    ManagePrintDirectoryComponent,
-    PrintableDirectoryComponent
+    ManagePrintableDirectoriesComponent,
+    PrintableDirectoryComponent,
+    RenderedPrintableDirectoryComponent,
+    MapComponent
   ],
   imports: [
     BrowserModule,

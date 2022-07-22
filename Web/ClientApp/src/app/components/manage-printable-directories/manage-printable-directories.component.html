@@ -1,0 +1,13 @@
+<h2>Printable Directories</h2>
+<a mat-raised-button color="primary" routerLink="/manage/edit-printable-directory/new">Create New Printable Directory</a>
+<div *ngIf="(printableDirectories | async) as pds">
+  <div *ngFor="let pd of pds">
+    <div>Created: {{pd.created}} {{pd.createdBy}}</div>
+    <div>Updated: {{pd.lastUpdated}} {{pd.lastUpdatedBy}}</div>
+    <div fxLayout="row">
+      <img [src]="pd.frontCoverDataUrl" />
+      <img [src]="pd.backCoverDataUrl" />
+    </div>
+    <a mat-raised-button color="primary" [routerLink]="['/manage/edit-printable-directory', pd.id]">Manage</a>
+  </div>
+</div>

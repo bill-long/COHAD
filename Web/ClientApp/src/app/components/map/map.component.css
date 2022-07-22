@@ -1,0 +1,92 @@
+.cls-1 {
+  letter-spacing: -.01em;
+}
+
+.cls-2 {
+  letter-spacing: 0em;
+}
+
+.cls-3 {
+  fill: none;
+  stroke: #000;
+  stroke-miterlimit: 10;
+}
+
+.cls-4 {
+  letter-spacing: 0em;
+}
+
+.cls-5 {
+  letter-spacing: -.05em;
+}
+
+.cls-6 {
+  letter-spacing: 0em;
+}
+
+.cls-7 {
+  letter-spacing: 0em;
+}
+
+.cls-8 {
+  letter-spacing: 0em;
+}
+
+.cls-9 {
+  letter-spacing: 0em;
+}
+
+.cls-10 {
+  letter-spacing: 0em;
+}
+
+.cls-11 {
+  letter-spacing: 0em;
+}
+
+.cls-12 {
+  letter-spacing: 0em;
+}
+
+.cls-13 {
+  letter-spacing: 0em;
+}
+
+.cls-14 {
+  font-family: MyriadPro-Regular, 'Myriad Pro';
+  font-size: 11px;
+}
+
+.cls-15 {
+  letter-spacing: 0em;
+}
+
+.cls-16 {
+  letter-spacing: 0em;
+}
+
+.cls-17 {
+  letter-spacing: 0em;
+}
+
+.cls-18 {
+  letter-spacing: -.01em;
+}
+
+.resident-info {
+  font-size: 9px;
+  text-align: center;
+  line-height: normal;
+}
+
+.resident-info>div {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+h1 {
+  margin-left: 15px;
+}

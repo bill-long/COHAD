@@ -1,0 +1,36 @@
+@page {
+  margin: 0;
+  size: 5in 8in portrait;
+}
+
+@page :first {
+  margin: 0
+}
+
+@page :last {
+  margin: 0
+}
+
+img {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  object-fit: cover;
+  break-inside: avoid;
+  break-after: always;
+}
+
+.full-page {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  object-fit: cover;
+  break-inside: avoid;
+  break-after: always;
+}
+
+.introduction {
+  break-after: always;
+}
