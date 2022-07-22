@@ -8,7 +8,7 @@ import { Action, ApplicationState, applicationState, dispatcher } from "src/app/
   templateUrl: './manage-printable-directories.component.html',
   styleUrls: ['./manage-printable-directories.component.css']
 })
-export class ManagePrintDirectoryComponent {
+export class ManagePrintableDirectoriesComponent {
   printableDirectories: Observable<PrintableDirectory[]>;
 
   constructor(
@@ -17,21 +17,5 @@ export class ManagePrintDirectoryComponent {
       this.printableDirectories = this.appState.pipe(map(s => s.printableDirectories));
     }
 
-  dragOver(event: any) {
-    event.preventDefault();
-  }
 
-  async handleDrop(event: any): Promise<string> {
-    let p = new Promise<string>((resolve, reject) => {
-      let reader = new FileReader();
-      reader.onloadend = (e) => {
-        resolve(reader.result as string);
-      }
-
-      reader.readAsDataURL(event.dataTransfer.files[0]);
-    });
-
-    event.preventDefault();
-    return p;
-  }
 }

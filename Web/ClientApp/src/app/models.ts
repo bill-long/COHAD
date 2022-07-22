@@ -118,4 +118,5 @@ export interface PrintableDirectory {
     map2DataUrl: string;
     map3DataUrl: string;
     backCoverDataUrl: string;
+    addExtraPageBreak: boolean;
 }

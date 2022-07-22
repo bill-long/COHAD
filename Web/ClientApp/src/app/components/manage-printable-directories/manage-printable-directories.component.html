@@ -1,65 +1,13 @@
-<h2>Print Directory</h2>
-<div class="dropzone-collection" *ngIf="(printDirectorySettings | async) as printDirectorySettings">
-  <div class="titled-dropzone">
-    <h3>Front Cover</h3>
-    <div id="front-cover-dropzone" class="dropzone" (dragover)="dragOver($event)" (drop)="frontCoverDrop($event)">
-      <div *ngIf="printDirectorySettings.frontCoverDataUrl == null">
-        <div class="icon">
-          <mat-icon>cloud_upload</mat-icon>
-        </div>
-        <div>
-          <span>Drop file here</span>
-        </div>
-      </div>
-      <img *ngIf="printDirectorySettings.frontCoverDataUrl != null" [src]="printDirectorySettings.frontCoverDataUrl" class="dropzone-image" />
+<h2>Printable Directories</h2>
+<a mat-raised-button color="primary" routerLink="/manage/edit-printable-directory/new">Create New Printable Directory</a>
+<div *ngIf="(printableDirectories | async) as pds">
+  <div *ngFor="let pd of pds">
+    <div>Created: {{pd.created}} {{pd.createdBy}}</div>
+    <div>Updated: {{pd.lastUpdated}} {{pd.lastUpdatedBy}}</div>
+    <div fxLayout="row">
+      <img [src]="pd.frontCoverDataUrl" />
+      <img [src]="pd.backCoverDataUrl" />
     </div>
+    <a mat-raised-button color="primary" [routerLink]="['/manage/edit-printable-directory', pd.id]">Manage</a>
   </div>
-  <div class="titled-dropzone">
-    <h3>Map Left Half</h3>
-    <div id="map-left-dropzone" class="dropzone" (dragover)="dragOver($event)" (drop)="mapLeftDrop($event)">
-      <div *ngIf="printDirectorySettings.mapLeftDataUrl == null">
-        <div class="icon">
-          <mat-icon>cloud_upload</mat-icon>
-        </div>
-        <div>
-          <span>Drop file here</span>
-        </div>
-      </div>
-      <img *ngIf="printDirectorySettings.mapLeftDataUrl != null" [src]="printDirectorySettings.mapLeftDataUrl" class="dropzone-image" />
-    </div>
-  </div>
-  <div class="titled-dropzone">
-    <h3>Map Right Half</h3>
-    <div id="map-right-dropzone" class="dropzone" (dragover)="dragOver($event)" (drop)="mapRightDrop($event)">
-      <div *ngIf="printDirectorySettings.mapRightDataUrl == null">
-        <div class="icon">
-          <mat-icon>cloud_upload</mat-icon>
-        </div>
-        <div>
-          <span>Drop file here</span>
-        </div>
-      </div>
-      <img *ngIf="printDirectorySettings.mapRightDataUrl != null" [src]="printDirectorySettings.mapRightDataUrl" class="dropzone-image" />
-    </div>
-  </div>
-  <div class="titled-dropzone">
-    <h3>Back Cover</h3>
-    <div id="back-cover-dropzone" class="dropzone" (dragover)="dragOver($event)" (drop)="backCoverDrop($event)">
-      <div *ngIf="printDirectorySettings.backCoverDataUrl == null">
-        <div class="icon">
-          <mat-icon>cloud_upload</mat-icon>
-        </div>
-        <div>
-          <span>Drop file here</span>
-        </div>
-      </div>
-      <img *ngIf="printDirectorySettings.backCoverDataUrl != null" [src]="printDirectorySettings.backCoverDataUrl" class="dropzone-image" />
-    </div>
-  </div>
-</div>
-<div>
-  <mat-checkbox (change)="addExtraPageBreakChanged($event)">Add Extra Page Break</mat-checkbox>
-</div>
-<div>
-  <a mat-raised-button class="show-printable-directory-button" color="primary" routerLink="/printable-directory">Generate Printable Directory</a>
 </div>

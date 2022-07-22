@@ -30,3 +30,7 @@ img {
   break-inside: avoid;
   break-after: always;
 }
+
+.introduction {
+  break-after: always;
+}

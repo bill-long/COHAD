@@ -1,8 +1,11 @@
-<div>
-  <img class="full-page" src="{{(printDirectorySettings | async)?.frontCoverDataUrl}}" alt="front cover">
-  <img class="full-page" src="{{(printDirectorySettings | async)?.mapLeftDataUrl}}" alt="map left">
-  <img class="full-page" src="{{(printDirectorySettings | async)?.mapRightDataUrl}}" alt="map right">
+<div *ngIf="(selectedDirectory | async) as selectedDirectory">
+  <img class="full-page" src="{{selectedDirectory?.frontCoverDataUrl}}" alt="front cover">
+  <div class="full-page" [innerHTML]="selectedDirectory.titlePageHTML"></div>
+  <img class="full-page" src="{{selectedDirectory?.map1DataUrl}}" alt="map one">
+  <img class="full-page" src="{{selectedDirectory?.map2DataUrl}}" alt="map two">
+  <img class="full-page" src="{{selectedDirectory?.map3DataUrl}}" alt="map three">
+  <div class="introduction" [innerHTML]="selectedDirectory.introductionHTML"></div>
   <app-directory [hideSearch]="true"></app-directory>
-  <div class="full-page" *ngIf="(printDirectorySettings | async)?.addExtraPageBreak"></div>
-  <img src="{{(printDirectorySettings | async)?.backCoverDataUrl}}" alt="back cover">
+  <div class="full-page" *ngIf="selectedDirectory?.addExtraPageBreak"></div>
+  <img src="{{selectedDirectory?.backCoverDataUrl}}" alt="back cover">
 </div>

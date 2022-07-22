@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -24,7 +25,7 @@ namespace Web.Controllers
 
         public async Task<IEnumerable<PrintableDirectory>> Get()
         {
-            return await _dbContext.PrintableDirectories.ToListAsync();
+            return await _dbContext.PrintableDirectories.OrderByDescending(pd => pd.Created).ToListAsync();
         }
 
         [HttpPost]

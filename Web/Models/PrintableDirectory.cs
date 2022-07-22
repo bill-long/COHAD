@@ -27,5 +27,7 @@ namespace Web.Models
         public string Map3DataUrl { get; set; }
 
         public string BackCoverDataUrl { get; set; }
+
+        public bool AddExtraPageBreak { get; set; }
     }
 }
