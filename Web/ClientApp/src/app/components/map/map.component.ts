@@ -52,7 +52,7 @@ export class MapComponent {
         }
       }
 
-      return `${surnameStr}${phoneToUse ? `<br/>${phoneToUse.areaCode}-${phoneToUse.prefix}-${phoneToUse.lineNumber}` : ''}`;
+      return `${surnameStr}${phoneToUse ? `<br/>${phoneToUse.areaCode}-${phoneToUse.prefix}-${('0000' + phoneToUse.lineNumber).slice(-4)}` : ''}`;
     }));
   }
 }
