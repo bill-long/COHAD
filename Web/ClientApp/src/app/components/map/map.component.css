@@ -31,3 +31,9 @@
   justify-content: center;
   align-items: center;
 }
+
+svg {
+  break-inside: avoid;
+  break-after: always;
+  display: block;
+}

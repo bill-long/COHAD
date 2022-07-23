@@ -64,13 +64,13 @@ namespace Web.Controllers
             return Ok(newPD);
         }
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] UpdatedPrintableDirectory updatedPrintableDirectory)
+        [HttpPut]
+        public async Task<IActionResult> Update([FromBody] UpdatedPrintableDirectory updatedPrintableDirectory)
         {
             var apiUser =
                 await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
 
-            var pdToUpdate = await _dbContext.PrintableDirectories.FirstOrDefaultAsync(p => p.Id == id);
+            var pdToUpdate = await _dbContext.PrintableDirectories.FirstOrDefaultAsync(p => p.Id == updatedPrintableDirectory.Id);
 
             if (pdToUpdate == null)
             {

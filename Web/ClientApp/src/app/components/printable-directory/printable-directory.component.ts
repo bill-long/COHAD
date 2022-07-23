@@ -1,5 +1,6 @@
 import { Component, Inject, Input } from "@angular/core";
 import { ActivatedRoute, Router } from "@angular/router";
+import Quill from "quill";
 import { combineLatest, map, Observable, shareReplay, Subject, take } from "rxjs";
 import { PrintableDirectory } from "src/app/models";
 import { PrintableDirectoryService } from "src/app/services/printable-directory.service";
@@ -57,6 +58,11 @@ export class PrintableDirectoryComponent {
         this.dispatcher.next(new LoadDirectory());
       }
     });
+
+    const Block = Quill.import('blots/block');
+    class MyBlock extends Block { }
+    MyBlock.tagName = 'DIV';
+    Quill.register('blots/block', MyBlock, true);
   }
 
   getNewPrintableDirectory(): PrintableDirectory {

@@ -39,6 +39,9 @@
     </div>
   </div>
 </div>
+<div class="editor-wrapper">
+  <quill-editor [readOnly]="!editing" [(ngModel)]="pdCopy.titlePageHTML"></quill-editor>
+</div>
 <div>
   <mat-checkbox [(ngModel)]="pdCopy.addExtraPageBreak" [disabled]="!editing">Add Extra Page Break</mat-checkbox>
 </div>

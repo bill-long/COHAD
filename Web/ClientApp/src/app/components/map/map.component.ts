@@ -1,5 +1,5 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, Inject, Input, OnInit, ViewChild } from '@angular/core';
-import { combineLatest, distinctUntilChanged, map, Observable, Subject, take } from 'rxjs';
+import { distinctUntilChanged, map, Observable, Subject, take } from 'rxjs';
 import { DirectoryHome, DirectoryPhoneNumber } from 'src/app/models';
 import { Action, ApplicationState, applicationState, dispatcher, LoadDirectory } from 'src/app/state';
 
@@ -31,16 +31,16 @@ export class MapComponent implements AfterViewInit {
   ngAfterViewInit(): void {
     switch (this.quadrant) {
       case 1:
-        this.mapSvg.nativeElement.setAttribute('viewBox', '0 0 620 490');
+        this.mapSvg.nativeElement.setAttribute('viewBox', '0 0 537 500');
         break;
       case 2:
-        this.mapSvg.nativeElement.setAttribute('viewBox', '580 0 620 490');
+        this.mapSvg.nativeElement.setAttribute('viewBox', '537 0 537 500');
         break;
       case 3:
-        this.mapSvg.nativeElement.setAttribute('viewBox', '0 470 630 730');
+        this.mapSvg.nativeElement.setAttribute('viewBox', '0 475 537 730');
         break;
       case 4:
-        this.mapSvg.nativeElement.setAttribute('viewBox', '550 470 630 730');
+        this.mapSvg.nativeElement.setAttribute('viewBox', '537 475 537 730');
         break;
       default:
         this.mapSvg.nativeElement.setAttribute('viewBox', '0 0 1075 1200');
