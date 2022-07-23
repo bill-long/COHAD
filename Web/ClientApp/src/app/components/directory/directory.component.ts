@@ -103,7 +103,12 @@ export class DirectoryComponent {
     let given = homeowners[0].givenName;
 
     if (homeowners.length > 1) {
-      given = given + ' and ' + homeowners[1].givenName;
+      given = given + ' and ';
+      if (homeowners[0].surname === homeowners[1].surname) {
+        given = given + homeowners[1].givenName;
+      } else {
+        given = given + homeowners[1].surname + ', ' + homeowners[1].givenName;
+      }
     }
 
     return given;
