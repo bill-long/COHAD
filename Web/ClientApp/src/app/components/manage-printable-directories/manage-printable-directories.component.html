@@ -1,13 +1,30 @@
-<h2>Printable Directories</h2>
-<a mat-raised-button color="primary" routerLink="/manage/edit-printable-directory/new">Create New Printable Directory</a>
-<div *ngIf="(printableDirectories | async) as pds">
-  <div *ngFor="let pd of pds">
-    <div>Created: {{pd.created}} {{pd.createdBy}}</div>
-    <div>Updated: {{pd.lastUpdated}} {{pd.lastUpdatedBy}}</div>
-    <div fxLayout="row">
-      <img [src]="pd.frontCoverDataUrl" />
-      <img [src]="pd.backCoverDataUrl" />
+<div>
+  <div fxLayout="row" fxLayoutAlign="space-between">
+    <h2>Printable Directories</h2>
+    <div>
+      <a mat-raised-button color="primary" routerLink="/manage/edit-printable-directory/new">Create New Printable Directory</a>
     </div>
-    <a mat-raised-button color="primary" [routerLink]="['/manage/edit-printable-directory', pd.id]">Manage</a>
+  </div>
+  <div *ngIf="(printableDirectories | async) as pds">
+    <div class="pd-item" *ngFor="let pd of pds">
+      <div>Created: {{pd.created | date:'medium'}} by {{pd.createdBy}}</div>
+      <div>Updated: {{pd.lastUpdated | date:'medium'}} by {{pd.lastUpdatedBy}}</div>
+      <div fxLayout="row">
+        <div class="cover-container">
+          <img class="cover-image" [src]="pd.frontCoverDataUrl" />
+        </div>
+        <div class="cover-container">
+          <img class="cover-image" [src]="pd.backCoverDataUrl" />
+        </div>
+      </div>
+      <div class="button-row" fxLayout="row">
+        <div>
+          <a mat-raised-button color="primary" [routerLink]="['/manage/edit-printable-directory', pd.id]">Edit</a>
+        </div>
+        <div>
+          <a mat-raised-button color="primary" routerLink="/printable-directory/{{pd.id}}">Print</a>
+        </div>
+      </div>
+    </div>
   </div>
 </div>

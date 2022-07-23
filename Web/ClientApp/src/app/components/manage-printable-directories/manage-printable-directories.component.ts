@@ -1,7 +1,8 @@
 import { Component, Inject } from "@angular/core";
-import { map, Observable, Subject } from "rxjs";
+import { map, Observable, Subject, take } from "rxjs";
 import { PrintableDirectory } from "src/app/models";
-import { Action, ApplicationState, applicationState, dispatcher } from "src/app/state";
+import { PrintableDirectoryService } from "src/app/services/printable-directory.service";
+import { Action, ApplicationState, applicationState, dispatcher, LoadPrintableDirectories } from "src/app/state";
 
 @Component({
   selector: 'app-manage-printable-directories',
@@ -13,9 +14,14 @@ export class ManagePrintableDirectoriesComponent {
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    @Inject(dispatcher) private dispatcher: Subject<Action>) {
+    @Inject(dispatcher) private dispatcher: Subject<Action>,
+    private printableDirectoryService: PrintableDirectoryService) {
       this.printableDirectories = this.appState.pipe(map(s => s.printableDirectories));
+
+      this.printableDirectories.pipe(take(1)).subscribe(data => {
+        if (data == null || data.length < 1) {
+          this.dispatcher.next(new LoadPrintableDirectories());
+        }
+      });
     }
-
-
 }

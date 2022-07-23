@@ -32,6 +32,8 @@
   align-items: center;
 }
 
-h1 {
-  margin-left: 15px;
+svg {
+  break-inside: avoid;
+  break-after: always;
+  display: block;
 }

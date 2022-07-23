@@ -34,3 +34,20 @@ img {
 .introduction {
   break-after: always;
 }
+
+.title-page {
+  display: flex;
+  flex-direction: column;
+  align-content: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.ql-size-large {
+  font-size: 1.5em;
+}
+
+.ql-size-huge {
+  font-size: 3em;
+  line-height: normal;
+}

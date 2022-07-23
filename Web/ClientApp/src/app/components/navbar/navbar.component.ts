@@ -29,7 +29,7 @@ export class NavbarComponent implements OnInit {
       }
 
       if (e instanceof NavigationEnd) {
-        if (e.url === '/printable-directory') {
+        if (e.url.startsWith('/printable-directory')) {
           this.isHidden = true;
         } else {
           this.isHidden = false;

@@ -36,3 +36,8 @@
 .button-bar > button {
   margin-right: 5px;
 }
+
+.editor-wrapper {
+  max-width: 800px;
+  min-height: 200px;
+}
