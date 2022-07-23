@@ -13,10 +13,6 @@ import { Action, AddPrintableDirectory, ApplicationState, applicationState, disp
 })
 export class PrintableDirectoryComponent {
 
-  editing: boolean = false;
-
-  pd: PrintableDirectory;
-
   pdCopy: PrintableDirectory;
 
   id: Observable<string | null>;
@@ -28,18 +24,14 @@ export class PrintableDirectoryComponent {
     private route: ActivatedRoute,
     private router: Router) {
 
-    this.pd = this.getNewPrintableDirectory();
     this.pdCopy = this.getNewPrintableDirectory();
     let printableDirectories = this.appState.pipe(map(s => s.printableDirectories));
     this.id = this.route.paramMap.pipe(map(p => p.get('id')), shareReplay(1));
     combineLatest([printableDirectories, this.id])
       .subscribe(([printableDirectories, id]) => {
-        if (id == 'new') {
-          this.startEdit();
-        } else {
+        if (id !== 'new') {
           let pdToEdit = printableDirectories.find(p => p.id === id);
           if (pdToEdit) {
-            this.pd = JSON.parse(JSON.stringify(pdToEdit));
             this.pdCopy = JSON.parse(JSON.stringify(pdToEdit));
           }
         }
@@ -80,13 +72,8 @@ export class PrintableDirectoryComponent {
     };
   }
 
-  startEdit() {
-    this.editing = true;
-  }
-
   cancelEdit() {
-    this.pdCopy = JSON.parse(JSON.stringify(this.pd));
-    this.editing = false;
+    this.router.navigateByUrl(`/manage/printable-directories`);
   }
 
   saveChanges() {
@@ -95,12 +82,18 @@ export class PrintableDirectoryComponent {
         this.printableDirectoryService.addPrintableDirectoryAndReloadAll(this.pdCopy).subscribe({
           next: v => {
             if (v) {
-              this.router.navigateByUrl(`/edit-printable-directory/${v.id}`);
+              this.router.navigateByUrl(`/manage/printable-directories`);
             }
           }
         });
       } else {
-        this.printableDirectoryService.updatePrintableDirectoryAndReloadAll(this.pdCopy).subscribe({ next: v => v });;
+        this.printableDirectoryService.updatePrintableDirectoryAndReloadAll(this.pdCopy).subscribe({
+          next: v => {
+            if (v) {
+              this.router.navigateByUrl(`/manage/printable-directories`);
+            }
+          }
+        });
       }
     });
   }

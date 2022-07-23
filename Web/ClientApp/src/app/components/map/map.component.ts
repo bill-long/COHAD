@@ -12,7 +12,8 @@ import { Action, ApplicationState, applicationState, dispatcher, LoadDirectory }
 export class MapComponent implements AfterViewInit {
 
   directory: Observable<DirectoryHome[]>;
-  @Input() quadrant: number | undefined;
+  @Input() pageCount: number | undefined;
+  @Input() pageNumber: number | undefined;
   @ViewChild('mapSvg') mapSvg: any;
 
   constructor(
@@ -29,21 +30,32 @@ export class MapComponent implements AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    switch (this.quadrant) {
-      case 1:
-        this.mapSvg.nativeElement.setAttribute('viewBox', '0 0 537 500');
-        break;
-      case 2:
-        this.mapSvg.nativeElement.setAttribute('viewBox', '537 0 537 500');
-        break;
-      case 3:
-        this.mapSvg.nativeElement.setAttribute('viewBox', '0 475 537 730');
-        break;
-      case 4:
-        this.mapSvg.nativeElement.setAttribute('viewBox', '537 475 537 730');
-        break;
-      default:
-        this.mapSvg.nativeElement.setAttribute('viewBox', '0 0 1075 1200');
+    if (this.pageCount && this.pageCount === 4) {
+      switch (this.pageNumber) {
+        case 1:
+          this.mapSvg.nativeElement.setAttribute('viewBox', '0 0 537 500');
+          break;
+        case 2:
+          this.mapSvg.nativeElement.setAttribute('viewBox', '537 0 537 500');
+          break;
+        case 3:
+          this.mapSvg.nativeElement.setAttribute('viewBox', '0 475 537 730');
+          break;
+        case 4:
+          this.mapSvg.nativeElement.setAttribute('viewBox', '537 475 537 730');
+          break;
+      }
+    } else if (this.pageCount && this.pageCount === 2) {
+      switch (this.pageNumber) {
+        case 1:
+          this.mapSvg.nativeElement.setAttribute('viewBox', '0 0 1075 495');
+          break;
+        case 2:
+          this.mapSvg.nativeElement.setAttribute('viewBox', '0 475 1075 730');
+          break;
+      }
+    } else {
+      this.mapSvg.nativeElement.setAttribute('viewBox', '0 0 1075 1200')
     }
   }
 
