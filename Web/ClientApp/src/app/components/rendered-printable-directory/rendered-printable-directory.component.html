@@ -1,9 +1,10 @@
 <div *ngIf="(selectedDirectory | async) as selectedDirectory">
   <img class="full-page" src="{{selectedDirectory?.frontCoverDataUrl}}" alt="front cover">
   <div class="full-page" [innerHTML]="selectedDirectory.titlePageHTML"></div>
-  <img class="full-page" src="{{selectedDirectory?.map1DataUrl}}" alt="map one">
-  <img class="full-page" src="{{selectedDirectory?.map2DataUrl}}" alt="map two">
-  <img class="full-page" src="{{selectedDirectory?.map3DataUrl}}" alt="map three">
+  <app-map [quadrant]="1"></app-map>
+  <app-map [quadrant]="2"></app-map>
+  <app-map [quadrant]="3"></app-map>
+  <app-map [quadrant]="4"></app-map>
   <div class="introduction" [innerHTML]="selectedDirectory.introductionHTML"></div>
   <app-directory [hideSearch]="true"></app-directory>
   <div class="full-page" *ngIf="selectedDirectory?.addExtraPageBreak"></div>

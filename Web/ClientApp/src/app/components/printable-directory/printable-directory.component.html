@@ -22,57 +22,6 @@
     </div>
   </div>
   <div class="titled-dropzone">
-    <h3>Map 1</h3>
-    <div *ngIf="!editing" class="dropzone inactive">
-      <img *ngIf="pdCopy.map1DataUrl != ''" [src]="pdCopy.map1DataUrl" class="dropzone-image" />
-    </div>
-    <div *ngIf="editing" class="dropzone" (dragover)="dragOver($event)" (drop)="map1Drop($event)">
-      <div *ngIf="pdCopy.map1DataUrl == ''">
-        <div class="icon">
-          <mat-icon>cloud_upload</mat-icon>
-        </div>
-        <div>
-          <span>Drop file here</span>
-        </div>
-      </div>
-      <img *ngIf="pdCopy.map1DataUrl != ''" [src]="pdCopy.map1DataUrl" class="dropzone-image" />
-    </div>
-  </div>
-  <div class="titled-dropzone">
-    <h3>Map 2</h3>
-    <div *ngIf="!editing" class="dropzone inactive">
-      <img *ngIf="pdCopy.map2DataUrl != ''" [src]="pdCopy.map2DataUrl" class="dropzone-image" />
-    </div>
-    <div *ngIf="editing" class="dropzone" (dragover)="dragOver($event)" (drop)="map2Drop($event)">
-      <div *ngIf="pdCopy.map2DataUrl == ''">
-        <div class="icon">
-          <mat-icon>cloud_upload</mat-icon>
-        </div>
-        <div>
-          <span>Drop file here</span>
-        </div>
-      </div>
-      <img *ngIf="pdCopy.map2DataUrl != ''" [src]="pdCopy.map2DataUrl" class="dropzone-image" />
-    </div>
-  </div>
-  <div class="titled-dropzone">
-    <h3>Map 3</h3>
-    <div *ngIf="!editing" class="dropzone inactive">
-      <img *ngIf="pdCopy.map3DataUrl != ''" [src]="pdCopy.map3DataUrl" class="dropzone-image" />
-    </div>
-    <div *ngIf="editing" class="dropzone" (dragover)="dragOver($event)" (drop)="map3Drop($event)">
-      <div *ngIf="pdCopy.map3DataUrl == ''">
-        <div class="icon">
-          <mat-icon>cloud_upload</mat-icon>
-        </div>
-        <div>
-          <span>Drop file here</span>
-        </div>
-      </div>
-      <img *ngIf="pdCopy.map3DataUrl != ''" [src]="pdCopy.map3DataUrl" class="dropzone-image" />
-    </div>
-  </div>
-  <div class="titled-dropzone">
     <h3>Back Cover</h3>
     <div *ngIf="!editing" class="dropzone inactive">
       <img *ngIf="pdCopy.backCoverDataUrl != ''" [src]="pdCopy.backCoverDataUrl" class="dropzone-image" />
@@ -94,5 +43,5 @@
   <mat-checkbox [(ngModel)]="pdCopy.addExtraPageBreak" [disabled]="!editing">Add Extra Page Break</mat-checkbox>
 </div>
 <div>
-  <a mat-raised-button class="show-printable-directory-button" color="primary" routerLink="/printable-directory">Generate Printable Directory</a>
+  <a mat-raised-button *ngIf="(id | async) !== 'new'" class="show-printable-directory-button" color="primary" routerLink="/printable-directory/{{id | async}}">Generate Printable Directory</a>
 </div>

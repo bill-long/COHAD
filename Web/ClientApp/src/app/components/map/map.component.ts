@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, Inject, OnInit } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, Inject, Input, OnInit, ViewChild } from '@angular/core';
 import { combineLatest, distinctUntilChanged, map, Observable, Subject, take } from 'rxjs';
 import { DirectoryHome, DirectoryPhoneNumber } from 'src/app/models';
 import { Action, ApplicationState, applicationState, dispatcher, LoadDirectory } from 'src/app/state';
@@ -9,9 +9,11 @@ import { Action, ApplicationState, applicationState, dispatcher, LoadDirectory }
   styleUrls: ['./map.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class MapComponent {
+export class MapComponent implements AfterViewInit {
 
   directory: Observable<DirectoryHome[]>;
+  @Input() quadrant: number | undefined;
+  @ViewChild('mapSvg') mapSvg: any;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -24,6 +26,25 @@ export class MapComponent {
         this.dispatcher.next(new LoadDirectory());
       }
     });
+  }
+
+  ngAfterViewInit(): void {
+    switch (this.quadrant) {
+      case 1:
+        this.mapSvg.nativeElement.setAttribute('viewBox', '0 0 620 490');
+        break;
+      case 2:
+        this.mapSvg.nativeElement.setAttribute('viewBox', '580 0 620 490');
+        break;
+      case 3:
+        this.mapSvg.nativeElement.setAttribute('viewBox', '0 470 630 730');
+        break;
+      case 4:
+        this.mapSvg.nativeElement.setAttribute('viewBox', '550 470 630 730');
+        break;
+      default:
+        this.mapSvg.nativeElement.setAttribute('viewBox', '0 0 1075 1200');
+    }
   }
 
   getResidentInfo(streetNumber: number, streetName: string): Observable<string> {

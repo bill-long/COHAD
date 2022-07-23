@@ -1,8 +1,9 @@
 import { Component, Inject, Input } from "@angular/core";
-import { ActivatedRoute } from "@angular/router";
-import { combineLatest, map, Observable, Subject } from "rxjs";
+import { ActivatedRoute, Router } from "@angular/router";
+import { combineLatest, map, Observable, shareReplay, Subject, take } from "rxjs";
 import { PrintableDirectory } from "src/app/models";
-import { Action, AddPrintableDirectory, ApplicationState, applicationState, dispatcher } from "src/app/state";
+import { PrintableDirectoryService } from "src/app/services/printable-directory.service";
+import { Action, AddPrintableDirectory, ApplicationState, applicationState, dispatcher, LoadDirectory, LoadPrintableDirectories } from "src/app/state";
 
 @Component({
   selector: 'app-printable-directory',
@@ -17,16 +18,20 @@ export class PrintableDirectoryComponent {
 
   pdCopy: PrintableDirectory;
 
+  id: Observable<string | null>;
+
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Subject<Action>,
-    private route: ActivatedRoute) {
+    private printableDirectoryService: PrintableDirectoryService,
+    private route: ActivatedRoute,
+    private router: Router) {
 
     this.pd = this.getNewPrintableDirectory();
     this.pdCopy = this.getNewPrintableDirectory();
     let printableDirectories = this.appState.pipe(map(s => s.printableDirectories));
-    let id = this.route.paramMap.pipe(map(p => p.get('id')));
-    combineLatest([printableDirectories, id])
+    this.id = this.route.paramMap.pipe(map(p => p.get('id')), shareReplay(1));
+    combineLatest([printableDirectories, this.id])
       .subscribe(([printableDirectories, id]) => {
         if (id == 'new') {
           this.startEdit();
@@ -38,6 +43,20 @@ export class PrintableDirectoryComponent {
           }
         }
       });
+
+    printableDirectories.pipe(take(1)).subscribe(data => {
+      if (data == null || data.length < 1) {
+        this.dispatcher.next(new LoadPrintableDirectories());
+      }
+    });
+
+    const directoryData = this.appState.pipe(map(s => s.directory));
+
+    directoryData.pipe(take(1)).subscribe(data => {
+      if (data == null || data.length < 1) {
+        this.dispatcher.next(new LoadDirectory());
+      }
+    });
   }
 
   getNewPrintableDirectory(): PrintableDirectory {
@@ -50,9 +69,6 @@ export class PrintableDirectoryComponent {
       frontCoverDataUrl: '',
       titlePageHTML: '',
       introductionHTML: '',
-      map1DataUrl: '',
-      map2DataUrl: '',
-      map3DataUrl: '',
       backCoverDataUrl: '',
       addExtraPageBreak: false
     };
@@ -62,13 +78,25 @@ export class PrintableDirectoryComponent {
     this.editing = true;
   }
 
-  cancelEdit () {
+  cancelEdit() {
     this.pdCopy = JSON.parse(JSON.stringify(this.pd));
     this.editing = false;
   }
 
   saveChanges() {
-    this.dispatcher.next(new AddPrintableDirectory(this.pdCopy));
+    this.id.pipe(take(1)).subscribe(id => {
+      if (id === 'new') {
+        this.printableDirectoryService.addPrintableDirectoryAndReloadAll(this.pdCopy).subscribe({
+          next: v => {
+            if (v) {
+              this.router.navigateByUrl(`/edit-printable-directory/${v.id}`);
+            }
+          }
+        });
+      } else {
+        this.printableDirectoryService.updatePrintableDirectoryAndReloadAll(this.pdCopy).subscribe({ next: v => v });;
+      }
+    });
   }
 
   dragOver(event: any) {
@@ -91,18 +119,6 @@ export class PrintableDirectoryComponent {
 
   async frontCoverDrop(event: any) {
     this.pdCopy.frontCoverDataUrl = await this.handleDrop(event);
-  }
-
-  async map1Drop(event: any) {
-    this.pdCopy.map1DataUrl = await this.handleDrop(event);
-  }
-
-  async map2Drop(event: any) {
-    this.pdCopy.map2DataUrl = await this.handleDrop(event);
-  }
-
-  async map3Drop(event: any) {
-    this.pdCopy.map3DataUrl = await this.handleDrop(event);
   }
 
   async backCoverDrop(event: any) {

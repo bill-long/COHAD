@@ -43,18 +43,17 @@ namespace Web.Controllers
                 FrontCoverDataUrl = updatedPrintableDirectory.FrontCoverDataUrl,
                 TitlePageHTML = updatedPrintableDirectory.TitlePageHTML,
                 IntroductionHTML = updatedPrintableDirectory.IntroductionHTML,
-                Map1DataUrl = updatedPrintableDirectory.Map1DataUrl,
-                Map2DataUrl = updatedPrintableDirectory.Map2DataUrl,
-                Map3DataUrl = updatedPrintableDirectory.Map3DataUrl,
                 BackCoverDataUrl = updatedPrintableDirectory.BackCoverDataUrl
             };
+
+            await _dbContext.PrintableDirectories.AddAsync(newPD);
 
             await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
                 SubjectId = newPD.Id.ToString(),
                 SubjectName = $"{newPD.Created} {newPD.CreatedBy}",
-                Action = "Updated printable directory.",
+                Action = "Added printable directory.",
                 Time = DateTime.UtcNow,
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
                 UserId = apiUser.UniqueId
@@ -62,7 +61,7 @@ namespace Web.Controllers
 
             await _dbContext.SaveChangesAsync();
 
-            return Ok();
+            return Ok(newPD);
         }
 
         [HttpPut("{id}")]
@@ -83,9 +82,6 @@ namespace Web.Controllers
             pdToUpdate.FrontCoverDataUrl = updatedPrintableDirectory.FrontCoverDataUrl;
             pdToUpdate.TitlePageHTML = updatedPrintableDirectory.TitlePageHTML;
             pdToUpdate.IntroductionHTML = updatedPrintableDirectory.IntroductionHTML;
-            pdToUpdate.Map1DataUrl = updatedPrintableDirectory.Map1DataUrl;
-            pdToUpdate.Map2DataUrl = updatedPrintableDirectory.Map2DataUrl;
-            pdToUpdate.Map3DataUrl = updatedPrintableDirectory.Map3DataUrl;
             pdToUpdate.BackCoverDataUrl = updatedPrintableDirectory.BackCoverDataUrl;
 
             await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
