@@ -20,6 +20,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatListModule } from '@angular/material/list';
+import { MatCardModule } from '@angular/material/card';
 
 import { QuillModule } from 'ngx-quill';
 
@@ -54,6 +55,7 @@ import { ManagePrintableDirectoriesComponent } from './components/manage-printab
 import { RenderedPrintableDirectoryComponent } from './components/rendered-printable-directory/rendered-printable-directory.component';
 import { PrintableDirectoryComponent } from './components/printable-directory/printable-directory.component';
 import { MapComponent } from './components/map/map.component';
+import { RenderedPrintableMapComponent } from './components/rendered-printable-map/rendered-printable-map.component';
 
 @NgModule({
   declarations: [
@@ -79,7 +81,8 @@ import { MapComponent } from './components/map/map.component';
     ManagePrintableDirectoriesComponent,
     PrintableDirectoryComponent,
     RenderedPrintableDirectoryComponent,
-    MapComponent
+    MapComponent,
+    RenderedPrintableMapComponent
   ],
   imports: [
     BrowserModule,
@@ -138,7 +141,8 @@ import { MapComponent } from './components/map/map.component';
     MatCheckboxModule,
     MatSelectModule,
     MatTooltipModule,
-    MatListModule
+    MatListModule,
+    MatCardModule
   ],
   providers: [
     { provide: dispatcher, useValue: new Subject<Action>() },

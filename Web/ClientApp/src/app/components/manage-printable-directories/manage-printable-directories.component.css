@@ -11,8 +11,9 @@ img {
   object-fit: cover;
 }
 
-.pd-item {
-  margin-top: 10px;
+.pd-card {
+  max-width: 800px;
+  margin-top: 20px;
 }
 
 .button-row {

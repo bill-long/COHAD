@@ -9,8 +9,7 @@ import { rolePermissions } from 'src/app/services/rolepermission.service';
 @Component({
   selector: 'app-navbar',
   templateUrl: './navbar.component.html',
-  styleUrls: ['./navbar.component.css'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  styleUrls: ['./navbar.component.css']
 })
 export class NavbarComponent implements OnInit {
 
@@ -29,7 +28,7 @@ export class NavbarComponent implements OnInit {
       }
 
       if (e instanceof NavigationEnd) {
-        if (e.url.startsWith('/printable-directory')) {
+        if (e.url.startsWith('/rendered')) {
           this.isHidden = true;
         } else {
           this.isHidden = false;
