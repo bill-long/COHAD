@@ -20,6 +20,7 @@ import { ManagePrintableDirectoriesComponent } from './components/manage-printab
 import { RenderedPrintableDirectoryComponent } from './components/rendered-printable-directory/rendered-printable-directory.component';
 import { PrintableDirectoryComponent } from './components/printable-directory/printable-directory.component';
 import { MapComponent } from './components/map/map.component';
+import { RenderedPrintableMapComponent } from './components/rendered-printable-map/rendered-printable-map.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
@@ -30,7 +31,8 @@ const routes: Routes = [
   { path: 'news', component: NewsComponent },
   { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
   { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] },
-  { path: 'printable-directory/:id', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
+  { path: 'rendered-print-directory/:id', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
+  { path: 'rendered-print-map', component: RenderedPrintableMapComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
   {
     path: 'manage', component: ManageComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, children: [
       { path: 'users', component: ManageUsersComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles } },
