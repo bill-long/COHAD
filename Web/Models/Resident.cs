@@ -9,6 +9,8 @@ namespace Web.Models
 
         public string Surname { get; set; }
 
+        public int YearOfBirth { get; set; }
+
         public List<EmailAddress> EmailAddresses { get; set; }
 
         public List<PhoneNumber> PhoneNumbers { get; set; }

@@ -42,6 +42,7 @@ export interface DirectoryResident {
     emailAddresses: DirectoryEmailAddress[];
     phoneNumbers: DirectoryPhoneNumber[];
     residentType: number;
+    yearOfBirth: number;
 }
 
 export interface DirectoryPhoneNumber {
@@ -71,6 +72,7 @@ export interface Resident {
     emailAddresses: EmailAddress[];
     phoneNumbers: PhoneNumber[];
     residentType: number;
+    yearOfBirth: number;
 }
 
 export interface PhoneNumber {

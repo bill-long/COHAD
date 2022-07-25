@@ -1,3 +1,4 @@
+import { R } from '@angular/cdk/keycodes';
 import { Component, OnInit, Input, Output, EventEmitter } from '@angular/core';
 import { Resident, PhoneNumber, EmailAddress } from 'src/app/models';
 
@@ -43,6 +44,28 @@ export class EditResidentComponent implements OnInit {
   deleteEmail(email: EmailAddress) {
     const index = this.resident.emailAddresses.indexOf(email);
     this.resident.emailAddresses.splice(index, 1);
+  }
+
+  getShowBirthYear(r: Resident) {
+    if (r.residentType === 2 && r.yearOfBirth !== 0) {
+      return true;
+    }
+
+    if ((r as any).showBirthYear === true) {
+      return true;
+    }
+
+    return false;
+  }
+
+  showBirthYearCheckChanged(event: any, r: Resident) {
+    if (event.checked) {
+      (r as any).showBirthYear = true;
+      r.yearOfBirth = 2000;
+    } else {
+      (r as any).showBirthYear = false;
+      r.yearOfBirth = 0;
+    }
   }
 
 }

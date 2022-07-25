@@ -17,10 +17,8 @@
             <div *ngIf="apiUser.ownedHomes == null || apiUser.ownedHomes.length < 1">No homes are associated with this
                 account. You must be assigned permissions before you can see and edit your home information.</div>
             <div *ngFor="let home of apiUser.ownedHomes">
-                <app-edit-home [home]="home" [editEnabled]="editEnabled" (doneEvent)="editEnabled = false">
+                <app-edit-home [home]="home">
                 </app-edit-home>
-                <button mat-flat-button color="primary" (click)="editEnabled = true" *ngIf="!editEnabled">Edit
-                    Details</button>
             </div>
         </div>
 
