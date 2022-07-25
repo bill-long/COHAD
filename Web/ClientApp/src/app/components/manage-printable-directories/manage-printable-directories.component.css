@@ -1,14 +1,15 @@
 .cover-container {
-  width: 120px;
-  height: 192px;
+  width: 220px;
+  height: 340px;
   overflow: hidden;
   margin-right: 5px;
 }
 
-img {
+.cover-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  overflow: hidden;
 }
 
 .pd-card {

@@ -41,8 +41,6 @@ namespace Web.Controllers
                 LastUpdated = DateTime.UtcNow,
                 LastUpdatedBy = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
                 FrontCoverDataUrl = updatedPrintableDirectory.FrontCoverDataUrl,
-                TitlePageHTML = updatedPrintableDirectory.TitlePageHTML,
-                IntroductionHTML = updatedPrintableDirectory.IntroductionHTML,
                 BackCoverDataUrl = updatedPrintableDirectory.BackCoverDataUrl
             };
 
@@ -80,8 +78,6 @@ namespace Web.Controllers
             pdToUpdate.LastUpdated = DateTime.UtcNow;
             pdToUpdate.LastUpdatedBy = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}";
             pdToUpdate.FrontCoverDataUrl = updatedPrintableDirectory.FrontCoverDataUrl;
-            pdToUpdate.TitlePageHTML = updatedPrintableDirectory.TitlePageHTML;
-            pdToUpdate.IntroductionHTML = updatedPrintableDirectory.IntroductionHTML;
             pdToUpdate.BackCoverDataUrl = updatedPrintableDirectory.BackCoverDataUrl;
 
             await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry

@@ -112,8 +112,6 @@ export interface PrintableDirectory {
     lastUpdated: string;
     lastUpdatedBy: string;
     frontCoverDataUrl: string;
-    titlePageHTML: string;
-    introductionHTML: string;
     backCoverDataUrl: string;
     addExtraPageBreak: boolean;
 }

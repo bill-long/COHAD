@@ -1,4 +1,4 @@
-import { Component, Inject, ViewEncapsulation } from "@angular/core";
+import { Component, Inject } from "@angular/core";
 import { ActivatedRoute } from "@angular/router";
 import { combineLatest, map, Observable, Subject } from "rxjs";
 import { PrintableDirectory } from "src/app/models";
@@ -7,12 +7,12 @@ import { Action, ApplicationState, applicationState, dispatcher } from "src/app/
 @Component({
   selector: 'app-rendered-printable-directory',
   templateUrl: './rendered-printable-directory.component.html',
-  styleUrls: ['./rendered-printable-directory.component.css'],
-  encapsulation: ViewEncapsulation.None
+  styleUrls: ['./rendered-printable-directory.component.css']
 })
 export class RenderedPrintableDirectoryComponent {
 
   selectedDirectory: Observable<PrintableDirectory | undefined>;
+  includeMap = false;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
