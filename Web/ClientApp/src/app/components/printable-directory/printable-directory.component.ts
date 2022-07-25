@@ -1,10 +1,9 @@
-import { Component, Inject, Input } from "@angular/core";
+import { Component, Inject } from "@angular/core";
 import { ActivatedRoute, Router } from "@angular/router";
-import Quill from "quill";
 import { combineLatest, map, Observable, shareReplay, Subject, take } from "rxjs";
 import { PrintableDirectory } from "src/app/models";
 import { PrintableDirectoryService } from "src/app/services/printable-directory.service";
-import { Action, AddPrintableDirectory, ApplicationState, applicationState, dispatcher, LoadDirectory, LoadPrintableDirectories } from "src/app/state";
+import { Action, ApplicationState, applicationState, dispatcher, LoadDirectory, LoadPrintableDirectories } from "src/app/state";
 
 @Component({
   selector: 'app-printable-directory',
@@ -50,11 +49,6 @@ export class PrintableDirectoryComponent {
         this.dispatcher.next(new LoadDirectory());
       }
     });
-
-    const Block = Quill.import('blots/block');
-    class MyBlock extends Block { }
-    MyBlock.tagName = 'DIV';
-    Quill.register('blots/block', MyBlock, true);
   }
 
   getNewPrintableDirectory(): PrintableDirectory {
@@ -65,8 +59,6 @@ export class PrintableDirectoryComponent {
       lastUpdated: '',
       lastUpdatedBy: '',
       frontCoverDataUrl: '',
-      titlePageHTML: '',
-      introductionHTML: '',
       backCoverDataUrl: '',
       addExtraPageBreak: false
     };
@@ -102,13 +94,18 @@ export class PrintableDirectoryComponent {
     event.preventDefault();
   }
 
-  async handleDrop(event: any): Promise<string> {
+  async handleDrop(event: any, allowedTypes: string[]): Promise<string> {
     let p = new Promise<string>((resolve, reject) => {
+      if (!allowedTypes.includes(event.dataTransfer.files[0].type)) {
+        reject('File type not allowed');
+      }
+
       let reader = new FileReader();
       reader.onloadend = (e) => {
         resolve(reader.result as string);
       }
 
+      console.log('Dropped file type:' + event.dataTransfer.files[0].type);
       reader.readAsDataURL(event.dataTransfer.files[0]);
     });
 
@@ -117,10 +114,10 @@ export class PrintableDirectoryComponent {
   }
 
   async frontCoverDrop(event: any) {
-    this.pdCopy.frontCoverDataUrl = await this.handleDrop(event);
+    this.pdCopy.frontCoverDataUrl = await this.handleDrop(event, ['image/jpeg', 'image/png', 'image/jpg', 'image/gif']);
   }
 
   async backCoverDrop(event: any) {
-    this.pdCopy.backCoverDataUrl = await this.handleDrop(event);
+    this.pdCopy.backCoverDataUrl = await this.handleDrop(event, ['image/jpeg', 'image/png', 'image/jpg', 'image/gif']);
   }
 }

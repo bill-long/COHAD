@@ -26,6 +26,7 @@ export class PrintableDirectoryService {
 
   addPrintableDirectoryAndReloadAll(pd: PrintableDirectory) {
     const obs = new Observable<PrintableDirectory | null>(o => {
+      pd.id = '00000000-0000-0000-0000-000000000000';
       this.httpClient.post<PrintableDirectory>('api/printabledirectory', pd).subscribe({
         next: result => {
           this.dispatcher.next(new LoadPrintableDirectories());

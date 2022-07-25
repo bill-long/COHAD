@@ -1,4 +1,4 @@
-import { Component, Inject } from "@angular/core";
+import { ChangeDetectionStrategy, Component, Inject } from "@angular/core";
 import { map, Observable, Subject, take } from "rxjs";
 import { PrintableDirectory } from "src/app/models";
 import { PrintableDirectoryService } from "src/app/services/printable-directory.service";
@@ -7,7 +7,8 @@ import { Action, ApplicationState, applicationState, dispatcher, LoadPrintableDi
 @Component({
   selector: 'app-manage-printable-directories',
   templateUrl: './manage-printable-directories.component.html',
-  styleUrls: ['./manage-printable-directories.component.css']
+  styleUrls: ['./manage-printable-directories.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ManagePrintableDirectoriesComponent {
   printableDirectories: Observable<PrintableDirectory[]>;

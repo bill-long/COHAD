@@ -16,10 +16,6 @@ namespace Web.Models
 
         public string FrontCoverDataUrl { get; set; }
 
-        public string TitlePageHTML { get; set; }
-
-        public string IntroductionHTML { get; set; }
-
         public string BackCoverDataUrl { get; set; }
 
         public bool AddExtraPageBreak { get; set; }
