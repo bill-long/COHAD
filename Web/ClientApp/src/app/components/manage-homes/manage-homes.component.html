@@ -47,6 +47,4 @@
 </table>
 
 <app-edit-home *ngIf="(focusedHome$ | async) != null" [home]="(focusedHome$ | async)" (doneEvent)="unfocusHome()"
-    [editEnabled]="editEnabled" [reloadAllOnSave]="true"></app-edit-home>
-<button *ngIf="(focusedHome$ | async) != null && !editEnabled" mat-flat-button color="primary" (click)="editEnabled = true">Edit
-    Details</button>
+    [startWithEditEnabled]="true" [reloadAllOnSave]="true"></app-edit-home>

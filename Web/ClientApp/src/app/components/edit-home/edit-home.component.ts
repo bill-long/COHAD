@@ -11,7 +11,9 @@ export class EditHomeComponent implements OnInit {
 
   @Input() home!: Home | null;
 
-  @Input() editEnabled!: boolean;
+  @Input() startWithEditEnabled: boolean | undefined;
+
+  editEnabled: boolean = false;
 
   @Input() reloadAllOnSave!: boolean;
 
@@ -25,6 +27,9 @@ export class EditHomeComponent implements OnInit {
 
   ngOnInit(): void {
     this.homeCopy = JSON.parse(JSON.stringify(this.home));
+    if (this.startWithEditEnabled) {
+      this.editEnabled = true;
+    }
   }
 
   addResident() {
@@ -38,6 +43,7 @@ export class EditHomeComponent implements OnInit {
       emailAddresses: [],
       phoneNumbers: [],
       residentType: 0,
+      yearOfBirth: 0
     });
   }
 
@@ -64,15 +70,35 @@ export class EditHomeComponent implements OnInit {
 
   cancel() {
     this.homeCopy = JSON.parse(JSON.stringify(this.home));
+    this.editEnabled = false;
     this.doneEvent.next();
   }
 
   save() {
+    this.saveInProgress = true;
     console.log('Saving', this.homeCopy);
     if (this.reloadAllOnSave) {
-      this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe(r => this.doneEvent.next());
+      this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe({
+        next: r => {
+          this.saveInProgress = false;
+          this.editEnabled = false;
+          this.doneEvent.next();
+        },
+        error: e => {
+          this.saveInProgress = false;
+        }
+      });
     } else {
-      this.homeService.saveHomeAndReloadMine(this.homeCopy).subscribe(r => this.doneEvent.next());
+      this.homeService.saveHomeAndReloadMine(this.homeCopy).subscribe({
+        next: r => {
+          this.saveInProgress = false;
+          this.editEnabled = false;
+          this.doneEvent.next();
+        },
+        error: e => {
+          this.saveInProgress = false;
+        }
+      });
     }
   }
 
