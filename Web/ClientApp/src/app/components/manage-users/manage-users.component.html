@@ -20,6 +20,11 @@
         <td mat-cell *matCellDef="let user"> {{user.identityProvider}} </td>
     </ng-container>
 
+    <ng-container matColumnDef="lastLoggedIn">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header> Last Login </th>
+      <td mat-cell *matCellDef="let user"> {{user.lastLoggedIn | date:'medium'}} </td>
+  </ng-container>
+
     <ng-container matColumnDef="streetAddress">
         <th mat-header-cell *matHeaderCellDef mat-sort-header> Street Address </th>
         <td mat-cell *matCellDef="let user"> {{user.streetAddress}} </td>

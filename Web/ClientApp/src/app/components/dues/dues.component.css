@@ -1,0 +1,20 @@
+.outer-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.outer-wrapper > div {
+  margin-top: 20px;
+  max-width: 614px;
+}
+
+.payment-info-text {
+  margin-top: 20px;
+}
+
+.payment-description {
+  margin-bottom: 20px;
+}

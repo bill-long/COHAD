@@ -54,8 +54,6 @@ namespace Web.Repository
             modelBuilder.Entity<NewAuditLogEntry>().ToContainer("AuditLog");
 
             modelBuilder.Entity<NewAuditLogEntry>().HasKey(a => a.Id);
-
-            modelBuilder.Entity<PrintableDirectory>().ToContainer("PrintableDirectory");
         }
 
         public DbSet<User> Users { get; set; }
@@ -63,7 +61,5 @@ namespace Web.Repository
         public DbSet<Home> Homes { get; set; }
 
         public DbSet<NewAuditLogEntry> AuditLog { get; set; }
-
-        public DbSet<PrintableDirectory> PrintableDirectories { get; set; }
     }
 }

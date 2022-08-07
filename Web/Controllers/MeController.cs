@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -34,6 +35,9 @@ namespace Web.Controllers
             var user = await _userRepository.Users.FindAsync(uniqueId);
             if (user != null)
             {
+                user.LastLoggedIn = DateTime.UtcNow;
+                await _userRepository.SaveChangesAsync();
+
                 // Includes are not supported, and we don't want this to be an owned type, so we're manually handling these references
                 // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
                 // See also https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations

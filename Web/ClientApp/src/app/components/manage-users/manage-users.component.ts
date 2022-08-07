@@ -22,6 +22,7 @@ export class ManageUsersComponent implements AfterViewInit {
     'surname',
     'email',
     'identityProvider',
+    'lastLoggedIn',
     'streetAddress',
     'roles',
     'ownedHomes',
