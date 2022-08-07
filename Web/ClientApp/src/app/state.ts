@@ -1,7 +1,7 @@
 import { Observable, Subject, BehaviorSubject } from 'rxjs';
 import { InjectionToken } from '@angular/core';
 import { scan } from 'rxjs/operators';
-import { ApiUser, AuthUser, Home, DirectoryHome, PrintableDirectory } from './models';
+import { ApiUser, AuthUser, Home, DirectoryHome } from './models';
 
 export interface ApplicationState {
     allHomes: Home[],
@@ -9,8 +9,7 @@ export interface ApplicationState {
     authUser: AuthUser | null,
     apiUser: ApiUser | null,
     directory: DirectoryHome[],
-    operationsInProgress: number,
-    printableDirectories: PrintableDirectory[]
+    operationsInProgress: number
 }
 
 export const initialStateValue: ApplicationState = {
@@ -19,8 +18,7 @@ export const initialStateValue: ApplicationState = {
     authUser: null,
     apiUser: null,
     directory: [],
-    operationsInProgress: 0,
-    printableDirectories: []
+    operationsInProgress: 0
 }
 
 export class AuthenticatedUserChanged { constructor(public authUser: AuthUser) { } }
@@ -45,14 +43,6 @@ export class Login { }
 
 export class Logout { }
 
-export class LoadPrintableDirectories { }
-
-export class LoadPrintableDirectoriesCompleted { constructor(public printableDirectories: PrintableDirectory[]) { } }
-
-export class AddPrintableDirectory { constructor(public printableDirectory: PrintableDirectory) { } }
-
-export class UpdatePrintableDirectory { constructor(public printableDirectory: PrintableDirectory) { } }
-
 export type Action =
     AuthenticatedUserChanged |
     LoadDirectory |
@@ -60,11 +50,7 @@ export type Action =
     LoadUser |
     LoadUserCompleted |
     Login |
-    Logout |
-    LoadPrintableDirectories |
-    LoadPrintableDirectoriesCompleted |
-    AddPrintableDirectory |
-    UpdatePrintableDirectory;
+    Logout;
 
 export const dispatcher = new InjectionToken<Subject<Action>>('dispatcher');
 
@@ -88,8 +74,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authUser: action.authUser,
                     apiUser: state.apiUser,
                     directory: state.directory,
-                    operationsInProgress: state.operationsInProgress,
-                    printableDirectories: state.printableDirectories
+                    operationsInProgress: state.operationsInProgress
                 };
             } else if (action instanceof LoadAllHomes) {
                 newState = addOperationInProgress(state);
@@ -100,8 +85,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authUser: state.authUser,
                     apiUser: state.apiUser,
                     directory: state.directory,
-                    operationsInProgress: state.operationsInProgress - 1,
-                    printableDirectories: state.printableDirectories
+                    operationsInProgress: state.operationsInProgress - 1
                 };
             } else if (action instanceof LoadAllUsers) {
                 newState = addOperationInProgress(state);
@@ -112,8 +96,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authUser: state.authUser,
                     apiUser: state.apiUser,
                     directory: state.directory,
-                    operationsInProgress: state.operationsInProgress - 1,
-                    printableDirectories: state.printableDirectories
+                    operationsInProgress: state.operationsInProgress - 1
                 };
             } else if (action instanceof LoadDirectory) {
                 newState = addOperationInProgress(state);
@@ -124,8 +107,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authUser: state.authUser,
                     apiUser: state.apiUser,
                     directory: action.data,
-                    operationsInProgress: state.operationsInProgress - 1,
-                    printableDirectories: state.printableDirectories
+                    operationsInProgress: state.operationsInProgress - 1
                 };
             } else if (action instanceof LoadUser) {
                 newState = addOperationInProgress(state);
@@ -136,18 +118,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authUser: state.authUser,
                     apiUser: action.user,
                     directory: state.directory,
-                    operationsInProgress: state.operationsInProgress - 1,
-                    printableDirectories: state.printableDirectories
-                };
-            } else if (action instanceof LoadPrintableDirectoriesCompleted) {
-                newState = {
-                    allHomes: state.allHomes,
-                    allUsers: state.allUsers,
-                    authUser: state.authUser,
-                    apiUser: state.apiUser,
-                    directory: state.directory,
-                    operationsInProgress: state.operationsInProgress - 1,
-                    printableDirectories: action.printableDirectories
+                    operationsInProgress: state.operationsInProgress - 1
                 };
             } else if (action instanceof Login) {
                 newState = state;
@@ -174,7 +145,6 @@ function addOperationInProgress(state: ApplicationState) {
         authUser: state.authUser,
         apiUser: state.apiUser,
         directory: state.directory,
-        operationsInProgress: state.operationsInProgress + 1,
-        printableDirectories: state.printableDirectories
+        operationsInProgress: state.operationsInProgress + 1
     };
 }

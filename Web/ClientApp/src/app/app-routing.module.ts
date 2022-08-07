@@ -16,11 +16,11 @@ import { SendEmailComponent } from './components/send-email/send-email.component
 import { AuditLogComponent } from './components/audit-log/audit-log.component';
 import { rolePermissions } from './services/rolepermission.service';
 import { PrivacyComponent } from './components/privacy/privacy.component';
-import { ManagePrintableDirectoriesComponent } from './components/manage-printable-directories/manage-printable-directories.component';
+import { ManagePrintComponent } from './components/manage-print/manage-print.component';
 import { RenderedPrintableDirectoryComponent } from './components/rendered-printable-directory/rendered-printable-directory.component';
-import { PrintableDirectoryComponent } from './components/printable-directory/printable-directory.component';
 import { MapComponent } from './components/map/map.component';
 import { RenderedPrintableMapComponent } from './components/rendered-printable-map/rendered-printable-map.component';
+import { DuesComponent } from './components/dues/dues.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
@@ -31,15 +31,15 @@ const routes: Routes = [
   { path: 'news', component: NewsComponent },
   { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
   { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] },
-  { path: 'rendered-print-directory/:id', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
+  { path: 'mydues', component: DuesComponent, canActivate: [AuthGuard] },
+  { path: 'rendered-print-directory', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
   { path: 'rendered-print-map', component: RenderedPrintableMapComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
   {
     path: 'manage', component: ManageComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, children: [
       { path: 'users', component: ManageUsersComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles } },
       { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageHomesRoles } },
       { path: 'send-email', component: SendEmailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles } },
-      { path: 'printable-directories', component: ManagePrintableDirectoriesComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
-      { path: 'edit-printable-directory/:id', component: PrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
+      { path: 'print', component: ManagePrintComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
       { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageAuditLogRoles } }
     ]
   },

@@ -1,0 +1,60 @@
+<div class="outer-wrapper">
+  <div>
+    <h1>Dues</h1>
+    <p>
+      COHAD is a voluntary HOA that relies on residents who choose to pay dues, which are
+      currently set at ${{baseDuesAmount}} per year. If you've paid dues in the past, we
+      sincerely thank you for your help.
+    </p>
+    <p>
+      The majority of dues are used to maintain the beauty of our entrances, including irrigation,
+      maintenance of grass and flower beds, new plants and shrubs as needed, and lighting.
+      The hard work of the Garden Club and other volunteers helps to keep these costs down,
+      but water and electricity bills must still be paid, and some contract work is necessary.
+    </p>
+    <p>
+      Dues also go towards community development for our neighborhood. We help the Social
+      Committee host events like the Easter Egg Hunt, the ice cream truck after the Fourth
+      of July Parade, block parties, and Breakfast with Santa. We also sponsor events like
+      the annual garage sale and the Earth Day Clean Out.
+    </p>
+    <p>
+      If you have any questions about the budget, please contact the COHAD Board at
+      <a href="mailto:board@cohad.org">board@cohad.org</a>, or attend our annual meeting, where
+      we discuss it in detail.
+    </p>
+  </div>
+  <div class="payment-section">
+    <mat-accordion>
+      <mat-expansion-panel (opened)="renderOneTimePaymentButtons()" (closed)="oneTimePaymentClosed()">
+        <mat-expansion-panel-header>
+          <mat-panel-title>One-time Payment</mat-panel-title>
+        </mat-expansion-panel-header>
+        <div class="payment-description">Make a one-time dues payment of ${{duesWithFeesAmount}} (fees included).</div>
+        <div #paypalOneTime></div>
+      </mat-expansion-panel>
+      <mat-expansion-panel (opened)="renderSubscribeButtons()" (closed)="subscribeClosed()">
+        <mat-expansion-panel-header>
+          <mat-panel-title>Recurring Payment</mat-panel-title>
+        </mat-expansion-panel-header>
+        <div class="payment-description">Automatically pay ${{duesWithFeesAmount}} (fees included) annually until cancelled. Cancel easily online through PayPal.</div>
+        <div #paypalAnnual></div>
+      </mat-expansion-panel>
+      <mat-expansion-panel>
+        <mat-expansion-panel-header>
+          <mat-panel-title>Pay Without Fees</mat-panel-title>
+        </mat-expansion-panel-header>
+        <div>
+          <div>Skip the PayPal fees and send ${{baseDuesAmount}} by check or cash.</div>
+          <ul>
+            <li>Make check payable to "COHAD".</li>
+            <li>Deliver to our Treasurer, Dorothy Woods, at 100 Hunters Hill Circle.</li>
+          </ul>
+        </div>
+      </mat-expansion-panel>
+    </mat-accordion>
+  </div>
+  <div>
+    <h2>Transaction History</h2>
+  </div>
+</div>

@@ -14,6 +14,7 @@ namespace Web.PresentationModels
         public string StreetAddress { get; private set; }
         public string Email { get; private set; }
         public string IdentityProvider { get; private set; }
+        public DateTime? LastLoggedIn { get; private set; }
         public List<string> Roles { get; private set; }
         public List<Home> OwnedHomes { get; private set; }
 
@@ -27,6 +28,7 @@ namespace Web.PresentationModels
                 StreetAddress = user.StreetAddress,
                 Email = user.Emails,
                 IdentityProvider = user.IdentityProvider,
+                LastLoggedIn = user.LastLoggedIn,
                 Roles = user.Roles.Select(r => r.ToString()).ToList(),
                 OwnedHomes = ownedHomes
             };

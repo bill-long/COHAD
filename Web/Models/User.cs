@@ -28,6 +28,8 @@ namespace Web.Models
 
         public List<Guid> OwnedHomeIds { get; set; }
 
+        public DateTime? LastLoggedIn { get; set; }
+
         public enum Role
         {
             Resident,

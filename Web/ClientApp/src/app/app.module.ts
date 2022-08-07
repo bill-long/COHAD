@@ -21,6 +21,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatListModule } from '@angular/material/list';
 import { MatCardModule } from '@angular/material/card';
+import { MatTabsModule } from '@angular/material/tabs';
+import { MatExpansionModule } from '@angular/material/expansion';
 
 import { QuillModule } from 'ngx-quill';
 
@@ -51,11 +53,11 @@ import { NgxMaskModule } from 'ngx-mask';
 import { PhoneNumberInputComponent } from './components/phone-number-input/phone-number-input.component';
 import { SendEmailComponent } from './components/send-email/send-email.component';
 import { AuditLogComponent } from './components/audit-log/audit-log.component';
-import { ManagePrintableDirectoriesComponent } from './components/manage-printable-directories/manage-printable-directories.component';
+import { ManagePrintComponent } from './components/manage-print/manage-print.component';
 import { RenderedPrintableDirectoryComponent } from './components/rendered-printable-directory/rendered-printable-directory.component';
-import { PrintableDirectoryComponent } from './components/printable-directory/printable-directory.component';
 import { MapComponent } from './components/map/map.component';
 import { RenderedPrintableMapComponent } from './components/rendered-printable-map/rendered-printable-map.component';
+import { DuesComponent } from './components/dues/dues.component';
 
 @NgModule({
   declarations: [
@@ -78,11 +80,11 @@ import { RenderedPrintableMapComponent } from './components/rendered-printable-m
     PhoneNumberInputComponent,
     SendEmailComponent,
     AuditLogComponent,
-    ManagePrintableDirectoriesComponent,
-    PrintableDirectoryComponent,
+    ManagePrintComponent,
     RenderedPrintableDirectoryComponent,
     MapComponent,
-    RenderedPrintableMapComponent
+    RenderedPrintableMapComponent,
+    DuesComponent
   ],
   imports: [
     BrowserModule,
@@ -142,7 +144,9 @@ import { RenderedPrintableMapComponent } from './components/rendered-printable-m
     MatSelectModule,
     MatTooltipModule,
     MatListModule,
-    MatCardModule
+    MatCardModule,
+    MatTabsModule,
+    MatExpansionModule
   ],
   providers: [
     { provide: dispatcher, useValue: new Subject<Action>() },
