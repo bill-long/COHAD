@@ -6,6 +6,8 @@ namespace Web.Models
     {
         public Guid Id { get; set; }
 
+        public string PayerUniqueId { get; set; }
+
         public string PayerEmail { get; set; }
 
         public string PayerName { get; set; }
