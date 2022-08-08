@@ -31,7 +31,7 @@ const routes: Routes = [
   { path: 'news', component: NewsComponent },
   { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
   { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] },
-  { path: 'mydues', component: DuesComponent, canActivate: [AuthGuard] },
+  { path: 'mydues', component: DuesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
   { path: 'rendered-print-directory', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
   { path: 'rendered-print-map', component: RenderedPrintableMapComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
   {
