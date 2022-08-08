@@ -106,3 +106,14 @@ export interface EmailInfo {
     htmlBody: string;
     isTestEmail: boolean;
 }
+
+export interface Payment {
+    id: string;
+    payerUniqueId: string;
+    payerEmail: string;
+    payerName: string;
+    amount: string;
+    date: string;
+    paymentType: number;
+    fullDetailsJSON: string;
+}

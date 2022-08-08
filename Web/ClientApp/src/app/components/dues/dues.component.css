@@ -18,3 +18,11 @@
 .payment-description {
   margin-bottom: 20px;
 }
+
+.transaction-section {
+  width: 100%;
+}
+
+table {
+  width: 100%;
+}

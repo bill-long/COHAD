@@ -54,11 +54,17 @@ namespace Web.Repository
             modelBuilder.Entity<NewAuditLogEntry>().ToContainer("AuditLog");
 
             modelBuilder.Entity<NewAuditLogEntry>().HasKey(a => a.Id);
+
+            modelBuilder.Entity<Payment>().ToContainer("Payments");
+
+            modelBuilder.Entity<Payment>().HasKey(p => p.Id);
         }
 
         public DbSet<User> Users { get; set; }
 
         public DbSet<Home> Homes { get; set; }
+
+        public DbSet<Payment> Payments { get; set; }
 
         public DbSet<NewAuditLogEntry> AuditLog { get; set; }
     }

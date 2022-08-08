@@ -54,7 +54,39 @@
       </mat-expansion-panel>
     </mat-accordion>
   </div>
-  <div>
+  <div class="transaction-section">
     <h2>Transaction History</h2>
+    <p>
+      Note: This only shows transactions made through this web site. This does not include
+      payments made using PayPal on the public COHAD web site.
+    </p>
+    <table mat-table *ngIf="payments.length > 0; else noPayments" [dataSource]="payments">
+
+      <ng-container matColumnDef="date">
+        <th mat-header-cell *matHeaderCellDef> Date </th>
+        <td mat-cell *matCellDef="let payment"> {{payment.date | date: 'short'}} </td>
+      </ng-container>
+
+      <ng-container matColumnDef="amount">
+        <th mat-header-cell *matHeaderCellDef> Amount </th>
+        <td mat-cell *matCellDef="let payment"> {{payment.amount | currency}} </td>
+      </ng-container>
+
+      <ng-container matColumnDef="description">
+        <th mat-header-cell *matHeaderCellDef> Description </th>
+        <td mat-cell *matCellDef="let payment"> {{payment.paymentType == 0 ? 'One-Time' : 'Subscription'}} </td>
+      </ng-container>
+
+      <ng-container matColumnDef="payerEmail">
+        <th class="payer-column" mat-header-cell *matHeaderCellDef> Payer </th>
+        <td mat-cell *matCellDef="let payment"> {{payment.payerEmail}} </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+    <ng-template #noPayments>
+      <p>No transactions found.</p>
+    </ng-template>
   </div>
 </div>
