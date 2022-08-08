@@ -2,16 +2,22 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
+  background-image: url(../../../assets/trees1.jpg);
+  background-size: cover;
+  height: 100vh;
+}
+
+.white-background {
+  background-color: white;
+  padding: 20px;
 }
 
 .outer-wrapper > div {
-  margin-top: 20px;
   max-width: 614px;
 }
 
-.payment-info-text {
+.outer-wrapper > :nth-child(1) {
   margin-top: 20px;
 }
 
