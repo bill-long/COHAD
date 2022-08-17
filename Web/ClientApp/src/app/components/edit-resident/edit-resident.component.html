@@ -7,7 +7,7 @@
         <input matInput [(ngModel)]="resident.givenName" [disabled]="!editEnabled">
       </mat-form-field>
 
-      <mat-form-field appearance="fill">
+      <mat-form-field *ngIf="resident.residentType !== 2" appearance="fill">
         <mat-label>Surname</mat-label>
         <input matInput [(ngModel)]="resident.surname" [disabled]="!editEnabled">
       </mat-form-field>
