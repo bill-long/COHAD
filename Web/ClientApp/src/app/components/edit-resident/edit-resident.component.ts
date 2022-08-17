@@ -58,6 +58,18 @@ export class EditResidentComponent implements OnInit {
     return false;
   }
 
+  getShowCollegeName(r: Resident) {
+    if (r.residentType === 2 && r.collegeName) {
+      return true;
+    }
+
+    if ((r as any).showCollegeName === true) {
+      return true;
+    }
+
+    return false;
+  }
+
   showBirthYearCheckChanged(event: any, r: Resident) {
     if (event.checked) {
       (r as any).showBirthYear = true;
@@ -65,6 +77,16 @@ export class EditResidentComponent implements OnInit {
     } else {
       (r as any).showBirthYear = false;
       r.yearOfBirth = 0;
+    }
+  }
+
+  showCollegeNameCheckChanged(event: any, r: Resident) {
+    if (event.checked) {
+      (r as any).showCollegeName = true;
+      r.collegeName = '';
+    } else {
+      (r as any).showCollegeName = false;
+      r.collegeName = '';
     }
   }
 

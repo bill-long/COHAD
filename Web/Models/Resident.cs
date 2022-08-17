@@ -11,6 +11,8 @@ namespace Web.Models
 
         public int YearOfBirth { get; set; }
 
+        public string CollegeName { get; set; }
+
         public List<EmailAddress> EmailAddresses { get; set; }
 
         public List<PhoneNumber> PhoneNumbers { get; set; }

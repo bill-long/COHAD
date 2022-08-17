@@ -71,18 +71,17 @@
         </ng-container>
         <ng-container *ngIf="getChildren(home).length > 0">
           <div class="info-line children-section">
-            <div>Children:</div>
+            <div>Children:
+              <ng-container *ngFor="let resident of getChildren(home); last as isLast">
+                <span>{{resident.givenName}}</span>
+                <span *ngIf="resident.yearOfBirth !== 0"> ({{resident.yearOfBirth}})</span>
+                <span *ngIf="resident.collegeName"> ({{resident.collegeName}})</span>
+                <span *ngIf="!isLast">, </span>
+              </ng-container>
+            </div>
             <div></div>
           </div>
           <div class="clear"></div>
-          <ng-container *ngFor="let resident of getChildren(home)">
-            <div class="info-line email-line">
-              <div>{{resident.givenName}} {{resident.surname}}</div>
-              <div><span *ngIf="resident.yearOfBirth !== 0">Born: {{resident.yearOfBirth}}</span></div>
-              <div></div>
-            </div>
-            <div class="clear"></div>
-          </ng-container>
         </ng-container>
       </div>
     </div>
