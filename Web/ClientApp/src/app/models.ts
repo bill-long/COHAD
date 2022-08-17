@@ -43,6 +43,7 @@ export interface DirectoryResident {
     phoneNumbers: DirectoryPhoneNumber[];
     residentType: number;
     yearOfBirth: number;
+    collegeName: string;
 }
 
 export interface DirectoryPhoneNumber {
@@ -73,6 +74,7 @@ export interface Resident {
     phoneNumbers: PhoneNumber[];
     residentType: number;
     yearOfBirth: number;
+    collegeName: string;
 }
 
 export interface PhoneNumber {

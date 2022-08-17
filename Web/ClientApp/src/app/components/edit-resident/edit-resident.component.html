@@ -28,12 +28,22 @@
           <mat-option [value]="2">Child</mat-option>
         </mat-select>
       </mat-form-field>
+      <div *ngIf="resident.residentType === 2" class="contact-options">
+        <mat-checkbox [checked]="getShowBirthYear(resident)" (change)="showBirthYearCheckChanged($event, resident)" [disabled]="!editEnabled">Show Birth Year</mat-checkbox>
+        <mat-checkbox [checked]="getShowCollegeName(resident)" (change)="showCollegeNameCheckChanged($event, resident)" [disabled]="!editEnabled">Show College Name</mat-checkbox>
+      </div>
     </div>
-    <div *ngIf="resident.residentType === 2" class="birth-year-inputs">
-      <mat-checkbox [checked]="getShowBirthYear(resident)" (change)="showBirthYearCheckChanged($event, resident)">Show Birth Year</mat-checkbox>
+  </div>
+
+  <div class="info-container" *ngIf="resident.residentType === 2">
+    <div>
       <mat-form-field *ngIf="getShowBirthYear(resident)" appearance="fill">
         <mat-label>Birth Year</mat-label>
         <input matInput [(ngModel)]="resident.yearOfBirth" [disabled]="!editEnabled">
+      </mat-form-field>
+      <mat-form-field *ngIf="getShowCollegeName(resident)" appearance="fill">
+        <mat-label>College Name</mat-label>
+        <input matInput [(ngModel)]="resident.collegeName" [disabled]="!editEnabled">
       </mat-form-field>
     </div>
   </div>

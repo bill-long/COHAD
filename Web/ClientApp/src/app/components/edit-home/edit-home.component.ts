@@ -43,7 +43,8 @@ export class EditHomeComponent implements OnInit {
       emailAddresses: [],
       phoneNumbers: [],
       residentType: 0,
-      yearOfBirth: 0
+      yearOfBirth: 0,
+      collegeName: ''
     });
   }
 

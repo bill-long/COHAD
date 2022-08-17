@@ -62,11 +62,18 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            // Make sure emails are valid
             foreach (var resident in updatedHome.Residents)
             {
-                if (resident.EmailAddresses != null && resident.EmailAddresses.Any())
+                if (resident.ResidentType == Resident.Type.Child)
                 {
+                    // Ensure we don't store contact info for children
+                    // The front end should not allow this, but we check here just in case
+                    resident.EmailAddresses = new List<EmailAddress>();
+                    resident.PhoneNumbers = new List<PhoneNumber>();
+                }
+                else if (resident.EmailAddresses != null && resident.EmailAddresses.Any())
+                {
+                    // Make sure email addresses are valid
                     resident.EmailAddresses =
                         resident.EmailAddresses
                             .Where(e => !string.IsNullOrWhiteSpace(e.Address) && e.Address.Contains("@", StringComparison.OrdinalIgnoreCase))

@@ -28,6 +28,7 @@ namespace Web.PresentationModels
                 GivenName = storedResident.GivenName,
                 Surname = storedResident.Surname,
                 YearOfBirth = storedResident.YearOfBirth,
+                CollegeName = storedResident.CollegeName,
                 EmailAddresses = visibleEmails,
                 PhoneNumbers = visiblePhones,
                 ResidentType = storedResident.ResidentType
@@ -39,6 +40,8 @@ namespace Web.PresentationModels
         public string Surname { get; private set; }
 
         public int YearOfBirth { get; set; }
+
+        public string CollegeName { get; set; }
 
         public List<DirectoryEmailAddress> EmailAddresses { get; private set; }
 
