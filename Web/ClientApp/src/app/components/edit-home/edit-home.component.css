@@ -1,38 +1,46 @@
-.action-bar>button {
-    margin-left: 5px;
+.action-bar {
+  position: sticky;
+  top: 5px;
+  z-index: 2;
+  background-color: #f8f8f8;
+}
+
+.action-bar > div > button {
+  margin-left: 5px;
+  margin-top: 5px;
 }
 
 .residents-container {
-    width: fit-content;
-    margin-top: 10px;
+  width: fit-content;
+  margin-top: 10px;
 }
 
 .contact-info {
-    display: flex;
+  display: flex;
 }
 
 .contact-options {
-    display: flex;
-    flex-direction: column;
-    margin-left: 5px;
+  display: flex;
+  flex-direction: column;
+  margin-left: 5px;
 }
 
 .filler {
-    flex: 1;
+  flex: 1;
 }
 
 .mat-input-element:disabled {
-    color: black;
+  color: black;
 }
 
 .phoneType {
-    width: 100px;
+  width: 100px;
 }
 
 .emailInput {
-    width: 220px;
+  width: 220px;
 }
 
 .container {
-    display: flex;
+  display: flex;
 }
