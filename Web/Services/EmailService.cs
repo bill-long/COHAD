@@ -168,7 +168,7 @@ namespace Web.Services
             return bccAddresses;
         }
 
-        private TextPart ConvertImageFormat(string htmlBody)
+        private MimeEntity ConvertImageFormat(string htmlBody)
         {
             var imageStart = "<img src=\"data:";
             var imageEnd = "\">";
@@ -216,10 +216,8 @@ namespace Web.Services
                 }
             }
 
-            var textPart = new TextPart(MimeKit.Text.TextFormat.Html);
-            textPart.SetText(Encoding.UTF8, sb.ToString());
-            textPart.ContentTransferEncoding = ContentEncoding.QuotedPrintable;
-            return textPart;
+            bodyBuilder.HtmlBody = sb.ToString();
+            return bodyBuilder.ToMessageBody();
         }
     }
 }
