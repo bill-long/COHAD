@@ -81,7 +81,7 @@ export class DirectoryComponent {
         r.givenName.toLowerCase().includes(f) ||
         r.surname.toLowerCase().includes(f) ||
         r.emailAddresses.filter(e => e.address.toLowerCase().includes(f)).length > 0 ||
-        r.phoneNumbers.filter(p => `(${p.areaCode}) ${p.prefix}-${p.lineNumber} ${p.type}`.toLowerCase().includes(f)).length > 0
+        r.phoneNumbers.filter(p => `(${p.areaCode}) ${p.prefix}-${('0000' + p.lineNumber).slice(-4)} ${p.type}`.toLowerCase().includes(f)).length > 0
       ).length > 0;
   }
 
