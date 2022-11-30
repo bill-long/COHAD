@@ -65,6 +65,8 @@
           </mat-checkbox>
           <mat-checkbox [(ngModel)]="emailAddress.socialCommitteeEmailOptedIn" [disabled]="!editEnabled" matTooltip="Social Committee events">Receive Social Committee emails
           </mat-checkbox>
+          <mat-checkbox [(ngModel)]="emailAddress.sunshineCommitteeEmailOptedIn" [disabled]="!editEnabled" matTooltip="Sunshine Committee events">Receive Sunshine Committee emails
+          </mat-checkbox>
         </div>
       </div>
       <button mat-icon-button color="warn" aria-label="delete email" matTooltip="Delete email address" (click)="deleteEmail(emailAddress)" *ngIf="editEnabled">

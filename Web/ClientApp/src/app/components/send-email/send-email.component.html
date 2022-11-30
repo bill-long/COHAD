@@ -7,6 +7,7 @@
             <mat-option *ngIf="canSendFromWelcomeCommittee | async" [value]="'from-welcome'">COHAD Welcome Committee</mat-option>
             <mat-option *ngIf="canSendFromGardenClub | async" [value]="'from-garden'">COHAD Garden Club</mat-option>
             <mat-option *ngIf="canSendFromSocialCommittee | async" [value]="'from-social'">COHAD Social Committee</mat-option>
+            <mat-option *ngIf="canSendFromSunshineCommittee | async" [value]="'from-sunshine'">COHAD Sunshine Committee</mat-option>
         </mat-select>
     </mat-form-field>
 </div>

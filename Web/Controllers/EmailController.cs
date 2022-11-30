@@ -48,7 +48,7 @@ namespace Web.Controllers
 
         [HttpPut("from-garden")]
         [Authorize(Policy = "GardenClub")]
-        public async Task<IActionResult> SendEmailFromSocialCommittee([FromBody] EmailInfo emailInfo)
+        public async Task<IActionResult> SendEmailFromGardenClub([FromBody] EmailInfo emailInfo)
         {
             await AuditEmail("Garden Club", emailInfo);
 
@@ -59,11 +59,22 @@ namespace Web.Controllers
 
         [HttpPut("from-social")]
         [Authorize(Policy = "SocialCommittee")]
-        public async Task<IActionResult> SendEmailFromGardenClub([FromBody] EmailInfo emailInfo)
+        public async Task<IActionResult> SendEmailFromSocialCommittee([FromBody] EmailInfo emailInfo)
         {
             await AuditEmail("Social Committee", emailInfo);
 
             await _emailService.SendEmail("social@cohad.org", "COHAD Social Committee", emailInfo, e => e != null && e.SocialCommitteeEmailOptedIn, "Canyon Oaks Residents", User);
+
+            return Ok();
+        }
+
+        [HttpPut("from-sunshine")]
+        [Authorize(Policy = "SunshineCommittee")]
+        public async Task<IActionResult> SendEmailFromSunshineCommittee([FromBody] EmailInfo emailInfo)
+        {
+            await AuditEmail("Sunshine Committee", emailInfo);
+
+            await _emailService.SendEmail("sunshine@cohad.org", "COHAD Sunshine Committee", emailInfo, e => e != null && e.SunshineCommitteeEmailOptedIn, "Canyon Oaks Residents", User);
 
             return Ok();
         }

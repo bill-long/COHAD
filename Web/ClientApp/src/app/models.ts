@@ -92,6 +92,7 @@ export interface EmailAddress {
     welcomeEmailOptedIn: boolean;
     gardenClubEmailOptedIn: boolean;
     socialCommitteeEmailOptedIn: boolean;
+    sunshineCommitteeEmailOptedIn: boolean;
 }
 
 export interface AuditLogEntry {
