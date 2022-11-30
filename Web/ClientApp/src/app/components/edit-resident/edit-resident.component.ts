@@ -38,7 +38,7 @@ export class EditResidentComponent implements OnInit {
       this.resident.emailAddresses = [];
     }
 
-    this.resident.emailAddresses.push({ address: '', visibleInDirectory: true, boardEmailOptedIn: true, welcomeEmailOptedIn: true, gardenClubEmailOptedIn: true, socialCommitteeEmailOptedIn: true });
+    this.resident.emailAddresses.push({ address: '', visibleInDirectory: true, boardEmailOptedIn: true, welcomeEmailOptedIn: true, gardenClubEmailOptedIn: true, socialCommitteeEmailOptedIn: true, sunshineCommitteeEmailOptedIn: true });
   }
 
   deleteEmail(email: EmailAddress) {

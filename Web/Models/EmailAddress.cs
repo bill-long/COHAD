@@ -27,5 +27,10 @@ namespace Web.Models
         /// Whether Social Committee emails should be sent to this address.
         /// </summary>
         public bool SocialCommitteeEmailOptedIn { get; set; }
+
+        /// <summary>
+        /// Whether Sunshine Committee emails should be sent to this address.
+        /// </summary>
+        public bool SunshineCommitteeEmailOptedIn { get; set; }
     }
 }

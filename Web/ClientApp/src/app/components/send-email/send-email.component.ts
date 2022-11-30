@@ -29,9 +29,9 @@ export class SendEmailComponent {
     class MyBlock extends Block { }
     MyBlock.tagName = 'DIV';
     Quill.register('blots/block', MyBlock, true);
-    zip(this.canSendFromBoard, this.canSendFromGardenClub, this.canSendFromSocialCommittee, this.canSendFromWelcomeCommittee)
+    zip(this.canSendFromBoard, this.canSendFromGardenClub, this.canSendFromSocialCommittee, this.canSendFromWelcomeCommittee, this.canSendFromSunshineCommittee)
     .pipe(take(1))
-    .subscribe(([board, garden, social, welcome]) => {
+    .subscribe(([board, garden, social, welcome, sunshine]) => {
       if (board) {
         this.senderEndpoint = "from-board";
       } else if (garden) {
@@ -40,6 +40,8 @@ export class SendEmailComponent {
         this.senderEndpoint = "from-social";
       } else if (welcome) {
         this.senderEndpoint = "from-welcome";
+      } else if (sunshine) {
+        this.senderEndpoint = "from-sunshine";
       }
     });
   }
@@ -58,6 +60,10 @@ export class SendEmailComponent {
 
   get canSendFromSocialCommittee(): Observable<boolean> {
     return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsSocialCommittee.includes(r)).length > 0));
+  }
+
+  get canSendFromSunshineCommittee(): Observable<boolean> {
+    return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsSunshineCommittee.includes(r)).length > 0));
   }
 
   get apiUserEmail(): Observable<string> {
