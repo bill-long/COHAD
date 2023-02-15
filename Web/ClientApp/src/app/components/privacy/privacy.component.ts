@@ -25,7 +25,8 @@ import { AuthService } from 'src/app/services/auth.service';
                         of the web site (currently Bill Long and Judy Johannesen).
                     </li>
                     <li>
-                        If you need help removing any of your information, just let us know.
+                        If you need help removing any of your information, just let us know by
+                        emailing <a href="mailto:directory@cohad.org">directory@cohad.org</a>
                     </li>
                     <li>
                         We do not sell any of your information, ever.
