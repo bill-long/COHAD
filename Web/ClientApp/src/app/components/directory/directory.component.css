@@ -17,53 +17,176 @@ mat-form-field {
 }
 
 .large-screen {
-  width: 614px;
+  width: 550px;
   font-size: large;
+  max-width: 100%;
 }
 
 @media print {
   .large-screen {
     width: 550px;
   }
+
+  .home {
+    max-width: 550px;
+  }
 }
 
 .home {
   padding-top: 30px;
   break-inside: avoid;
-}
-
-.info-line > :first-child {
-  float: left;
-  margin-bottom: 5px;
-}
-
-.info-line > :last-child {
-  float: right;
-  text-align: right;
-}
-
-.clear {
-  clear: both;
-}
-
-.email-line > div {
-  width: 33%;
-  float: left;
-  text-align: inherit;
-}
-
-.other-adult {
-  margin-top: 8px;
-}
-
-.children-section {
-  margin-top: 8px;
-}
-
-.home-phone {
-  font-weight: bold;
+  width: 100%;
+  max-width: 550px;
 }
 
 mat-spinner {
   margin-top: 15px;
+}
+
+.homeHeader {
+  margin-bottom: 6px;
+}
+
+.homeTopRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-phone {
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.homeAddress {
+  margin-top: 6px;
+}
+
+.homeContactLines {
+  margin-top: 6px;
+}
+
+.subsectionTitle {
+  margin-top: 14px;
+  font-weight: bold;
+}
+
+.adultSection {
+  margin-top: 6px;
+}
+
+.residentBlock {
+  margin-top: 10px;
+  break-inside: avoid;
+}
+
+.residentName {
+  font-weight: normal;
+}
+
+.residentSurname {
+  font-weight: normal;
+}
+
+.residentTopRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.residentPhones {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.phoneLine {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+  justify-content: flex-end;
+}
+
+.residentEmailLine {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.residentEmailInline {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.kvRow {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+  align-items: start;
+  margin-top: 4px;
+}
+
+.k {
+  font-weight: bold;
+}
+
+.v {
+  overflow-wrap: anywhere;
+}
+
+.contactType {
+  font-weight: normal;
+}
+
+.contactValue {
+  white-space: normal;
+}
+
+.childrenSection {
+  margin-top: 6px;
+}
+
+.childrenTitle {
+  margin-top: 6px;
+}
+
+.childrenHeader {
+  margin-top: 6px;
+}
+
+.childrenLabel {
+  font-weight: normal;
+}
+
+.childInline {
+  font-weight: normal;
+}
+
+.childLine {
+  margin-top: 4px;
+}
+
+.childMeta {
+  font-weight: normal;
+}
+
+@media print {
+  /* Hide interactive search on the printed directory */
+  mat-form-field {
+    display: none;
+  }
+
+  .home {
+    padding-top: 18px;
+    padding-bottom: 18px;
+  }
 }
