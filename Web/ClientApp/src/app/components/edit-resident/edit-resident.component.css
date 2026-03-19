@@ -24,6 +24,8 @@
   align-items: center;
   gap: 8px;
   margin-left: 12px;
+  /* Leave room for the expansion indicator (togglePosition="after") */
+  margin-right: 44px;
 }
 
 .headerActions button {
@@ -85,9 +87,10 @@
 }
 
 .section {
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 8px;
   padding: 12px;
+  background: rgba(0, 0, 0, 0.015);
 }
 
 .sectionHeader {
@@ -102,15 +105,21 @@
   font-weight: 700;
 }
 
-.row {
-  display: flex;
-  flex-wrap: wrap;
+.sectionHint {
+  margin-top: 2px;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
   gap: 12px;
-  align-items: flex-start;
+  align-items: start;
 }
 
 .field {
-  width: 260px;
+  width: 100%;
   max-width: 100%;
 }
 
@@ -119,7 +128,7 @@
 }
 
 .emailField {
-  width: 320px;
+  width: 100%;
 }
 
 .phoneTypeField {
@@ -131,8 +140,19 @@
   min-width: 220px;
 }
 
-.phoneRow {
-  align-items: center;
+.basicsGrid {
+  grid-template-columns: 1.2fr 1.2fr 180px;
+}
+
+.childGrid {
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+.toggleRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin-bottom: 8px;
 }
 
 .list {
@@ -142,9 +162,85 @@
 }
 
 .itemCard {
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 8px;
-  padding: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.itemActions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.itemActionsInline {
+  align-self: center;
+}
+
+.removeBtn {
+  min-width: 0;
+}
+
+.inlineConfirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inlineConfirm button {
+  white-space: nowrap;
+}
+
+.itemMain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.phoneMain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.emailField {
+  flex: 1;
+  min-width: 260px;
+}
+
+.prefs {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) 1fr;
+  gap: 12px 16px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.prefTitle {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: rgba(0, 0, 0, 0.6);
+  margin-bottom: 6px;
+}
+
+.prefGroup {
+  min-width: 0;
+}
+
+.checkboxGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: 2px 16px;
+  align-items: start;
 }
 
 .options {
@@ -169,5 +265,23 @@
   .headerActions {
     gap: 6px;
     margin-left: 8px;
+    flex-wrap: wrap;
+    margin-right: 36px;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .basicsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .prefs {
+    grid-template-columns: 1fr;
+  }
+
+  .checkboxGrid {
+    grid-template-columns: 1fr;
   }
 }

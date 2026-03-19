@@ -1,5 +1,6 @@
 mat-form-field {
-    width: 120px;
+    width: 190px;
+    max-width: 100%;
 }
 
 .mat-input-element:disabled {

@@ -23,9 +23,56 @@ export class EditResidentComponent implements OnInit {
 
   @Output() delete = new EventEmitter<void>();
 
+  confirmDeleteResident = false;
+  confirmRemoveEmailIndex: number | null = null;
+  confirmRemovePhoneIndex: number | null = null;
+
   constructor() { }
 
   ngOnInit(): void {
+  }
+
+  private clearInlineConfirms() {
+    this.confirmDeleteResident = false;
+    this.confirmRemoveEmailIndex = null;
+    this.confirmRemovePhoneIndex = null;
+  }
+
+  startConfirmDeleteResident() {
+    this.clearInlineConfirms();
+    this.confirmDeleteResident = true;
+  }
+
+  cancelConfirmDeleteResident() {
+    this.confirmDeleteResident = false;
+  }
+
+  startConfirmRemoveEmail(index: number) {
+    this.clearInlineConfirms();
+    this.confirmRemoveEmailIndex = index;
+  }
+
+  cancelConfirmRemoveEmail() {
+    this.confirmRemoveEmailIndex = null;
+  }
+
+  startConfirmRemovePhone(index: number) {
+    this.clearInlineConfirms();
+    this.confirmRemovePhoneIndex = index;
+  }
+
+  cancelConfirmRemovePhone() {
+    this.confirmRemovePhoneIndex = null;
+  }
+
+  confirmRemoveEmail(email: EmailAddress) {
+    this.deleteEmail(email);
+    this.confirmRemoveEmailIndex = null;
+  }
+
+  confirmRemovePhone(phone: PhoneNumber) {
+    this.deletePhone(phone);
+    this.confirmRemovePhoneIndex = null;
   }
 
   get displayName() {

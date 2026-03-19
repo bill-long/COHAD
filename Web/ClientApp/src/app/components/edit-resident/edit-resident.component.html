@@ -19,25 +19,45 @@
       <div class="headerActions" (click)="$event.stopPropagation()">
         <ng-container *ngIf="!editEnabled; else editModeActions">
           <button mat-stroked-button color="primary" aria-label="Edit resident" (click)="edit.next()">Edit</button>
-          <button mat-icon-button color="warn" aria-label="Delete resident" matTooltip="Delete resident" (click)="delete.next()">
-            <mat-icon>delete</mat-icon>
-          </button>
+          <ng-container *ngIf="!confirmDeleteResident; else confirmDeleteResidentActions">
+            <button mat-stroked-button color="warn" aria-label="Delete resident" (click)="startConfirmDeleteResident()">Delete</button>
+          </ng-container>
+
+          <ng-template #confirmDeleteResidentActions>
+            <div class="inlineConfirm" role="group" aria-label="Confirm delete resident">
+              <button mat-flat-button color="warn" (click)="delete.next()" aria-label="Confirm delete resident">Confirm</button>
+              <button mat-stroked-button (click)="cancelConfirmDeleteResident()" aria-label="Cancel delete resident">Cancel</button>
+            </div>
+          </ng-template>
         </ng-container>
 
         <ng-template #editModeActions>
           <button mat-flat-button color="primary" aria-label="Save resident" (click)="save.next()" [disabled]="saveInProgress">Save</button>
           <button mat-stroked-button color="warn" aria-label="Cancel resident edits" (click)="cancel.next()" [disabled]="saveInProgress">Cancel</button>
-          <button mat-icon-button color="warn" aria-label="Delete resident" matTooltip="Delete resident" (click)="delete.next()" [disabled]="saveInProgress">
-            <mat-icon>delete</mat-icon>
-          </button>
+          <ng-container *ngIf="!confirmDeleteResident; else confirmDeleteResidentActionsEdit">
+            <button mat-stroked-button color="warn" aria-label="Delete resident" (click)="startConfirmDeleteResident()" [disabled]="saveInProgress">Delete</button>
+          </ng-container>
+
+          <ng-template #confirmDeleteResidentActionsEdit>
+            <div class="inlineConfirm" role="group" aria-label="Confirm delete resident">
+              <button mat-flat-button color="warn" (click)="delete.next()" [disabled]="saveInProgress" aria-label="Confirm delete resident">Confirm</button>
+              <button mat-stroked-button (click)="cancelConfirmDeleteResident()" [disabled]="saveInProgress" aria-label="Cancel delete resident">Cancel</button>
+            </div>
+          </ng-template>
         </ng-template>
       </div>
     </mat-expansion-panel-header>
 
     <div class="panelBody" *ngIf="editEnabled">
       <div class="section">
-        <div class="sectionTitle">Basics</div>
-        <div class="row">
+        <div class="sectionHeader">
+          <div>
+            <div class="sectionTitle">Basics</div>
+            <div class="sectionHint">Name and resident type.</div>
+          </div>
+        </div>
+
+        <div class="formGrid basicsGrid">
           <mat-form-field appearance="fill" class="field">
             <mat-label>Given Name</mat-label>
             <input matInput name="residentGivenName" [(ngModel)]="resident.givenName" [disabled]="!editEnabled">
@@ -60,14 +80,27 @@
       </div>
 
       <div class="section" *ngIf="resident.residentType === 2">
-        <div class="sectionTitle">Child details</div>
-        <div class="row">
-          <div class="options">
-            <mat-checkbox [checked]="getShowBirthYear(resident)" (change)="showBirthYearCheckChanged($event, resident)" [disabled]="!editEnabled">Show Birth Year</mat-checkbox>
-            <mat-checkbox [checked]="getShowCollegeName(resident)" (change)="showCollegeNameCheckChanged($event, resident)" [disabled]="!editEnabled">Show College Name</mat-checkbox>
+        <div class="sectionHeader">
+          <div>
+            <div class="sectionTitle">Child details</div>
+            <div class="sectionHint">Optional items you can choose to show.</div>
           </div>
         </div>
-        <div class="row" *ngIf="getShowBirthYear(resident) || getShowCollegeName(resident)">
+
+        <div class="toggleRow">
+          <mat-checkbox
+            [checked]="getShowBirthYear(resident)"
+            (change)="showBirthYearCheckChanged($event, resident)"
+            [disabled]="!editEnabled"
+          >Show birth year</mat-checkbox>
+          <mat-checkbox
+            [checked]="getShowCollegeName(resident)"
+            (change)="showCollegeNameCheckChanged($event, resident)"
+            [disabled]="!editEnabled"
+          >Show college name</mat-checkbox>
+        </div>
+
+        <div class="formGrid childGrid" *ngIf="getShowBirthYear(resident) || getShowCollegeName(resident)">
           <mat-form-field *ngIf="getShowBirthYear(resident)" appearance="fill" class="field">
             <mat-label>Birth Year</mat-label>
             <input matInput name="residentBirthYear" type="number" [(ngModel)]="resident.yearOfBirth" [disabled]="!editEnabled">
@@ -82,31 +115,86 @@
       <ng-container *ngIf="resident.residentType !== 2">
         <div class="section">
           <div class="sectionHeader">
-            <div class="sectionTitle">Emails</div>
+            <div>
+              <div class="sectionTitle">Emails</div>
+              <div class="sectionHint">Email address and subscriptions.</div>
+            </div>
             <button mat-stroked-button color="primary" (click)="addEmail()" *ngIf="editEnabled" aria-label="Add email">Add email</button>
           </div>
 
           <form class="list" *ngIf="resident.emailAddresses?.length; else noEmails" #residentEmailForm="ngForm">
-            <div class="itemCard" *ngFor="let emailAddress of resident.emailAddresses">
-              <div class="row">
+            <div class="itemCard" *ngFor="let emailAddress of resident.emailAddresses; let i = index">
+              <div class="itemMain">
                 <mat-form-field appearance="fill" class="field emailField">
-                  <mat-label>Email</mat-label>
-                  <input matInput type="email" [name]="'residentEmail_' + (resident.givenName || '') + '_' + (resident.surname || '') + '_' + (emailAddress.address || '')" [(ngModel)]="emailAddress.address" [disabled]="!editEnabled" email required #emailModel="ngModel" aria-label="Resident email address">
+                  <mat-label>Email address</mat-label>
+                  <input
+                    matInput
+                    type="email"
+                    [name]="'residentEmail_' + (resident.givenName || '') + '_' + (resident.surname || '') + '_' + (emailAddress.address || '')"
+                    [(ngModel)]="emailAddress.address"
+                    [disabled]="!editEnabled"
+                    email
+                    required
+                    #emailModel="ngModel"
+                    aria-label="Resident email address"
+                  >
                   <mat-error *ngIf="emailModel.invalid && (emailModel.dirty || emailModel.touched)">Enter a valid email address</mat-error>
                 </mat-form-field>
 
-                <button mat-icon-button color="warn" aria-label="Delete email" matTooltip="Delete email" (click)="deleteEmail(emailAddress)" *ngIf="editEnabled">
-                  <mat-icon>delete</mat-icon>
-                </button>
+                <div class="itemActions itemActionsInline" *ngIf="editEnabled">
+                  <ng-container *ngIf="confirmRemoveEmailIndex !== i; else confirmRemoveEmailActions">
+                    <button mat-stroked-button class="removeBtn" color="warn" (click)="startConfirmRemoveEmail(i)" aria-label="Remove email">Remove</button>
+                  </ng-container>
+                  <ng-template #confirmRemoveEmailActions>
+                    <div class="inlineConfirm" role="group" aria-label="Confirm remove email">
+                      <button mat-flat-button color="warn" (click)="confirmRemoveEmail(emailAddress)" aria-label="Confirm remove email">Confirm</button>
+                      <button mat-stroked-button (click)="cancelConfirmRemoveEmail()" aria-label="Cancel remove email">Cancel</button>
+                    </div>
+                  </ng-template>
+                </div>
               </div>
 
-              <div class="options">
-                <mat-checkbox name="residentEmailVisible" [(ngModel)]="emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in directory</mat-checkbox>
-                <mat-checkbox name="residentEmailBoard" [(ngModel)]="emailAddress.boardEmailOptedIn" [disabled]="!editEnabled" matTooltip="Annual Meeting announcements and other neighborhood business">Receive Board emails</mat-checkbox>
-                <mat-checkbox name="residentEmailWelcome" [(ngModel)]="emailAddress.welcomeEmailOptedIn" [disabled]="!editEnabled" matTooltip="New arrivals in the neighborhood">Receive Welcome emails</mat-checkbox>
-                <mat-checkbox name="residentEmailGarden" [(ngModel)]="emailAddress.gardenClubEmailOptedIn" [disabled]="!editEnabled" matTooltip="Garden Club meetings and events">Receive Garden Club emails</mat-checkbox>
-                <mat-checkbox name="residentEmailSocial" [(ngModel)]="emailAddress.socialCommitteeEmailOptedIn" [disabled]="!editEnabled" matTooltip="Social Committee events">Receive Social Committee emails</mat-checkbox>
-                <mat-checkbox name="residentEmailSunshine" [(ngModel)]="emailAddress.sunshineCommitteeEmailOptedIn" [disabled]="!editEnabled" matTooltip="Sunshine Committee events">Receive Sunshine Committee emails</mat-checkbox>
+              <div class="prefs">
+                <div class="prefGroup">
+                  <div class="prefTitle">Directory</div>
+                  <mat-checkbox [name]="'residentEmailVisible_' + i" [(ngModel)]="emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in directory</mat-checkbox>
+                </div>
+
+                <div class="prefGroup">
+                  <div class="prefTitle">Subscriptions</div>
+                  <div class="checkboxGrid">
+                    <mat-checkbox
+                      [name]="'residentEmailBoard_' + i"
+                      [(ngModel)]="emailAddress.boardEmailOptedIn"
+                      [disabled]="!editEnabled"
+                      matTooltip="Annual Meeting announcements and other neighborhood business"
+                    >Board</mat-checkbox>
+                    <mat-checkbox
+                      [name]="'residentEmailWelcome_' + i"
+                      [(ngModel)]="emailAddress.welcomeEmailOptedIn"
+                      [disabled]="!editEnabled"
+                      matTooltip="New arrivals in the neighborhood"
+                    >Welcome</mat-checkbox>
+                    <mat-checkbox
+                      [name]="'residentEmailGarden_' + i"
+                      [(ngModel)]="emailAddress.gardenClubEmailOptedIn"
+                      [disabled]="!editEnabled"
+                      matTooltip="Garden Club meetings and events"
+                    >Garden Club</mat-checkbox>
+                    <mat-checkbox
+                      [name]="'residentEmailSocial_' + i"
+                      [(ngModel)]="emailAddress.socialCommitteeEmailOptedIn"
+                      [disabled]="!editEnabled"
+                      matTooltip="Social Committee events"
+                    >Social</mat-checkbox>
+                    <mat-checkbox
+                      [name]="'residentEmailSunshine_' + i"
+                      [(ngModel)]="emailAddress.sunshineCommitteeEmailOptedIn"
+                      [disabled]="!editEnabled"
+                      matTooltip="Sunshine Committee events"
+                    >Sunshine</mat-checkbox>
+                  </div>
+                </div>
               </div>
             </div>
           </form>
@@ -118,16 +206,19 @@
 
         <div class="section">
           <div class="sectionHeader">
-            <div class="sectionTitle">Phones</div>
+            <div>
+              <div class="sectionTitle">Phones</div>
+              <div class="sectionHint">Phone number and directory visibility.</div>
+            </div>
             <button mat-stroked-button color="primary" (click)="addPhone()" *ngIf="editEnabled" aria-label="Add phone">Add phone</button>
           </div>
 
           <div class="list" *ngIf="resident.phoneNumbers?.length; else noPhones">
-            <div class="itemCard" *ngFor="let phoneNumber of resident.phoneNumbers">
-              <div class="row phoneRow">
+            <div class="itemCard" *ngFor="let phoneNumber of resident.phoneNumbers; let i = index">
+              <div class="phoneMain">
                 <mat-form-field appearance="fill" class="field phoneTypeField">
                   <mat-label>Type</mat-label>
-                  <mat-select name="residentPhoneType" [(ngModel)]="phoneNumber.type" [disabled]="!editEnabled">
+                  <mat-select [name]="'residentPhoneType_' + i" [(ngModel)]="phoneNumber.type" [disabled]="!editEnabled">
                     <mat-option value="Mobile">Mobile</mat-option>
                     <mat-option value="Home">Home</mat-option>
                     <mat-option value="Work">Work</mat-option>
@@ -138,13 +229,24 @@
                   <app-phone-number-input [phoneNumber]="phoneNumber" [editEnabled]="editEnabled"></app-phone-number-input>
                 </div>
 
-                <button mat-icon-button color="warn" aria-label="Delete phone" matTooltip="Delete phone" (click)="deletePhone(phoneNumber)" *ngIf="editEnabled">
-                  <mat-icon>delete</mat-icon>
-                </button>
+                <div class="itemActions itemActionsInline" *ngIf="editEnabled">
+                  <ng-container *ngIf="confirmRemovePhoneIndex !== i; else confirmRemovePhoneActions">
+                    <button mat-stroked-button class="removeBtn" color="warn" (click)="startConfirmRemovePhone(i)" aria-label="Remove phone">Remove</button>
+                  </ng-container>
+                  <ng-template #confirmRemovePhoneActions>
+                    <div class="inlineConfirm" role="group" aria-label="Confirm remove phone">
+                      <button mat-flat-button color="warn" (click)="confirmRemovePhone(phoneNumber)" aria-label="Confirm remove phone">Confirm</button>
+                      <button mat-stroked-button (click)="cancelConfirmRemovePhone()" aria-label="Cancel remove phone">Cancel</button>
+                    </div>
+                  </ng-template>
+                </div>
               </div>
 
-              <div class="options">
-                <mat-checkbox name="residentPhoneVisible" [(ngModel)]="phoneNumber.visibleInDirectory" [disabled]="!editEnabled">Show in directory</mat-checkbox>
+              <div class="prefs">
+                <div class="prefGroup">
+                  <div class="prefTitle">Directory</div>
+                  <mat-checkbox [name]="'residentPhoneVisible_' + i" [(ngModel)]="phoneNumber.visibleInDirectory" [disabled]="!editEnabled">Show in directory</mat-checkbox>
+                </div>
               </div>
             </div>
           </div>
