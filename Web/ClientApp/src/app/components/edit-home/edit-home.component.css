@@ -103,6 +103,49 @@
   margin-top: 4px;
 }
 
+.reorderHint {
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.residentDragRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 6px 6px 0;
+  border-radius: 8px;
+}
+
+.dragHandle {
+  margin-top: 10px;
+  cursor: grab;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.residentContent {
+  flex: 1;
+  min-width: 0;
+}
+
+/* CDK drag polish */
+.cdk-drag-preview {
+  box-sizing: border-box;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.cdk-drag-placeholder {
+  opacity: 0.3;
+}
+
+.cdk-drop-list-dragging .residentDragRow:not(.cdk-drag-placeholder) {
+  transition: transform 150ms cubic-bezier(0, 0, 0.2, 1);
+}
+
 .contact-info {
   display: flex;
   flex-wrap: wrap;

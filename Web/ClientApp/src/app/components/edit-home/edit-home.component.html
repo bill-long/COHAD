@@ -113,25 +113,41 @@
     <!-- Residents -->
     <section class="section">
       <div class="sectionHeader">
-        <div class="sectionTitle">Residents</div>
+        <div>
+          <div class="sectionTitle">Residents</div>
+          <div class="muted reorderHint">Drag to reorder (the phone number of the first resident appears on the map).</div>
+        </div>
         <div class="sectionActions">
           <button mat-stroked-button color="primary" (click)="addResident()" aria-label="Add resident">Add resident</button>
+          <button mat-flat-button color="primary" (click)="saveResidentOrder()" [disabled]="saveInProgress || !residentOrderDirty" aria-label="Save resident order">Save order</button>
+          <button mat-stroked-button (click)="resetResidentOrder()" [disabled]="saveInProgress || !residentOrderDirty" aria-label="Reset resident order">Reset</button>
         </div>
       </div>
 
       <div class="sectionBody">
         <div *ngIf="homeCopy.residents?.length; else noResidents">
-          <div class="residents-container">
-            <app-edit-resident
-              *ngFor="let resident of homeCopy.residents"
-              [resident]="resident"
-              [editEnabled]="isResidentEditing(resident)"
-              [saveInProgress]="saveInProgress"
-              (edit)="startResidentEdit(resident)"
-              (save)="saveResident(resident)"
-              (cancel)="cancelResidentEdit(resident)"
-              (delete)="confirmDeleteResident(resident)"
-            ></app-edit-resident>
+          <div
+            class="residents-container"
+            cdkDropList
+            [cdkDropListData]="homeCopy.residents"
+            (cdkDropListDropped)="dropResident($event)"
+          >
+            <div class="residentDragRow" *ngFor="let resident of homeCopy.residents" cdkDrag>
+              <button mat-icon-button class="dragHandle" cdkDragHandle aria-label="Drag to reorder">
+                <mat-icon>drag_indicator</mat-icon>
+              </button>
+              <div class="residentContent">
+                <app-edit-resident
+                  [resident]="resident"
+                  [editEnabled]="isResidentEditing(resident)"
+                  [saveInProgress]="saveInProgress"
+                  (edit)="startResidentEdit(resident)"
+                  (save)="saveResident(resident)"
+                  (cancel)="cancelResidentEdit(resident)"
+                  (delete)="confirmDeleteResident(resident)"
+                ></app-edit-resident>
+              </div>
+            </div>
           </div>
         </div>
         <ng-template #noResidents><span class="muted">No residents listed.</span></ng-template>

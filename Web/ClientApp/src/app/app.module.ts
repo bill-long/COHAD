@@ -23,6 +23,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatDialogModule } from '@angular/material/dialog';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 
 import { QuillModule } from 'ngx-quill';
 
@@ -140,7 +141,8 @@ import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dial
         MatCardModule,
         MatTabsModule,
         MatExpansionModule,
-        MatDialogModule], providers: [
+        MatDialogModule,
+        DragDropModule], providers: [
         { provide: dispatcher, useValue: new Subject<Action>() },
         { provide: initialState, useValue: initialStateValue },
         { provide: applicationState, useFactory: applicationStateFactory, deps: [initialState, dispatcher] },

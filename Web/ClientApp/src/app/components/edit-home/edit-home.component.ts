@@ -3,6 +3,7 @@ import { Home, Resident } from 'src/app/models';
 import { HomeService } from 'src/app/services/home.service';
 import { MatDialog } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
+import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 
 @Component({
     selector: 'app-edit-home',
@@ -35,6 +36,9 @@ export class EditHomeComponent implements OnInit, OnChanges {
   private residentEditing = new WeakSet<Resident>();
   private residentSnapshots = new WeakMap<Resident, Resident>();
 
+  residentOrderDirty = false;
+  private residentOrderSnapshot: Resident[] = [];
+
   saveStatus: {
     contact?: { ok: boolean; message: string };
     phone?: { ok: boolean; message: string };
@@ -59,10 +63,74 @@ export class EditHomeComponent implements OnInit, OnChanges {
   private refreshHomeCopyFromInput() {
     // Clone to detach template edits from the input object.
     this.homeCopy = JSON.parse(JSON.stringify(this.home ?? {}));
+    this.captureResidentOrderSnapshot();
   }
 
   private clearStatuses() {
     this.saveStatus = {};
+  }
+
+  private captureResidentOrderSnapshot() {
+    this.residentOrderSnapshot = [...(this.homeCopy.residents ?? [])];
+    this.residentOrderDirty = false;
+  }
+
+  private isSameResidentOrder() {
+    const current = this.homeCopy.residents ?? [];
+    if (current.length !== this.residentOrderSnapshot.length) {
+      return false;
+    }
+    for (let i = 0; i < current.length; i++) {
+      if (current[i] !== this.residentOrderSnapshot[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  dropResident(event: CdkDragDrop<Resident[]>) {
+    if (!this.homeCopy.residents) {
+      return;
+    }
+    moveItemInArray(this.homeCopy.residents, event.previousIndex, event.currentIndex);
+    this.residentOrderDirty = !this.isSameResidentOrder();
+  }
+
+  resetResidentOrder() {
+    if (!this.homeCopy.residents || this.residentOrderSnapshot.length < 1) {
+      return;
+    }
+
+    const orderIndex = new Map<Resident, number>();
+    this.residentOrderSnapshot.forEach((r, i) => orderIndex.set(r, i));
+
+    this.homeCopy.residents.sort((a, b) => (orderIndex.get(a) ?? 9999) - (orderIndex.get(b) ?? 9999));
+    this.residentOrderDirty = false;
+  }
+
+  saveResidentOrder() {
+    this.saveInProgress = true;
+    this.clearStatuses();
+
+    const onDone = (ok: boolean) => {
+      this.saveInProgress = false;
+      if (ok) {
+        this.captureResidentOrderSnapshot();
+        this.doneEvent.next();
+      }
+    };
+
+    if (this.reloadAllOnSave) {
+      this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe({
+        next: r => onDone(true),
+        error: e => onDone(false)
+      });
+    } else {
+      this.homeService.saveHomeAndReloadMine(this.homeCopy).subscribe({
+        next: r => onDone(true),
+        error: e => onDone(false)
+      });
+    }
   }
 
   startEdit(section: 'contact' | 'phone' | 'residents') {
@@ -173,6 +241,8 @@ export class EditHomeComponent implements OnInit, OnChanges {
       yearOfBirth: 0,
       collegeName: ''
     });
+
+    this.residentOrderDirty = !this.isSameResidentOrder();
   }
 
   deleteResident(event: any, resident: Resident) {
