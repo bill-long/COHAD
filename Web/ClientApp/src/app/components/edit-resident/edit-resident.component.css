@@ -12,20 +12,67 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
+  min-width: 220px;
+  flex: 1 1 220px;
 }
 
 .residentHeader {
   position: relative;
 }
 
+.residentPanel ::ng-deep .mat-expansion-panel-header {
+  height: auto !important;
+  min-height: 64px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  align-content: center;
+  row-gap: 8px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  box-sizing: border-box;
+}
+
+.residentPanel ::ng-deep .mat-content {
+  flex: 1 1 400px;
+  min-width: 340px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: center;
+  row-gap: 8px;
+  overflow: visible;
+}
+
+.residentPanel ::ng-deep .mat-expansion-panel-header-title,
+.residentPanel ::ng-deep .mat-expansion-panel-header-description {
+  min-width: 0;
+}
+
+.residentPanel ::ng-deep .mat-expansion-panel-header-title {
+  flex: 1 1 240px;
+  min-width: 220px;
+}
+
+.residentPanel ::ng-deep .mat-expansion-panel-header-description {
+  flex: 1 1 260px;
+  max-width: none;
+  overflow: hidden;
+}
+
 .headerActions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 12px;
+  margin-left: auto;
   /* Leave room for the expansion indicator (togglePosition="after") */
   margin-right: 44px;
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
+  min-width: fit-content;
+  max-width: 100%;
+  align-self: center;
 }
 
 .headerActions button {
@@ -34,6 +81,8 @@
 
 .residentName {
   font-weight: 700;
+  flex: 1 1 160px;
+  min-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -53,15 +102,19 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  width: 100%;
   min-width: 0;
+  overflow: hidden;
 }
 
 .metaEmail {
+  flex: 1 1 auto;
+  min-width: 0;
   color: rgba(0, 0, 0, 0.65);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 260px;
+  max-width: none;
 }
 
 .metaSep {
@@ -258,15 +311,21 @@
 }
 
 @media (max-width: 600px) {
+
   .metaRow {
     display: none;
   }
 
   .headerActions {
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
     gap: 6px;
-    margin-left: 8px;
-    flex-wrap: wrap;
-    margin-right: 36px;
+    padding-right: 36px;
+  }
+
+  .headerActions button {
+    white-space: normal;
   }
 
   .formGrid {
