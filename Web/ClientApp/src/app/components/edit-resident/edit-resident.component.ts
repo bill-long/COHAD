@@ -13,7 +13,15 @@ export class EditResidentComponent implements OnInit {
 
   @Input() editEnabled!: boolean;
 
-  @Output() deleteResident = new EventEmitter<void>();
+  @Input() saveInProgress: boolean = false;
+
+  @Output() edit = new EventEmitter<void>();
+
+  @Output() save = new EventEmitter<void>();
+
+  @Output() cancel = new EventEmitter<void>();
+
+  @Output() delete = new EventEmitter<void>();
 
   constructor() { }
 

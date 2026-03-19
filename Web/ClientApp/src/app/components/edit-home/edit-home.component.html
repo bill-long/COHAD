@@ -115,33 +115,26 @@
       <div class="sectionHeader">
         <div class="sectionTitle">Residents</div>
         <div class="sectionActions">
-          <button mat-stroked-button color="primary" (click)="startEdit('residents')" *ngIf="!editing.residents" aria-label="Edit residents section">Edit</button>
-          <button mat-flat-button color="primary" (click)="save('residents')" [disabled]="saveInProgress" *ngIf="editing.residents" aria-label="Save residents section">Save</button>
-          <button mat-stroked-button color="warn" (click)="cancelSection('residents')" [disabled]="saveInProgress" *ngIf="editing.residents" aria-label="Cancel residents edits">Cancel</button>
+          <button mat-stroked-button color="primary" (click)="addResident()" aria-label="Add resident">Add resident</button>
         </div>
       </div>
 
-      <div class="status ok" *ngIf="saveStatus.residents?.ok">{{ saveStatus.residents?.message }}</div>
-      <div class="status err" *ngIf="saveStatus.residents && !saveStatus.residents.ok">{{ saveStatus.residents.message }}</div>
-
-      <div class="sectionBody" *ngIf="!editing.residents">
+      <div class="sectionBody">
         <div *ngIf="homeCopy.residents?.length; else noResidents">
-          <div class="residentList">
-            <div class="residentRow" *ngFor="let resident of homeCopy.residents">
-              <div class="residentName">{{ resident.givenName }} {{ resident.surname }}</div>
-            </div>
+          <div class="residents-container">
+            <app-edit-resident
+              *ngFor="let resident of homeCopy.residents"
+              [resident]="resident"
+              [editEnabled]="isResidentEditing(resident)"
+              [saveInProgress]="saveInProgress"
+              (edit)="startResidentEdit(resident)"
+              (save)="saveResident(resident)"
+              (cancel)="cancelResidentEdit(resident)"
+              (delete)="confirmDeleteResident(resident)"
+            ></app-edit-resident>
           </div>
         </div>
         <ng-template #noResidents><span class="muted">No residents listed.</span></ng-template>
-      </div>
-
-      <div class="sectionBody" *ngIf="editing.residents">
-        <div class="inlineActions">
-          <button mat-button color="primary" (click)="addResident()">Add resident</button>
-        </div>
-        <div class="residents-container">
-          <app-edit-resident *ngFor="let resident of homeCopy.residents" [resident]="resident" (deleteResident)="deleteResident($event, resident)" [editEnabled]="editing.residents"></app-edit-resident>
-        </div>
       </div>
     </section>
   </mat-card-content>

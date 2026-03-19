@@ -22,6 +22,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatCardModule } from '@angular/material/card';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatExpansionModule } from '@angular/material/expansion';
+import { MatDialogModule } from '@angular/material/dialog';
 
 import { QuillModule } from 'ngx-quill';
 
@@ -57,6 +58,7 @@ import { RenderedPrintableDirectoryComponent } from './components/rendered-print
 import { MapComponent } from './components/map/map.component';
 import { RenderedPrintableMapComponent } from './components/rendered-printable-map/rendered-printable-map.component';
 import { DuesComponent } from './components/dues/dues.component';
+import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
 
 @NgModule({ declarations: [
         AppComponent,
@@ -82,7 +84,8 @@ import { DuesComponent } from './components/dues/dues.component';
         RenderedPrintableDirectoryComponent,
         MapComponent,
         RenderedPrintableMapComponent,
-        DuesComponent
+        DuesComponent,
+        ConfirmDialogComponent
     ],
     bootstrap: [AppComponent], imports: [BrowserModule,
         AppRoutingModule,
@@ -136,7 +139,8 @@ import { DuesComponent } from './components/dues/dues.component';
         MatListModule,
         MatCardModule,
         MatTabsModule,
-        MatExpansionModule], providers: [
+        MatExpansionModule,
+        MatDialogModule], providers: [
         { provide: dispatcher, useValue: new Subject<Action>() },
         { provide: initialState, useValue: initialStateValue },
         { provide: applicationState, useFactory: applicationStateFactory, deps: [initialState, dispatcher] },

@@ -1,5 +1,5 @@
 <mat-accordion class="residentAccordion">
-  <mat-expansion-panel class="residentPanel" [togglePosition]="'after'">
+  <mat-expansion-panel class="residentPanel" [togglePosition]="'after'" [expanded]="editEnabled" [disabled]="!editEnabled">
     <mat-expansion-panel-header class="residentHeader">
       <mat-panel-title>
         <div class="titleRow">
@@ -15,15 +15,26 @@
           <span class="metaEmpty" *ngIf="!primaryEmail && !hasPrimaryPhone">No contact info</span>
         </div>
       </mat-panel-description>
+
+      <div class="headerActions" (click)="$event.stopPropagation()">
+        <ng-container *ngIf="!editEnabled; else editModeActions">
+          <button mat-stroked-button color="primary" aria-label="Edit resident" (click)="edit.next()">Edit</button>
+          <button mat-icon-button color="warn" aria-label="Delete resident" matTooltip="Delete resident" (click)="delete.next()">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </ng-container>
+
+        <ng-template #editModeActions>
+          <button mat-flat-button color="primary" aria-label="Save resident" (click)="save.next()" [disabled]="saveInProgress">Save</button>
+          <button mat-stroked-button color="warn" aria-label="Cancel resident edits" (click)="cancel.next()" [disabled]="saveInProgress">Cancel</button>
+          <button mat-icon-button color="warn" aria-label="Delete resident" matTooltip="Delete resident" (click)="delete.next()" [disabled]="saveInProgress">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </ng-template>
+      </div>
     </mat-expansion-panel-header>
 
-    <div class="panelActions" *ngIf="editEnabled">
-      <button mat-icon-button color="warn" aria-label="Delete resident" matTooltip="Delete resident" (click)="deleteResident.next()">
-        <mat-icon>delete</mat-icon>
-      </button>
-    </div>
-
-    <div class="panelBody">
+    <div class="panelBody" *ngIf="editEnabled">
       <div class="section">
         <div class="sectionTitle">Basics</div>
         <div class="row">

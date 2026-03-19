@@ -1,6 +1,8 @@
 import { Component, ElementRef, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, ViewChild } from '@angular/core';
 import { Home, Resident } from 'src/app/models';
 import { HomeService } from 'src/app/services/home.service';
+import { MatDialog } from '@angular/material/dialog';
+import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 
 @Component({
     selector: 'app-edit-home',
@@ -30,13 +32,16 @@ export class EditHomeComponent implements OnInit, OnChanges {
     residents: false
   };
 
+  private residentEditing = new WeakSet<Resident>();
+  private residentSnapshots = new WeakMap<Resident, Resident>();
+
   saveStatus: {
     contact?: { ok: boolean; message: string };
     phone?: { ok: boolean; message: string };
     residents?: { ok: boolean; message: string };
   } = {};
 
-  constructor(private homeService: HomeService) { }
+  constructor(private homeService: HomeService, private dialog: MatDialog) { }
 
   ngOnInit(): void {
     this.refreshHomeCopyFromInput();
@@ -76,6 +81,82 @@ export class EditHomeComponent implements OnInit, OnChanges {
     this.refreshHomeCopyFromInput();
     this.editing[section] = false;
     this.doneEvent.next();
+  }
+
+  isResidentEditing(resident: Resident) {
+    return this.residentEditing.has(resident);
+  }
+
+  startResidentEdit(resident: Resident) {
+    if (!this.residentSnapshots.has(resident)) {
+      this.residentSnapshots.set(resident, JSON.parse(JSON.stringify(resident)));
+    }
+    this.residentEditing.add(resident);
+  }
+
+  cancelResidentEdit(resident: Resident) {
+    const snap = this.residentSnapshots.get(resident);
+    if (snap) {
+      Object.assign(resident, JSON.parse(JSON.stringify(snap)));
+    }
+    this.residentSnapshots.delete(resident);
+    this.residentEditing.delete(resident);
+  }
+
+  saveResident(resident: Resident) {
+    this.saveInProgress = true;
+    this.clearStatuses();
+
+    const onDone = (ok: boolean) => {
+      this.saveInProgress = false;
+      if (ok) {
+        this.residentSnapshots.delete(resident);
+        this.residentEditing.delete(resident);
+        this.doneEvent.next();
+      }
+    };
+
+    if (this.reloadAllOnSave) {
+      this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe({
+        next: r => onDone(true),
+        error: e => onDone(false)
+      });
+    } else {
+      this.homeService.saveHomeAndReloadMine(this.homeCopy).subscribe({
+        next: r => onDone(true),
+        error: e => onDone(false)
+      });
+    }
+  }
+
+  confirmDeleteResident(resident: Resident) {
+    const name = `${resident.givenName ?? ''} ${resident.surname ?? ''}`.trim() || 'this resident';
+
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete resident?',
+        body: `This will permanently remove ${name} from your home.\n\nYou can’t undo this after saving.`,
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        confirmColor: 'warn'
+      }
+    });
+
+    ref.afterClosed().subscribe(confirmed => {
+      if (confirmed === true) {
+        this.deleteResidentAndSave(resident);
+      }
+    });
+  }
+
+  private deleteResidentAndSave(resident: Resident) {
+    const index = this.homeCopy.residents?.indexOf(resident) ?? -1;
+    if (index >= 0) {
+      this.homeCopy.residents.splice(index, 1);
+    }
+    this.residentSnapshots.delete(resident);
+    this.residentEditing.delete(resident);
+    this.saveResident(resident);
   }
 
   addResident() {
