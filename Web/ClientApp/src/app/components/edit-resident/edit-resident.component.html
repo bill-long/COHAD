@@ -17,35 +17,66 @@
       </mat-panel-description>
 
       <div class="headerActions" (click)="$event.stopPropagation()">
-        <ng-container *ngIf="!editEnabled; else editModeActions">
-          <button mat-stroked-button color="primary" aria-label="Edit resident" (click)="edit.next()">Edit</button>
-          <ng-container *ngIf="!confirmDeleteResident; else confirmDeleteResidentActions">
-            <button mat-stroked-button color="warn" aria-label="Delete resident" (click)="startConfirmDeleteResident()">Delete</button>
+        <div class="fullActions">
+          <ng-container *ngIf="!editEnabled; else editModeActions">
+            <button mat-stroked-button color="primary" aria-label="Edit resident" (click)="edit.next()">Edit</button>
+            <ng-container *ngIf="!confirmDeleteResident; else confirmDeleteResidentActions">
+              <button mat-stroked-button color="warn" aria-label="Delete resident" (click)="startConfirmDeleteResident()">Delete</button>
+            </ng-container>
+
+            <ng-template #confirmDeleteResidentActions>
+              <div class="inlineConfirm" role="group" aria-label="Confirm delete resident">
+                <button mat-flat-button color="warn" (click)="delete.next()" aria-label="Confirm delete resident">Confirm</button>
+                <button mat-stroked-button (click)="cancelConfirmDeleteResident()" aria-label="Cancel delete resident">Cancel</button>
+              </div>
+            </ng-template>
           </ng-container>
 
-          <ng-template #confirmDeleteResidentActions>
-            <div class="inlineConfirm" role="group" aria-label="Confirm delete resident">
-              <button mat-flat-button color="warn" (click)="delete.next()" aria-label="Confirm delete resident">Confirm</button>
-              <button mat-stroked-button (click)="cancelConfirmDeleteResident()" aria-label="Cancel delete resident">Cancel</button>
-            </div>
+          <ng-template #editModeActions>
+            <button mat-flat-button color="primary" aria-label="Save resident" (click)="save.next()" [disabled]="saveInProgress">Save</button>
+            <button mat-stroked-button color="warn" aria-label="Cancel resident edits" (click)="cancel.next()" [disabled]="saveInProgress">Cancel</button>
+            <ng-container *ngIf="!confirmDeleteResident; else confirmDeleteResidentActionsEdit">
+              <button mat-stroked-button color="warn" aria-label="Delete resident" (click)="startConfirmDeleteResident()" [disabled]="saveInProgress">Delete</button>
+            </ng-container>
+
+            <ng-template #confirmDeleteResidentActionsEdit>
+              <div class="inlineConfirm" role="group" aria-label="Confirm delete resident">
+                <button mat-flat-button color="warn" (click)="delete.next()" [disabled]="saveInProgress" aria-label="Confirm delete resident">Confirm</button>
+                <button mat-stroked-button (click)="cancelConfirmDeleteResident()" [disabled]="saveInProgress" aria-label="Cancel delete resident">Cancel</button>
+              </div>
+            </ng-template>
           </ng-template>
+        </div>
+
+        <div class="tinyActions">
+          <button
+            mat-icon-button
+            [matMenuTriggerFor]="residentHeaderActionsMenu"
+            aria-label="Resident actions"
+            [disabled]="saveInProgress"
+            (click)="$event.stopPropagation()"
+          >
+            <mat-icon>more_vert</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <mat-menu #residentHeaderActionsMenu="matMenu">
+        <ng-container *ngIf="!editEnabled; else tinyEditModeActions">
+          <button mat-menu-item (click)="edit.next()">Edit</button>
+          <button mat-menu-item color="warn" *ngIf="!confirmDeleteResident" (click)="startConfirmDeleteResident()">Delete</button>
+          <button mat-menu-item color="warn" *ngIf="confirmDeleteResident" (click)="delete.next()">Confirm delete</button>
+          <button mat-menu-item *ngIf="confirmDeleteResident" (click)="cancelConfirmDeleteResident()">Cancel delete</button>
         </ng-container>
 
-        <ng-template #editModeActions>
-          <button mat-flat-button color="primary" aria-label="Save resident" (click)="save.next()" [disabled]="saveInProgress">Save</button>
-          <button mat-stroked-button color="warn" aria-label="Cancel resident edits" (click)="cancel.next()" [disabled]="saveInProgress">Cancel</button>
-          <ng-container *ngIf="!confirmDeleteResident; else confirmDeleteResidentActionsEdit">
-            <button mat-stroked-button color="warn" aria-label="Delete resident" (click)="startConfirmDeleteResident()" [disabled]="saveInProgress">Delete</button>
-          </ng-container>
-
-          <ng-template #confirmDeleteResidentActionsEdit>
-            <div class="inlineConfirm" role="group" aria-label="Confirm delete resident">
-              <button mat-flat-button color="warn" (click)="delete.next()" [disabled]="saveInProgress" aria-label="Confirm delete resident">Confirm</button>
-              <button mat-stroked-button (click)="cancelConfirmDeleteResident()" [disabled]="saveInProgress" aria-label="Cancel delete resident">Cancel</button>
-            </div>
-          </ng-template>
+        <ng-template #tinyEditModeActions>
+          <button mat-menu-item (click)="save.next()" [disabled]="saveInProgress">Save</button>
+          <button mat-menu-item (click)="cancel.next()" [disabled]="saveInProgress">Cancel edits</button>
+          <button mat-menu-item color="warn" *ngIf="!confirmDeleteResident" (click)="startConfirmDeleteResident()" [disabled]="saveInProgress">Delete</button>
+          <button mat-menu-item color="warn" *ngIf="confirmDeleteResident" (click)="delete.next()" [disabled]="saveInProgress">Confirm delete</button>
+          <button mat-menu-item *ngIf="confirmDeleteResident" (click)="cancelConfirmDeleteResident()" [disabled]="saveInProgress">Cancel delete</button>
         </ng-template>
-      </div>
+      </mat-menu>
     </mat-expansion-panel-header>
 
     <div class="panelBody" *ngIf="editEnabled">

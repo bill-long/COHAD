@@ -232,3 +232,14 @@
     max-width: 180px;
   }
 }
+
+@media (max-width: 320px) {
+  .residentDragRow {
+    gap: 4px;
+    padding-right: 2px;
+  }
+
+  .dragHandle {
+    display: none;
+  }
+}

@@ -75,6 +75,16 @@
   align-self: center;
 }
 
+.fullActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tinyActions {
+  display: none;
+}
+
 .headerActions button {
   white-space: nowrap;
 }
@@ -342,5 +352,28 @@
 
   .checkboxGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 320px) {
+  .headerActions {
+    margin-right: 36px;
+    width: auto;
+    padding-right: 0;
+  }
+
+  .fullActions {
+    display: none;
+  }
+
+  .tinyActions {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .residentPanel ::ng-deep .mat-expansion-panel-header {
+    min-height: 60px;
+    padding-top: 6px;
+    padding-bottom: 6px;
   }
 }
