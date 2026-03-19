@@ -10,16 +10,9 @@ import { map } from 'rxjs/operators';
     standalone: false
 })
 export class MyinfoComponent implements OnInit {
-
-  editEnabled: boolean = false;
-
   constructor(@Inject(applicationState) private appState: Observable<ApplicationState>) { }
 
   ngOnInit(): void {
-  }
-
-  get authUser$() {
-    return this.appState.pipe(map(s => s.authUser));
   }
 
   get apiUser$() {

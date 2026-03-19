@@ -1,20 +1,67 @@
-.outer-flexbox {
+.page {
+    margin: 16px auto 48px;
+    padding: 0 16px;
+    max-width: 960px;
+}
+
+.pageHeader {
+    margin: 8px 0 16px;
+}
+
+.pageTitle {
+    margin: 0;
+}
+
+.subtitle {
+    color: rgba(0, 0, 0, 0.7);
+}
+
+.card {
+    margin-top: 12px;
+}
+
+.infoCard {
+    background: #fafafa;
+}
+
+.kvGrid {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 8px 16px;
+    align-items: baseline;
+}
+
+.k {
+    color: rgba(0, 0, 0, 0.7);
+    font-weight: 600;
+}
+
+.v {
+    overflow-wrap: anywhere;
+}
+
+.homesHeader {
+    margin-top: 20px;
+}
+
+.homesList {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    margin-top: 15px;
+    gap: 12px;
+    margin-top: 8px;
 }
 
-.content-area {
-    width: fit-content;
-    margin-bottom: 30px;
+.emptyStateTitle {
+    font-weight: 600;
+    margin-bottom: 4px;
 }
 
-.user-attributes-grid {
-    display: grid;
-    grid-template-columns: 150px auto;
+.emptyStateBody {
+    color: rgba(0, 0, 0, 0.7);
 }
 
-.home-attributes {
-    margin-top: 15px;
+@media (max-width: 600px) {
+    .kvGrid {
+        grid-template-columns: 1fr;
+    }
 }

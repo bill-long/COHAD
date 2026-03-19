@@ -1,66 +1,159 @@
-.delete-resident {
-    display: flex;
-    flex-direction: row;
+.residentAccordion {
+  width: 100%;
 }
 
-.info-container {
-    margin-bottom: 10px;
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    max-width: 486px;
+.residentPanel {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.info-container > div {
-    display: flex;
-    flex-direction: row;
+.residentHeader .titleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
-.resident-wrapper {
-    background: white;
-    margin-bottom: 10px;
-    padding: 10px;
+.residentName {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.resident-type-select {
-  width: 100px;
+.typeChip {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.75);
+  flex: 0 0 auto;
 }
 
-.outline {
-    outline: solid 1px lightgray;
+.metaRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
 }
 
-.contact-options {
-    margin-left: 5px;
-    display: flex;
-    flex-direction: column;
+.metaEmail {
+  color: rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
 }
 
-.filler {
-    flex: 1;
+.metaSep {
+  color: rgba(0, 0, 0, 0.35);
 }
 
-.action-bar {
-    display: flex;
+.metaPhone {
+  color: rgba(0, 0, 0, 0.65);
+  white-space: nowrap;
+  font-size: 13px;
 }
 
-.action-bar>button {
-    margin-top: 5px;
-    margin-left: 5px;
+.metaEmpty {
+  color: rgba(0, 0, 0, 0.65);
+  white-space: nowrap;
+}
+
+.panelActions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 8px;
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.section {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.sectionTitle {
+  font-weight: 700;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.field {
+  width: 260px;
+  max-width: 100%;
+}
+
+.typeField {
+  width: 180px;
+}
+
+.emailField {
+  width: 320px;
+}
+
+.phoneTypeField {
+  width: 140px;
+}
+
+.phoneInput {
+  flex: 1;
+  min-width: 220px;
+}
+
+.phoneRow {
+  align-items: center;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.itemCard {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.empty {
+  color: rgba(0, 0, 0, 0.65);
 }
 
 .mat-input-element:disabled {
-    color: black;
+  color: rgba(0, 0, 0, 0.87);
 }
 
-.phoneType {
-    width: 100px;
-}
-
-.emailInput {
-    width: 220px;
-}
-
-.birth-year-inputs {
-  width: 220px;
+@media (max-width: 600px) {
+  .metaRow {
+    display: none;
+  }
 }

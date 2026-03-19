@@ -1,4 +1,3 @@
-import { R } from '@angular/cdk/keycodes';
 import { Component, OnInit, Input, Output, EventEmitter } from '@angular/core';
 import { Resident, PhoneNumber, EmailAddress } from 'src/app/models';
 
@@ -19,6 +18,61 @@ export class EditResidentComponent implements OnInit {
   constructor() { }
 
   ngOnInit(): void {
+  }
+
+  get displayName() {
+    const given = (this.resident?.givenName ?? '').trim();
+    const surname = (this.resident?.surname ?? '').trim();
+    const isChild = this.resident?.residentType === 2;
+
+    const name = isChild ? given : `${given} ${surname}`.trim();
+    return name.length > 0 ? name : 'Resident';
+  }
+
+  get typeLabel() {
+    switch (this.resident?.residentType) {
+      case 0:
+        return 'Homeowner';
+      case 1:
+        return 'Other Adult';
+      case 2:
+        return 'Child';
+      default:
+        return 'Resident';
+    }
+  }
+
+  get emailCount() {
+    return this.resident?.emailAddresses?.length ?? 0;
+  }
+
+  get phoneCount() {
+    return this.resident?.phoneNumbers?.length ?? 0;
+  }
+
+  get primaryEmail(): string | null {
+    const addr = (this.resident?.emailAddresses?.[0]?.address ?? '').trim();
+    return addr.length > 0 ? addr : null;
+  }
+
+  get primaryPhone(): PhoneNumber | null {
+    return this.resident?.phoneNumbers?.[0] ?? null;
+  }
+
+  get hasPrimaryPhone(): boolean {
+    return !!(this.primaryPhone?.areaCode && this.primaryPhone?.prefix && this.primaryPhone?.lineNumber);
+  }
+
+  get primaryPhoneDisplay(): string | null {
+    if (!this.hasPrimaryPhone || !this.primaryPhone) {
+      return null;
+    }
+
+    const ac = this.primaryPhone.areaCode;
+    const pre = this.primaryPhone.prefix;
+    const line = this.primaryPhone.lineNumber;
+
+    return `(${ac}) ${pre}-${('0000' + line).slice(-4)}`;
   }
 
   addPhone() {
