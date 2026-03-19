@@ -1,5 +1,5 @@
 <mat-toolbar *ngIf="isHidden !== true" color="primary">
-  <div fxLayout fxHide.lt-md="true">
+  <div class="nav-desktop">
     <span class="badge"> COHAD </span>
     <div>
       <a mat-flat-button color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
@@ -19,7 +19,7 @@
       <button mat-button *ngIf="!(authUser$ | async)?.identityClaims?.emails" (click)="login()" [disabled]="disabled">Sign In</button>
     </div>
   </div>
-  <div fxHide.gt-sm="true">
+  <div class="nav-mobile">
     <button mat-flat-button color="primary" [matMenuTriggerFor]="hamburgerMenu">
       <mat-icon>menu</mat-icon>
     </button>

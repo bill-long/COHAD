@@ -7,9 +7,10 @@ import { PaymentService } from "src/app/services/payment.service";
 import { Action, ApplicationState, applicationState, dispatcher } from "src/app/state";
 
 @Component({
-  selector: "app-dues",
-  templateUrl: "./dues.component.html",
-  styleUrls: ["./dues.component.css"]
+    selector: "app-dues",
+    templateUrl: "./dues.component.html",
+    styleUrls: ["./dues.component.css"],
+    standalone: false
 })
 export class DuesComponent {
 

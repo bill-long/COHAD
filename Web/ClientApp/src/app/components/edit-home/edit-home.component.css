@@ -17,6 +17,7 @@
 
 .contact-info {
   display: flex;
+  flex-wrap: wrap;
 }
 
 .contact-options {

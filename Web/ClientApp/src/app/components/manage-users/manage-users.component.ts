@@ -7,9 +7,10 @@ import { map, take } from 'rxjs/operators';
 import { ApiUser, Home } from 'src/app/models';
 
 @Component({
-  selector: 'app-manage-users',
-  templateUrl: './manage-users.component.html',
-  styleUrls: ['./manage-users.component.css']
+    selector: 'app-manage-users',
+    templateUrl: './manage-users.component.html',
+    styleUrls: ['./manage-users.component.css'],
+    standalone: false
 })
 export class ManageUsersComponent implements AfterViewInit {
 
@@ -48,7 +49,7 @@ export class ManageUsersComponent implements AfterViewInit {
     this.allHomes$ = this.appState.pipe(map(s => s.allHomes));
     this.allHomes$.pipe(take(1)).subscribe(h => {
       if (h.length < 1) {
-        this.dispatcher.next(new LoadAllHomes);
+        this.dispatcher.next(new LoadAllHomes());
       }
     });
   }

@@ -6,9 +6,10 @@ import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { ApplicationState, applicationState } from 'src/app/state';
 
 @Component({
-  selector: 'app-manage',
-  templateUrl: './manage.component.html',
-  styleUrls: ['./manage.component.css']
+    selector: 'app-manage',
+    templateUrl: './manage.component.html',
+    styleUrls: ['./manage.component.css'],
+    standalone: false
 })
 export class ManageComponent implements OnInit {
 

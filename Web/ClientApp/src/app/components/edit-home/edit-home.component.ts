@@ -3,9 +3,10 @@ import { Home, Resident } from 'src/app/models';
 import { HomeService } from 'src/app/services/home.service';
 
 @Component({
-  selector: 'app-edit-home',
-  templateUrl: './edit-home.component.html',
-  styleUrls: ['./edit-home.component.css']
+    selector: 'app-edit-home',
+    templateUrl: './edit-home.component.html',
+    styleUrls: ['./edit-home.component.css'],
+    standalone: false
 })
 export class EditHomeComponent implements OnInit {
 

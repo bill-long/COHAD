@@ -1,7 +1,7 @@
 <div class="container">
   <h2>{{homeCopy.streetNumber}} {{homeCopy.streetName}}</h2>
 
-  <div class="contact-info" *ngIf="homeCopy.emailAddress" fxLayout="row wrap">
+  <div class="contact-info" *ngIf="homeCopy.emailAddress">
     <button mat-icon-button color="warn" aria-label="delete email" title="Delete email address" (click)="deleteEmail()" *ngIf="editEnabled">
       <mat-icon>delete</mat-icon>
     </button>
@@ -17,7 +17,7 @@
     </div>
   </div>
 
-  <div class="contact-info" *ngIf="homeCopy.phoneNumber" fxLayout="row wrap">
+  <div class="contact-info" *ngIf="homeCopy.phoneNumber">
     <button mat-icon-button color="warn" aria-label="delete phone number" title="Delete phone number" (click)="deletePhone()" *ngIf="editEnabled">
       <mat-icon>delete</mat-icon>
     </button>

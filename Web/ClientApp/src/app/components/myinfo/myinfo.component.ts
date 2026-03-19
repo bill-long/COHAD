@@ -4,9 +4,10 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 @Component({
-  selector: 'app-myinfo',
-  templateUrl: './myinfo.component.html',
-  styleUrls: ['./myinfo.component.css']
+    selector: 'app-myinfo',
+    templateUrl: './myinfo.component.html',
+    styleUrls: ['./myinfo.component.css'],
+    standalone: false
 })
 export class MyinfoComponent implements OnInit {
 

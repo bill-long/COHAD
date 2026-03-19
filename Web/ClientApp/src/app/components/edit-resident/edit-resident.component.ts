@@ -3,9 +3,10 @@ import { Component, OnInit, Input, Output, EventEmitter } from '@angular/core';
 import { Resident, PhoneNumber, EmailAddress } from 'src/app/models';
 
 @Component({
-  selector: 'app-edit-resident',
-  templateUrl: './edit-resident.component.html',
-  styleUrls: ['./edit-resident.component.css']
+    selector: 'app-edit-resident',
+    templateUrl: './edit-resident.component.html',
+    styleUrls: ['./edit-resident.component.css'],
+    standalone: false
 })
 export class EditResidentComponent implements OnInit {
 

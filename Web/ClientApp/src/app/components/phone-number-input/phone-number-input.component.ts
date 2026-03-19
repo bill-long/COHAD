@@ -3,9 +3,10 @@ import { PhoneNumber } from 'src/app/models';
 import { UntypedFormControl } from '@angular/forms';
 
 @Component({
-  selector: 'app-phone-number-input',
-  templateUrl: './phone-number-input.component.html',
-  styleUrls: ['./phone-number-input.component.css']
+    selector: 'app-phone-number-input',
+    templateUrl: './phone-number-input.component.html',
+    styleUrls: ['./phone-number-input.component.css'],
+    standalone: false
 })
 export class PhoneNumberInputComponent implements OnInit {
 

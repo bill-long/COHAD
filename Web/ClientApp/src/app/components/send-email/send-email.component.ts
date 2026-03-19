@@ -7,9 +7,10 @@ import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { applicationState, ApplicationState } from 'src/app/state';
 
 @Component({
-  selector: 'app-send-email',
-  templateUrl: './send-email.component.html',
-  styleUrls: ['./send-email.component.css']
+    selector: 'app-send-email',
+    templateUrl: './send-email.component.html',
+    styleUrls: ['./send-email.component.css'],
+    standalone: false
 })
 export class SendEmailComponent {
 
@@ -25,10 +26,11 @@ export class SendEmailComponent {
     private httpClient: HttpClient,
     @Inject(applicationState) private appState: Observable<ApplicationState>
   ) {
-    const Block = Quill.import('blots/block');
-    class MyBlock extends Block { }
-    MyBlock.tagName = 'DIV';
-    Quill.register('blots/block', MyBlock, true);
+    const Block = Quill.import('blots/block') as any;
+    class MyBlock extends Block {
+      static tagName = 'DIV';
+    }
+    Quill.register(MyBlock, true);
     zip(this.canSendFromBoard, this.canSendFromGardenClub, this.canSendFromSocialCommittee, this.canSendFromWelcomeCommittee, this.canSendFromSunshineCommittee)
     .pipe(take(1))
     .subscribe(([board, garden, social, welcome, sunshine]) => {
