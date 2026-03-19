@@ -14,6 +14,42 @@
   padding: 12px;
 }
 
+.compactRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compactRowLeft {
+  min-width: 0;
+}
+
+.compactSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.compactLabel {
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.compactValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+
+.compactSep {
+  color: rgba(0, 0, 0, 0.35);
+  margin: 0 2px;
+}
+
 .sectionHeader {
   display: flex;
   align-items: center;
@@ -190,5 +226,9 @@
 @media (max-width: 600px) {
   .kv {
     grid-template-columns: 1fr;
+  }
+
+  .compactValue {
+    max-width: 180px;
   }
 }

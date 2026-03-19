@@ -1,0 +1,69 @@
+<h2 mat-dialog-title>Edit home contact info</h2>
+
+<form #contactForm="ngForm" class="dialogBody" mat-dialog-content>
+  <div class="section">
+    <div class="sectionHeader">
+      <div class="sectionTitle">Email</div>
+      <div class="sectionActions">
+        <button mat-stroked-button color="primary" type="button" (click)="addEmail()" *ngIf="homeCopy.emailAddress == null">Add email</button>
+        <button mat-stroked-button color="warn" type="button" (click)="deleteEmail()" *ngIf="homeCopy.emailAddress != null" aria-label="Delete home email">Delete</button>
+      </div>
+    </div>
+
+    <div *ngIf="homeCopy.emailAddress; else noEmail">
+      <mat-form-field appearance="fill" class="fieldWide">
+        <mat-label>Email</mat-label>
+        <input matInput type="email" name="homeEmailAddress" [(ngModel)]="homeCopy.emailAddress.address" email required #homeEmailModel="ngModel">
+        <mat-error *ngIf="homeEmailModel.invalid && (homeEmailModel.dirty || homeEmailModel.touched)">Enter a valid email address</mat-error>
+      </mat-form-field>
+
+      <div class="options">
+        <mat-checkbox name="homeEmailVisible" [(ngModel)]="homeCopy.emailAddress.visibleInDirectory">Show in directory</mat-checkbox>
+        <mat-checkbox name="homeEmailBoard" [(ngModel)]="homeCopy.emailAddress.boardEmailOptedIn">Receive Board emails</mat-checkbox>
+        <mat-checkbox name="homeEmailWelcome" [(ngModel)]="homeCopy.emailAddress.welcomeEmailOptedIn">Receive Welcome emails</mat-checkbox>
+        <mat-checkbox name="homeEmailGarden" [(ngModel)]="homeCopy.emailAddress.gardenClubEmailOptedIn">Receive Garden Club emails</mat-checkbox>
+      </div>
+    </div>
+
+    <ng-template #noEmail>
+      <div class="muted">Not set.</div>
+    </ng-template>
+  </div>
+
+  <div class="section">
+    <div class="sectionHeader">
+      <div class="sectionTitle">Phone</div>
+      <div class="sectionActions">
+        <button mat-stroked-button color="primary" type="button" (click)="addPhone()" *ngIf="homeCopy.phoneNumber == null">Add phone</button>
+        <button mat-stroked-button color="warn" type="button" (click)="deletePhone()" *ngIf="homeCopy.phoneNumber != null" aria-label="Delete home phone">Delete</button>
+      </div>
+    </div>
+
+    <div *ngIf="homeCopy.phoneNumber; else noPhone" class="phoneRow">
+      <mat-form-field appearance="fill" class="phoneType">
+        <mat-label>Type</mat-label>
+        <mat-select name="homePhoneType" [(ngModel)]="homeCopy.phoneNumber.type">
+          <mat-option value="Mobile">Mobile</mat-option>
+          <mat-option value="Home">Home</mat-option>
+          <mat-option value="Work">Work</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <app-phone-number-input [phoneNumber]="homeCopy.phoneNumber" [editEnabled]="true"></app-phone-number-input>
+
+      <div class="options">
+        <mat-checkbox name="homePhoneVisible" [(ngModel)]="homeCopy.phoneNumber.visibleInDirectory">Show in directory</mat-checkbox>
+      </div>
+    </div>
+
+    <ng-template #noPhone>
+      <div class="muted">Not set.</div>
+    </ng-template>
+  </div>
+</form>
+
+<div mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cancel()">Cancel</button>
+  <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="contactForm.invalid">Save</button>
+</div>
+

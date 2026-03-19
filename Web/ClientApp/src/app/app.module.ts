@@ -60,6 +60,7 @@ import { MapComponent } from './components/map/map.component';
 import { RenderedPrintableMapComponent } from './components/rendered-printable-map/rendered-printable-map.component';
 import { DuesComponent } from './components/dues/dues.component';
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
+import { EditHomeContactDialogComponent } from './components/edit-home-contact-dialog/edit-home-contact-dialog.component';
 
 @NgModule({ declarations: [
         AppComponent,
@@ -86,7 +87,8 @@ import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dial
         MapComponent,
         RenderedPrintableMapComponent,
         DuesComponent,
-        ConfirmDialogComponent
+        ConfirmDialogComponent,
+        EditHomeContactDialogComponent
     ],
     bootstrap: [AppComponent], imports: [BrowserModule,
         AppRoutingModule,

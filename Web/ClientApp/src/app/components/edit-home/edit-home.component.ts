@@ -4,6 +4,7 @@ import { HomeService } from 'src/app/services/home.service';
 import { MatDialog } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import { EditHomeContactDialogComponent } from '../edit-home-contact-dialog/edit-home-contact-dialog.component';
 
 @Component({
     selector: 'app-edit-home',
@@ -68,6 +69,59 @@ export class EditHomeComponent implements OnInit, OnChanges {
 
   private clearStatuses() {
     this.saveStatus = {};
+  }
+
+  get homeEmailSummary() {
+    const addr = (this.homeCopy?.emailAddress?.address ?? '').trim();
+    return addr.length > 0 ? addr : 'Not set';
+  }
+
+  get homePhoneSummary() {
+    const p = this.homeCopy?.phoneNumber;
+    if (!p?.areaCode || !p?.prefix || !p?.lineNumber) {
+      return 'Not set';
+    }
+    return `(${p.areaCode}) ${p.prefix}-${('0000' + p.lineNumber).slice(-4)}`;
+  }
+
+  openHomeContactDialog() {
+    const ref = this.dialog.open(EditHomeContactDialogComponent, {
+      data: { home: this.homeCopy }
+    });
+
+    ref.afterClosed().subscribe(result => {
+      if (!result) {
+        return;
+      }
+
+      this.homeCopy.emailAddress = result.emailAddress;
+      this.homeCopy.phoneNumber = result.phoneNumber;
+      this.saveHomeContact();
+    });
+  }
+
+  private saveHomeContact() {
+    this.saveInProgress = true;
+    this.clearStatuses();
+
+    const onDone = (ok: boolean) => {
+      this.saveInProgress = false;
+      if (ok) {
+        this.doneEvent.next();
+      }
+    };
+
+    if (this.reloadAllOnSave) {
+      this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe({
+        next: r => onDone(true),
+        error: e => onDone(false)
+      });
+    } else {
+      this.homeService.saveHomeAndReloadMine(this.homeCopy).subscribe({
+        next: r => onDone(true),
+        error: e => onDone(false)
+      });
+    }
   }
 
   private captureResidentOrderSnapshot() {

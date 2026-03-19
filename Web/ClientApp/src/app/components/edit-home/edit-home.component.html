@@ -5,108 +5,22 @@
   </mat-card-header>
 
   <mat-card-content class="sections">
-    <!-- Contact -->
-    <section class="section">
-      <form #contactForm="ngForm">
-      <div class="sectionHeader">
-        <div class="sectionTitle">Contact</div>
-        <div class="sectionActions">
-          <button mat-stroked-button color="primary" (click)="startEdit('contact')" *ngIf="!editing.contact" aria-label="Edit contact section">Edit</button>
-          <button mat-flat-button color="primary" (click)="save('contact')" [disabled]="saveInProgress || contactForm.invalid" *ngIf="editing.contact" aria-label="Save contact section">Save</button>
-          <button mat-stroked-button color="warn" (click)="cancelSection('contact')" [disabled]="saveInProgress" *ngIf="editing.contact" aria-label="Cancel contact edits">Cancel</button>
+    <!-- Home contact info (hidden, edit via dialog) -->
+    <section class="section compactRow">
+      <div class="compactRowLeft">
+        <div class="sectionTitle">Home contact info</div>
+        <div class="compactSummary">
+          <span class="compactLabel">Email</span>
+          <span class="compactValue">{{ homeEmailSummary }}</span>
+          <span class="compactSep">•</span>
+          <span class="compactLabel">Phone</span>
+          <span class="compactValue">{{ homePhoneSummary }}</span>
         </div>
       </div>
-
-      <div class="status ok" *ngIf="saveStatus.contact?.ok">{{ saveStatus.contact?.message }}</div>
-      <div class="status err" *ngIf="saveStatus.contact && !saveStatus.contact.ok">{{ saveStatus.contact.message }}</div>
-
-      <div class="sectionBody" *ngIf="!editing.contact">
-        <div class="kv">
-          <div class="k">Email</div>
-          <div class="v" *ngIf="homeCopy.emailAddress; else noEmail">{{ homeCopy.emailAddress.address }}</div>
-          <ng-template #noEmail><span class="muted">Not set</span></ng-template>
-        </div>
-        <div class="chips" *ngIf="homeCopy.emailAddress">
-          <span class="chip" *ngIf="homeCopy.emailAddress.visibleInDirectory">Shown in directory</span>
-          <span class="chip" *ngIf="homeCopy.emailAddress.boardEmailOptedIn">Board emails</span>
-          <span class="chip" *ngIf="homeCopy.emailAddress.welcomeEmailOptedIn">Welcome emails</span>
-          <span class="chip" *ngIf="homeCopy.emailAddress.gardenClubEmailOptedIn">Garden club</span>
-        </div>
-      </div>
-
-      <div class="sectionBody" *ngIf="editing.contact">
-        <div class="inlineActions">
-          <button mat-button color="primary" (click)="addEmail()" *ngIf="homeCopy.emailAddress == null">Add email</button>
-          <button mat-button color="warn" (click)="deleteEmail()" *ngIf="homeCopy.emailAddress != null" aria-label="Delete email address">Delete email</button>
-        </div>
-
-        <div *ngIf="homeCopy.emailAddress">
-          <mat-form-field appearance="fill" class="emailInput">
-            <mat-label>Email</mat-label>
-            <input #emailAddressInput matInput type="email" name="homeEmailAddress" [(ngModel)]="homeCopy.emailAddress.address" [disabled]="!editing.contact" email required #homeEmailModel="ngModel" aria-label="Home email address">
-            <mat-error *ngIf="homeEmailModel.invalid && (homeEmailModel.dirty || homeEmailModel.touched)">Enter a valid email address</mat-error>
-          </mat-form-field>
-
-          <div class="contact-options">
-            <mat-checkbox name="homeEmailVisible" [(ngModel)]="homeCopy.emailAddress.visibleInDirectory" [disabled]="!editing.contact">Show in directory</mat-checkbox>
-            <mat-checkbox name="homeEmailBoard" [(ngModel)]="homeCopy.emailAddress.boardEmailOptedIn" [disabled]="!editing.contact">Receive Board emails</mat-checkbox>
-            <mat-checkbox name="homeEmailWelcome" [(ngModel)]="homeCopy.emailAddress.welcomeEmailOptedIn" [disabled]="!editing.contact">Receive Welcome emails</mat-checkbox>
-            <mat-checkbox name="homeEmailGarden" [(ngModel)]="homeCopy.emailAddress.gardenClubEmailOptedIn" [disabled]="!editing.contact">Receive Garden Club emails</mat-checkbox>
-          </div>
-        </div>
-      </div>
-      </form>
-    </section>
-
-    <!-- Phone -->
-    <section class="section">
-      <div class="sectionHeader">
-        <div class="sectionTitle">Phone</div>
-        <div class="sectionActions">
-          <button mat-stroked-button color="primary" (click)="startEdit('phone')" *ngIf="!editing.phone" aria-label="Edit phone section">Edit</button>
-          <button mat-flat-button color="primary" (click)="save('phone')" [disabled]="saveInProgress" *ngIf="editing.phone" aria-label="Save phone section">Save</button>
-          <button mat-stroked-button color="warn" (click)="cancelSection('phone')" [disabled]="saveInProgress" *ngIf="editing.phone" aria-label="Cancel phone edits">Cancel</button>
-        </div>
-      </div>
-
-      <div class="status ok" *ngIf="saveStatus.phone?.ok">{{ saveStatus.phone?.message }}</div>
-      <div class="status err" *ngIf="saveStatus.phone && !saveStatus.phone.ok">{{ saveStatus.phone.message }}</div>
-
-      <div class="sectionBody" *ngIf="!editing.phone">
-        <div class="kv">
-          <div class="k">Number</div>
-          <div class="v" *ngIf="homeCopy.phoneNumber; else noPhone">
-            <span class="muted">{{ homeCopy.phoneNumber.type }}</span>
-            <span class="sep">•</span>
-            <span>({{ homeCopy.phoneNumber.areaCode }}) {{ homeCopy.phoneNumber.prefix }}-{{ homeCopy.phoneNumber.lineNumber }}</span>
-          </div>
-          <ng-template #noPhone><span class="muted">Not set</span></ng-template>
-        </div>
-        <div class="chips" *ngIf="homeCopy.phoneNumber?.visibleInDirectory">
-          <span class="chip">Shown in directory</span>
-        </div>
-      </div>
-
-      <div class="sectionBody" *ngIf="editing.phone">
-        <div class="inlineActions">
-          <button mat-button color="primary" (click)="addPhone()" *ngIf="homeCopy.phoneNumber == null">Add phone</button>
-          <button mat-button color="warn" (click)="deletePhone()" *ngIf="homeCopy.phoneNumber != null" aria-label="Delete phone number">Delete phone</button>
-        </div>
-
-        <div class="contact-info" *ngIf="homeCopy.phoneNumber">
-          <mat-form-field appearance="fill" class="phoneType">
-            <mat-label>Type</mat-label>
-            <mat-select name="homePhoneType" [(ngModel)]="homeCopy.phoneNumber.type" [disabled]="!editing.phone">
-              <mat-option value="Mobile">Mobile</mat-option>
-              <mat-option value="Home">Home</mat-option>
-              <mat-option value="Work">Work</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <app-phone-number-input [phoneNumber]="homeCopy.phoneNumber" [editEnabled]="editing.phone"></app-phone-number-input>
-          <div class="contact-options">
-            <mat-checkbox name="homePhoneVisible" [(ngModel)]="homeCopy.phoneNumber.visibleInDirectory" [disabled]="!editing.phone">Show in directory</mat-checkbox>
-          </div>
-        </div>
+      <div class="sectionActions">
+        <button mat-stroked-button color="primary" (click)="openHomeContactDialog()" [disabled]="saveInProgress" aria-label="Edit home contact info">
+          Edit home contact info
+        </button>
       </div>
     </section>
 
@@ -115,7 +29,7 @@
       <div class="sectionHeader">
         <div>
           <div class="sectionTitle">Residents</div>
-          <div class="muted reorderHint">Drag to reorder (the phone number of the first resident appears on the map).</div>
+          <div class="muted reorderHint">Drag to reorder (the phone number of the first resident appears on the map, unless a home phone number is set).</div>
         </div>
         <div class="sectionActions">
           <button mat-stroked-button color="primary" (click)="addResident()" aria-label="Add resident">Add resident</button>
