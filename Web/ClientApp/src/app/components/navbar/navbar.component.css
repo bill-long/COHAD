@@ -15,3 +15,31 @@
 .getting-details {
     margin: 10px;
 }
+
+.nav-desktop {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+}
+
+.nav-desktop > div {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.nav-mobile {
+    display: block;
+}
+
+@media (max-width: 959.98px) {
+    .nav-desktop {
+        display: none;
+    }
+}
+
+@media (min-width: 960px) {
+    .nav-mobile {
+        display: none;
+    }
+}

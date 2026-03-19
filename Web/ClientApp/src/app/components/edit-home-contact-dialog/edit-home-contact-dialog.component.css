@@ -1,0 +1,64 @@
+.dialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 320px;
+}
+
+.section {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.sectionTitle {
+  font-weight: 700;
+}
+
+.sectionActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.fieldWide {
+  width: 420px;
+  max-width: 100%;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phoneRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.phoneType {
+  width: 140px;
+}
+
+.muted {
+  color: rgba(0, 0, 0, 0.65);
+}
+
+@media (max-width: 600px) {
+  .dialogBody {
+    min-width: 0;
+  }
+}
+

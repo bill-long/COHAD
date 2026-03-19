@@ -10,10 +10,11 @@ import { UserService } from 'src/app/services/user.service';
 import { applicationState, ApplicationState } from 'src/app/state';
 
 @Component({
-  selector: 'app-user',
-  templateUrl: './user.component.html',
-  styleUrls: ['./user.component.css'],
-  encapsulation: ViewEncapsulation.None
+    selector: 'app-user',
+    templateUrl: './user.component.html',
+    styleUrls: ['./user.component.css'],
+    encapsulation: ViewEncapsulation.None,
+    standalone: false
 })
 export class UserComponent implements OnInit {
 

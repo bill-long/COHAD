@@ -17,15 +17,15 @@
 
 <div class="wide-input">
     <mat-form-field>
-        <mat-chip-list #roleChipList area-label="Role selection">
-            <mat-chip *ngFor="let role of apiUserCopy.roles" [removable]="removable" (removed)="removeRole(role)">
+        <mat-chip-grid #roleChipGrid aria-label="Role selection">
+            <mat-chip-row *ngFor="let role of apiUserCopy.roles" [removable]="removable" (removed)="removeRole(role)">
                 {{role}}
                 <mat-icon matChipRemove *ngIf="removable">cancel</mat-icon>
-            </mat-chip>
-            <input placeholder="Roles" #roleInput [formControl]="roleControl" [matChipInputFor]="roleChipList"
+            </mat-chip-row>
+            <input placeholder="Roles" #roleInput [formControl]="roleControl" [matChipInputFor]="roleChipGrid"
                 [matAutocomplete]="roleAuto" [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
                 (matChipInputTokenEnd)="addRole($event)">
-        </mat-chip-list>
+        </mat-chip-grid>
         <mat-autocomplete #roleAuto="matAutocomplete" (optionSelected)="selectedRole($event)">
             <mat-option *ngFor="let role of allRoles" [value]="role">
                 {{role}}
@@ -36,16 +36,16 @@
 
 <div class="wide-input">
     <mat-form-field>
-        <mat-chip-list #chipList area-label="Home selection">
-            <mat-chip *ngFor="let home of apiUserCopy.ownedHomes" [removable]="removable" (removed)="removeHome(home)">
+        <mat-chip-grid #chipGrid aria-label="Home selection">
+            <mat-chip-row *ngFor="let home of apiUserCopy.ownedHomes" [removable]="removable" (removed)="removeHome(home)">
                 {{home.streetNumber}}
                 {{home.streetName}}
                 <mat-icon matChipRemove *ngIf="removable">cancel</mat-icon>
-            </mat-chip>
-            <input placeholder="Homes" #homeInput [formControl]="homeControl" [matChipInputFor]="chipList"
+            </mat-chip-row>
+            <input placeholder="Homes" #homeInput [formControl]="homeControl" [matChipInputFor]="chipGrid"
                 [matAutocomplete]="auto" [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
                 (matChipInputTokenEnd)="addHome($event)">
-        </mat-chip-list>
+        </mat-chip-grid>
         <mat-autocomplete #auto="matAutocomplete" (optionSelected)="selectedHome($event)">
             <mat-option *ngFor="let home of filteredHomes | async" [value]="home">
                 {{home.streetNumber}} {{home.streetName}}

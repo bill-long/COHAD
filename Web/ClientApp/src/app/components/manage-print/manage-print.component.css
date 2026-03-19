@@ -19,6 +19,8 @@
 
 .button-row {
   margin-top: 10px;
+  display: flex;
+  flex-direction: row;
 }
 
 .button-row > * {

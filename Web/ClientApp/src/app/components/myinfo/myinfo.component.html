@@ -1,26 +1,51 @@
-<div class="outer-flexbox">
-    <div class="content-area">
-        <div class="mat-h1">Your User Information</div>
-        <div class="user-attributes-grid" *ngIf="apiUser$ | async as apiUser">
-            <div>Name</div>
-            <div>{{ apiUser.displayName }}</div>
-            <div>Street Address</div>
-            <div>{{ apiUser.streetAddress }}</div>
-            <div>Email</div>
-            <div>{{ apiUser.email }}</div>
-            <div>Logged In From</div>
-            <div>{{ apiUser.identityProvider }}</div>
-        </div>
+<div class="page" *ngIf="apiUser$ | async as apiUser; else loadingState">
+    <div class="pageHeader">
+        <div class="mat-h1 pageTitle">My Info</div>
+        <div class="subtitle">View your account details and update home contact information.</div>
+    </div>
 
-        <div class="home-attributes" *ngIf="apiUser$ | async as apiUser">
-            <div class="mat-h1">Your Home</div>
-            <div *ngIf="apiUser.ownedHomes == null || apiUser.ownedHomes.length < 1">No homes are associated with this
-                account. You must be assigned permissions before you can see and edit your home information.</div>
-            <div *ngFor="let home of apiUser.ownedHomes">
-                <app-edit-home [home]="home">
-                </app-edit-home>
+    <mat-card class="card">
+        <mat-card-header>
+            <mat-card-title>Account</mat-card-title>
+            <mat-card-subtitle>Read-only account details</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+            <div class="kvGrid" role="list">
+                <div class="k" role="listitem">Name</div>
+                <div class="v">{{ apiUser.displayName }}</div>
+
+                <div class="k" role="listitem">Email</div>
+                <div class="v">{{ apiUser.email }}</div>
+
+                <div class="k" role="listitem">Street Address</div>
+                <div class="v">{{ apiUser.streetAddress }}</div>
+
+                <div class="k" role="listitem">Logged in from</div>
+                <div class="v">{{ apiUser.identityProvider }}</div>
             </div>
-        </div>
+        </mat-card-content>
+    </mat-card>
 
+    <div class="homesHeader">
+        <div class="mat-h2">My Home</div>
+    </div>
+
+    <mat-card class="card infoCard" *ngIf="apiUser.ownedHomes == null || apiUser.ownedHomes.length < 1">
+        <mat-card-content>
+            <div class="emptyStateTitle">No homes are associated with this account.</div>
+            <div class="emptyStateBody">You must be assigned permissions before you can see and edit your home information.</div>
+        </mat-card-content>
+    </mat-card>
+
+    <div class="homesList" *ngIf="apiUser.ownedHomes != null && apiUser.ownedHomes.length > 0">
+        <app-edit-home *ngFor="let home of apiUser.ownedHomes" [home]="home"></app-edit-home>
     </div>
 </div>
+
+<ng-template #loadingState>
+    <div class="page">
+        <mat-card class="card infoCard">
+            <mat-card-content>Loading your information…</mat-card-content>
+        </mat-card>
+    </div>
+</ng-template>

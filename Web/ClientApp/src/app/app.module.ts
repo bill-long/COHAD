@@ -1,6 +1,5 @@
 import { BrowserModule } from '@angular/platform-browser';
 import { NgModule } from '@angular/core';
-import { FlexLayoutModule } from '@angular/flex-layout';
 
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
@@ -23,6 +22,8 @@ import { MatListModule } from '@angular/material/list';
 import { MatCardModule } from '@angular/material/card';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatExpansionModule } from '@angular/material/expansion';
+import { MatDialogModule } from '@angular/material/dialog';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 
 import { QuillModule } from 'ngx-quill';
 
@@ -35,7 +36,7 @@ import { NavbarComponent } from './components/navbar/navbar.component';
 import { HeaderComponent } from './components/header/header.component';
 import { NewsComponent } from './components/news/news.component';
 import { DocumentsComponent } from './components/documents/documents.component';
-import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
+import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { OAuthModule } from 'angular-oauth2-oidc';
@@ -58,101 +59,95 @@ import { RenderedPrintableDirectoryComponent } from './components/rendered-print
 import { MapComponent } from './components/map/map.component';
 import { RenderedPrintableMapComponent } from './components/rendered-printable-map/rendered-printable-map.component';
 import { DuesComponent } from './components/dues/dues.component';
+import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
+import { EditHomeContactDialogComponent } from './components/edit-home-contact-dialog/edit-home-contact-dialog.component';
 
-@NgModule({
-  declarations: [
-    AppComponent,
-    HomeComponent,
-    AboutComponent,
-    NavbarComponent,
-    HeaderComponent,
-    NewsComponent,
-    DocumentsComponent,
-    UnauthorizedComponent,
-    MyinfoComponent,
-    DirectoryComponent,
-    ManageComponent,
-    UserComponent,
-    ManageUsersComponent,
-    ManageHomesComponent,
-    EditHomeComponent,
-    EditResidentComponent,
-    PhoneNumberInputComponent,
-    SendEmailComponent,
-    AuditLogComponent,
-    ManagePrintComponent,
-    RenderedPrintableDirectoryComponent,
-    MapComponent,
-    RenderedPrintableMapComponent,
-    DuesComponent
-  ],
-  imports: [
-    BrowserModule,
-    AppRoutingModule,
-    BrowserAnimationsModule,
-    HttpClientModule,
-    FormsModule,
-    ReactiveFormsModule,
-    FlexLayoutModule,
-    OAuthModule.forRoot({
-      resourceServer: {
-        sendAccessToken: true,
-        allowedUrls: [
-          'api/'
-        ]
-      }
-    }),
-    QuillModule.forRoot({
-      modules: {
-        toolbar: [
-          ['bold', 'italic', 'underline', 'strike'],        // toggled buttons
-          ['blockquote', 'code-block'],
-
-          [{ 'header': 1 }, { 'header': 2 }],               // custom button values
-          [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-          [{ 'indent': '-1' }, { 'indent': '+1' }],          // outdent/indent
-
-          [{ 'size': ['small', false, 'large', 'huge'] }],  // custom dropdown
-          [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-
-          [{ 'color': [] }, { 'background': [] }],          // dropdown with defaults from theme
-          [{ 'font': [] }],
-          [{ 'align': [] }],
-
-          ['clean'],                                         // remove formatting button
-
-          ['link', 'image']
-        ]
-      }
-    }),
-    NgxMaskModule.forRoot(),
-    MatToolbarModule,
-    MatButtonModule,
-    MatMenuModule,
-    MatTableModule,
-    MatSortModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonToggleModule,
-    MatProgressSpinnerModule,
-    MatSidenavModule,
-    MatGridListModule,
-    MatIconModule,
-    MatChipsModule,
-    MatAutocompleteModule,
-    MatCheckboxModule,
-    MatSelectModule,
-    MatTooltipModule,
-    MatListModule,
-    MatCardModule,
-    MatTabsModule,
-    MatExpansionModule
-  ],
-  providers: [
-    { provide: dispatcher, useValue: new Subject<Action>() },
-    { provide: initialState, useValue: initialStateValue },
-    { provide: applicationState, useFactory: applicationStateFactory, deps: [initialState, dispatcher] }
-  ],
-  bootstrap: [AppComponent]
-})
+@NgModule({ declarations: [
+        AppComponent,
+        HomeComponent,
+        AboutComponent,
+        NavbarComponent,
+        HeaderComponent,
+        NewsComponent,
+        DocumentsComponent,
+        UnauthorizedComponent,
+        MyinfoComponent,
+        DirectoryComponent,
+        ManageComponent,
+        UserComponent,
+        ManageUsersComponent,
+        ManageHomesComponent,
+        EditHomeComponent,
+        EditResidentComponent,
+        PhoneNumberInputComponent,
+        SendEmailComponent,
+        AuditLogComponent,
+        ManagePrintComponent,
+        RenderedPrintableDirectoryComponent,
+        MapComponent,
+        RenderedPrintableMapComponent,
+        DuesComponent,
+        ConfirmDialogComponent,
+        EditHomeContactDialogComponent
+    ],
+    bootstrap: [AppComponent], imports: [BrowserModule,
+        AppRoutingModule,
+        BrowserAnimationsModule,
+        FormsModule,
+        ReactiveFormsModule,
+        OAuthModule.forRoot({
+            resourceServer: {
+                sendAccessToken: true,
+                allowedUrls: [
+                    'api/'
+                ]
+            }
+        }),
+        QuillModule.forRoot({
+            modules: {
+                toolbar: [
+                    ['bold', 'italic', 'underline', 'strike'], // toggled buttons
+                    ['blockquote', 'code-block'],
+                    [{ 'header': 1 }, { 'header': 2 }], // custom button values
+                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                    [{ 'indent': '-1' }, { 'indent': '+1' }], // outdent/indent
+                    [{ 'size': ['small', false, 'large', 'huge'] }], // custom dropdown
+                    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                    [{ 'color': [] }, { 'background': [] }], // dropdown with defaults from theme
+                    [{ 'font': [] }],
+                    [{ 'align': [] }],
+                    ['clean'], // remove formatting button
+                    ['link', 'image']
+                ]
+            }
+        }),
+        NgxMaskModule.forRoot(),
+        MatToolbarModule,
+        MatButtonModule,
+        MatMenuModule,
+        MatTableModule,
+        MatSortModule,
+        MatFormFieldModule,
+        MatInputModule,
+        MatButtonToggleModule,
+        MatProgressSpinnerModule,
+        MatSidenavModule,
+        MatGridListModule,
+        MatIconModule,
+        MatChipsModule,
+        MatAutocompleteModule,
+        MatCheckboxModule,
+        MatSelectModule,
+        MatTooltipModule,
+        MatListModule,
+        MatCardModule,
+        MatTabsModule,
+        MatExpansionModule,
+        MatDialogModule,
+        DragDropModule], providers: [
+        { provide: dispatcher, useValue: new Subject<Action>() },
+        { provide: initialState, useValue: initialStateValue },
+        { provide: applicationState, useFactory: applicationStateFactory, deps: [initialState, dispatcher] },
+        provideHttpClient(withInterceptorsFromDi())
+    ] })
 export class AppModule { }

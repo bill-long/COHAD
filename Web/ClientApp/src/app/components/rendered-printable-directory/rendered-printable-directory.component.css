@@ -1,14 +1,15 @@
 @page {
-  margin: 0;
+  /* Provide breathing room so first/last entries aren't flush to edges. */
+  margin: 0.25in 0.2in 0.25in 0.2in;
   size: 5in 8in portrait;
 }
 
 @page :first {
-  margin: 0
+  margin: 0.25in 0.2in 0.25in 0.2in;
 }
 
 @page :last {
-  margin: 0
+  margin: 0.25in 0.2in 0.25in 0.2in;
 }
 
 img {

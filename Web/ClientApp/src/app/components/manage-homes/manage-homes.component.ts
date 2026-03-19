@@ -9,9 +9,10 @@ import { UntypedFormControl } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 @Component({
-  selector: 'app-manage-homes',
-  templateUrl: './manage-homes.component.html',
-  styleUrls: ['./manage-homes.component.css']
+    selector: 'app-manage-homes',
+    templateUrl: './manage-homes.component.html',
+    styleUrls: ['./manage-homes.component.css'],
+    standalone: false
 })
 export class ManageHomesComponent implements OnInit, AfterViewInit {
 

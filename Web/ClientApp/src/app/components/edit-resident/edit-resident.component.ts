@@ -1,11 +1,11 @@
-import { R } from '@angular/cdk/keycodes';
 import { Component, OnInit, Input, Output, EventEmitter } from '@angular/core';
 import { Resident, PhoneNumber, EmailAddress } from 'src/app/models';
 
 @Component({
-  selector: 'app-edit-resident',
-  templateUrl: './edit-resident.component.html',
-  styleUrls: ['./edit-resident.component.css']
+    selector: 'app-edit-resident',
+    templateUrl: './edit-resident.component.html',
+    styleUrls: ['./edit-resident.component.css'],
+    standalone: false
 })
 export class EditResidentComponent implements OnInit {
 
@@ -13,11 +13,121 @@ export class EditResidentComponent implements OnInit {
 
   @Input() editEnabled!: boolean;
 
-  @Output() deleteResident = new EventEmitter<void>();
+  @Input() saveInProgress: boolean = false;
+
+  @Output() edit = new EventEmitter<void>();
+
+  @Output() save = new EventEmitter<void>();
+
+  @Output() cancel = new EventEmitter<void>();
+
+  @Output() delete = new EventEmitter<void>();
+
+  confirmDeleteResident = false;
+  confirmRemoveEmailIndex: number | null = null;
+  confirmRemovePhoneIndex: number | null = null;
 
   constructor() { }
 
   ngOnInit(): void {
+  }
+
+  private clearInlineConfirms() {
+    this.confirmDeleteResident = false;
+    this.confirmRemoveEmailIndex = null;
+    this.confirmRemovePhoneIndex = null;
+  }
+
+  startConfirmDeleteResident() {
+    this.clearInlineConfirms();
+    this.confirmDeleteResident = true;
+  }
+
+  cancelConfirmDeleteResident() {
+    this.confirmDeleteResident = false;
+  }
+
+  startConfirmRemoveEmail(index: number) {
+    this.clearInlineConfirms();
+    this.confirmRemoveEmailIndex = index;
+  }
+
+  cancelConfirmRemoveEmail() {
+    this.confirmRemoveEmailIndex = null;
+  }
+
+  startConfirmRemovePhone(index: number) {
+    this.clearInlineConfirms();
+    this.confirmRemovePhoneIndex = index;
+  }
+
+  cancelConfirmRemovePhone() {
+    this.confirmRemovePhoneIndex = null;
+  }
+
+  confirmRemoveEmail(email: EmailAddress) {
+    this.deleteEmail(email);
+    this.confirmRemoveEmailIndex = null;
+  }
+
+  confirmRemovePhone(phone: PhoneNumber) {
+    this.deletePhone(phone);
+    this.confirmRemovePhoneIndex = null;
+  }
+
+  get displayName() {
+    const given = (this.resident?.givenName ?? '').trim();
+    const surname = (this.resident?.surname ?? '').trim();
+    const isChild = this.resident?.residentType === 2;
+
+    const name = isChild ? given : `${given} ${surname}`.trim();
+    return name.length > 0 ? name : 'Resident';
+  }
+
+  get typeLabel() {
+    switch (this.resident?.residentType) {
+      case 0:
+        return 'Homeowner';
+      case 1:
+        return 'Other Adult';
+      case 2:
+        return 'Child';
+      default:
+        return 'Resident';
+    }
+  }
+
+  get emailCount() {
+    return this.resident?.emailAddresses?.length ?? 0;
+  }
+
+  get phoneCount() {
+    return this.resident?.phoneNumbers?.length ?? 0;
+  }
+
+  get primaryEmail(): string | null {
+    const addr = (this.resident?.emailAddresses?.[0]?.address ?? '').trim();
+    return addr.length > 0 ? addr : null;
+  }
+
+  get primaryPhone(): PhoneNumber | null {
+    return this.resident?.phoneNumbers?.[0] ?? null;
+  }
+
+  get hasPrimaryPhone(): boolean {
+    return !!(this.primaryPhone?.areaCode && this.primaryPhone?.prefix && this.primaryPhone?.lineNumber);
+  }
+
+  get primaryPhoneDisplay(): string | null {
+    if (!this.hasPrimaryPhone || !this.primaryPhone) {
+      return null;
+    }
+
+    const ac = this.primaryPhone.areaCode;
+    const pre = this.primaryPhone.prefix;
+    const line = this.primaryPhone.lineNumber;
+
+    return `(${ac}) ${pre}-${('0000' + line).slice(-4)}`;
   }
 
   addPhone() {

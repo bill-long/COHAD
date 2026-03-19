@@ -7,81 +7,108 @@
 
     <div *ngFor="let home of (itemsToRender | async)">
       <div class="home" ngClass.gt-sm="large-screen" [ngClass]="{ 'large-screen': hideSearch }" *ngIf="getHomeowners(home).length > 0">
-        <div class="info-line">
-          <div class="names"><span class="surname">{{getSurname(home)}}</span>, {{getGivenNames(home)}}</div>
-          <div>
-            <span class="home-phone" *ngIf="home.phoneNumber">({{home.phoneNumber.areaCode}})
-              {{home.phoneNumber.prefix}}-{{('0000' + home.phoneNumber.lineNumber).slice(-4)}}</span>
+        <!-- Home header -->
+        <div class="homeHeader">
+          <div class="homeTopRow">
+            <div class="names">
+              <span class="surname">{{getSurname(home)}}</span>, {{getGivenNames(home)}}
+            </div>
+            <div class="home-phone" *ngIf="home.phoneNumber">
+              ({{home.phoneNumber.areaCode}})
+              {{home.phoneNumber.prefix}}-{{('0000' + home.phoneNumber.lineNumber).slice(-4)}}
+            </div>
+          </div>
+
+          <div class="homeAddress">
+            {{home.streetNumber}} {{home.streetName}}
+          </div>
+
+          <div class="homeContactLines">
+            <div class="kvRow" *ngIf="home.emailAddress">
+              <div class="k">Email:</div>
+              <div class="v">{{home.emailAddress.address}}</div>
+            </div>
           </div>
         </div>
-        <div class="clear"></div>
-        <div class="info-line">
-          <div>{{home.streetNumber}} {{home.streetName}}</div>
-          <div></div>
-        </div>
-        <div class="clear"></div>
-        <div class="info-line email-line" *ngIf="home.emailAddress">
-          <div>Email:</div>
-          <div>{{home.emailAddress.address}}</div>
-          <div></div>
-        </div>
-        <div class="clear"></div>
-        <ng-container *ngFor="let resident of getHomeowners(home)">
-          <ng-container *ngFor="let email of resident.emailAddresses">
-            <div class="info-line email-line">
-              <div>{{resident.givenName}} Email:</div>
-              <div>{{email.address}}</div>
-              <div></div>
-            </div>
-            <div class="clear"></div>
-          </ng-container>
-          <ng-container *ngFor="let phoneNumber of resident.phoneNumbers">
-            <div class="info-line">
-              <div>{{resident.givenName}} {{phoneNumber.type}}:</div>
-              <div class="phoneNumber">({{phoneNumber.areaCode}})
-                {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+
+        <!-- Adults subsection (combined) -->
+        <div class="adultSection">
+          <ng-container *ngFor="let resident of getHomeowners(home)">
+            <div class="residentBlock">
+              <div class="residentTopRow">
+                <div class="residentName">
+                  {{resident.givenName}} <span class="residentSurname">{{resident.surname}}</span>
+                </div>
+
+                <div class="residentPhones" *ngIf="resident.phoneNumbers?.length">
+                  <div class="phoneLine" *ngFor="let phoneNumber of resident.phoneNumbers">
+                    <span class="contactType">{{phoneNumber.type}}:</span>
+                    <span class="contactValue">
+                      ({{phoneNumber.areaCode}}) {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="residentEmailInline" *ngIf="!resident.phoneNumbers?.length && resident.emailAddresses?.length">
+                  <ng-container *ngFor="let email of resident.emailAddresses; let isLast=last">
+                    <span>{{email.address}}</span><span *ngIf="!isLast">, </span>
+                  </ng-container>
+                </div>
+              </div>
+
+              <div class="residentEmailLine" *ngIf="resident.emailAddresses?.length && resident.phoneNumbers?.length">
+                <ng-container *ngFor="let email of resident.emailAddresses; let isLast=last">
+                  <span>{{email.address}}</span><span *ngIf="!isLast">, </span>
+                </ng-container>
               </div>
             </div>
-            <div class="clear"></div>
           </ng-container>
-        </ng-container>
-        <ng-container *ngFor="let resident of getOtherAdults(home)">
-          <div class="info-line other-adult">
-            <div>{{resident.givenName}} {{resident.surname}}</div>
-            <div></div>
-          </div>
-          <div class="clear"></div>
-          <ng-container *ngFor="let email of resident.emailAddresses">
-            <div class="info-line email-line">
-              <div>{{resident.givenName}} Email:</div>
-              <div>{{email.address}}</div>
-              <div></div>
-            </div>
-            <div class="clear"></div>
-          </ng-container>
-          <ng-container *ngFor="let phoneNumber of resident.phoneNumbers">
-            <div class="info-line">
-              <div>{{resident.givenName}} {{phoneNumber.type}}:</div>
-              <div class="phoneNumber">({{phoneNumber.areaCode}})
-                {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+
+          <ng-container *ngFor="let resident of getOtherAdults(home)">
+            <div class="residentBlock">
+              <div class="residentTopRow">
+                <div class="residentName">
+                  {{resident.givenName}} <span class="residentSurname">{{resident.surname}}</span>
+                </div>
+
+                <div class="residentPhones" *ngIf="resident.phoneNumbers?.length">
+                  <div class="phoneLine" *ngFor="let phoneNumber of resident.phoneNumbers">
+                    <span class="contactType">{{phoneNumber.type}}:</span>
+                    <span class="contactValue">
+                      ({{phoneNumber.areaCode}}) {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="residentEmailInline" *ngIf="!resident.phoneNumbers?.length && resident.emailAddresses?.length">
+                  <ng-container *ngFor="let email of resident.emailAddresses; let isLast=last">
+                    <span>{{email.address}}</span><span *ngIf="!isLast">, </span>
+                  </ng-container>
+                </div>
+              </div>
+
+              <div class="residentEmailLine" *ngIf="resident.emailAddresses?.length && resident.phoneNumbers?.length">
+                <ng-container *ngFor="let email of resident.emailAddresses; let isLast=last">
+                  <span>{{email.address}}</span><span *ngIf="!isLast">, </span>
+                </ng-container>
               </div>
             </div>
-            <div class="clear"></div>
           </ng-container>
-        </ng-container>
+        </div>
+
+        <!-- Children subsection -->
         <ng-container *ngIf="getChildren(home).length > 0">
-          <div class="info-line children-section">
-            <div>Children:
-              <ng-container *ngFor="let resident of getChildren(home); last as isLast">
-                <span>{{resident.givenName}}</span>
-                <span *ngIf="resident.yearOfBirth !== 0"> ({{resident.yearOfBirth}})</span>
-                <span *ngIf="resident.collegeName"> ({{resident.collegeName}})</span>
-                <span *ngIf="!isLast">, </span>
-              </ng-container>
-            </div>
-            <div></div>
+          <div class="childrenHeader">
+            <span class="childrenLabel">Children: </span>
+            <ng-container *ngFor="let resident of getChildren(home); let last = last">
+              <span class="childInline">
+                <span class="childName">{{resident.givenName}}</span>
+                <span *ngIf="resident.yearOfBirth !== 0" class="childMeta"> ({{resident.yearOfBirth}})</span>
+                <span *ngIf="resident.collegeName" class="childMeta"> ({{resident.collegeName}})</span>
+              </span>
+              <span *ngIf="!last">, </span>
+            </ng-container>
           </div>
-          <div class="clear"></div>
         </ng-container>
       </div>
     </div>

@@ -4,10 +4,11 @@ import { DirectoryHome, DirectoryPhoneNumber } from 'src/app/models';
 import { Action, ApplicationState, applicationState, dispatcher, LoadDirectory } from 'src/app/state';
 
 @Component({
-  selector: 'app-map',
-  templateUrl: './map.component.html',
-  styleUrls: ['./map.component.css'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+    selector: 'app-map',
+    templateUrl: './map.component.html',
+    styleUrls: ['./map.component.css'],
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    standalone: false
 })
 export class MapComponent implements AfterViewInit {
 

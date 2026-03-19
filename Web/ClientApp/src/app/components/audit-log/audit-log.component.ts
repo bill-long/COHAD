@@ -5,10 +5,11 @@ import { MatTableDataSource } from '@angular/material/table';
 import { AuditLogEntry } from 'src/app/models';
 
 @Component({
-  selector: 'app-audit-log',
-  templateUrl: './audit-log.component.html',
-  styleUrls: ['./audit-log.component.css'],
-  encapsulation: ViewEncapsulation.None
+    selector: 'app-audit-log',
+    templateUrl: './audit-log.component.html',
+    styleUrls: ['./audit-log.component.css'],
+    encapsulation: ViewEncapsulation.None,
+    standalone: false
 })
 export class AuditLogComponent implements OnInit {
 

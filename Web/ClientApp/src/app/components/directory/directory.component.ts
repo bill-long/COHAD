@@ -6,10 +6,11 @@ import { DirectoryHome, DirectoryResident } from '../../models';
 import { applicationState, ApplicationState, Action, dispatcher, LoadDirectory } from 'src/app/state';
 
 @Component({
-  selector: 'app-directory',
-  templateUrl: './directory.component.html',
-  styleUrls: ['./directory.component.css'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+    selector: 'app-directory',
+    templateUrl: './directory.component.html',
+    styleUrls: ['./directory.component.css'],
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    standalone: false
 })
 export class DirectoryComponent {
 

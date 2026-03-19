@@ -1,0 +1,9 @@
+.content {
+  min-width: 280px;
+}
+
+.body {
+  color: rgba(0, 0, 0, 0.75);
+  white-space: pre-line;
+}
+
