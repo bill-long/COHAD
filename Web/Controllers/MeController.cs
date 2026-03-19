@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -20,11 +20,16 @@ namespace Web.Controllers
     public class MeController : ControllerBase
     {
         private readonly CohadWebDbContext _userRepository;
+        private readonly IHomeLookupService _homeLookupService;
         private readonly IEmailService _emailService;
 
-        public MeController(CohadWebDbContext userRepository, IEmailService emailService)
+        public MeController(
+            CohadWebDbContext userRepository,
+            IHomeLookupService homeLookupService,
+            IEmailService emailService)
         {
             _userRepository = userRepository;
+            _homeLookupService = homeLookupService;
             _emailService = emailService;
         }
 
@@ -33,6 +38,13 @@ namespace Web.Controllers
         {
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
             var user = await _userRepository.Users.FindAsync(uniqueId);
+            if (user == null)
+            {
+                var userDocumentIds = new[] { $"User|{uniqueId}", uniqueId };
+                user = await _userRepository.Users
+                    .Where(u => userDocumentIds.Contains(EF.Property<string>(u, "id")))
+                    .FirstOrDefaultAsync();
+            }
             if (user != null)
             {
                 user.LastLoggedIn = DateTime.UtcNow;
@@ -41,7 +53,11 @@ namespace Web.Controllers
                 // Includes are not supported, and we don't want this to be an owned type, so we're manually handling these references
                 // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
                 // See also https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
-                var ownedHomes = user.OwnedHomeIds == null ? new List<Home>() : await _userRepository.Homes.Where(h => user.OwnedHomeIds.Contains(h.Id)).ToListAsync();
+                var ownedHomes = new List<Home>();
+                if (user.OwnedHomeIds != null && user.OwnedHomeIds.Count > 0)
+                {
+                    ownedHomes = await _homeLookupService.LoadOwnedHomesAsync(user.OwnedHomeIds);
+                }
                 return PresentationUser.FromStorageModel(user, ownedHomes);
             }
 

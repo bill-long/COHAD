@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -27,8 +27,7 @@ namespace Web.Controllers
         public async Task<IEnumerable<DirectoryHome>> GetDirectory()
         {
             var homes = await dbContext.Homes.ToListAsync();
-
-            var visibleHomeInfo = dbContext.Homes.Select(DirectoryHome.FromStorageModel).ToList();
+            var visibleHomeInfo = homes.Select(DirectoryHome.FromStorageModel).ToList();
 
             return visibleHomeInfo;
         }

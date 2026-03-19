@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Authorization;
 using Web.Models;
 using Web.Repository;
@@ -92,8 +93,11 @@ namespace Web
             // services.AddDbContext<CohadWebDbContext>(options => options.UseInMemoryDatabase("CohadWebDebugDatabase"));
 
             services.AddDbContext<CohadWebDbContext>(options => options.UseCosmos(uri, key, db));
+            services.AddSingleton(_ => new CosmosClient(uri, key));
+            services.AddSingleton(sp => sp.GetRequiredService<CosmosClient>().GetContainer(db, "Homes"));
 
             services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<IHomeLookupService, HomeLookupService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
