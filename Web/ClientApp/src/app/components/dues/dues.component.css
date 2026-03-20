@@ -9,7 +9,7 @@
 }
 
 .white-background {
-  background-color: white;
+  background-color: var(--surface);
   padding: 20px;
 }
 

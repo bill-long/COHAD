@@ -9,7 +9,7 @@ import { Component, OnInit } from '@angular/core';
 export class HomeComponent implements OnInit {
 
   title = "COHAD";
-  subtitles = ["Canyon Oaks Homeowners Association", "Denton"];
+  subtitles = ["Canyon Oaks Homeowners Assssociation", "Denton"];
 
   constructor() { }
 

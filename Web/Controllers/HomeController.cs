@@ -165,7 +165,8 @@ namespace Web.Controllers
                         UniqueId = u.UniqueId,
                         GivenName = u.GivenName,
                         Surname = u.Surname,
-                        Emails = u.Emails
+                        Emails = u.Emails,
+                        IdentityProvider = u.IdentityProvider
                     })
                     .ToList();
             }

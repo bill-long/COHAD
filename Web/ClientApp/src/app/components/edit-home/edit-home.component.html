@@ -70,7 +70,10 @@
 
     <section class="section">
       <div class="sectionHeader">
-        <div class="sectionTitle">Associated users</div>
+        <div>
+          <div class="sectionTitle">Associated users</div>
+          <div class="muted associatedUsersHint">These users can modify this home's details.</div>
+        </div>
       </div>
 
       <div class="sectionBody">
@@ -79,6 +82,7 @@
             <div class="associatedUserText">
               <div class="associatedUserName">{{ associatedUser.givenName }} {{ associatedUser.surname }}</div>
               <div class="muted">{{ associatedUser.emails }}</div>
+              <div class="muted associatedUserProvider">{{ associatedUserProviderLabel(associatedUser) }}</div>
             </div>
             <button
               mat-stroked-button

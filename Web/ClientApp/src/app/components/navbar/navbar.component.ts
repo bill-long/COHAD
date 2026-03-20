@@ -5,6 +5,7 @@ import { Router, NavigationStart, ActivatedRoute, UrlSegment, NavigationEnd } fr
 import { applicationState, ApplicationState, dispatcher, Action, Login, Logout } from 'src/app/state';
 import { ApiUser, AuthUser } from 'src/app/models';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
+import { ThemeService } from 'src/app/services/theme.service';
 
 @Component({
     selector: 'app-navbar',
@@ -21,7 +22,8 @@ export class NavbarComponent implements OnInit {
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>,
-    private router: Router) {
+    private router: Router,
+    private themeService: ThemeService) {
 
     router.events.subscribe(e => {
       if (e instanceof NavigationStart) {
@@ -61,6 +63,14 @@ export class NavbarComponent implements OnInit {
 
   get manageVisible$(): Observable<boolean> {
     return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0))
+  }
+
+  get isDarkTheme$(): Observable<boolean> {
+    return this.themeService.isDarkTheme$;
+  }
+
+  toggleTheme(): void {
+    this.themeService.toggleTheme();
   }
 
 }

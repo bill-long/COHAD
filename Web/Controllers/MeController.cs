@@ -39,6 +39,9 @@ namespace Web.Controllers
             var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
             if (user != null)
             {
+                user.GivenName = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.GivenName)?.Value;
+                user.Surname = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Surname)?.Value;
+                user.Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value;
                 user.LastLoggedIn = DateTime.UtcNow;
                 await _userRepository.UpsertAsync(user);
 
@@ -102,7 +105,8 @@ namespace Web.Controllers
                         UniqueId = u.UniqueId,
                         GivenName = u.GivenName,
                         Surname = u.Surname,
-                        Emails = u.Emails
+                        Emails = u.Emails,
+                        IdentityProvider = u.IdentityProvider
                     })
                     .ToList();
             }

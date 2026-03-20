@@ -272,11 +272,13 @@ export class EditHomeComponent implements OnInit, OnChanges {
   }
 
   confirmRemoveAssociatedUser(associatedUser: HomeAssociatedUser) {
-    const name = `${associatedUser.givenName ?? ''} ${associatedUser.surname ?? ''}`.trim() || associatedUser.emails || 'this user';
+    const providerLabel = this.associatedUserProviderLabel(associatedUser).replace(/\s+account$/i, '');
+    const accountLabel = `${providerLabel} account`;
+    const emailAddress = (associatedUser?.emails ?? '').trim() || 'this user';
     const ref = this.dialog.open(ConfirmDialogComponent, {
       data: {
         title: 'Remove home association?',
-        body: `This will remove ${name}'s association with this home.`,
+        body: `${accountLabel} ${emailAddress} will no longer be able to modify this home's details.`,
         confirmText: 'Remove',
         cancelText: 'Cancel',
         confirmColor: 'warn'
@@ -288,6 +290,20 @@ export class EditHomeComponent implements OnInit, OnChanges {
         this.removeAssociatedUser(associatedUser);
       }
     });
+  }
+
+  associatedUserProviderLabel(associatedUser: HomeAssociatedUser) {
+    const provider = (associatedUser?.identityProvider ?? '').toLowerCase();
+    if (provider.includes('google')) {
+      return 'Google account';
+    }
+    if (provider.includes('facebook')) {
+      return 'Facebook account';
+    }
+    if (provider.trim().length < 1) {
+      return 'Account provider unknown';
+    }
+    return associatedUser.identityProvider;
   }
 
   private removeAssociatedUser(associatedUser: HomeAssociatedUser) {

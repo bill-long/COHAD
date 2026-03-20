@@ -13,7 +13,7 @@
 }
 
 .subtitle {
-    color: rgba(0, 0, 0, 0.7);
+    color: var(--text-secondary);
 }
 
 .card {
@@ -21,19 +21,19 @@
 }
 
 .infoCard {
-    background: #fafafa;
+    background: var(--surface-muted);
 }
 
 .kvGrid {
     display: grid;
     grid-template-columns: 180px 1fr;
-    gap: 8px 16px;
+    gap: 4px 16px;
     align-items: baseline;
 }
 
 .k {
-    color: rgba(0, 0, 0, 0.7);
-    font-weight: 600;
+    color: var(--text-secondary);
+    font-weight: 500;
 }
 
 .v {
@@ -52,12 +52,12 @@
 }
 
 .emptyStateTitle {
-    font-weight: 600;
+    font-weight: 500;
     margin-bottom: 4px;
 }
 
 .emptyStateBody {
-    color: rgba(0, 0, 0, 0.7);
+    color: var(--text-secondary);
 }
 
 @media (max-width: 600px) {

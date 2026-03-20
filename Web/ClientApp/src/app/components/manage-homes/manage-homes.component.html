@@ -46,5 +46,7 @@
     <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
 </table>
 
-<app-edit-home *ngIf="(focusedHome$ | async) != null" [home]="(focusedHome$ | async)" (doneEvent)="unfocusHome()"
-    [startWithEditEnabled]="true" [reloadAllOnSave]="true"></app-edit-home>
+<div class="focusedHomeEditor" *ngIf="(focusedHome$ | async) != null">
+    <app-edit-home [home]="(focusedHome$ | async)" (doneEvent)="unfocusHome()"
+        [startWithEditEnabled]="true" [reloadAllOnSave]="true"></app-edit-home>
+</div>

@@ -12,6 +12,8 @@ namespace Web.Models
         public string Surname { get; set; }
 
         public string Emails { get; set; }
+
+        public string IdentityProvider { get; set; }
     }
 
     public class Home

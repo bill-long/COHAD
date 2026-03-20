@@ -10,6 +10,22 @@
     margin-bottom: 50px;
 }
 
+.header.no-bottom-gap {
+    margin-bottom: 0;
+}
+
+.header.fill-viewport {
+    height: calc(100vh - 64px);
+    min-height: calc(100vh - 64px);
+}
+
+@media (max-width: 599.98px) {
+    .header.fill-viewport {
+        height: calc(100vh - 56px);
+        min-height: calc(100vh - 56px);
+    }
+}
+
 .header>h1 {
     color: white;
     text-shadow: black 3px 0 10px, black -3px 0 10px;
