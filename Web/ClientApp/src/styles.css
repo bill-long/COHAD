@@ -44,6 +44,11 @@ html {
     height: 100%;
 }
 
+app-root {
+    display: block;
+    width: 100%;
+}
+
 body {
     margin: 0;
     height: 100%;
