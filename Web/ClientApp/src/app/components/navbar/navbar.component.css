@@ -1,3 +1,13 @@
+:host {
+    display: block;
+    width: 100%;
+}
+
+mat-toolbar {
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .example-fill-remaining-space {
     /* This fills the remaining space, by using flexbox. 
        Every toolbar row uses a flexbox row layout. */
@@ -30,6 +40,7 @@
 
 .nav-mobile {
     display: block;
+    width: 100%;
 }
 
 @media (max-width: 959.98px) {
