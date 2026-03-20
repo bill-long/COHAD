@@ -43,7 +43,7 @@ namespace Web.Controllers
                 user.Surname = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Surname)?.Value;
                 user.Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value;
                 user.LastLoggedIn = DateTime.UtcNow;
-                await _userRepository.UpsertAsync(user);
+                FireAndForget(() => _userRepository.UpsertAsync(user));
 
                 // Includes are not supported, and we don't want this to be an owned type, so we're manually handling these references
                 // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
@@ -73,25 +73,33 @@ namespace Web.Controllers
 
             await _userRepository.UpsertAsync(newUser);
 
-            try
-            {
-                await _emailService.SendEmail(
-                    "webservice@cohad.org",
-                    "COHAD Web",
-                    new EmailInfo
-                    {
-                        Subject = "New User Registered",
-                        HtmlBody = $"<div>Name: {newUser.GivenName} {newUser.Surname}</div><div>Email: {newUser.Emails}</div><div>Address: {newUser.StreetAddress}</div>"
-                    },
-                    new List<string> { "directory@cohad.org" },
-                    User);
-            }
-            catch
-            {
-                // If the email fails, ignore it, we don't care.
-            }
+            FireAndForget(() => _emailService.SendEmail(
+                "webservice@cohad.org",
+                "COHAD Web",
+                new EmailInfo
+                {
+                    Subject = "New User Registered",
+                    HtmlBody = $"<div>Name: {newUser.GivenName} {newUser.Surname}</div><div>Email: {newUser.Emails}</div><div>Address: {newUser.StreetAddress}</div>"
+                },
+                new List<string> { "directory@cohad.org" },
+                User));
 
             return PresentationUser.FromStorageModel(newUser, new List<Home>());
+        }
+
+        private static void FireAndForget(Func<Task> taskFactory)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await taskFactory();
+                }
+                catch
+                {
+                    // Best-effort side effect only.
+                }
+            });
         }
 
         private static void PopulateAssociatedUsers(List<Home> homes, List<User> users)

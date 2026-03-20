@@ -2,3 +2,9 @@
 <div>
     <router-outlet></router-outlet>
 </div>
+<div *ngIf="showPostLoginTransition$ | async" class="post-login-transition" role="status" aria-live="polite">
+    <div class="post-login-transition__content">
+        <mat-progress-spinner diameter="36" mode="indeterminate"></mat-progress-spinner>
+        <span>Signing you in...</span>
+    </div>
+</div>

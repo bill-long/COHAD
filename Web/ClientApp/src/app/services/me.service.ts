@@ -19,7 +19,13 @@ export class MeService {
       if (s.authUser?.accessToken == null) {
         this.dispatcher.next(new LoadUserCompleted(null));
       } else {
-        httpClient.get<ApiUser>('api/me').subscribe(u => this.dispatcher.next(new LoadUserCompleted(u)));
+        httpClient.get<ApiUser>('api/me').subscribe({
+          next: u => this.dispatcher.next(new LoadUserCompleted(u)),
+          error: e => {
+            console.error('Failed to load api/me after authentication', e);
+            this.dispatcher.next(new LoadUserCompleted(null));
+          }
+        });
       }
     });
 
