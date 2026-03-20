@@ -49,6 +49,8 @@ namespace Web.Controllers
                 if (user.OwnedHomeIds != null && user.OwnedHomeIds.Count > 0)
                 {
                     ownedHomes = await _homeRepository.GetByIdsAsync(user.OwnedHomeIds);
+                    var allUsers = await _userRepository.GetAllAsync();
+                    PopulateAssociatedUsers(ownedHomes, allUsers);
                 }
                 return PresentationUser.FromStorageModel(user, ownedHomes);
             }
@@ -87,6 +89,23 @@ namespace Web.Controllers
             }
 
             return PresentationUser.FromStorageModel(newUser, new List<Home>());
+        }
+
+        private static void PopulateAssociatedUsers(List<Home> homes, List<User> users)
+        {
+            foreach (var home in homes)
+            {
+                home.AssociatedUsers = users
+                    .Where(u => u.OwnedHomeIds != null && u.OwnedHomeIds.Contains(home.Id))
+                    .Select(u => new HomeAssociatedUser
+                    {
+                        UniqueId = u.UniqueId,
+                        GivenName = u.GivenName,
+                        Surname = u.Surname,
+                        Emails = u.Emails
+                    })
+                    .ToList();
+            }
         }
     }
 }

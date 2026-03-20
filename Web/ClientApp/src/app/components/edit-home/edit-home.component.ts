@@ -1,5 +1,5 @@
 import { Component, ElementRef, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, ViewChild } from '@angular/core';
-import { Home, Resident } from 'src/app/models';
+import { Home, HomeAssociatedUser, Resident } from 'src/app/models';
 import { HomeService } from 'src/app/services/home.service';
 import { MatDialog } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
@@ -267,6 +267,44 @@ export class EditHomeComponent implements OnInit, OnChanges {
     ref.afterClosed().subscribe(confirmed => {
       if (confirmed === true) {
         this.deleteResidentAndSave(resident);
+      }
+    });
+  }
+
+  confirmRemoveAssociatedUser(associatedUser: HomeAssociatedUser) {
+    const name = `${associatedUser.givenName ?? ''} ${associatedUser.surname ?? ''}`.trim() || associatedUser.emails || 'this user';
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Remove home association?',
+        body: `This will remove ${name}'s association with this home.`,
+        confirmText: 'Remove',
+        cancelText: 'Cancel',
+        confirmColor: 'warn'
+      }
+    });
+
+    ref.afterClosed().subscribe(confirmed => {
+      if (confirmed === true) {
+        this.removeAssociatedUser(associatedUser);
+      }
+    });
+  }
+
+  private removeAssociatedUser(associatedUser: HomeAssociatedUser) {
+    if (!this.homeCopy?.id || !associatedUser?.uniqueId) {
+      return;
+    }
+
+    this.saveInProgress = true;
+    this.homeService.removeAssociatedUser(this.homeCopy.id, associatedUser.uniqueId, !!this.reloadAllOnSave).subscribe({
+      next: ok => {
+        this.saveInProgress = false;
+        if (ok) {
+          this.doneEvent.next();
+        }
+      },
+      error: _ => {
+        this.saveInProgress = false;
       }
     });
   }

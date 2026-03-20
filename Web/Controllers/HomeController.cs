@@ -35,7 +35,10 @@ namespace Web.Controllers
         [Authorize(Policy = "Administrator")]
         public async Task<IEnumerable<Home>> Get()
         {
-            return await _homeRepository.GetAllAsync();
+            var homes = await _homeRepository.GetAllAsync();
+            var users = await _userRepository.GetAllAsync();
+            PopulateAssociatedUsers(homes, users);
+            return homes;
         }
 
         /// <summary>
@@ -106,6 +109,66 @@ namespace Web.Controllers
             await _homeRepository.UpsertAsync(storedHome);
 
             return Ok();
+        }
+
+        [HttpDelete("{homeId}/owners/{userUniqueId}")]
+        public async Task<IActionResult> RemoveAssociatedUser(Guid homeId, string userUniqueId)
+        {
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
+            var ownsHome = apiUser.OwnedHomeIds != null && apiUser.OwnedHomeIds.Contains(homeId);
+            if (!ownsHome && !apiUser.Roles.Contains(Models.User.Role.Administrator))
+            {
+                return Forbid();
+            }
+
+            var userToUpdate = await _userRepository.GetByUniqueIdAsync(userUniqueId);
+            if (userToUpdate == null)
+            {
+                return NotFound();
+            }
+
+            userToUpdate.OwnedHomeIds ??= new List<Guid>();
+            if (!userToUpdate.OwnedHomeIds.Contains(homeId))
+            {
+                return Conflict("The specified user is not associated with the specified home.");
+            }
+
+            userToUpdate.OwnedHomeIds = userToUpdate.OwnedHomeIds.Where(h => h != homeId).ToList();
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
+            {
+                Id = Guid.NewGuid(),
+                SubjectId = userToUpdate.UniqueId,
+                SubjectName = userToUpdate.Emails,
+                Action = $"Removed home {homeId:D} from this user.",
+                Time = DateTime.UtcNow,
+                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                UserId = apiUser.UniqueId
+            });
+
+            await _userRepository.UpsertAsync(userToUpdate);
+            return Ok();
+        }
+
+        private static void PopulateAssociatedUsers(List<Home> homes, List<User> users)
+        {
+            foreach (var home in homes)
+            {
+                home.AssociatedUsers = users
+                    .Where(u => u.OwnedHomeIds != null && u.OwnedHomeIds.Contains(home.Id))
+                    .Select(u => new HomeAssociatedUser
+                    {
+                        UniqueId = u.UniqueId,
+                        GivenName = u.GivenName,
+                        Surname = u.Surname,
+                        Emails = u.Emails
+                    })
+                    .ToList();
+            }
         }
     }
 }

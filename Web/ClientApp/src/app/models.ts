@@ -65,6 +65,14 @@ export interface Home {
     emailAddress: EmailAddress | null;
     residents: Resident[];
     auditLog: AuditLogEntry[];
+    associatedUsers?: HomeAssociatedUser[];
+}
+
+export interface HomeAssociatedUser {
+    uniqueId: string;
+    givenName: string;
+    surname: string;
+    emails: string;
 }
 
 export interface Resident {
