@@ -87,7 +87,11 @@ public sealed class UserPurgeRunnerTests
         Assert.Equal(1, result.Deleted);
         users.Verify(r => r.DeleteAsync("resident"), Times.Once);
         users.Verify(r => r.DeleteAsync("admin"), Times.Never);
-        audit.Verify(a => a.AddAsync(It.Is<NewAuditLogEntry>(e => e.SubjectId == "resident")), Times.Once);
+        audit.Verify(
+            a => a.AddAsync(It.Is<NewAuditLogEntry>(
+                e => e.SubjectId == "resident" &&
+                     e.Action.Contains("no homes or no roles", StringComparison.OrdinalIgnoreCase))),
+            Times.Once);
     }
 
     [Fact]

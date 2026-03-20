@@ -112,6 +112,68 @@ public sealed class UserPurgeIntegrationTests
     }
 
     [SkippableFact]
+    public async Task GetPurgeCandidatesAsync_includes_user_when_no_roles_before_cutoff()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.UnavailableReason);
+
+        var repo = _fixture.CreateUserRepository();
+        var uniqueId = $"google.com{Guid.NewGuid():N}";
+        var user = NewUnassociatedUser(uniqueId);
+        user.Roles = new List<User.Role>();
+
+        await repo.UpsertAsync(user).ConfigureAwait(false);
+        var loaded = await repo.GetByUniqueIdAsync(uniqueId).ConfigureAwait(false);
+        Assert.NotNull(loaded);
+        loaded.OwnedHomeIds = new List<Guid> { Guid.NewGuid() };
+        loaded.NoRolesSinceUtc = DateTime.UtcNow.AddDays(-45);
+        await repo.UpsertAsync(loaded).ConfigureAwait(false);
+
+        try
+        {
+            var cutoff = DateTime.UtcNow.AddDays(-30);
+            var candidates = await repo.GetPurgeCandidatesAsync(cutoff, 100).ConfigureAwait(false);
+            Assert.Contains(candidates, c => c.UniqueId == uniqueId);
+        }
+        finally
+        {
+            await repo.DeleteAsync(uniqueId).ConfigureAwait(false);
+        }
+    }
+
+    [SkippableFact]
+    public async Task GetPurgeCandidatesAsync_excludes_user_when_roles_present()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.UnavailableReason);
+
+        var repo = _fixture.CreateUserRepository();
+        var uniqueId = $"google.com{Guid.NewGuid():N}";
+        var user = NewUnassociatedUser(uniqueId);
+        user.Roles = new List<User.Role>();
+
+        await repo.UpsertAsync(user).ConfigureAwait(false);
+        var loaded = await repo.GetByUniqueIdAsync(uniqueId).ConfigureAwait(false);
+        Assert.NotNull(loaded);
+        loaded.OwnedHomeIds = new List<Guid> { Guid.NewGuid() };
+        loaded.NoRolesSinceUtc = DateTime.UtcNow.AddDays(-45);
+        await repo.UpsertAsync(loaded).ConfigureAwait(false);
+        loaded = await repo.GetByUniqueIdAsync(uniqueId).ConfigureAwait(false);
+        Assert.NotNull(loaded);
+        loaded.Roles = new List<User.Role> { User.Role.Resident };
+        await repo.UpsertAsync(loaded).ConfigureAwait(false);
+
+        try
+        {
+            var cutoff = DateTime.UtcNow.AddDays(-30);
+            var candidates = await repo.GetPurgeCandidatesAsync(cutoff, 100).ConfigureAwait(false);
+            Assert.DoesNotContain(candidates, c => c.UniqueId == uniqueId);
+        }
+        finally
+        {
+            await repo.DeleteAsync(uniqueId).ConfigureAwait(false);
+        }
+    }
+
+    [SkippableFact]
     public async Task DeleteAsync_removes_document_and_second_delete_does_not_throw()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.UnavailableReason);

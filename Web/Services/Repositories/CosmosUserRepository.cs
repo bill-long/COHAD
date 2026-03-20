@@ -20,7 +20,7 @@ namespace Web.Services.Repositories
         Task<User> UpsertAsync(User user);
 
         /// <summary>
-        /// Users with no owned homes whose unassociated clock is on or before <paramref name="cutoffUtc"/>.
+        /// Users whose no-home or no-role clock is on or before <paramref name="cutoffUtc"/>.
         /// </summary>
         Task<List<User>> GetPurgeCandidatesAsync(DateTime cutoffUtc, int maxCount);
 
@@ -86,16 +86,30 @@ namespace Web.Services.Repositories
                 return new List<User>();
             }
 
-            // OwnedHomeIds is stored as a JSON string (legacy). UnassociatedSinceUtc must be set for eligibility.
+            // OwnedHomeIds and Roles are commonly stored as JSON strings (legacy).
             var query = new CosmosQueryDefinition(@"
 SELECT * FROM c
 WHERE c.Discriminator = 'User'
-  AND IS_DEFINED(c.UnassociatedSinceUtc)
-  AND c.UnassociatedSinceUtc <= @cutoff
   AND (
-    NOT IS_DEFINED(c.OwnedHomeIds)
-    OR c.OwnedHomeIds = '[]'
-    OR (IS_ARRAY(c.OwnedHomeIds) AND ARRAY_LENGTH(c.OwnedHomeIds) = 0)
+    (
+      IS_DEFINED(c.UnassociatedSinceUtc)
+      AND c.UnassociatedSinceUtc <= @cutoff
+      AND (
+        NOT IS_DEFINED(c.OwnedHomeIds)
+        OR c.OwnedHomeIds = '[]'
+        OR (IS_ARRAY(c.OwnedHomeIds) AND ARRAY_LENGTH(c.OwnedHomeIds) = 0)
+      )
+    )
+    OR
+    (
+      IS_DEFINED(c.NoRolesSinceUtc)
+      AND c.NoRolesSinceUtc <= @cutoff
+      AND (
+        NOT IS_DEFINED(c.Roles)
+        OR c.Roles = '[]'
+        OR (IS_ARRAY(c.Roles) AND ARRAY_LENGTH(c.Roles) = 0)
+      )
+    )
   )").WithParameter("@cutoff", cutoffUtc);
 
             var results = new List<User>();
@@ -106,7 +120,13 @@ WHERE c.Discriminator = 'User'
                 foreach (var doc in response)
                 {
                     var user = CosmosLegacyDocumentMapper.ToUser(doc);
-                    if (user.OwnedHomeIds == null || user.OwnedHomeIds.Count == 0)
+                    var noHomesEligible = (user.OwnedHomeIds == null || user.OwnedHomeIds.Count == 0)
+                        && user.UnassociatedSinceUtc != null
+                        && user.UnassociatedSinceUtc <= cutoffUtc;
+                    var noRolesEligible = (user.Roles == null || user.Roles.Count == 0)
+                        && user.NoRolesSinceUtc != null
+                        && user.NoRolesSinceUtc <= cutoffUtc;
+                    if (noHomesEligible || noRolesEligible)
                     {
                         results.Add(user);
                         if (results.Count >= maxCount)

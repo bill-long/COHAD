@@ -70,6 +70,7 @@ namespace Web.Services.Cosmos
                 StreetAddress = doc.Value<string>("StreetAddress"),
                 LastLoggedIn = doc["LastLoggedIn"]?.ToObject<DateTime?>(),
                 UnassociatedSinceUtc = doc["UnassociatedSinceUtc"]?.ToObject<DateTime?>(),
+                NoRolesSinceUtc = doc["NoRolesSinceUtc"]?.ToObject<DateTime?>(),
                 Roles = DeserializeFlexible<List<User.Role>>(doc["Roles"]) ?? new List<User.Role>(),
                 OwnedHomeIds = DeserializeFlexible<List<Guid>>(doc["OwnedHomeIds"]) ?? new List<Guid>()
             };
@@ -100,6 +101,9 @@ namespace Web.Services.Cosmos
             doc["LastLoggedIn"] = user.LastLoggedIn != null ? JToken.FromObject(user.LastLoggedIn) : JValue.CreateNull();
             doc["UnassociatedSinceUtc"] = user.UnassociatedSinceUtc != null
                 ? JToken.FromObject(user.UnassociatedSinceUtc)
+                : JValue.CreateNull();
+            doc["NoRolesSinceUtc"] = user.NoRolesSinceUtc != null
+                ? JToken.FromObject(user.NoRolesSinceUtc)
                 : JValue.CreateNull();
             // Keep legacy storage format for backward compatibility.
             doc["Roles"] = JsonConvert.SerializeObject(user.Roles ?? new List<User.Role>());

@@ -100,6 +100,37 @@ public sealed class CosmosLegacyDocumentMapperTests
     }
 
     [Fact]
+    public void ToUser_reads_NoRolesSinceUtc()
+    {
+        var when = new DateTime(2025, 1, 16, 8, 30, 0, DateTimeKind.Utc);
+        var doc = JObject.Parse($@"{{
+            ""id"": ""User|google.comx"",
+            ""Roles"": ""[]"",
+            ""OwnedHomeIds"": ""[]"",
+            ""NoRolesSinceUtc"": ""{when:O}""
+        }}");
+        var user = CosmosLegacyDocumentMapper.ToUser(doc);
+        Assert.Equal(when, user.NoRolesSinceUtc);
+    }
+
+    [Fact]
+    public void MergeUserIntoDocument_writes_NoRolesSinceUtc()
+    {
+        var doc = JObject.Parse(@"{ ""Roles"": ""[]"", ""OwnedHomeIds"": ""[]"" }");
+        var when = new DateTime(2025, 2, 2, 0, 0, 0, DateTimeKind.Utc);
+        var user = new User
+        {
+            UniqueId = "google.comu1",
+            NameIdentifier = "u1",
+            Roles = new List<User.Role>(),
+            OwnedHomeIds = new List<Guid>(),
+            NoRolesSinceUtc = when
+        };
+        CosmosLegacyDocumentMapper.MergeUserIntoDocument(doc, user);
+        Assert.Equal(when, doc["NoRolesSinceUtc"]?.ToObject<DateTime?>());
+    }
+
+    [Fact]
     public void MergeUserIntoDocument_keeps_AuditLog_when_present()
     {
         var doc = JObject.Parse(@"{

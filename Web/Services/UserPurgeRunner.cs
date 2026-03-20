@@ -32,7 +32,7 @@ public sealed class UserPurgeResult
 }
 
 /// <summary>
-/// Removes users who have had no owned homes for longer than <see cref="UserPurgeOptions.PurgeAfterDays"/>.
+/// Removes users who have had no owned homes or no roles for longer than <see cref="UserPurgeOptions.PurgeAfterDays"/>.
 /// </summary>
 public sealed class UserPurgeRunner
 {
@@ -89,7 +89,7 @@ public sealed class UserPurgeRunner
                     Id = Guid.NewGuid(),
                     SubjectId = user.UniqueId,
                     SubjectName = user.Emails,
-                    Action = $"Purged inactive user (no home association for {options.PurgeAfterDays}+ days).",
+                    Action = $"Purged inactive user (no homes or no roles for {options.PurgeAfterDays}+ days).",
                     Time = DateTime.UtcNow,
                     UserDisplayName = "System",
                     UserId = "user-purge"

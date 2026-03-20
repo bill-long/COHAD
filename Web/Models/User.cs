@@ -35,6 +35,11 @@ namespace Web.Models
         /// </summary>
         public DateTime? UnassociatedSinceUtc { get; set; }
 
+        /// <summary>
+        /// When the user last had no roles (UTC). Null while they have one or more roles.
+        /// </summary>
+        public DateTime? NoRolesSinceUtc { get; set; }
+
         public enum Role
         {
             Resident,
