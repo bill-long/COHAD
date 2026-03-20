@@ -70,7 +70,7 @@ namespace Web.MockData
         {
             lock (_homes)
             {
-                return Task.FromResult(_homes.Values.ToList());
+                return Task.FromResult(_homes.Values.Select(CloneHome).ToList());
             }
         }
 
@@ -104,22 +104,93 @@ namespace Web.MockData
             lock (_homes)
             {
                 _homes[home.Id] = CloneHome(home);
-                return Task.FromResult(_homes[home.Id]);
+                return Task.FromResult(CloneHome(_homes[home.Id]));
             }
         }
 
         private static Home CloneHome(Home h)
         {
-            // Shallow clone sufficient for in-memory mock; avoid shared references mutating seed unexpectedly.
             return new Home
             {
                 Id = h.Id,
                 StreetNumber = h.StreetNumber,
                 StreetName = h.StreetName,
-                PhoneNumber = h.PhoneNumber,
-                EmailAddress = h.EmailAddress,
-                Residents = h.Residents?.ToList() ?? new List<Resident>(),
-                AssociatedUsers = h.AssociatedUsers?.ToList() ?? new List<HomeAssociatedUser>()
+                PhoneNumber = ClonePhoneNumber(h.PhoneNumber),
+                EmailAddress = CloneEmailAddress(h.EmailAddress),
+                Residents = h.Residents?.Select(CloneResident).ToList() ?? new List<Resident>(),
+                AssociatedUsers = h.AssociatedUsers?.Select(CloneAssociatedUser).ToList() ?? new List<HomeAssociatedUser>()
+            };
+        }
+
+        private static PhoneNumber ClonePhoneNumber(PhoneNumber p)
+        {
+            if (p == null)
+            {
+                return null;
+            }
+
+            return new PhoneNumber
+            {
+                AreaCode = p.AreaCode,
+                Prefix = p.Prefix,
+                LineNumber = p.LineNumber,
+                Type = p.Type,
+                VisibleInDirectory = p.VisibleInDirectory
+            };
+        }
+
+        private static EmailAddress CloneEmailAddress(EmailAddress e)
+        {
+            if (e == null)
+            {
+                return null;
+            }
+
+            return new EmailAddress
+            {
+                Address = e.Address,
+                VisibleInDirectory = e.VisibleInDirectory,
+                BoardEmailOptedIn = e.BoardEmailOptedIn,
+                WelcomeEmailOptedIn = e.WelcomeEmailOptedIn,
+                GardenClubEmailOptedIn = e.GardenClubEmailOptedIn,
+                SocialCommitteeEmailOptedIn = e.SocialCommitteeEmailOptedIn,
+                SunshineCommitteeEmailOptedIn = e.SunshineCommitteeEmailOptedIn
+            };
+        }
+
+        private static Resident CloneResident(Resident r)
+        {
+            if (r == null)
+            {
+                return null;
+            }
+
+            return new Resident
+            {
+                GivenName = r.GivenName,
+                Surname = r.Surname,
+                YearOfBirth = r.YearOfBirth,
+                CollegeName = r.CollegeName,
+                ResidentType = r.ResidentType,
+                EmailAddresses = r.EmailAddresses?.Select(CloneEmailAddress).ToList() ?? new List<EmailAddress>(),
+                PhoneNumbers = r.PhoneNumbers?.Select(ClonePhoneNumber).ToList() ?? new List<PhoneNumber>()
+            };
+        }
+
+        private static HomeAssociatedUser CloneAssociatedUser(HomeAssociatedUser u)
+        {
+            if (u == null)
+            {
+                return null;
+            }
+
+            return new HomeAssociatedUser
+            {
+                UniqueId = u.UniqueId,
+                GivenName = u.GivenName,
+                Surname = u.Surname,
+                Emails = u.Emails,
+                IdentityProvider = u.IdentityProvider
             };
         }
     }

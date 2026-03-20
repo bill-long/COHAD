@@ -55,10 +55,13 @@ namespace Web
                 {
                     if (useMockData)
                     {
-                        var signingKey = Configuration["MockJwt:SigningKey"];
+                        var signingKey = MockJwtSigningKey.Resolve(Configuration);
                         if (string.IsNullOrEmpty(signingKey))
                         {
-                            throw new InvalidOperationException("MockData environment requires MockJwt:SigningKey in configuration.");
+                            throw new InvalidOperationException(
+                                "MockData requires a non-empty MockJwt:SigningKey. Set user secret " +
+                                "(dotnet user-secrets set \"MockJwt:SigningKey\" \"<32+ chars>\") or environment variable " +
+                                "MockJwt__SigningKey (do not commit real keys).");
                         }
 
                         options.TokenValidationParameters = new TokenValidationParameters
