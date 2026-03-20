@@ -62,6 +62,7 @@ namespace Web.Controllers
             storedUser.Surname = updatedUser.Surname;
             storedUser.StreetAddress = updatedUser.StreetAddress;
 
+            await _userRepository.UpsertAsync(storedUser);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
@@ -73,7 +74,6 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _userRepository.UpsertAsync(storedUser);
             return Ok();
         }
 
@@ -100,6 +100,7 @@ namespace Web.Controllers
             }
 
             user.OwnedHomeIds.Add(home.Id);
+            await _userRepository.UpsertAsync(user);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
@@ -111,7 +112,6 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _userRepository.UpsertAsync(user);
             return Ok();
         }
 
@@ -137,6 +137,7 @@ namespace Web.Controllers
             }
 
             user.OwnedHomeIds = user.OwnedHomeIds.Where(h => h != homeId).ToList();
+            await _userRepository.UpsertAsync(user);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
@@ -148,7 +149,6 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _userRepository.UpsertAsync(user);
             return Ok();
         }
 
@@ -179,6 +179,7 @@ namespace Web.Controllers
             }
 
             userToModify.Roles.Add(roleToAdd);
+            await _userRepository.UpsertAsync(userToModify);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
@@ -190,7 +191,6 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _userRepository.UpsertAsync(userToModify);
             return Ok();
         }
 
@@ -221,6 +221,7 @@ namespace Web.Controllers
 
             userToModify.Roles ??= new List<Models.User.Role>();
             userToModify.Roles.Remove(roleToRemove);
+            await _userRepository.UpsertAsync(userToModify);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
@@ -232,7 +233,6 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _userRepository.UpsertAsync(userToModify);
             return Ok();
         }
     }

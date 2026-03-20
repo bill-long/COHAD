@@ -95,6 +95,7 @@ namespace Web.Controllers
             storedHome.PhoneNumber = updatedHome.PhoneNumber;
             storedHome.Residents = updatedHome.Residents.Where(r => !string.IsNullOrEmpty(r.GivenName)).ToList();
 
+            await _homeRepository.UpsertAsync(storedHome);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
@@ -105,8 +106,6 @@ namespace Web.Controllers
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
                 UserId = apiUser.UniqueId
             });
-
-            await _homeRepository.UpsertAsync(storedHome);
 
             return Ok();
         }
@@ -139,6 +138,7 @@ namespace Web.Controllers
             }
 
             userToUpdate.OwnedHomeIds = userToUpdate.OwnedHomeIds.Where(h => h != homeId).ToList();
+            await _userRepository.UpsertAsync(userToUpdate);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
@@ -150,7 +150,6 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _userRepository.UpsertAsync(userToUpdate);
             return Ok();
         }
 
