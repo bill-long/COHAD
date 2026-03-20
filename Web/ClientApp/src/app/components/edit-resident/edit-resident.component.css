@@ -91,6 +91,7 @@
 
 .residentName {
   font-weight: 700;
+  color: rgba(0, 0, 0, 0.87);
   flex: 1 1 160px;
   min-width: 120px;
   overflow: hidden;
