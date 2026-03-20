@@ -61,8 +61,26 @@ export class NavbarComponent implements OnInit {
     return this.appState.pipe(map(s => s.authUser));
   }
 
+  get authBootstrapCompleted$(): Observable<boolean> {
+    return this.appState.pipe(map(s => s.authBootstrapStatus === 'completed'));
+  }
+
+  get navVm$(): Observable<{ authUser: AuthUser | null; apiUser: ApiUser | null; authBootstrapCompleted: boolean; showAuthenticatedNav: boolean; showGuestPrivacy: boolean }> {
+    return this.appState.pipe(map(s => {
+      const authBootstrapCompleted = s.authBootstrapStatus === 'completed';
+      const showAuthenticatedNav = authBootstrapCompleted && s.apiUser != null;
+      return {
+        authUser: s.authUser,
+        apiUser: s.apiUser,
+        authBootstrapCompleted,
+        showAuthenticatedNav,
+        showGuestPrivacy: !showAuthenticatedNav
+      };
+    }));
+  }
+
   get manageVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0))
+    return this.navVm$.pipe(map(vm => vm.showAuthenticatedNav && vm.apiUser !== null && vm.apiUser.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0))
   }
 
   get isDarkTheme$(): Observable<boolean> {

@@ -35,8 +35,8 @@ mat-form-field {
 .home {
   padding-top: 30px;
   break-inside: avoid;
-  width: 100%;
-  max-width: 550px;
+  width: 550px;
+  max-width: 100%;
 }
 
 mat-spinner {
@@ -59,12 +59,21 @@ mat-spinner {
   white-space: nowrap;
 }
 
-.homeAddress {
+.homeAddressRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 6px;
 }
 
-.homeContactLines {
-  margin-top: 6px;
+.homeAddress {
+  min-width: 0;
+}
+
+.homeEmail {
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .subsectionTitle {
@@ -124,22 +133,6 @@ mat-spinner {
   flex: 1;
   min-width: 0;
   text-align: right;
-  overflow-wrap: anywhere;
-}
-
-.kvRow {
-  display: grid;
-  grid-template-columns: 110px 1fr;
-  gap: 10px;
-  align-items: start;
-  margin-top: 4px;
-}
-
-.k {
-  font-weight: bold;
-}
-
-.v {
   overflow-wrap: anywhere;
 }
 
