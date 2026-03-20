@@ -55,3 +55,10 @@ If tests fail with **PartitionKeyMismatch** against your test account:
 ## dotnet test without Cosmos
 
 Omit `RUN_COSMOS_INTEGRATION_TESTS`; tests skip with a clear reason.
+
+## User purge scenarios
+
+`UserPurgeIntegrationTests` exercises **`GetPurgeCandidatesAsync`**, **`DeleteAsync`** (including idempotent second delete), and **`UserPurgeRunner`** against real Cosmos (same opt-in as above). It validates:
+
+- SQL + partition key behavior for legacy user documents (`Discriminator`, `OwnedHomeIds` as `[]`, `UnassociatedSinceUtc`).
+- Dry-run leaves documents in place; live run deletes a non-admin eligible user and skips an administrator.
