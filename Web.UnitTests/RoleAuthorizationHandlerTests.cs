@@ -58,6 +58,28 @@ public sealed class RoleAuthorizationHandlerTests
     }
 
     [Fact]
+    public async Task Does_not_succeed_when_user_has_null_roles()
+    {
+        var uniqueId = "google.comu1";
+        var mockRepo = new Mock<IUserRepository>();
+        mockRepo.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = null
+        });
+        var handler = new RoleAuthorizationHandler(mockRepo.Object);
+        var requirement = new RoleAuthorizationRequirement(User.Role.Resident);
+        var context = new AuthorizationHandlerContext(
+            new IAuthorizationRequirement[] { requirement },
+            Principal("u1", "google.com"),
+            resource: null);
+
+        await ((IAuthorizationHandler)handler).HandleAsync(context);
+
+        Assert.False(context.HasSucceeded);
+    }
+
+    [Fact]
     public async Task Does_not_succeed_when_role_missing()
     {
         var uniqueId = "google.comu1";
