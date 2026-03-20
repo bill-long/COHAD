@@ -32,3 +32,10 @@ Users with role **Administrator** are never deleted.
 
 - Deploy as a separate **Function App** from the web app.
 - Prefer **Key Vault references** for `CosmosKey` and enable **Application Insights** on the Function App for operational logs.
+
+### GitHub Actions
+
+If you use the repo workflow `.github/workflows/master_userpurgefunction.yml`, create these repository secrets:
+
+- `AzureFunctionApp_Name_UserPurge`: the Azure Function App name (e.g. `my-funcapp`)
+- `AzureFunctionApp_PublishProfile_UserPurge`: the XML publish profile contents from the Function App
