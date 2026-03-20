@@ -49,7 +49,9 @@ export class AuthService {
 
       this.oauthService.events
         .subscribe(async e => {
-          console.log('OAuthService event', e);
+          if (!environment.production) {
+            console.log('OAuthService event', e);
+          }
           this.updateState();
         });
     }

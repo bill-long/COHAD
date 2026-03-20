@@ -1,6 +1,7 @@
 import { Observable, Subject, BehaviorSubject } from 'rxjs';
 import { InjectionToken } from '@angular/core';
 import { scan } from 'rxjs/operators';
+import { environment } from 'src/environments/environment';
 import { ApiUser, AuthUser, Home, DirectoryHome } from './models';
 
 export interface ApplicationState {
@@ -65,7 +66,9 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
     let appStateObservable = dispatcher.pipe(
         scan((state: ApplicationState, action: Action) => {
 
-            console.log('Processing action ', action);
+            if (!environment.production) {
+                console.log('Processing action ', action);
+            }
 
             let newState: ApplicationState;
 
@@ -137,7 +140,9 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                 newState = state;
             }
 
-            console.log('Emitting new state', newState);
+            if (!environment.production) {
+                console.log('Emitting new state', newState);
+            }
 
             return newState;
         }, initialState));
