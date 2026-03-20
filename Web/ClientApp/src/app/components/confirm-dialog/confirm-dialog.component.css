@@ -3,7 +3,7 @@
 }
 
 .body {
-  color: rgba(0, 0, 0, 0.75);
+  color: var(--text-secondary);
   white-space: pre-line;
 }
 

@@ -4,5 +4,5 @@ mat-form-field {
 }
 
 .mat-input-element:disabled {
-    color: black;
+    color: var(--text-primary);
 }
