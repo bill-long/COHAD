@@ -23,7 +23,7 @@ COHAD (Canyon Oaks Homeowners Association Directory) is a .NET 10 ASP.NET Core b
 Use this when you need a **signed-in** session and working APIs **without** Cosmos DB or Azure AD B2C.
 
 1. **Angular** with mock auth: `cd Web/ClientApp && npm run start:mock` (build configuration `mock` sets `environment.useMockAuth`).
-2. **Backend** with in-memory repositories and HS256 dev tokens — you must supply a **signing key** (at least 32 bytes) via environment variable **`MockJwt__SigningKey`** or `dotnet user-secrets set "MockJwt:SigningKey" "..."` in the `Web` project (never commit real keys; `appsettings.MockData.json` keeps an empty placeholder):  
+2. **Backend** with in-memory repositories and HS256 dev tokens — you must supply a **signing key** of at least **32 UTF-8 bytes** (required for HS256) via environment variable **`MockJwt__SigningKey`** or `dotnet user-secrets set "MockJwt:SigningKey" "..."` in the `Web` project (never commit real keys; `appsettings.MockData.json` keeps an empty placeholder):  
    `MockJwt__SigningKey='<your-local-secret>' ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://0.0.0.0:5000" dotnet run --project Web/Web.csproj`
 3. Open **http://localhost:5000** (same proxy pattern as Development: API serves the app and proxies the SPA from port 4200).
 

@@ -35,7 +35,7 @@ namespace Web.MockData
         {
             lock (_users)
             {
-                return Task.FromResult(_users.Values.ToList());
+                return Task.FromResult(_users.Values.Select(CloneUser).ToList());
             }
         }
 
@@ -48,19 +48,19 @@ namespace Web.MockData
 
             lock (_users)
             {
-                return Task.FromResult(_users.TryGetValue(uniqueId, out var u) ? u : null);
+                return Task.FromResult(_users.TryGetValue(uniqueId, out var u) ? CloneUser(u) : null);
             }
         }
 
         public Task<User> UpsertAsync(User user)
         {
-            UserAssociationState.Apply(user);
+            var copy = CloneUser(user);
+            UserAssociationState.Apply(copy);
             lock (_users)
             {
-                _users[user.UniqueId] = user;
+                _users[copy.UniqueId] = copy;
+                return Task.FromResult(CloneUser(copy));
             }
-
-            return Task.FromResult(user);
         }
 
         public Task<List<User>> GetPurgeCandidatesAsync(DateTime cutoffUtc, int maxCount)
@@ -76,6 +76,30 @@ namespace Web.MockData
             }
 
             return Task.CompletedTask;
+        }
+
+        private static User CloneUser(User u)
+        {
+            if (u == null)
+            {
+                return null;
+            }
+
+            return new User
+            {
+                NameIdentifier = u.NameIdentifier,
+                GivenName = u.GivenName,
+                Surname = u.Surname,
+                IdentityProvider = u.IdentityProvider,
+                Emails = u.Emails,
+                StreetAddress = u.StreetAddress,
+                Roles = u.Roles?.ToList() ?? new List<User.Role>(),
+                UniqueId = u.UniqueId,
+                OwnedHomeIds = u.OwnedHomeIds?.ToList() ?? new List<Guid>(),
+                LastLoggedIn = u.LastLoggedIn,
+                UnassociatedSinceUtc = u.UnassociatedSinceUtc,
+                NoRolesSinceUtc = u.NoRolesSinceUtc
+            };
         }
     }
 }

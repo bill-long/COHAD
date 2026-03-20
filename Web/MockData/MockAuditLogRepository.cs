@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Web.Models;
 using Web.Services.Repositories;
@@ -13,7 +14,7 @@ namespace Web.MockData
         {
             lock (_entries)
             {
-                _entries.Add(entry);
+                _entries.Add(CloneEntry(entry));
             }
 
             return Task.CompletedTask;
@@ -23,8 +24,27 @@ namespace Web.MockData
         {
             lock (_entries)
             {
-                return Task.FromResult(new List<NewAuditLogEntry>(_entries));
+                return Task.FromResult(_entries.Select(CloneEntry).ToList());
             }
+        }
+
+        private static NewAuditLogEntry CloneEntry(NewAuditLogEntry e)
+        {
+            if (e == null)
+            {
+                return null;
+            }
+
+            return new NewAuditLogEntry
+            {
+                Id = e.Id,
+                Time = e.Time,
+                UserId = e.UserId,
+                UserDisplayName = e.UserDisplayName,
+                SubjectId = e.SubjectId,
+                SubjectName = e.SubjectName,
+                Action = e.Action
+            };
         }
     }
 }

@@ -21,10 +21,14 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var signingKey = MockJwtSigningKey.Resolve(config);
-            if (string.IsNullOrEmpty(signingKey))
+            string signingKey;
+            try
             {
-                return StatusCode(500, "MockJwt:SigningKey is not configured (set MockJwt__SigningKey or user secrets).");
+                signingKey = MockJwtSigningKey.ResolveValidated(config);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return StatusCode(500, ex.Message);
             }
 
             var token = MockJwtIssuer.CreateAccessToken(signingKey, TimeSpan.FromHours(24));

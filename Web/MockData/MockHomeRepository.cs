@@ -63,7 +63,7 @@ namespace Web.MockData
                 },
                 AssociatedUsers = new List<HomeAssociatedUser>()
             };
-            _homes[home.Id] = home;
+            _homes[home.Id] = CloneHome(home);
         }
 
         public Task<List<Home>> GetAllAsync()
