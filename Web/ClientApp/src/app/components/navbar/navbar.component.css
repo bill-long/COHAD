@@ -44,8 +44,19 @@ mat-toolbar {
 }
 
 @media (max-width: 959.98px) {
+    mat-toolbar {
+        padding: 0;
+    }
+
     .nav-desktop {
         display: none;
+    }
+
+    .nav-mobile > button {
+        width: 100%;
+        min-width: 0;
+        justify-content: flex-start;
+        border-radius: 0;
     }
 }
 
