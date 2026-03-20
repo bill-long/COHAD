@@ -12,11 +12,9 @@
       <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="vm.showAuthenticatedNav">My
         Info</a>
       <a mat-flat-button color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent">Manage</a>
-      <button mat-icon-button (click)="toggleTheme()" [attr.aria-label]="(isDarkTheme$ | async) ? 'Switch to light mode' : 'Switch to dark mode'">
-        <mat-icon>{{ (isDarkTheme$ | async) ? 'light_mode' : 'dark_mode' }}</mat-icon>
-      </button>
       <button mat-flat-button color="primary" *ngIf="vm.authUser?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
       <mat-menu #userMenu="matMenu">
+        <button mat-menu-item (click)="toggleTheme()">{{ (isDarkTheme$ | async) ? 'Use light mode' : 'Use dark mode' }}</button>
         <button mat-menu-item (click)="logout()" [disabled]="disabled">Sign Out</button>
       </mat-menu>
       <button mat-button *ngIf="!vm.authUser?.identityClaims?.emails" (click)="login()" [disabled]="disabled">Sign In</button>
@@ -34,7 +32,6 @@
       <a mat-menu-item color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="vm.showAuthenticatedNav">My
         Info</a>
       <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent">Manage</a>
-      <button mat-menu-item (click)="toggleTheme()">{{ (isDarkTheme$ | async) ? 'Use light mode' : 'Use dark mode' }}</button>
       <button mat-button *ngIf="!vm.authUser?.identityClaims?.emails" (click)="login()" [disabled]="disabled">Sign In</button>
       <button mat-menu-item color="primary" *ngIf="vm.authUser?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
     </mat-menu>
