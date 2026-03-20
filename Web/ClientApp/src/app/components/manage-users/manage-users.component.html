@@ -1,3 +1,8 @@
+<mat-form-field appearance="fill" [hidden]="focusedUser != null">
+    <mat-label>Search</mat-label>
+    <input matInput [formControl]="userFilter">
+</mat-form-field>
+
 <table mat-table [dataSource]="dataSource" matSort [ngClass]="{ 'displaynone': focusedUser != null }">
 
     <ng-container matColumnDef="givenName">

@@ -5,6 +5,7 @@ import { Observer, Observable } from 'rxjs';
 import { MatSort } from '@angular/material/sort';
 import { map, take } from 'rxjs/operators';
 import { ApiUser, Home } from 'src/app/models';
+import { UntypedFormControl } from '@angular/forms';
 
 const PURGE_AFTER_DAYS = 30;
 const MANAGE_USERS_COLUMN_WIDTHS_STORAGE_KEY = 'manageUsers.columnWidths';
@@ -35,6 +36,7 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
   ];
 
   focusedUser: ApiUser | null = null;
+  userFilter = new UntypedFormControl('');
 
   allHomes$: Observable<Home[]>;
   private readonly onResizeMouseMove = (event: MouseEvent) => this.handleResizeMouseMove(event);
@@ -73,7 +75,12 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
       const value = (user as unknown as Record<string, unknown>)[sortHeaderId];
       return typeof value === 'string' || typeof value === 'number' ? value : '';
     };
+    this.dataSource.filterPredicate = (user: ApiUser, filter: string): boolean => this.isFilterMatch(filter, user);
     this.dataSource.sort = this.sort;
+
+    this.userFilter.valueChanges.subscribe(value => {
+      this.dataSource.filter = (value ?? '').toString().trim().toLowerCase();
+    });
   }
 
   ngOnDestroy(): void {
@@ -126,6 +133,25 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
 
     const elapsedDays = Math.floor((nowMs - sinceMs) / (1000 * 60 * 60 * 24));
     return PURGE_AFTER_DAYS - elapsedDays;
+  }
+
+  private isFilterMatch(filter: string, user: ApiUser): boolean {
+    if (!filter) {
+      return true;
+    }
+
+    const ownedHomes = user.ownedHomes.map(home => `${home.streetNumber} ${home.streetName}`).join(' ');
+    const combined = [
+      user.givenName,
+      user.surname,
+      user.email,
+      user.identityProvider,
+      user.streetAddress,
+      user.roles.join(' '),
+      ownedHomes
+    ].join(' ').toLowerCase();
+
+    return combined.includes(filter);
   }
 
   private handleResizeMouseMove(event: MouseEvent): void {
