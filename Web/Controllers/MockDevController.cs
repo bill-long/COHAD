@@ -1,7 +1,8 @@
-#if DEBUG
 using System;
+using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -13,11 +14,18 @@ namespace Web.Controllers
     [ApiController]
     public class MockDevController : ControllerBase
     {
+        private static readonly TimeSpan MockTokenLifetime = TimeSpan.FromMinutes(15);
+
         [HttpGet("mock-auth")]
         [AllowAnonymous]
         public IActionResult GetMockToken([FromServices] IWebHostEnvironment env, [FromServices] IConfiguration config)
         {
             if (!env.IsEnvironment("MockData"))
+            {
+                return NotFound();
+            }
+
+            if (!IsLoopbackRequest(HttpContext))
             {
                 return NotFound();
             }
@@ -32,9 +40,34 @@ namespace Web.Controllers
                 return StatusCode(500, ex.Message);
             }
 
-            var token = MockJwtIssuer.CreateAccessToken(signingKey, TimeSpan.FromHours(24));
-            return Ok(new { accessToken = token, expiresIn = 86400 });
+            var token = MockJwtIssuer.CreateAccessToken(signingKey, MockTokenLifetime);
+            return Ok(new { accessToken = token, expiresIn = (int)MockTokenLifetime.TotalSeconds });
+        }
+
+        private static bool IsLoopbackRequest(HttpContext context)
+        {
+            var remoteAddress = context?.Connection.RemoteIpAddress;
+            if (remoteAddress == null)
+            {
+                return false;
+            }
+
+            return IsLoopback(remoteAddress);
+        }
+
+        private static bool IsLoopback(IPAddress address)
+        {
+            if (IPAddress.IsLoopback(address))
+            {
+                return true;
+            }
+
+            if (address.IsIPv4MappedToIPv6)
+            {
+                return IPAddress.IsLoopback(address.MapToIPv4());
+            }
+
+            return false;
         }
     }
 }
-#endif

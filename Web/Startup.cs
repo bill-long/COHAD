@@ -225,7 +225,7 @@ namespace Web
 
                 if (useDevSpaProxy)
                 {
-                    spa.UseProxyToSpaDevelopmentServer("http://localhost:4200");
+                    spa.UseProxyToSpaDevelopmentServer("http://127.0.0.1:4200");
                 }
             });
         }
