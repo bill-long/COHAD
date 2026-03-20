@@ -43,6 +43,18 @@ namespace Web
                 configuration.RootPath = "ClientApp/dist/cohad-app";
             });
 
+            // Restrict cross-origin requests to the same origin by default.
+            // The SPA is served by this same host, so no additional origins need to be permitted here.
+            services.AddCors(options =>
+            {
+                options.AddDefaultPolicy(policy =>
+                {
+                    policy.WithOrigins(Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>())
+                          .AllowAnyHeader()
+                          .AllowAnyMethod();
+                });
+            });
+
             var useMockData = Environment.IsEnvironment("MockData");
 
             services
@@ -174,6 +186,7 @@ namespace Web
                 app.UseSpaStaticFiles();
             }
             app.UseRouting();
+            app.UseCors();
             app.UseAuthentication();
             app.UseAuthorization();
 
