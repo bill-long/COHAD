@@ -244,6 +244,15 @@
   font-weight: 600;
 }
 
+.associatedUsersHint {
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.associatedUserProvider {
+  font-size: 13px;
+}
+
 @media (max-width: 600px) {
   .kv {
     grid-template-columns: 1fr;

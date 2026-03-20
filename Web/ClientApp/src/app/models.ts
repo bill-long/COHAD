@@ -73,6 +73,7 @@ export interface HomeAssociatedUser {
     givenName: string;
     surname: string;
     emails: string;
+    identityProvider: string;
 }
 
 export interface Resident {
