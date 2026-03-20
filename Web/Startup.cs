@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -11,8 +10,8 @@ using Microsoft.IdentityModel.Tokens;
 using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Authorization;
 using Web.Models;
-using Web.Repository;
 using Web.Services;
+using Web.Services.Repositories;
 
 namespace Web
 {
@@ -90,14 +89,17 @@ namespace Web
             var key = Configuration["CosmosKey"];
             var db = Configuration["CosmosDatabase"];
 
-            // services.AddDbContext<CohadWebDbContext>(options => options.UseInMemoryDatabase("CohadWebDebugDatabase"));
-
-            services.AddDbContext<CohadWebDbContext>(options => options.UseCosmos(uri, key, db));
             services.AddSingleton(_ => new CosmosClient(uri, key));
-            services.AddSingleton(sp => sp.GetRequiredService<CosmosClient>().GetContainer(db, "Homes"));
+            services.AddScoped<IUserRepository>(sp =>
+                new CosmosUserRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Users")));
+            services.AddScoped<IHomeRepository>(sp =>
+                new CosmosHomeRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Homes")));
+            services.AddScoped<IPaymentRepository>(sp =>
+                new CosmosPaymentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments")));
+            services.AddScoped<IAuditLogRepository>(sp =>
+                new CosmosAuditLogRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog")));
 
             services.AddScoped<IEmailService, EmailService>();
-            services.AddScoped<IHomeLookupService, HomeLookupService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

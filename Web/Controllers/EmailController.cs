@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Web.Configuration;
 using Web.Models;
-using Web.Repository;
 using Web.Services;
+using Web.Services.Repositories;
 using Web.UpdateModels;
 
 namespace Web.Controllers
@@ -14,13 +14,14 @@ namespace Web.Controllers
     [ApiController]
     public class EmailController : ControllerBase
     {
-        private readonly CohadWebDbContext _dbContext;
-        private readonly SmtpOptions _options;
+        private readonly IUserRepository _userRepository;
+        private readonly IAuditLogRepository _auditLogRepository;
         private readonly IEmailService _emailService;
 
-        public EmailController(CohadWebDbContext dbContext, IEmailService emailService)
+        public EmailController(IUserRepository userRepository, IAuditLogRepository auditLogRepository, IEmailService emailService)
         {
-            _dbContext = dbContext;
+            _userRepository = userRepository;
+            _auditLogRepository = auditLogRepository;
             _emailService = emailService;
         }
 
@@ -82,9 +83,9 @@ namespace Web.Controllers
         private async Task AuditEmail(string from, EmailInfo emailInfo)
         {
             var apiUser =
-                await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+                await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
 
-            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
                 SubjectId = "",
@@ -94,8 +95,6 @@ namespace Web.Controllers
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
                 UserId = apiUser.UniqueId
             });
-
-            await _dbContext.SaveChangesAsync();
         }        
     }
 }

@@ -16,8 +16,7 @@
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="3.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="10.0.5" />
     <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.57.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Cosmos" Version="10.0.5" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.5" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
   <ItemGroup>
     <!-- Don't publish the SPA source files, but do show them in the project files list -->

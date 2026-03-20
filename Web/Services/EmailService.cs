@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,13 +7,12 @@ using System.Text;
 using System.Threading.Tasks;
 using MailKit;
 using MailKit.Net.Smtp;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MimeKit;
 using MimeKit.Utils;
 using Web.Configuration;
 using Web.Models;
-using Web.Repository;
+using Web.Services.Repositories;
 using Web.UpdateModels;
 
 namespace Web.Services
@@ -27,12 +26,14 @@ namespace Web.Services
 
     public class EmailService : IEmailService
     {
-        private readonly CohadWebDbContext _dbContext;
+        private readonly IUserRepository _userRepository;
+        private readonly IHomeRepository _homeRepository;
         private readonly SmtpOptions _options;
 
-        public EmailService(CohadWebDbContext dbContext, IConfiguration config)
+        public EmailService(IUserRepository userRepository, IHomeRepository homeRepository, IConfiguration config)
         {
-            _dbContext = dbContext;
+            _userRepository = userRepository;
+            _homeRepository = homeRepository;
             _options = new SmtpOptions
             {
                 SmtpHost = config["SmtpHost"],
@@ -59,7 +60,7 @@ namespace Web.Services
             if (emailInfo.IsTestEmail)
             {
                 var apiUser =
-                    await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(user.Claims));
+                    await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(user.Claims));
                 bccList = new List<string> { apiUser.Emails };
                 subject = $"Test: {subject}";
             }
@@ -70,7 +71,6 @@ namespace Web.Services
             message.Body = ConvertImageFormat(emailInfo.HtmlBody);
             message.ReplyTo.Add(new MailboxAddress(fromDisplay, fromEmail));
 
-            var homes = await _dbContext.Homes.ToListAsync();
 #if DEBUG
             message.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
             message.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
@@ -145,7 +145,7 @@ namespace Web.Services
         private async Task<List<string>> GetAllEmailsMatchingFilter(Func<EmailAddress, bool> filter)
         {
             var bccAddresses = new List<string>();
-            var homes = await _dbContext.Homes.ToListAsync();
+            var homes = await _homeRepository.GetAllAsync();
 
             bccAddresses.AddRange(
                 homes.SelectMany(

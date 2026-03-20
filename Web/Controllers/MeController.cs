@@ -5,11 +5,10 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Web.Models;
 using Web.PresentationModels;
-using Web.Repository;
 using Web.Services;
+using Web.Services.Repositories;
 using Web.UpdateModels;
 
 namespace Web.Controllers
@@ -19,17 +18,17 @@ namespace Web.Controllers
     [Authorize]
     public class MeController : ControllerBase
     {
-        private readonly CohadWebDbContext _userRepository;
-        private readonly IHomeLookupService _homeLookupService;
+        private readonly IUserRepository _userRepository;
+        private readonly IHomeRepository _homeRepository;
         private readonly IEmailService _emailService;
 
         public MeController(
-            CohadWebDbContext userRepository,
-            IHomeLookupService homeLookupService,
+            IUserRepository userRepository,
+            IHomeRepository homeRepository,
             IEmailService emailService)
         {
             _userRepository = userRepository;
-            _homeLookupService = homeLookupService;
+            _homeRepository = homeRepository;
             _emailService = emailService;
         }
 
@@ -37,18 +36,11 @@ namespace Web.Controllers
         public async Task<PresentationUser> Get()
         {
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            var user = await _userRepository.Users.FindAsync(uniqueId);
-            if (user == null)
-            {
-                var userDocumentIds = new[] { $"User|{uniqueId}", uniqueId };
-                user = await _userRepository.Users
-                    .Where(u => userDocumentIds.Contains(EF.Property<string>(u, "id")))
-                    .FirstOrDefaultAsync();
-            }
+            var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
             if (user != null)
             {
                 user.LastLoggedIn = DateTime.UtcNow;
-                await _userRepository.SaveChangesAsync();
+                await _userRepository.UpsertAsync(user);
 
                 // Includes are not supported, and we don't want this to be an owned type, so we're manually handling these references
                 // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
@@ -56,7 +48,7 @@ namespace Web.Controllers
                 var ownedHomes = new List<Home>();
                 if (user.OwnedHomeIds != null && user.OwnedHomeIds.Count > 0)
                 {
-                    ownedHomes = await _homeLookupService.LoadOwnedHomesAsync(user.OwnedHomeIds);
+                    ownedHomes = await _homeRepository.GetByIdsAsync(user.OwnedHomeIds);
                 }
                 return PresentationUser.FromStorageModel(user, ownedHomes);
             }
@@ -74,8 +66,7 @@ namespace Web.Controllers
                 UniqueId = uniqueId
             };
 
-            await _userRepository.Users.AddAsync(newUser);
-            await _userRepository.SaveChangesAsync();
+            await _userRepository.UpsertAsync(newUser);
 
             try
             {

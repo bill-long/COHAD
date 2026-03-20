@@ -1,12 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Web.Models;
-using Web.Repository;
+using Web.Services.Repositories;
 
 namespace Web.Controllers
 {
@@ -15,16 +14,16 @@ namespace Web.Controllers
     [Authorize(Policy = "Administrator")]
     public class AuditLogController : ControllerBase
     {
-        private readonly CohadWebDbContext _dbContext;
+        private readonly IAuditLogRepository _auditLogRepository;
 
-        public AuditLogController(CohadWebDbContext dbContext)
+        public AuditLogController(IAuditLogRepository auditLogRepository)
         {
-            _dbContext = dbContext;
+            _auditLogRepository = auditLogRepository;
         }
 
         public async Task<IEnumerable<NewAuditLogEntry>> Get()
         {
-            var audits = await _dbContext.AuditLog.ToListAsync();
+            var audits = await _auditLogRepository.GetAllAsync();
 
             return audits.OrderByDescending(a => a.Time);
         }

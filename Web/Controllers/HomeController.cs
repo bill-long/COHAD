@@ -1,12 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Web.Models;
-using Web.Repository;
+using Web.Services.Repositories;
 using Web.UpdateModels;
 
 namespace Web.Controllers
@@ -16,11 +15,18 @@ namespace Web.Controllers
     [Authorize(Policy = "Resident")]
     public class HomeController : ControllerBase
     {
-        private readonly CohadWebDbContext _dbContext;
+        private readonly IUserRepository _userRepository;
+        private readonly IHomeRepository _homeRepository;
+        private readonly IAuditLogRepository _auditLogRepository;
 
-        public HomeController(CohadWebDbContext dbContext)
+        public HomeController(
+            IUserRepository userRepository,
+            IHomeRepository homeRepository,
+            IAuditLogRepository auditLogRepository)
         {
-            _dbContext = dbContext;
+            _userRepository = userRepository;
+            _homeRepository = homeRepository;
+            _auditLogRepository = auditLogRepository;
         }
 
         /// <summary>
@@ -29,7 +35,7 @@ namespace Web.Controllers
         [Authorize(Policy = "Administrator")]
         public async Task<IEnumerable<Home>> Get()
         {
-            return await _dbContext.Homes.ToListAsync();
+            return await _homeRepository.GetAllAsync();
         }
 
         /// <summary>
@@ -43,7 +49,7 @@ namespace Web.Controllers
         public async Task<IActionResult> Update([FromBody] UpdatedHome updatedHome)
         {
             var apiUser =
-                await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+                await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
 
             if (apiUser.OwnedHomeIds?.FirstOrDefault(homeId => homeId == updatedHome.Id) == null)
             {
@@ -55,7 +61,7 @@ namespace Web.Controllers
             }
 
             // User has permissions to update, so let's do it.
-            var storedHome = await _dbContext.Homes.FirstOrDefaultAsync(h => h.Id == updatedHome.Id);
+            var storedHome = await _homeRepository.GetByIdAsync(updatedHome.Id);
 
             if (storedHome == null)
             {
@@ -85,7 +91,7 @@ namespace Web.Controllers
             storedHome.PhoneNumber = updatedHome.PhoneNumber;
             storedHome.Residents = updatedHome.Residents.Where(r => !string.IsNullOrEmpty(r.GivenName)).ToList();
 
-            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
                 SubjectId = storedHome.Id.ToString(),
@@ -96,7 +102,7 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _dbContext.SaveChangesAsync();
+            await _homeRepository.UpsertAsync(storedHome);
 
             return Ok();
         }
