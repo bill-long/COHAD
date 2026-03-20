@@ -37,6 +37,7 @@ import { HeaderComponent } from './components/header/header.component';
 import { NewsComponent } from './components/news/news.component';
 import { DocumentsComponent } from './components/documents/documents.component';
 import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { MockAuthInterceptor } from './services/mock-auth.interceptor';
 import { UnauthorizedComponent } from './components/unauthorized/unauthorized.component';
 import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { OAuthModule } from 'angular-oauth2-oidc';
@@ -148,6 +149,7 @@ import { EditHomeContactDialogComponent } from './components/edit-home-contact-d
         { provide: dispatcher, useValue: new Subject<Action>() },
         { provide: initialState, useValue: initialStateValue },
         { provide: applicationState, useFactory: applicationStateFactory, deps: [initialState, dispatcher] },
+        { provide: HTTP_INTERCEPTORS, useClass: MockAuthInterceptor, multi: true },
         provideHttpClient(withInterceptorsFromDi())
     ] })
 export class AppModule { }

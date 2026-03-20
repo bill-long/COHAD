@@ -3,7 +3,9 @@
 // The list of file replacements can be found in `angular.json`.
 
 export const environment = {
-  production: false
+  production: false,
+  /** When true, use MockData backend + dev JWT instead of Azure AD B2C. */
+  useMockAuth: false
 };
 
 /*

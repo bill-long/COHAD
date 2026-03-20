@@ -21,7 +21,7 @@ export const initialStateValue: ApplicationState = {
     operationsInProgress: 0
 }
 
-export class AuthenticatedUserChanged { constructor(public authUser: AuthUser) { } }
+export class AuthenticatedUserChanged { constructor(public authUser: AuthUser | null) { } }
 
 export class LoadAllHomes { }
 

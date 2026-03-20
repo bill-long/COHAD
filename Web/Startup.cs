@@ -1,3 +1,5 @@
+using System;
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -9,6 +11,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Authorization;
+using Web.MockData;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
@@ -17,12 +20,15 @@ namespace Web
 {
     public class Startup
     {
-        public Startup(IConfiguration configuration)
+        public Startup(IConfiguration configuration, IWebHostEnvironment environment)
         {
             Configuration = configuration;
+            Environment = environment;
         }
 
         public IConfiguration Configuration { get; }
+
+        public IWebHostEnvironment Environment { get; }
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
@@ -37,6 +43,8 @@ namespace Web
                 configuration.RootPath = "ClientApp/dist/cohad-app";
             });
 
+            var useMockData = Environment.IsEnvironment("MockData");
+
             services
                 .AddAuthentication(options =>
                 {
@@ -45,16 +53,33 @@ namespace Web
                 })
                 .AddJwtBearer(options =>
                 {
-                    options.TokenValidationParameters = new TokenValidationParameters
+                    if (useMockData)
                     {
-                        ValidateAudience = true,
-                        ValidateIssuer = true,
-                        ValidIssuer = "https://cohadorgb2c.b2clogin.com/a7e9006b-c606-4670-960c-3998b35ea5ee/v2.0/",
-                        ValidAudience = "5803d9fa-a62f-401c-b0f4-269b3cb468eb"
-                    };
+                        var signingKey = MockJwtSigningKey.ResolveValidated(Configuration);
 
-                    options.MetadataAddress =
-                        "https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/v2.0/.well-known/openid-configuration";
+                        options.TokenValidationParameters = new TokenValidationParameters
+                        {
+                            ValidateAudience = true,
+                            ValidateIssuer = true,
+                            ValidateIssuerSigningKey = true,
+                            ValidIssuer = MockJwtIssuer.Issuer,
+                            ValidAudience = MockJwtIssuer.Audience,
+                            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey))
+                        };
+                    }
+                    else
+                    {
+                        options.TokenValidationParameters = new TokenValidationParameters
+                        {
+                            ValidateAudience = true,
+                            ValidateIssuer = true,
+                            ValidIssuer = "https://cohadorgb2c.b2clogin.com/a7e9006b-c606-4670-960c-3998b35ea5ee/v2.0/",
+                            ValidAudience = "5803d9fa-a62f-401c-b0f4-269b3cb468eb"
+                        };
+
+                        options.MetadataAddress =
+                            "https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/v2.0/.well-known/openid-configuration";
+                    }
                 });
 
             // Allow reverse proxy from nginx
@@ -84,22 +109,33 @@ namespace Web
 
             services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();
 
-            // Repository stuff
-            var uri = Configuration["CosmosUri"];
-            var key = Configuration["CosmosKey"];
-            var db = Configuration["CosmosDatabase"];
+            // Repository / persistence
+            if (useMockData)
+            {
+                services.AddSingleton<IUserRepository, MockUserRepository>();
+                services.AddSingleton<IHomeRepository, MockHomeRepository>();
+                services.AddSingleton<IPaymentRepository, MockPaymentRepository>();
+                services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
+                services.AddScoped<IEmailService, NoOpEmailService>();
+            }
+            else
+            {
+                var uri = Configuration["CosmosUri"];
+                var key = Configuration["CosmosKey"];
+                var db = Configuration["CosmosDatabase"];
 
-            services.AddSingleton(_ => new CosmosClient(uri, key));
-            services.AddScoped<IUserRepository>(sp =>
-                new CosmosUserRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Users")));
-            services.AddScoped<IHomeRepository>(sp =>
-                new CosmosHomeRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Homes")));
-            services.AddScoped<IPaymentRepository>(sp =>
-                new CosmosPaymentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments")));
-            services.AddScoped<IAuditLogRepository>(sp =>
-                new CosmosAuditLogRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog")));
+                services.AddSingleton(_ => new CosmosClient(uri, key));
+                services.AddScoped<IUserRepository>(sp =>
+                    new CosmosUserRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Users")));
+                services.AddScoped<IHomeRepository>(sp =>
+                    new CosmosHomeRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Homes")));
+                services.AddScoped<IPaymentRepository>(sp =>
+                    new CosmosPaymentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments")));
+                services.AddScoped<IAuditLogRepository>(sp =>
+                    new CosmosAuditLogRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog")));
 
-            services.AddScoped<IEmailService, EmailService>();
+                services.AddScoped<IEmailService, EmailService>();
+            }
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -110,7 +146,9 @@ namespace Web
                 ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
             });
 
-            if (env.IsDevelopment())
+            var useDevSpaProxy = env.IsDevelopment() || env.IsEnvironment("MockData");
+
+            if (useDevSpaProxy)
             {
                 app.UseDeveloperExceptionPage();
             }
@@ -121,7 +159,7 @@ namespace Web
 
             app.UseHttpsRedirection();
             app.UseStaticFiles();
-            if (!env.IsDevelopment())
+            if (!useDevSpaProxy)
             {
                 app.UseSpaStaticFiles();
             }
@@ -143,7 +181,7 @@ namespace Web
 
                 spa.Options.SourcePath = "ClientApp";
 
-                if (env.IsDevelopment())
+                if (useDevSpaProxy)
                 {
                     spa.UseProxyToSpaDevelopmentServer("http://localhost:4200");
                 }

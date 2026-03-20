@@ -18,6 +18,21 @@ COHAD (Canyon Oaks Homeowners Association Directory) is a .NET 10 ASP.NET Core b
 2. Start .NET backend: `ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="http://0.0.0.0:5000" dotnet run --project Web/Web.csproj`
 3. The backend proxies SPA requests to `http://localhost:4200` in development mode.
 
+### Mock data mode (agents / local UX testing)
+
+Use this when you need a **signed-in** session and working APIs **without** Cosmos DB or Azure AD B2C.
+
+1. **Angular** with mock auth: `cd Web/ClientApp && npm run start:mock` (build configuration `mock` sets `environment.useMockAuth`).
+2. **Backend** with in-memory repositories and HS256 dev tokens — you must supply a **signing key** of at least **32 UTF-8 bytes** (required for HS256) via environment variable **`MockJwt__SigningKey`** or `dotnet user-secrets set "MockJwt:SigningKey" "..."` in the `Web` project (never commit real keys; `appsettings.MockData.json` keeps an empty placeholder):  
+   `MockJwt__SigningKey='<your-local-secret>' ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://0.0.0.0:5000" dotnet run --project Web/Web.csproj`
+3. Open **http://localhost:5000** (same proxy pattern as Development: API serves the app and proxies the SPA from port 4200).
+
+The SPA obtains a dev JWT from `GET /api/dev/mock-auth` (only when `ASPNETCORE_ENVIRONMENT=MockData`). The mock user is **mock@cohad.local** with **Resident** and **Administrator** roles and owns a sample home at **123 Mock Lane** (editable under My Info / directory flows). Data resets when the process restarts.
+
+Mock mode is selected only by **`ASPNETCORE_ENVIRONMENT=MockData`** (not a separate `UseMockData` flag). This mode is for local testing only.
+
+See also `scripts/run-mock-data.sh` for the two commands in one place.
+
 ### Tests
 
 - **Backend unit tests** (no external deps): `dotnet test Web.UnitTests/Web.UnitTests.csproj`
