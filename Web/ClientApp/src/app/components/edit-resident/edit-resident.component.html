@@ -47,36 +47,7 @@
             </ng-template>
           </ng-template>
         </div>
-
-        <div class="tinyActions">
-          <button
-            mat-icon-button
-            [matMenuTriggerFor]="residentHeaderActionsMenu"
-            aria-label="Resident actions"
-            [disabled]="saveInProgress"
-            (click)="$event.stopPropagation()"
-          >
-            <mat-icon>more_vert</mat-icon>
-          </button>
-        </div>
       </div>
-
-      <mat-menu #residentHeaderActionsMenu="matMenu">
-        <ng-container *ngIf="!editEnabled; else tinyEditModeActions">
-          <button mat-menu-item (click)="edit.next()">Edit</button>
-          <button mat-menu-item color="warn" *ngIf="!confirmDeleteResident" (click)="startConfirmDeleteResident()">Delete</button>
-          <button mat-menu-item color="warn" *ngIf="confirmDeleteResident" (click)="delete.next()">Confirm delete</button>
-          <button mat-menu-item *ngIf="confirmDeleteResident" (click)="cancelConfirmDeleteResident()">Cancel delete</button>
-        </ng-container>
-
-        <ng-template #tinyEditModeActions>
-          <button mat-menu-item (click)="save.next()" [disabled]="saveInProgress">Save</button>
-          <button mat-menu-item (click)="cancel.next()" [disabled]="saveInProgress">Cancel edits</button>
-          <button mat-menu-item color="warn" *ngIf="!confirmDeleteResident" (click)="startConfirmDeleteResident()" [disabled]="saveInProgress">Delete</button>
-          <button mat-menu-item color="warn" *ngIf="confirmDeleteResident" (click)="delete.next()" [disabled]="saveInProgress">Confirm delete</button>
-          <button mat-menu-item *ngIf="confirmDeleteResident" (click)="cancelConfirmDeleteResident()" [disabled]="saveInProgress">Cancel delete</button>
-        </ng-template>
-      </mat-menu>
     </mat-expansion-panel-header>
 
     <div class="panelBody" *ngIf="editEnabled">

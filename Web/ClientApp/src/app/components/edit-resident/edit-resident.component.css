@@ -79,10 +79,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.tinyActions {
-  display: none;
+  flex-wrap: wrap;
 }
 
 .headerActions button {
@@ -339,6 +336,11 @@
     white-space: normal;
   }
 
+  .fullActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   .formGrid {
     grid-template-columns: 1fr;
   }
@@ -359,22 +361,6 @@
 @media (max-width: 480px) {
   .residentPanel ::ng-deep .mat-content {
     flex: 1 1 100%;
-  }
-
-  .headerActions {
-    width: auto;
-    margin-left: auto;
-    margin-right: 36px;
-    padding-right: 0;
-  }
-
-  .fullActions {
-    display: none;
-  }
-
-  .tinyActions {
-    display: inline-flex;
-    align-items: center;
   }
 
   .sectionHeader {
@@ -403,12 +389,6 @@
 }
 
 @media (max-width: 320px) {
-  .headerActions {
-    margin-right: 36px;
-    width: auto;
-    padding-right: 0;
-  }
-
   .residentPanel ::ng-deep .mat-expansion-panel-header {
     min-height: 60px;
     padding-top: 6px;
