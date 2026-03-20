@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Web.Authorization;
 using Web.Models;
@@ -29,7 +30,7 @@ public sealed class RoleAuthorizationHandlerTests
             new Claim(ClaimTypes.NameIdentifier, "only-name-id")
         }, "Test"));
         var mockRepo = new Mock<IUserRepository>(MockBehavior.Strict);
-        var handler = new RoleAuthorizationHandler(mockRepo.Object);
+        var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Resident);
         var context = new AuthorizationHandlerContext(new IAuthorizationRequirement[] { requirement }, user, resource: null);
 
@@ -45,7 +46,7 @@ public sealed class RoleAuthorizationHandlerTests
         var uniqueId = "google.comu1";
         var mockRepo = new Mock<IUserRepository>();
         mockRepo.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync((User?)null);
-        var handler = new RoleAuthorizationHandler(mockRepo.Object);
+        var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Resident);
         var context = new AuthorizationHandlerContext(
             new IAuthorizationRequirement[] { requirement },
@@ -67,7 +68,7 @@ public sealed class RoleAuthorizationHandlerTests
             UniqueId = uniqueId,
             Roles = null
         });
-        var handler = new RoleAuthorizationHandler(mockRepo.Object);
+        var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Resident);
         var context = new AuthorizationHandlerContext(
             new IAuthorizationRequirement[] { requirement },
@@ -89,7 +90,7 @@ public sealed class RoleAuthorizationHandlerTests
             UniqueId = uniqueId,
             Roles = new List<User.Role> { User.Role.Board }
         });
-        var handler = new RoleAuthorizationHandler(mockRepo.Object);
+        var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Administrator);
         var context = new AuthorizationHandlerContext(
             new IAuthorizationRequirement[] { requirement },
@@ -111,7 +112,7 @@ public sealed class RoleAuthorizationHandlerTests
             UniqueId = uniqueId,
             Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator }
         });
-        var handler = new RoleAuthorizationHandler(mockRepo.Object);
+        var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Administrator);
         var context = new AuthorizationHandlerContext(
             new IAuthorizationRequirement[] { requirement },
