@@ -1,15 +1,14 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Web.Models;
 using Web.PresentationModels;
-using Web.Repository;
 using Web.Services;
+using Web.Services.Repositories;
 using Web.UpdateModels;
 
 namespace Web.Controllers
@@ -19,12 +18,17 @@ namespace Web.Controllers
     [Authorize]
     public class MeController : ControllerBase
     {
-        private readonly CohadWebDbContext _userRepository;
+        private readonly IUserRepository _userRepository;
+        private readonly IHomeRepository _homeRepository;
         private readonly IEmailService _emailService;
 
-        public MeController(CohadWebDbContext userRepository, IEmailService emailService)
+        public MeController(
+            IUserRepository userRepository,
+            IHomeRepository homeRepository,
+            IEmailService emailService)
         {
             _userRepository = userRepository;
+            _homeRepository = homeRepository;
             _emailService = emailService;
         }
 
@@ -32,16 +36,22 @@ namespace Web.Controllers
         public async Task<PresentationUser> Get()
         {
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            var user = await _userRepository.Users.FindAsync(uniqueId);
+            var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
             if (user != null)
             {
                 user.LastLoggedIn = DateTime.UtcNow;
-                await _userRepository.SaveChangesAsync();
+                await _userRepository.UpsertAsync(user);
 
                 // Includes are not supported, and we don't want this to be an owned type, so we're manually handling these references
                 // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
                 // See also https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
-                var ownedHomes = user.OwnedHomeIds == null ? new List<Home>() : await _userRepository.Homes.Where(h => user.OwnedHomeIds.Contains(h.Id)).ToListAsync();
+                var ownedHomes = new List<Home>();
+                if (user.OwnedHomeIds != null && user.OwnedHomeIds.Count > 0)
+                {
+                    ownedHomes = await _homeRepository.GetByIdsAsync(user.OwnedHomeIds);
+                    var allUsers = await _userRepository.GetAllAsync();
+                    PopulateAssociatedUsers(ownedHomes, allUsers);
+                }
                 return PresentationUser.FromStorageModel(user, ownedHomes);
             }
 
@@ -58,8 +68,7 @@ namespace Web.Controllers
                 UniqueId = uniqueId
             };
 
-            await _userRepository.Users.AddAsync(newUser);
-            await _userRepository.SaveChangesAsync();
+            await _userRepository.UpsertAsync(newUser);
 
             try
             {
@@ -80,6 +89,23 @@ namespace Web.Controllers
             }
 
             return PresentationUser.FromStorageModel(newUser, new List<Home>());
+        }
+
+        private static void PopulateAssociatedUsers(List<Home> homes, List<User> users)
+        {
+            foreach (var home in homes)
+            {
+                home.AssociatedUsers = users
+                    .Where(u => u.OwnedHomeIds != null && u.OwnedHomeIds.Contains(home.Id))
+                    .Select(u => new HomeAssociatedUser
+                    {
+                        UniqueId = u.UniqueId,
+                        GivenName = u.GivenName,
+                        Surname = u.Surname,
+                        Emails = u.Emails
+                    })
+                    .ToList();
+            }
         }
     }
 }

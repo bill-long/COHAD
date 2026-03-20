@@ -1,12 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Web.Models;
-using Web.Repository;
+using Web.Services.Repositories;
 
 namespace Web.Controllers
 {
@@ -15,31 +13,30 @@ namespace Web.Controllers
     [Authorize(Policy = "Resident")]
     public class PaymentController : Controller
     {
-        private readonly CohadWebDbContext _dbContext;
+        private readonly IUserRepository _userRepository;
+        private readonly IPaymentRepository _paymentRepository;
 
-        public PaymentController(CohadWebDbContext dbContext)
+        public PaymentController(IUserRepository userRepository, IPaymentRepository paymentRepository)
         {
-            _dbContext = dbContext;
+            _userRepository = userRepository;
+            _paymentRepository = paymentRepository;
         }
 
         public async Task<IEnumerable<Payment>> Get()
         {
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            var user = await _dbContext.Users.FindAsync(uniqueId);
-            var payments = await _dbContext.Payments.Where(p => p.PayerUniqueId == uniqueId).ToListAsync();
-            return payments;
+            _ = await _userRepository.GetByUniqueIdAsync(uniqueId);
+            return await _paymentRepository.GetByPayerUniqueIdAsync(uniqueId);
         }
 
         [HttpPost]
         public async Task<Payment> Add([FromBody] Payment payment)
         {
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            var user = await _dbContext.Users.FindAsync(uniqueId);
+            var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
             payment.Id = Guid.NewGuid();
             payment.PayerUniqueId = user.UniqueId;
-            _dbContext.Payments.Add(payment);
-            await _dbContext.SaveChangesAsync();
-            return payment;
+            return await _paymentRepository.AddAsync(payment);
         }
     }
 }

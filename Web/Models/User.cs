@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -29,6 +29,16 @@ namespace Web.Models
         public List<Guid> OwnedHomeIds { get; set; }
 
         public DateTime? LastLoggedIn { get; set; }
+
+        /// <summary>
+        /// When the user last had no homes in <see cref="OwnedHomeIds"/> (UTC). Null while they own at least one home.
+        /// </summary>
+        public DateTime? UnassociatedSinceUtc { get; set; }
+
+        /// <summary>
+        /// When the user last had no roles (UTC). Null while they have one or more roles.
+        /// </summary>
+        public DateTime? NoRolesSinceUtc { get; set; }
 
         public enum Role
         {

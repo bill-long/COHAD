@@ -1,13 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Web.Models;
 using Web.PresentationModels;
-using Web.Repository;
+using Web.Services.Repositories;
 using Web.UpdateModels;
 
 namespace Web.Controllers
@@ -17,51 +16,43 @@ namespace Web.Controllers
     [Authorize(Policy = "Administrator")]
     public class UserController : ControllerBase
     {
-        private readonly CohadWebDbContext _dbContext;
+        private readonly IUserRepository _userRepository;
+        private readonly IHomeRepository _homeRepository;
+        private readonly IAuditLogRepository _auditLogRepository;
 
-        public UserController(CohadWebDbContext dbContext) {
-            _dbContext = dbContext;
+        public UserController(
+            IUserRepository userRepository,
+            IHomeRepository homeRepository,
+            IAuditLogRepository auditLogRepository)
+        {
+            _userRepository = userRepository;
+            _homeRepository = homeRepository;
+            _auditLogRepository = auditLogRepository;
         }
 
         public async Task<IEnumerable<PresentationUser>> Get()
         {
-            var allUsers = await _dbContext.Users.ToListAsync();
-
-            var allHomes = await _dbContext.Homes.ToListAsync();
-
+            var allUsers = await _userRepository.GetAllAsync();
+            var allHomes = await _homeRepository.GetAllAsync();
             return allUsers.Select(u => PresentationUser.FromStorageModel(u, allHomes.Where(h => u.OwnedHomeIds != null && u.OwnedHomeIds.Contains(h.Id)).ToList()));
         }
 
-        /// <summary>
-        /// Updates the basic properties of a user. Residents can do
-        /// this to themselves. Otherwise, requires Committee role.
-        /// </summary>
-        /// <param name="updatedUser"></param>
-        /// <returns></returns>
         [Authorize(Policy = "Resident")]
         [HttpPut]
         public async Task<IActionResult> UpdateUserProperties([FromBody] UpdatedUser updatedUser)
         {
-            var apiUser =
-                await _dbContext.Users.FirstOrDefaultAsync(u =>
-                    u.UniqueId == Models.User.GetUniqueIdFromClaims(User.Claims));
-
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
             if (apiUser == null)
             {
                 return NotFound();
             }
 
-            if (updatedUser.UniqueId != apiUser.UniqueId)
+            if (updatedUser.UniqueId != apiUser.UniqueId && !apiUser.Roles.Contains(Models.User.Role.Administrator))
             {
-                // The authenticated user is trying to update some other user. Check roles.
-                if (!apiUser.Roles.Contains(Models.User.Role.Administrator))
-                {
-                    return Forbid();
-                }
+                return Forbid();
             }
 
-            var storedUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.UniqueId == updatedUser.UniqueId);
-
+            var storedUser = await _userRepository.GetByUniqueIdAsync(updatedUser.UniqueId);
             if (storedUser == null)
             {
                 return NotFound();
@@ -71,7 +62,7 @@ namespace Web.Controllers
             storedUser.Surname = updatedUser.Surname;
             storedUser.StreetAddress = updatedUser.StreetAddress;
 
-            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
                 SubjectId = storedUser.UniqueId,
@@ -82,40 +73,29 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _dbContext.SaveChangesAsync();
-
+            await _userRepository.UpsertAsync(storedUser);
             return Ok();
         }
 
-        /// <summary>
-        /// Makes the specified user an owner of the specified home.
-        /// </summary>
-        /// <param name="userId"></param>
-        /// <param name="homeId"></param>
-        /// <returns></returns>
         [HttpPut("{userId}/homes/add/{homeId}")]
         public async Task<IActionResult> AddOwnedHome(string userId, Guid homeId)
         {
-            var apiUser = await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
-
-            var user = await _dbContext.Users.FindAsync(userId);
-            var home = await _dbContext.Homes.FindAsync(homeId);
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var user = await _userRepository.GetByUniqueIdAsync(userId);
+            var home = await _homeRepository.GetByIdAsync(homeId);
             if (user == null || home == null)
             {
                 return NotFound();
             }
 
             user.OwnedHomeIds ??= new List<Guid>();
-
             if (user.OwnedHomeIds.Contains(home.Id))
             {
                 return Conflict("The specified user is already an owner of the specified home.");
             }
 
-            _dbContext.Users.Update(user);
             user.OwnedHomeIds.Add(home.Id);
-
-            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
                 SubjectId = user.UniqueId,
@@ -126,38 +106,28 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _dbContext.SaveChangesAsync();
-
+            await _userRepository.UpsertAsync(user);
             return Ok();
         }
 
-        /// <summary>
-        /// Removes the specified user as an owner of the specified home.
-        /// </summary>
-        /// <param name="userId"></param>
-        /// <param name="homeId"></param>
-        /// <returns></returns>
         [HttpPut("{userId}/homes/remove/{homeId}")]
         public async Task<IActionResult> RemoveOwnedHome(string userId, Guid homeId)
         {
-            var apiUser = await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
-            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.UniqueId == userId);
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var user = await _userRepository.GetByUniqueIdAsync(userId);
             if (user == null)
             {
                 return NotFound();
             }
 
             user.OwnedHomeIds ??= new List<Guid>();
-
             if (!user.OwnedHomeIds.Contains(homeId))
             {
                 return Conflict("The specified user is not an owner of the specified home.");
             }
 
-            _dbContext.Users.Update(user);
             user.OwnedHomeIds = user.OwnedHomeIds.Where(h => h != homeId).ToList();
-
-            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
                 SubjectId = user.UniqueId,
@@ -168,18 +138,15 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _dbContext.SaveChangesAsync();
-
+            await _userRepository.UpsertAsync(user);
             return Ok();
         }
 
         [HttpPut("{userId}/roles/add/{roleName}")]
         public async Task<IActionResult> AddUserRole(string userId, string roleName)
         {
-            var apiUser = await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
-
-            var userToModify = await _dbContext.Users.FindAsync(userId);
-
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var userToModify = await _userRepository.GetByUniqueIdAsync(userId);
             if (userToModify == null)
             {
                 return NotFound();
@@ -190,12 +157,8 @@ namespace Web.Controllers
                 return BadRequest();
             }
 
-            // Not sure why this is necessary, but it doesn't detect role changes otherwise
-            _dbContext.Update(userToModify);
-
             userToModify.Roles.Add(roleToAdd);
-
-            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
                 SubjectId = userToModify.UniqueId,
@@ -206,18 +169,15 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _dbContext.SaveChangesAsync();
-
+            await _userRepository.UpsertAsync(userToModify);
             return Ok();
         }
 
         [HttpPut("{userId}/roles/remove/{roleName}")]
         public async Task<IActionResult> RemoveUserRole(string userId, string roleName)
         {
-            var apiUser = await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
-
-            var userToModify = await _dbContext.Users.FindAsync(userId);
-
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var userToModify = await _userRepository.GetByUniqueIdAsync(userId);
             if (userToModify == null)
             {
                 return NotFound();
@@ -233,12 +193,8 @@ namespace Web.Controllers
                 return Forbid();
             }
 
-            // Not sure why this is necessary, but it doesn't detect role changes otherwise
-            _dbContext.Update(userToModify);
-
             userToModify.Roles.Remove(roleToRemove);
-
-            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
                 SubjectId = userToModify.UniqueId,
@@ -249,8 +205,7 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _dbContext.SaveChangesAsync();
-
+            await _userRepository.UpsertAsync(userToModify);
             return Ok();
         }
     }

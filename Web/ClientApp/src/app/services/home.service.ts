@@ -56,4 +56,29 @@ export class HomeService {
 
     return obs;
   }
+
+  removeAssociatedUser(homeId: string, userUniqueId: string, reloadAllOnSave: boolean) {
+    const obs = new Observable<boolean>(o => {
+      this.httpClient.delete(`api/home/${homeId}/owners/${encodeURIComponent(userUniqueId)}`).subscribe(result => {
+        if (reloadAllOnSave) {
+          this.dispatcher.next(new LoadAllHomes());
+        } else {
+          this.dispatcher.next(new LoadUser());
+        }
+        this.dispatcher.next(new LoadDirectory());
+        o.next(true);
+        o.complete();
+      }, err => {
+        if (reloadAllOnSave) {
+          this.dispatcher.next(new LoadAllHomes());
+        } else {
+          this.dispatcher.next(new LoadUser());
+        }
+        o.next(false);
+        o.complete();
+      });
+    });
+
+    return obs;
+  }
 }

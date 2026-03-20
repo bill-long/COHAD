@@ -13,23 +13,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v4
 
-    - name: Set up .NET Core
-      uses: actions/setup-dotnet@v1
+    - name: Set up .NET 10
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '6.0.101'
+        dotnet-version: '10.0.x'
 
-    - name: Build with dotnet
-      run: dotnet build --configuration Release
+    - name: Build Web
+      run: dotnet build Web/Web.csproj --configuration Release
+
+    - name: Test with dotnet
+      run: dotnet test Web.UnitTests/Web.UnitTests.csproj --configuration Release
 
     - name: dotnet publish
-      run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
+      run: dotnet publish Web/Web.csproj --configuration Release --output ./publish
 
     - name: Deploy to Azure Web App
-      uses: azure/webapps-deploy@v2
+      uses: azure/webapps-deploy@v3
       with:
         app-name: 'cohadweb'
         slot-name: 'production'
         publish-profile: ${{ secrets.AzureAppService_PublishProfile_4cc98d8b282841d0a4715655839f3079 }}
-        package: ${{env.DOTNET_ROOT}}/myapp 
+        package: ./publish

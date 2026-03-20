@@ -67,5 +67,30 @@
         <ng-template #noResidents><span class="muted">No residents listed.</span></ng-template>
       </div>
     </section>
+
+    <section class="section">
+      <div class="sectionHeader">
+        <div class="sectionTitle">Associated users</div>
+      </div>
+
+      <div class="sectionBody">
+        <div *ngIf="homeCopy.associatedUsers?.length; else noAssociatedUsers">
+          <div class="associatedUserRow" *ngFor="let associatedUser of homeCopy.associatedUsers">
+            <div class="associatedUserText">
+              <div class="associatedUserName">{{ associatedUser.givenName }} {{ associatedUser.surname }}</div>
+              <div class="muted">{{ associatedUser.emails }}</div>
+            </div>
+            <button
+              mat-stroked-button
+              color="warn"
+              [disabled]="saveInProgress"
+              (click)="confirmRemoveAssociatedUser(associatedUser)">
+              Remove association
+            </button>
+          </div>
+        </div>
+        <ng-template #noAssociatedUsers><span class="muted">No associated users.</span></ng-template>
+      </div>
+    </section>
   </mat-card-content>
 </mat-card>

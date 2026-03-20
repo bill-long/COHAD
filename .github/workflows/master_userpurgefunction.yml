@@ -1,0 +1,32 @@
+name: Build and deploy Azure Function - user purge
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build UserPurgeFunction
+        run: dotnet build Functions/UserPurgeFunction/UserPurgeFunction.csproj --configuration Release
+
+      - name: dotnet publish UserPurgeFunction
+        run: dotnet publish Functions/UserPurgeFunction/UserPurgeFunction.csproj --configuration Release --output ./publish
+
+      - name: Deploy to Azure Function App
+        uses: Azure/functions-action@v1.5.4
+        with:
+          app-name: ${{ secrets.AzureFunctionApp_Name_UserPurge }}
+          package: ./publish
+          publish-profile: ${{ secrets.AzureFunctionApp_PublishProfile_UserPurge }}
+

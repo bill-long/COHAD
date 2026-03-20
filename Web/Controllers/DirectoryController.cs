@@ -1,14 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Web.Data;
 using Web.PresentationModels;
-using Web.Repository;
+using Web.Services.Repositories;
 
 namespace Web.Controllers
 {
@@ -17,20 +15,17 @@ namespace Web.Controllers
     [Authorize(Policy = "Resident")]
     public class DirectoryController : ControllerBase
     {
-        private readonly CohadWebDbContext dbContext;
+        private readonly IHomeRepository _homeRepository;
 
-        public DirectoryController(CohadWebDbContext dbContext)
+        public DirectoryController(IHomeRepository homeRepository)
         {
-            this.dbContext = dbContext;
+            _homeRepository = homeRepository;
         }
 
         public async Task<IEnumerable<DirectoryHome>> GetDirectory()
         {
-            var homes = await dbContext.Homes.ToListAsync();
-
-            var visibleHomeInfo = dbContext.Homes.Select(DirectoryHome.FromStorageModel).ToList();
-
-            return visibleHomeInfo;
+            var homes = await _homeRepository.GetAllAsync();
+            return homes.Select(DirectoryHome.FromStorageModel).ToList();
         }
     }
 }

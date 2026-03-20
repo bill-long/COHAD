@@ -1,12 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Web.Models;
-using Web.Repository;
+using Web.Services.Repositories;
 using Web.UpdateModels;
 
 namespace Web.Controllers
@@ -16,11 +15,18 @@ namespace Web.Controllers
     [Authorize(Policy = "Resident")]
     public class HomeController : ControllerBase
     {
-        private readonly CohadWebDbContext _dbContext;
+        private readonly IUserRepository _userRepository;
+        private readonly IHomeRepository _homeRepository;
+        private readonly IAuditLogRepository _auditLogRepository;
 
-        public HomeController(CohadWebDbContext dbContext)
+        public HomeController(
+            IUserRepository userRepository,
+            IHomeRepository homeRepository,
+            IAuditLogRepository auditLogRepository)
         {
-            _dbContext = dbContext;
+            _userRepository = userRepository;
+            _homeRepository = homeRepository;
+            _auditLogRepository = auditLogRepository;
         }
 
         /// <summary>
@@ -29,7 +35,10 @@ namespace Web.Controllers
         [Authorize(Policy = "Administrator")]
         public async Task<IEnumerable<Home>> Get()
         {
-            return await _dbContext.Homes.ToListAsync();
+            var homes = await _homeRepository.GetAllAsync();
+            var users = await _userRepository.GetAllAsync();
+            PopulateAssociatedUsers(homes, users);
+            return homes;
         }
 
         /// <summary>
@@ -43,9 +52,10 @@ namespace Web.Controllers
         public async Task<IActionResult> Update([FromBody] UpdatedHome updatedHome)
         {
             var apiUser =
-                await _dbContext.Users.FindAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+                await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
 
-            if (apiUser.OwnedHomeIds?.FirstOrDefault(homeId => homeId == updatedHome.Id) == null)
+            var ownsHome = apiUser.OwnedHomeIds != null && apiUser.OwnedHomeIds.Contains(updatedHome.Id);
+            if (!ownsHome)
             {
                 // This user doesn't own this home. Check roles.
                 if (!apiUser.Roles.Contains(Models.User.Role.Administrator))
@@ -55,7 +65,7 @@ namespace Web.Controllers
             }
 
             // User has permissions to update, so let's do it.
-            var storedHome = await _dbContext.Homes.FirstOrDefaultAsync(h => h.Id == updatedHome.Id);
+            var storedHome = await _homeRepository.GetByIdAsync(updatedHome.Id);
 
             if (storedHome == null)
             {
@@ -85,7 +95,7 @@ namespace Web.Controllers
             storedHome.PhoneNumber = updatedHome.PhoneNumber;
             storedHome.Residents = updatedHome.Residents.Where(r => !string.IsNullOrEmpty(r.GivenName)).ToList();
 
-            await _dbContext.AuditLog.AddAsync(new NewAuditLogEntry
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
                 SubjectId = storedHome.Id.ToString(),
@@ -96,9 +106,69 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            await _dbContext.SaveChangesAsync();
+            await _homeRepository.UpsertAsync(storedHome);
 
             return Ok();
+        }
+
+        [HttpDelete("{homeId}/owners/{userUniqueId}")]
+        public async Task<IActionResult> RemoveAssociatedUser(Guid homeId, string userUniqueId)
+        {
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
+            var ownsHome = apiUser.OwnedHomeIds != null && apiUser.OwnedHomeIds.Contains(homeId);
+            if (!ownsHome && !apiUser.Roles.Contains(Models.User.Role.Administrator))
+            {
+                return Forbid();
+            }
+
+            var userToUpdate = await _userRepository.GetByUniqueIdAsync(userUniqueId);
+            if (userToUpdate == null)
+            {
+                return NotFound();
+            }
+
+            userToUpdate.OwnedHomeIds ??= new List<Guid>();
+            if (!userToUpdate.OwnedHomeIds.Contains(homeId))
+            {
+                return Conflict("The specified user is not associated with the specified home.");
+            }
+
+            userToUpdate.OwnedHomeIds = userToUpdate.OwnedHomeIds.Where(h => h != homeId).ToList();
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
+            {
+                Id = Guid.NewGuid(),
+                SubjectId = userToUpdate.UniqueId,
+                SubjectName = userToUpdate.Emails,
+                Action = $"Removed home {homeId:D} from this user.",
+                Time = DateTime.UtcNow,
+                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                UserId = apiUser.UniqueId
+            });
+
+            await _userRepository.UpsertAsync(userToUpdate);
+            return Ok();
+        }
+
+        private static void PopulateAssociatedUsers(List<Home> homes, List<User> users)
+        {
+            foreach (var home in homes)
+            {
+                home.AssociatedUsers = users
+                    .Where(u => u.OwnedHomeIds != null && u.OwnedHomeIds.Contains(home.Id))
+                    .Select(u => new HomeAssociatedUser
+                    {
+                        UniqueId = u.UniqueId,
+                        GivenName = u.GivenName,
+                        Surname = u.Surname,
+                        Emails = u.Emails
+                    })
+                    .ToList();
+            }
         }
     }
 }

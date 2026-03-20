@@ -223,6 +223,27 @@
   font-weight: 600;
 }
 
+.associatedUserRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.associatedUserRow:last-child {
+  border-bottom: none;
+}
+
+.associatedUserText {
+  min-width: 0;
+}
+
+.associatedUserName {
+  font-weight: 600;
+}
+
 @media (max-width: 600px) {
   .kv {
     grid-template-columns: 1fr;
@@ -230,5 +251,16 @@
 
   .compactValue {
     max-width: 180px;
+  }
+}
+
+@media (max-width: 320px) {
+  .residentDragRow {
+    gap: 4px;
+    padding-right: 2px;
+  }
+
+  .dragHandle {
+    display: none;
   }
 }

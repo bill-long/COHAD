@@ -1,15 +1,15 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using Web.Repository;
+using Web.Services.Repositories;
 
 namespace Web.Authorization
 {
     public class RoleAuthorizationHandler : AuthorizationHandler<RoleAuthorizationRequirement>
     {
-        private readonly CohadWebDbContext _userRepository;
+        private readonly IUserRepository _userRepository;
 
-        public RoleAuthorizationHandler(CohadWebDbContext userRepository)
+        public RoleAuthorizationHandler(IUserRepository userRepository)
         {
             _userRepository = userRepository;
         }
@@ -22,7 +22,7 @@ namespace Web.Authorization
                 return;
             }
 
-            var storedUser = await _userRepository.Users.FindAsync(uniqueId);
+            var storedUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
             if (storedUser == null || !storedUser.Roles.Contains(requirement.RequiredRole))
             {
                 return;
