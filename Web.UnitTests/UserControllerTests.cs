@@ -159,7 +159,7 @@ public sealed class UserControllerTests
     }
 
     [Fact]
-    public async Task AddUserRole_returns_Conflict_when_role_already_assigned()
+    public async Task AddUserRole_returns_Ok_when_role_already_assigned()
     {
         var apiUniqueId = UniqueId("admin");
         var targetUniqueId = "target-user";
@@ -182,7 +182,8 @@ public sealed class UserControllerTests
 
         var result = await c.AddUserRole(targetUniqueId, "Resident");
 
-        Assert.IsType<ConflictObjectResult>(result);
+        // Idempotent — role already present, no error, no duplicate added, no upsert needed
+        Assert.IsType<OkResult>(result);
         mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
     }
 }

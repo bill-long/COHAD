@@ -175,7 +175,7 @@ namespace Web.Controllers
             userToModify.Roles ??= new List<Models.User.Role>();
             if (userToModify.Roles.Contains(roleToAdd))
             {
-                return Conflict($"The user already has the role {roleToAdd}.");
+                return Ok();
             }
 
             userToModify.Roles.Add(roleToAdd);
