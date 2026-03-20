@@ -31,6 +31,16 @@ namespace Web.Controllers
         [HttpPost]
         public async Task<IActionResult> Add([FromBody] Payment payment)
         {
+            if (string.IsNullOrWhiteSpace(payment.Amount) ||
+                !decimal.TryParse(payment.Amount, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var amount) ||
+                amount <= 0)
+            {
+                return BadRequest("A positive numeric Amount is required.");
+            }
+
+            payment.Date ??= DateTime.UtcNow;
+
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
             var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
             if (user == null)
