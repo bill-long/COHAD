@@ -157,4 +157,33 @@ public sealed class UserControllerTests
 
         Assert.IsType<OkResult>(result);
     }
+
+    [Fact]
+    public async Task AddUserRole_returns_Ok_when_role_already_assigned()
+    {
+        var apiUniqueId = UniqueId("admin");
+        var targetUniqueId = "target-user";
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(apiUniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = apiUniqueId,
+            GivenName = "Admin",
+            Surname = "User",
+            Roles = new List<User.Role> { User.Role.Administrator }
+        });
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(targetUniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = targetUniqueId,
+            Roles = new List<User.Role> { User.Role.Resident }  // role already present
+        });
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>(), nameId: "admin");
+
+        var result = await c.AddUserRole(targetUniqueId, "Resident");
+
+        // Idempotent — role already present, no error, no duplicate added, no upsert needed
+        Assert.IsType<OkResult>(result);
+        mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+    }
 }

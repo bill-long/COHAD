@@ -1,3 +1,4 @@
+#if DEBUG
 using System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -36,3 +37,4 @@ namespace Web.Controllers
         }
     }
 }
+#endif

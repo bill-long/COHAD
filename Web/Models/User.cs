@@ -59,7 +59,8 @@ namespace Web.Models
                 .FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")?.Value;
             if (nameId == null || idProvider == null)
             {
-                return null;
+                throw new InvalidOperationException(
+                    "Cannot build a unique user ID: one or more required claims (NameIdentifier, identityprovider) are missing.");
             }
 
             return idProvider + nameId;

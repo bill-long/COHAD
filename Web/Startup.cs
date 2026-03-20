@@ -3,11 +3,14 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Authorization;
@@ -41,6 +44,18 @@ namespace Web
             services.AddSpaStaticFiles(configuration =>
             {
                 configuration.RootPath = "ClientApp/dist/cohad-app";
+            });
+
+            // Restrict cross-origin requests to the same origin by default.
+            // The SPA is served by this same host, so no additional origins need to be permitted here.
+            services.AddCors(options =>
+            {
+                options.AddDefaultPolicy(policy =>
+                {
+                    policy.WithOrigins(Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>())
+                          .AllowAnyHeader()
+                          .AllowAnyMethod();
+                });
             });
 
             var useMockData = Environment.IsEnvironment("MockData");
@@ -139,7 +154,7 @@ namespace Web
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILogger<Startup> logger)
         {
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
@@ -155,7 +170,33 @@ namespace Web
             else
             {
                 app.UseHsts();
+
+                // Global exception handler: log the error and return a generic 500 response
+                app.UseExceptionHandler(errorApp =>
+                {
+                    errorApp.Run(async context =>
+                    {
+                        var exceptionHandler = context.Features.Get<IExceptionHandlerFeature>();
+                        if (exceptionHandler != null)
+                        {
+                            logger.LogError(exceptionHandler.Error, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path);
+                        }
+
+                        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                        context.Response.ContentType = "application/json";
+                        await context.Response.WriteAsync("{\"error\":\"An unexpected error occurred.\"}");
+                    });
+                });
             }
+
+            // Add security headers on every response
+            app.Use(async (context, next) =>
+            {
+                context.Response.Headers["X-Frame-Options"] = "DENY";
+                context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+                await next();
+            });
 
             app.UseHttpsRedirection();
             app.UseStaticFiles();
@@ -164,6 +205,7 @@ namespace Web
                 app.UseSpaStaticFiles();
             }
             app.UseRouting();
+            app.UseCors();
             app.UseAuthentication();
             app.UseAuthorization();
 

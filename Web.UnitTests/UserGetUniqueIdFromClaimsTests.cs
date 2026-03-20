@@ -30,7 +30,7 @@ public sealed class UserGetUniqueIdFromClaimsTests
                 "http://schemas.microsoft.com/identity/claims/identityprovider",
                 "google.com")
         };
-        Assert.Null(User.GetUniqueIdFromClaims(claims));
+        Assert.Throws<InvalidOperationException>(() => User.GetUniqueIdFromClaims(claims));
     }
 
     [Fact]
@@ -40,6 +40,6 @@ public sealed class UserGetUniqueIdFromClaimsTests
         {
             new Claim(ClaimTypes.NameIdentifier, "abc")
         };
-        Assert.Null(User.GetUniqueIdFromClaims(claims));
+        Assert.Throws<InvalidOperationException>(() => User.GetUniqueIdFromClaims(claims));
     }
 }

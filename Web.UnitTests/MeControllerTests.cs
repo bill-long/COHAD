@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Web.Controllers;
 using Web.Models;
@@ -24,7 +25,7 @@ public sealed class MeControllerTests
         string nameId = "u1",
         string idp = "google.com")
     {
-        var controller = new MeController(userRepository, homeRepository, emailService)
+        var controller = new MeController(userRepository, homeRepository, emailService, Mock.Of<ILogger<MeController>>())
         {
             ControllerContext = new ControllerContext
             {
