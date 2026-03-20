@@ -47,19 +47,39 @@ public sealed class PaymentControllerTests
     public async Task Get_returns_payments_for_authenticated_user()
     {
         var uniqueId = UniqueId("u1");
+        var user = new User { UniqueId = uniqueId };
         var expected = new List<Payment>
         {
             new Payment { Id = Guid.NewGuid(), PayerUniqueId = uniqueId, Amount = "100.00" }
         };
 
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(user);
+
         var mockPayments = new Mock<IPaymentRepository>();
         mockPayments.Setup(r => r.GetByPayerUniqueIdAsync(uniqueId)).ReturnsAsync(expected);
 
-        var c = CreateController(Mock.Of<IUserRepository>(), mockPayments.Object);
+        var c = CreateController(mockUsers.Object, mockPayments.Object);
 
         var result = await c.Get();
 
-        Assert.Equal(expected, result);
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.Same(expected, ok.Value);
+    }
+
+    [Fact]
+    public async Task Get_returns_NotFound_when_user_not_in_database()
+    {
+        var uniqueId = UniqueId("u1");
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync((User?)null);
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IPaymentRepository>());
+
+        var result = await c.Get();
+
+        Assert.IsType<NotFoundResult>(result);
     }
 
     // ── Add ──────────────────────────────────────────────────────────────────
