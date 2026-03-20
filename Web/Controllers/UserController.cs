@@ -81,6 +81,11 @@ namespace Web.Controllers
         public async Task<IActionResult> AddOwnedHome(string userId, Guid homeId)
         {
             var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
             var user = await _userRepository.GetByUniqueIdAsync(userId);
             var home = await _homeRepository.GetByIdAsync(homeId);
             if (user == null || home == null)
@@ -114,6 +119,11 @@ namespace Web.Controllers
         public async Task<IActionResult> RemoveOwnedHome(string userId, Guid homeId)
         {
             var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
             var user = await _userRepository.GetByUniqueIdAsync(userId);
             if (user == null)
             {
@@ -146,6 +156,11 @@ namespace Web.Controllers
         public async Task<IActionResult> AddUserRole(string userId, string roleName)
         {
             var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
             var userToModify = await _userRepository.GetByUniqueIdAsync(userId);
             if (userToModify == null)
             {
@@ -157,6 +172,7 @@ namespace Web.Controllers
                 return BadRequest();
             }
 
+            userToModify.Roles ??= new List<Models.User.Role>();
             userToModify.Roles.Add(roleToAdd);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
@@ -177,6 +193,11 @@ namespace Web.Controllers
         public async Task<IActionResult> RemoveUserRole(string userId, string roleName)
         {
             var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
             var userToModify = await _userRepository.GetByUniqueIdAsync(userId);
             if (userToModify == null)
             {
@@ -193,6 +214,7 @@ namespace Web.Controllers
                 return Forbid();
             }
 
+            userToModify.Roles ??= new List<Models.User.Role>();
             userToModify.Roles.Remove(roleToRemove);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {

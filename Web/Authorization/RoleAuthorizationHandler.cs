@@ -23,7 +23,7 @@ namespace Web.Authorization
             }
 
             var storedUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
-            if (storedUser == null || !storedUser.Roles.Contains(requirement.RequiredRole))
+            if (storedUser == null || storedUser.Roles == null || !storedUser.Roles.Contains(requirement.RequiredRole))
             {
                 return;
             }
