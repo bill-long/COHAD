@@ -36,7 +36,7 @@
 
 .residentPanel ::ng-deep .mat-content {
   flex: 1 1 400px;
-  min-width: 340px;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -201,7 +201,7 @@
 
 .phoneInput {
   flex: 1;
-  min-width: 220px;
+  min-width: 0;
 }
 
 .basicsGrid {
@@ -275,7 +275,7 @@
 
 .emailField {
   flex: 1;
-  min-width: 260px;
+  min-width: 0;
 }
 
 .prefs {
@@ -356,10 +356,15 @@
   }
 }
 
-@media (max-width: 320px) {
+@media (max-width: 480px) {
+  .residentPanel ::ng-deep .mat-content {
+    flex: 1 1 100%;
+  }
+
   .headerActions {
-    margin-right: 36px;
     width: auto;
+    margin-left: auto;
+    margin-right: 36px;
     padding-right: 0;
   }
 
@@ -370,6 +375,38 @@
   .tinyActions {
     display: inline-flex;
     align-items: center;
+  }
+
+  .sectionHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .itemMain,
+  .phoneMain {
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .emailField,
+  .phoneTypeField,
+  .phoneInput {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .itemActionsInline {
+    width: 100%;
+    justify-content: flex-start;
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 320px) {
+  .headerActions {
+    margin-right: 36px;
+    width: auto;
+    padding-right: 0;
   }
 
   .residentPanel ::ng-deep .mat-expansion-panel-header {
