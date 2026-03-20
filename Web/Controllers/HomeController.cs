@@ -51,7 +51,8 @@ namespace Web.Controllers
             var apiUser =
                 await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
 
-            if (apiUser.OwnedHomeIds?.FirstOrDefault(homeId => homeId == updatedHome.Id) == null)
+            var ownsHome = apiUser.OwnedHomeIds != null && apiUser.OwnedHomeIds.Contains(updatedHome.Id);
+            if (!ownsHome)
             {
                 // This user doesn't own this home. Check roles.
                 if (!apiUser.Roles.Contains(Models.User.Role.Administrator))

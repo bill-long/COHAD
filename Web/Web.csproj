@@ -9,6 +9,10 @@
     <BuildServerSideRenderer>false</BuildServerSideRenderer>
     <UserSecretsId>20aa6a98-9950-4bb9-9f73-5d13ea35c1f0</UserSecretsId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Web.UnitTests" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Blobs" Version="12.27.0" />
     <PackageReference Include="MailKit" Version="4.15.1" />
