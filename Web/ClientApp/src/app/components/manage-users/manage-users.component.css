@@ -48,3 +48,45 @@ table {
 .displaynone {
     display: none;
 }
+
+/* Progressive column hiding order:
+   1) streetAddress, 2) identityProvider, 3) daysUntilPurge, 4) email, 5) lastLoggedIn */
+@media (max-width: 1500px) {
+    .hide-streetAddress {
+        display: none;
+    }
+}
+
+@media (max-width: 1350px) {
+    .hide-streetAddress,
+    .hide-identityProvider {
+        display: none;
+    }
+}
+
+@media (max-width: 1200px) {
+    .hide-streetAddress,
+    .hide-identityProvider,
+    .hide-daysUntilPurge {
+        display: none;
+    }
+}
+
+@media (max-width: 1050px) {
+    .hide-streetAddress,
+    .hide-identityProvider,
+    .hide-daysUntilPurge,
+    .hide-email {
+        display: none;
+    }
+}
+
+@media (max-width: 900px) {
+    .hide-streetAddress,
+    .hide-identityProvider,
+    .hide-daysUntilPurge,
+    .hide-email,
+    .hide-lastLoggedIn {
+        display: none;
+    }
+}

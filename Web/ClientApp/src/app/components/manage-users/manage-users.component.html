@@ -17,35 +17,35 @@
     </ng-container>
 
     <ng-container matColumnDef="email">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.email">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.email" class="hide-email">
           Email
           <span class="resize-handle" (mousedown)="startResize($event, 'email')"></span>
         </th>
-        <td mat-cell *matCellDef="let user"> {{user.email}} </td>
+        <td mat-cell *matCellDef="let user" class="hide-email"> {{user.email}} </td>
     </ng-container>
 
     <ng-container matColumnDef="identityProvider">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.identityProvider">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.identityProvider" class="hide-identityProvider">
           Identity Provider
           <span class="resize-handle" (mousedown)="startResize($event, 'identityProvider')"></span>
         </th>
-        <td mat-cell *matCellDef="let user"> {{user.identityProvider}} </td>
+        <td mat-cell *matCellDef="let user" class="hide-identityProvider"> {{user.identityProvider}} </td>
     </ng-container>
 
     <ng-container matColumnDef="lastLoggedIn">
-      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.lastLoggedIn">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.lastLoggedIn" class="hide-lastLoggedIn">
         Last Login
         <span class="resize-handle" (mousedown)="startResize($event, 'lastLoggedIn')"></span>
       </th>
-      <td mat-cell *matCellDef="let user"> {{user.lastLoggedIn | date:'medium'}} </td>
+      <td mat-cell *matCellDef="let user" class="hide-lastLoggedIn"> {{user.lastLoggedIn | date:'medium'}} </td>
   </ng-container>
 
     <ng-container matColumnDef="daysUntilPurge">
-      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.daysUntilPurge">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.daysUntilPurge" class="hide-daysUntilPurge">
         Days Until Purge
         <span class="resize-handle" (mousedown)="startResize($event, 'daysUntilPurge')"></span>
       </th>
-      <td mat-cell *matCellDef="let user">
+      <td mat-cell *matCellDef="let user" class="hide-daysUntilPurge">
         <ng-container *ngIf="getDaysUntilPurge(user) !== null; else noPurgeClock">
           {{getDaysUntilPurge(user)}}
         </ng-container>
@@ -54,11 +54,11 @@
     </ng-container>
 
     <ng-container matColumnDef="streetAddress">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.streetAddress">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.streetAddress" class="hide-streetAddress">
           Street Address
           <span class="resize-handle" (mousedown)="startResize($event, 'streetAddress')"></span>
         </th>
-        <td mat-cell *matCellDef="let user"> {{user.streetAddress}} </td>
+        <td mat-cell *matCellDef="let user" class="hide-streetAddress"> {{user.streetAddress}} </td>
     </ng-container>
 
     <ng-container matColumnDef="roles">
