@@ -19,14 +19,12 @@
             </div>
           </div>
 
-          <div class="homeAddress">
-            {{home.streetNumber}} {{home.streetName}}
-          </div>
-
-          <div class="homeContactLines">
-            <div class="kvRow" *ngIf="home.emailAddress">
-              <div class="k">Email:</div>
-              <div class="v">{{home.emailAddress.address}}</div>
+          <div class="homeAddressRow">
+            <div class="homeAddress">
+              {{home.streetNumber}} {{home.streetName}}
+            </div>
+            <div class="homeEmail" *ngIf="home.emailAddress">
+              {{home.emailAddress.address}}
             </div>
           </div>
         </div>
