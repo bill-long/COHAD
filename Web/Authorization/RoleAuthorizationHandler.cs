@@ -16,8 +16,12 @@ namespace Web.Authorization
 
         protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, RoleAuthorizationRequirement requirement)
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(context.User.Claims);
-            if (string.IsNullOrEmpty(uniqueId))
+            string uniqueId;
+            try
+            {
+                uniqueId = Models.User.GetUniqueIdFromClaims(context.User.Claims);
+            }
+            catch (InvalidOperationException)
             {
                 return;
             }
