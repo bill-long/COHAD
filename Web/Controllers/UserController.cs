@@ -173,6 +173,11 @@ namespace Web.Controllers
             }
 
             userToModify.Roles ??= new List<Models.User.Role>();
+            if (userToModify.Roles.Contains(roleToAdd))
+            {
+                return Conflict($"The user already has the role {roleToAdd}.");
+            }
+
             userToModify.Roles.Add(roleToAdd);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
