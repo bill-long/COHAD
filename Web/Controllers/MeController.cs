@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -21,15 +22,18 @@ namespace Web.Controllers
         private readonly IUserRepository _userRepository;
         private readonly IHomeRepository _homeRepository;
         private readonly IEmailService _emailService;
+        private readonly ILogger<MeController> _logger;
 
         public MeController(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
-            IEmailService emailService)
+            IEmailService emailService,
+            ILogger<MeController> logger)
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
             _emailService = emailService;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -68,7 +72,8 @@ namespace Web.Controllers
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
                 Roles = new List<User.Role>(),
                 OwnedHomeIds = new List<System.Guid>(),
-                UniqueId = uniqueId
+                UniqueId = uniqueId,
+                LastLoggedIn = DateTime.UtcNow
             };
 
             await _userRepository.UpsertAsync(newUser);
@@ -87,7 +92,7 @@ namespace Web.Controllers
             return PresentationUser.FromStorageModel(newUser, new List<Home>());
         }
 
-        private static void FireAndForget(Func<Task> taskFactory)
+        private void FireAndForget(Func<Task> taskFactory)
         {
             _ = Task.Run(async () =>
             {
@@ -95,9 +100,9 @@ namespace Web.Controllers
                 {
                     await taskFactory();
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Best-effort side effect only.
+                    _logger.LogError(ex, "Background side effect failed in MeController.");
                 }
             });
         }
