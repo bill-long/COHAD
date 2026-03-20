@@ -25,18 +25,22 @@ namespace Web.Controllers
         public async Task<IEnumerable<Payment>> Get()
         {
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            _ = await _userRepository.GetByUniqueIdAsync(uniqueId);
             return await _paymentRepository.GetByPayerUniqueIdAsync(uniqueId);
         }
 
         [HttpPost]
-        public async Task<Payment> Add([FromBody] Payment payment)
+        public async Task<IActionResult> Add([FromBody] Payment payment)
         {
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
             var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
+            if (user == null)
+            {
+                return NotFound();
+            }
+
             payment.Id = Guid.NewGuid();
             payment.PayerUniqueId = user.UniqueId;
-            return await _paymentRepository.AddAsync(payment);
+            return Ok(await _paymentRepository.AddAsync(payment));
         }
     }
 }

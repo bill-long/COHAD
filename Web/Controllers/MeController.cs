@@ -64,10 +64,10 @@ namespace Web.Controllers
 
             var newUser = new User
             {
-                NameIdentifier = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value,
+                NameIdentifier = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? string.Empty,
                 GivenName = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.GivenName)?.Value,
                 Surname = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Surname)?.Value,
-                IdentityProvider = User.Claims.First(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider").Value,
+                IdentityProvider = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")?.Value ?? string.Empty,
                 Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value,
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
                 Roles = new List<User.Role>(),
