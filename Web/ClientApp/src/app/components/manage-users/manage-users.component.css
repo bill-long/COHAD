@@ -1,7 +1,92 @@
 table {
     width: 100%;
+    table-layout: fixed;
+}
+
+.mat-column-givenName,
+.mat-column-surname {
+    min-width: 130px;
+}
+
+.mat-column-email,
+.mat-column-identityProvider {
+    min-width: 190px;
+}
+
+.mat-column-lastLoggedIn,
+.mat-column-daysUntilPurge,
+.mat-column-actions {
+    min-width: 140px;
+}
+
+.mat-column-streetAddress,
+.mat-column-roles,
+.mat-column-ownedHomes {
+    min-width: 180px;
+}
+
+.mat-header-cell {
+    position: relative;
+    overflow: hidden;
+}
+
+.resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 100%;
+    width: 8px;
+    cursor: col-resize;
+    user-select: none;
+}
+
+.mat-cell {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .displaynone {
     display: none;
+}
+
+/* Progressive column hiding order:
+   1) streetAddress, 2) identityProvider, 3) daysUntilPurge, 4) email, 5) lastLoggedIn */
+@media (max-width: 1500px) {
+    .hide-streetAddress {
+        display: none;
+    }
+}
+
+@media (max-width: 1350px) {
+    .hide-streetAddress,
+    .hide-identityProvider {
+        display: none;
+    }
+}
+
+@media (max-width: 1200px) {
+    .hide-streetAddress,
+    .hide-identityProvider,
+    .hide-daysUntilPurge {
+        display: none;
+    }
+}
+
+@media (max-width: 1050px) {
+    .hide-streetAddress,
+    .hide-identityProvider,
+    .hide-daysUntilPurge,
+    .hide-email {
+        display: none;
+    }
+}
+
+@media (max-width: 900px) {
+    .hide-streetAddress,
+    .hide-identityProvider,
+    .hide-daysUntilPurge,
+    .hide-email,
+    .hide-lastLoggedIn {
+        display: none;
+    }
 }

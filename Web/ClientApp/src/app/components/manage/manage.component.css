@@ -1,13 +1,29 @@
-.example-container {
+.manage-container {
     min-height: 80vh;
     margin: 10px;
 }
 
-.side-nav-button {
-    width: 150px;
-    margin: 2px;
+.top-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
 }
 
-.drawer-content-wrapper {
-    margin-left: 15px;
+.top-nav-button {
+    min-width: 120px;
+}
+
+.manage-content {
+    width: 100%;
+}
+
+@media (max-width: 640px) {
+    .top-nav {
+        gap: 6px;
+    }
+
+    .top-nav-button {
+        min-width: 0;
+    }
 }

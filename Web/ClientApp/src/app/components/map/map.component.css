@@ -11,10 +11,12 @@
 .street-name {
   font-size: 10px;
   font-weight: bold;
+  fill: var(--text-primary);
 }
 
 .house-number {
   font-size: 9px;
+  fill: var(--text-primary);
 }
 
 .resident-info {

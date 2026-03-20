@@ -10,6 +10,9 @@ export interface ApiUser {
     identityProvider: string;
     email: string;
     streetAddress: string;
+    lastLoggedIn?: string | null;
+    unassociatedSinceUtc?: string | null;
+    noRolesSinceUtc?: string | null;
     roles: string[];
     ownedHomes: Home[];
 }

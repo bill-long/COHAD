@@ -1,19 +1,18 @@
-<mat-drawer-container class="example-container">
-    <mat-drawer class="side-drawer" mode="side" opened>
-        <div *ngIf="manageUsersVisible$ | async"><a mat-flat-button class="side-nav-button" color="primary" routerLink="users"
-                routerLinkActive="mat-accent">Users</a></div>
-        <div *ngIf="manageHomesVisible$ | async"><a mat-flat-button class="side-nav-button" color="primary" routerLink="homes"
-                routerLinkActive="mat-accent">Homes</a></div>
-        <div *ngIf="manageEmailVisible$ | async"><a mat-flat-button class="side-nav-button" color="primary" routerLink="send-email"
-                routerLinkActive="mat-accent">Send Email</a></div>
-        <div *ngIf="printDirectoryVisible$ | async"><a mat-flat-button class="side-nav-button" color="primary" routerLink="print"
-                routerLinkActive="mat-accent">Print Directory</a></div>
-        <div *ngIf="manageAuditVisible$ | async"><a mat-flat-button class="side-nav-button" color="primary" routerLink="audit-log"
-                routerLinkActive="mat-accent">Audit Log</a></div>
-    </mat-drawer>
-    <mat-drawer-content>
-        <div class="drawer-content-wrapper">
-            <router-outlet></router-outlet>
-        </div>
-    </mat-drawer-content>
-</mat-drawer-container>
+<div class="manage-container">
+    <div class="top-nav">
+        <a mat-flat-button class="top-nav-button" color="primary" routerLink="users" routerLinkActive="mat-accent"
+            *ngIf="manageUsersVisible$ | async">Users</a>
+        <a mat-flat-button class="top-nav-button" color="primary" routerLink="homes" routerLinkActive="mat-accent"
+            *ngIf="manageHomesVisible$ | async">Homes</a>
+        <a mat-flat-button class="top-nav-button" color="primary" routerLink="send-email" routerLinkActive="mat-accent"
+            *ngIf="manageEmailVisible$ | async">Send Email</a>
+        <a mat-flat-button class="top-nav-button" color="primary" routerLink="print" routerLinkActive="mat-accent"
+            *ngIf="printDirectoryVisible$ | async">Print Directory</a>
+        <a mat-flat-button class="top-nav-button" color="primary" routerLink="audit-log" routerLinkActive="mat-accent"
+            *ngIf="manageAuditVisible$ | async">Audit Log</a>
+    </div>
+
+    <div class="manage-content">
+        <router-outlet></router-outlet>
+    </div>
+</div>

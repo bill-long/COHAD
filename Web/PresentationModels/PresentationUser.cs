@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Web.Models;
@@ -15,6 +15,8 @@ namespace Web.PresentationModels
         public string Email { get; private set; }
         public string IdentityProvider { get; private set; }
         public DateTime? LastLoggedIn { get; private set; }
+        public DateTime? UnassociatedSinceUtc { get; private set; }
+        public DateTime? NoRolesSinceUtc { get; private set; }
         public List<string> Roles { get; private set; }
         public List<Home> OwnedHomes { get; private set; }
 
@@ -29,6 +31,8 @@ namespace Web.PresentationModels
                 Email = user.Emails,
                 IdentityProvider = user.IdentityProvider,
                 LastLoggedIn = user.LastLoggedIn,
+                UnassociatedSinceUtc = user.UnassociatedSinceUtc,
+                NoRolesSinceUtc = user.NoRolesSinceUtc,
                 Roles = user.Roles.Select(r => r.ToString()).ToList(),
                 OwnedHomes = ownedHomes
             };
