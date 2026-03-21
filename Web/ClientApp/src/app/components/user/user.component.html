@@ -15,8 +15,8 @@
     </mat-form-field>
 </div>
 
-<div class="wide-input">
-    <mat-form-field>
+<div class="wide-input chip-input">
+    <mat-form-field appearance="fill">
         <mat-chip-grid #roleChipGrid aria-label="Role selection">
             <mat-chip-row *ngFor="let role of apiUserCopy.roles" [removable]="removable" (removed)="removeRole(role)">
                 {{role}}
@@ -27,15 +27,16 @@
                 (matChipInputTokenEnd)="addRole($event)">
         </mat-chip-grid>
         <mat-autocomplete #roleAuto="matAutocomplete" (optionSelected)="selectedRole($event)">
-            <mat-option *ngFor="let role of allRoles" [value]="role">
+            <mat-option *ngFor="let role of allRoles" [value]="role" [disabled]="!canAddNonAdminRoles() && role !== administratorRole">
                 {{role}}
             </mat-option>
         </mat-autocomplete>
+        <mat-hint class="normalization-hint" *ngIf="!hasAnyHomes()">Users with no homes lose all roles.</mat-hint>
     </mat-form-field>
 </div>
 
-<div class="wide-input">
-    <mat-form-field>
+<div class="wide-input chip-input">
+    <mat-form-field appearance="fill">
         <mat-chip-grid #chipGrid aria-label="Home selection">
             <mat-chip-row *ngFor="let home of apiUserCopy.ownedHomes" [removable]="removable" (removed)="removeHome(home)">
                 {{home.streetNumber}}
@@ -51,6 +52,7 @@
                 {{home.streetNumber}} {{home.streetName}}
             </mat-option>
         </mat-autocomplete>
+        <mat-hint class="normalization-hint" *ngIf="!hasAnyRoles()">Adding a home will first add Resident so changes can be saved.</mat-hint>
     </mat-form-field>
 </div>
 

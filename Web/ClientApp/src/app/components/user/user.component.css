@@ -1,11 +1,28 @@
 mat-form-field {
     margin: 5px;
+    width: min(100%, 420px);
 }
 
-.wide-input .mat-form-field-infix {
-    width: 380px;
+.wide-input mat-form-field {
+    width: min(100%, 640px);
 }
 
-.action-bar>button {
+.chip-input mat-form-field {
+    width: min(100%, 640px);
+}
+
+.chip-input .mat-mdc-form-field-infix,
+.chip-input .mat-form-field-infix {
+    width: auto;
+    min-height: auto;
+}
+
+.normalization-hint {
+    display: block;
+    white-space: normal;
+    line-height: 1.3;
+}
+
+.action-bar > button {
     margin-left: 5px;
 }

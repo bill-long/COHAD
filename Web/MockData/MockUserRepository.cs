@@ -14,10 +14,10 @@ namespace Web.MockData
 
         public MockUserRepository()
         {
-            var u = new User
+            var adminUser = new User
             {
-                NameIdentifier = MockDataConstants.NameIdentifier,
-                UniqueId = MockDataConstants.UniqueId,
+                NameIdentifier = MockDataConstants.AdminNameIdentifier,
+                UniqueId = MockDataConstants.AdminUniqueId,
                 IdentityProvider = MockDataConstants.IdentityProvider,
                 GivenName = "Mock",
                 Surname = "Resident",
@@ -27,8 +27,24 @@ namespace Web.MockData
                 OwnedHomeIds = new List<Guid> { MockDataConstants.SampleHomeId },
                 LastLoggedIn = DateTime.UtcNow.AddDays(-1)
             };
-            UserAssociationState.Apply(u);
-            _users[u.UniqueId] = u;
+            UserAssociationState.Apply(adminUser);
+            _users[adminUser.UniqueId] = adminUser;
+
+            var secondaryUser = new User
+            {
+                NameIdentifier = MockDataConstants.SecondaryUserNameIdentifier,
+                UniqueId = MockDataConstants.SecondaryUserUniqueId,
+                IdentityProvider = MockDataConstants.IdentityProvider,
+                GivenName = "Taylor",
+                Surname = "Neighbor",
+                Emails = "taylor@cohad.local",
+                StreetAddress = "456 Test Court",
+                Roles = new List<User.Role> { User.Role.Resident },
+                OwnedHomeIds = new List<Guid> { MockDataConstants.SecondSampleHomeId },
+                LastLoggedIn = DateTime.UtcNow.AddDays(-2)
+            };
+            UserAssociationState.Apply(secondaryUser);
+            _users[secondaryUser.UniqueId] = secondaryUser;
         }
 
         public Task<List<User>> GetAllAsync()
