@@ -107,7 +107,6 @@ namespace Web.Controllers
 
         [HttpPost]
         [Authorize(Policy = "Administrator")]
-        [RequestFormLimits(MultipartBodyLengthLimit = 104857600)]
         public async Task<IActionResult> Upload([FromForm] DocumentUploadRequest request)
         {
             if (request?.File == null || request.File.Length <= 0)
@@ -133,9 +132,11 @@ namespace Web.Controllers
             }
 
             var id = Guid.NewGuid();
-            var safeBaseName = SanitizeFileName(string.IsNullOrWhiteSpace(request.DisplayName)
+            var rawDisplayName = string.IsNullOrWhiteSpace(request.DisplayName)
                 ? Path.GetFileNameWithoutExtension(request.File.FileName)
-                : request.DisplayName);
+                : request.DisplayName.Trim();
+            // Strip any extension the user typed (e.g. "Rules.pdf") so we don't duplicate the file extension ("Rules.pdf.pdf").
+            var safeBaseName = SanitizeFileName(Path.GetFileNameWithoutExtension(rawDisplayName));
             if (string.IsNullOrWhiteSpace(safeBaseName))
             {
                 return BadRequest("Display name is required.");

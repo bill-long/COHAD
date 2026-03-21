@@ -2,6 +2,11 @@ import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { HttpEventType } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { DocumentsService, ResidentDocument } from 'src/app/services/documents.service';
+import {
+  formatFileSize,
+  getFileIconName,
+  getFileTypeChipLabel
+} from 'src/app/utils/document-display.utils';
 
 @Component({
   selector: 'app-manage-documents',
@@ -132,49 +137,15 @@ export class ManageDocumentsComponent implements OnInit {
   }
 
   formatSize(sizeBytes: number): string {
-    if (sizeBytes < 1024) {
-      return `${sizeBytes} B`;
-    }
-
-    if (sizeBytes < 1024 * 1024) {
-      return `${(sizeBytes / 1024).toFixed(1)} KB`;
-    }
-
-    return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+    return formatFileSize(sizeBytes);
   }
 
   getFileTypeChip(doc: ResidentDocument): string {
-    const extension = this.getExtension(doc.displayName);
-    if (extension) {
-      return extension.toUpperCase();
-    }
-
-    if (doc.contentType?.includes('pdf')) {
-      return 'PDF';
-    }
-
-    return 'FILE';
+    return getFileTypeChipLabel(doc);
   }
 
   getFileIcon(doc: ResidentDocument): string {
-    const extension = this.getExtension(doc.displayName);
-    if (extension === 'pdf') {
-      return 'picture_as_pdf';
-    }
-
-    if (extension === 'doc' || extension === 'docx') {
-      return 'description';
-    }
-
-    if (extension === 'xls' || extension === 'xlsx') {
-      return 'table_chart';
-    }
-
-    if (extension === 'txt') {
-      return 'article';
-    }
-
-    return 'insert_drive_file';
+    return getFileIconName(doc);
   }
 
   private loadDocuments(): void {
@@ -190,15 +161,6 @@ export class ManageDocumentsComponent implements OnInit {
         this.error = 'Failed to load documents.';
       }
     });
-  }
-
-  private getExtension(fileName: string): string {
-    const lastDot = fileName.lastIndexOf('.');
-    if (lastDot < 0 || lastDot === fileName.length - 1) {
-      return '';
-    }
-
-    return fileName.substring(lastDot + 1).toLowerCase();
   }
 
   private resetFileInput(): void {

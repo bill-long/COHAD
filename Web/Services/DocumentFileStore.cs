@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
@@ -25,6 +26,8 @@ namespace Web.Services
     public class AzureBlobDocumentFileStore : IDocumentFileStore
     {
         private readonly BlobContainerClient _containerClient;
+        private readonly SemaphoreSlim _containerInitLock = new(1, 1);
+        private bool _containerEnsured;
 
         public AzureBlobDocumentFileStore(IOptions<DocumentStorageOptions> options)
         {
@@ -41,11 +44,35 @@ namespace Web.Services
 
             var serviceClient = new BlobServiceClient(value.ConnectionString);
             _containerClient = serviceClient.GetBlobContainerClient(value.ContainerName);
-            _containerClient.CreateIfNotExists(PublicAccessType.None);
+        }
+
+        private async Task EnsureContainerAsync()
+        {
+            if (_containerEnsured)
+            {
+                return;
+            }
+
+            await _containerInitLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_containerEnsured)
+                {
+                    return;
+                }
+
+                await _containerClient.CreateIfNotExistsAsync(PublicAccessType.None).ConfigureAwait(false);
+                _containerEnsured = true;
+            }
+            finally
+            {
+                _containerInitLock.Release();
+            }
         }
 
         public async Task UploadAsync(string blobPath, Stream stream, string contentType)
         {
+            await EnsureContainerAsync().ConfigureAwait(false);
             var blob = _containerClient.GetBlobClient(blobPath);
             await blob.UploadAsync(stream, new BlobUploadOptions
             {
@@ -58,6 +85,7 @@ namespace Web.Services
 
         public async Task<DocumentFileResult> DownloadAsync(string blobPath)
         {
+            await EnsureContainerAsync().ConfigureAwait(false);
             var blob = _containerClient.GetBlobClient(blobPath);
             var exists = await blob.ExistsAsync();
             if (!exists.Value)
@@ -75,6 +103,7 @@ namespace Web.Services
 
         public async Task DeleteAsync(string blobPath)
         {
+            await EnsureContainerAsync().ConfigureAwait(false);
             var blob = _containerClient.GetBlobClient(blobPath);
             await blob.DeleteIfExistsAsync();
         }

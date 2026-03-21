@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,6 +62,13 @@ namespace Web
 
             var useMockData = Environment.IsEnvironment("MockData");
             services.Configure<DocumentStorageOptions>(Configuration.GetSection("DocumentStorage"));
+            // Keep multipart request cap aligned with DocumentStorage:MaxUploadBytes (DocumentController enforces the same limit).
+            services.Configure<FormOptions>(options =>
+            {
+                var max = Configuration.GetSection("DocumentStorage").GetValue<long?>("MaxUploadBytes")
+                    ?? new DocumentStorageOptions().MaxUploadBytes;
+                options.MultipartBodyLengthLimit = max;
+            });
 
             services
                 .AddAuthentication(options =>
@@ -154,7 +162,7 @@ namespace Web
                     new CosmosAuditLogRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog")));
                 services.AddScoped<IDocumentRepository>(sp =>
                     new CosmosDocumentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
-                services.AddScoped<IDocumentFileStore, AzureBlobDocumentFileStore>();
+                services.AddSingleton<IDocumentFileStore, AzureBlobDocumentFileStore>();
 
                 services.AddScoped<IEmailService, EmailService>();
             }

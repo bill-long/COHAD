@@ -14,11 +14,11 @@ namespace Web
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
                 // User secrets are only included by default when ASPNETCORE_ENVIRONMENT is Development.
-                // If you run with another environment (or launchSettings omits the variable), load secrets
-                // from this assembly so local values like DocumentStorage:ConnectionString still apply.
+                // For the local-only MockData environment, also load user secrets so values like
+                // DocumentStorage:ConnectionString apply without loading secrets in staging/production.
                 .ConfigureAppConfiguration((ctx, config) =>
                 {
-                    if (!ctx.HostingEnvironment.IsDevelopment())
+                    if (ctx.HostingEnvironment.IsEnvironment("MockData"))
                     {
                         config.AddUserSecrets(typeof(Program).Assembly, optional: true);
                     }

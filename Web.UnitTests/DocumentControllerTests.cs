@@ -180,6 +180,43 @@ public sealed class DocumentControllerTests
         mockFileStore.Verify(s => s.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "application/pdf"), Times.Once);
     }
 
+    [Fact]
+    public async Task Upload_does_not_duplicate_extension_when_display_name_includes_extension()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            GivenName = "Admin",
+            Surname = "User",
+            Roles = new List<User.Role> { User.Role.Administrator }
+        });
+
+        ResidentDocument saved = null;
+        var mockDocs = new Mock<IDocumentRepository>();
+        mockDocs.Setup(r => r.UpsertAsync(It.IsAny<ResidentDocument>()))
+            .Callback<ResidentDocument>(d => saved = d)
+            .ReturnsAsync((ResidentDocument d) => d);
+
+        var mockFileStore = new Mock<IDocumentFileStore>();
+        mockFileStore.Setup(s => s.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, mockDocs.Object, mockFileStore.Object, Mock.Of<IAuditLogRepository>());
+        var request = new DocumentUploadRequest
+        {
+            DisplayName = "Rules.pdf",
+            File = CreateFormFile("anything.pdf", "application/pdf", Encoding.UTF8.GetBytes("pdf"))
+        };
+
+        var result = await c.Upload(request);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(saved);
+        Assert.Equal("Rules.pdf", saved.DisplayName);
+    }
+
     private static IFormFile CreateFormFile(string fileName, string contentType, byte[] bytes)
     {
         var ms = new MemoryStream(bytes);
