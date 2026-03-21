@@ -2,7 +2,6 @@ import { Component, OnInit, Input } from '@angular/core';
 
 @Component({
     selector: 'app-header',
-    inputs: ['title', 'subtitles', 'imagePath', 'noBottomGap', 'fillViewport', 'imageFetchPriority'],
     styleUrls: ['./header.component.css'],
     template: `
   <div class="header" [class.no-bottom-gap]="noBottomGap" [class.fill-viewport]="fillViewport">
@@ -17,12 +16,12 @@ import { Component, OnInit, Input } from '@angular/core';
 })
 export class HeaderComponent implements OnInit {
 
-  title!: string;
-  subtitles!: string[];
-  imagePath!: string;
-  noBottomGap = false;
-  fillViewport = false;
-  imageFetchPriority?: 'high' | 'low' | 'auto';
+  @Input() title!: string;
+  @Input() subtitles!: string[];
+  @Input() imagePath!: string;
+  @Input() noBottomGap = false;
+  @Input() fillViewport = false;
+  @Input() imageFetchPriority?: 'high' | 'low' | 'auto';
 
   constructor() { }
 
