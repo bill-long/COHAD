@@ -8,6 +8,8 @@
             *ngIf="manageEmailVisible$ | async">Send Email</a>
         <a mat-flat-button class="top-nav-button" color="primary" routerLink="print" routerLinkActive="mat-accent"
             *ngIf="printDirectoryVisible$ | async">Print Directory</a>
+        <a mat-flat-button class="top-nav-button" color="primary" routerLink="documents" routerLinkActive="mat-accent"
+            *ngIf="manageDocumentsVisible$ | async">Documents</a>
         <a mat-flat-button class="top-nav-button" color="primary" routerLink="audit-log" routerLinkActive="mat-accent"
             *ngIf="manageAuditVisible$ | async">Audit Log</a>
     </div>

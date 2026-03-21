@@ -21,6 +21,7 @@ import { RenderedPrintableDirectoryComponent } from './components/rendered-print
 import { MapComponent } from './components/map/map.component';
 import { RenderedPrintableMapComponent } from './components/rendered-printable-map/rendered-printable-map.component';
 import { DuesComponent } from './components/dues/dues.component';
+import { ManageDocumentsComponent } from './components/manage-documents/manage-documents.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
@@ -29,7 +30,7 @@ const routes: Routes = [
   { path: 'directory', component: DirectoryComponent },
   { path: 'map', component: MapComponent },
   { path: 'news', component: NewsComponent },
-  { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
+  { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
   { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] },
   { path: 'mydues', component: DuesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
   { path: 'rendered-print-directory', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
@@ -40,6 +41,7 @@ const routes: Routes = [
       { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageHomesRoles } },
       { path: 'send-email', component: SendEmailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles } },
       { path: 'print', component: ManagePrintComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
+      { path: 'documents', component: ManageDocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles } },
       { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageAuditLogRoles } }
     ]
   },

@@ -15,6 +15,7 @@ namespace Web.Services.Cosmos
         internal static string ToHomeDocumentId(Guid homeId) => $"Home|{homeId:D}";
         internal static string ToPaymentDocumentId(Guid paymentId) => $"Payment|{paymentId:D}";
         internal static string ToAuditLogDocumentId(Guid auditLogId) => $"AuditLog|{auditLogId:D}";
+        internal static string ToResidentDocumentId(Guid documentId) => $"ResidentDocument|{documentId:D}";
 
         internal static Guid ParseLegacyGuid(string raw)
         {
@@ -204,6 +205,37 @@ namespace Web.Services.Cosmos
                 ["SubjectId"] = audit.SubjectId,
                 ["SubjectName"] = audit.SubjectName,
                 ["Action"] = audit.Action
+            };
+        }
+
+        internal static ResidentDocument ToResidentDocument(JObject doc)
+        {
+            var rawId = doc.Value<string>("id");
+            return new ResidentDocument
+            {
+                Id = ParseLegacyGuid(rawId),
+                DisplayName = doc.Value<string>("DisplayName"),
+                OriginalFileName = doc.Value<string>("OriginalFileName"),
+                BlobPath = doc.Value<string>("BlobPath"),
+                ContentType = doc.Value<string>("ContentType"),
+                SizeBytes = doc.Value<long?>("SizeBytes") ?? 0,
+                UploadedByUniqueId = doc.Value<string>("UploadedByUniqueId"),
+                CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue
+            };
+        }
+
+        internal static JObject ToResidentDocumentDocument(ResidentDocument document)
+        {
+            return new JObject
+            {
+                ["id"] = ToResidentDocumentId(document.Id),
+                ["DisplayName"] = document.DisplayName,
+                ["OriginalFileName"] = document.OriginalFileName,
+                ["BlobPath"] = document.BlobPath,
+                ["ContentType"] = document.ContentType,
+                ["SizeBytes"] = document.SizeBytes,
+                ["UploadedByUniqueId"] = document.UploadedByUniqueId,
+                ["CreatedUtc"] = JToken.FromObject(document.CreatedUtc)
             };
         }
     }

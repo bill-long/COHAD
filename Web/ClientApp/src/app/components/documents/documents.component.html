@@ -1,18 +1,32 @@
-<app-header imagePath="assets/leaves1.jpg"></app-header>
-<div class="container">
-  <div class="row">
-    <div class="col">
-      <h1 class="font-weight-lighter">Documents</h1>
+<div class="documents-page container py-4">
+  <section class="documents-shell">
+    <div class="documents-header">
+      <h1>Resident Documents</h1>
+      <p>Download HOA documents shared with residents.</p>
     </div>
-  </div>
-  <div class="row mt-2">
-    <div class="col">
-      <div class="folder mt-1" *ngFor="let f of folders">
-        <span octicon="file-directory" class="align-middle"></span> {{f.name}}
-        <div class="file ml-3 mt-1" *ngFor="let file of f.children" (click)="downloadFile(f.name, file.name)">
-          <span octicon="file" class="align-middle"></span> {{file.name}}
+
+    <div class="alert alert-danger mb-3" *ngIf="error">{{ error }}</div>
+
+    <div class="loading-state" *ngIf="loading">Loading documents...</div>
+
+    <section class="documents-list" *ngIf="!loading && documents.length > 0">
+      <div class="document-card" *ngFor="let doc of documents">
+        <button class="file-link" type="button" (click)="downloadFile(doc)">
+          <mat-icon class="file-icon">{{ getFileIcon(doc) }}</mat-icon>
+          <span class="file-name">{{ doc.displayName }}</span>
+          <span class="file-chip">{{ getFileTypeChip(doc) }}</span>
+        </button>
+
+        <div class="document-meta">
+          <span>{{ doc.createdUtc | date:'mediumDate' }}</span>
+          <span class="meta-separator">-</span>
+          <span>{{ formatSize(doc.sizeBytes) }}</span>
         </div>
       </div>
+    </section>
+
+    <div *ngIf="!loading && documents.length === 0" class="empty-state">
+      No documents available yet.
     </div>
-  </div>
+  </section>
 </div>

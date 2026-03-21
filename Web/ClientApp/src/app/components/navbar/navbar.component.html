@@ -8,6 +8,7 @@
         Policy</a>
       <a mat-flat-button color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="directory" routerLinkActive="mat-accent">Directory</a>
       <a mat-flat-button color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="map" routerLinkActive="mat-accent">Map</a>
+      <a mat-flat-button color="primary" *ngIf="vm.showAuthenticatedNav && (vm.apiUser?.roles?.includes('Resident') || vm.apiUser?.roles?.includes('Administrator'))" routerLink="documents" routerLinkActive="mat-accent">Documents</a>
       <a mat-flat-button color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="mydues" routerLinkActive="mat-accent">Dues</a>
       <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="vm.showAuthenticatedNav">My
         Info</a>
@@ -28,6 +29,7 @@
       <a mat-menu-item color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
       <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="directory" routerLinkActive="mat-accent">Directory</a>
       <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="map" routerLinkActive="mat-accent">Map</a>
+      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav && (vm.apiUser?.roles?.includes('Resident') || vm.apiUser?.roles?.includes('Administrator'))" routerLink="documents" routerLinkActive="mat-accent">Documents</a>
       <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="mydues" routerLinkActive="mat-accent">Dues</a>
       <a mat-menu-item color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="vm.showAuthenticatedNav">My
         Info</a>

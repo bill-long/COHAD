@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Authorization;
+using Web.Configuration;
 using Web.MockData;
 using Web.Models;
 using Web.Services;
@@ -59,6 +61,14 @@ namespace Web
             });
 
             var useMockData = Environment.IsEnvironment("MockData");
+            services.Configure<DocumentStorageOptions>(Configuration.GetSection("DocumentStorage"));
+            // Keep multipart request cap aligned with DocumentStorage:MaxUploadBytes (DocumentController enforces the same limit).
+            services.Configure<FormOptions>(options =>
+            {
+                var max = Configuration.GetSection("DocumentStorage").GetValue<long?>("MaxUploadBytes")
+                    ?? new DocumentStorageOptions().MaxUploadBytes;
+                options.MultipartBodyLengthLimit = max;
+            });
 
             services
                 .AddAuthentication(options =>
@@ -131,6 +141,8 @@ namespace Web
                 services.AddSingleton<IHomeRepository, MockHomeRepository>();
                 services.AddSingleton<IPaymentRepository, MockPaymentRepository>();
                 services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
+                services.AddSingleton<IDocumentRepository, MockDocumentRepository>();
+                services.AddSingleton<IDocumentFileStore, MockDocumentFileStore>();
                 services.AddScoped<IEmailService, NoOpEmailService>();
             }
             else
@@ -148,6 +160,9 @@ namespace Web
                     new CosmosPaymentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments")));
                 services.AddScoped<IAuditLogRepository>(sp =>
                     new CosmosAuditLogRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog")));
+                services.AddScoped<IDocumentRepository>(sp =>
+                    new CosmosDocumentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
+                services.AddSingleton<IDocumentFileStore, AzureBlobDocumentFileStore>();
 
                 services.AddScoped<IEmailService, EmailService>();
             }

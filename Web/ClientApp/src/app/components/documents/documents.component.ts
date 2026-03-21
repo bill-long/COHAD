@@ -1,32 +1,66 @@
 import { Component, OnInit } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { AuthService } from 'src/app/services/auth.service';
+import { DocumentsService, ResidentDocument } from 'src/app/services/documents.service';
+import {
+  formatFileSize,
+  getFileIconName,
+  getFileTypeChipLabel
+} from 'src/app/utils/document-display.utils';
 
 @Component({
-    selector: 'app-documents',
-    templateUrl: './documents.component.html',
-    styleUrls: ['./documents.component.css'],
-    standalone: false
+  selector: 'app-documents',
+  templateUrl: './documents.component.html',
+  styleUrls: ['./documents.component.css'],
+  standalone: false
 })
 export class DocumentsComponent implements OnInit {
+  documents: ResidentDocument[] = [];
+  loading = false;
+  error = '';
 
-  folders!: { name: string, children: { name: string}[] }[];
+  constructor(
+    private readonly documentsService: DocumentsService) { }
 
-  constructor(private httpClient: HttpClient, private authService: AuthService) {
-    httpClient.get('api/document').subscribe((r: any) => this.folders = r.children);
+  ngOnInit(): void {
+    this.loadDocuments();
   }
 
-  ngOnInit() {
-  }
-
-  downloadFile(folder: string, file: string) {
-    this.httpClient.get<Blob>(`api/document/${folder}/${file}`, { responseType: 'blob' as 'json' }).subscribe(r => {
-      const url = window.URL.createObjectURL(r);
-      const downloadLink = document.createElement('a');
+  downloadFile(doc: ResidentDocument): void {
+    this.documentsService.download(doc.id).subscribe(blob => {
+      const url = window.URL.createObjectURL(blob);
+      const downloadLink = window.document.createElement('a');
       downloadLink.href = url;
-      downloadLink.setAttribute('download', file);
-      document.body.appendChild(downloadLink);
+      downloadLink.setAttribute('download', doc.displayName);
+      window.document.body.appendChild(downloadLink);
       downloadLink.click();
+      downloadLink.remove();
+      window.URL.revokeObjectURL(url);
+    });
+  }
+
+  formatSize(sizeBytes: number): string {
+    return formatFileSize(sizeBytes);
+  }
+
+  getFileTypeChip(doc: ResidentDocument): string {
+    return getFileTypeChipLabel(doc);
+  }
+
+  getFileIcon(doc: ResidentDocument): string {
+    return getFileIconName(doc);
+  }
+
+  private loadDocuments(): void {
+    this.loading = true;
+    this.documentsService.getAll().subscribe({
+      next: docs => {
+        this.documents = docs ?? [];
+        this.loading = false;
+      },
+      error: () => {
+        this.documents = [];
+        this.loading = false;
+        this.error = 'Failed to load documents.';
+      }
     });
   }
 

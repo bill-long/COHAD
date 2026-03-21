@@ -42,4 +42,8 @@ export class ManageComponent implements OnInit {
     return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0))
   }
 
+  get manageDocumentsVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageUsersRoles.includes(r)).length > 0))
+  }
+
 }

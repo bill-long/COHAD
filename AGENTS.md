@@ -45,6 +45,7 @@ No Angular lint target is configured (`ng lint` errors). The project has a legac
 
 ### Non-obvious gotchas
 
+- **SPA dev proxy vs `ng serve` host:** `Startup.cs` proxies to `http://127.0.0.1:4200`. Plain `ng serve` (no `--host`) may listen only on `localhost` / IPv6 (`::1`), so the proxy gets “connection refused” to `127.0.0.1`. Use `npm start` (binds `127.0.0.1`), or `npx ng serve --host 127.0.0.1 --port 4200`, or `--host 0.0.0.0` which also accepts IPv4 loopback.
 - The backend starts successfully without Cosmos DB credentials but API endpoints will fail at runtime (null CosmosClient). The SPA landing page, Privacy Policy, and navigation all work without Cosmos.
 - Authentication uses Azure AD B2C (`cohadorgb2c.b2clogin.com`). Sign In will redirect externally; this cannot work without a registered redirect URI matching the dev environment.
 - The `.csproj` `PublishRunWebpack` target runs `npm install` + `npm run prodbuild` during `dotnet publish` — avoid publishing in dev; use `dotnet run` instead.
