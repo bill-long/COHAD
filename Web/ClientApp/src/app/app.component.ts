@@ -17,6 +17,7 @@ import { applicationState, ApplicationState } from './state';
     standalone: false
 })
 export class AppComponent implements OnInit {
+
   constructor(
     private authService: AuthService,
     private meService: MeService,

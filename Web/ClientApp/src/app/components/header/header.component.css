@@ -1,13 +1,34 @@
 .header {
+    position: relative;
+    overflow: hidden;
     height: 70vh;
     min-height: 475px;
-    background-size: cover;
-    background-position: center;
+    background-color: #1e2a1e;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     margin-bottom: 50px;
+}
+
+.header-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.header-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .header.no-bottom-gap {
@@ -26,7 +47,7 @@
     }
 }
 
-.header>h1 {
+.header-content>h1 {
     color: white;
     text-shadow: black 3px 0 10px, black -3px 0 10px;
     text-align: center;

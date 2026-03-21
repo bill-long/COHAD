@@ -11,7 +11,9 @@ export interface ApplicationState {
     apiUser: ApiUser | null,
     directory: DirectoryHome[],
     operationsInProgress: number,
-    authBootstrapStatus: 'idle' | 'inProgress' | 'completed'
+    authBootstrapStatus: 'idle' | 'inProgress' | 'completed',
+    /** True after OAuth tryLogin / mock-auth has finished establishing session (or lack thereof). Used so guards do not act on the initial null user before bootstrap. */
+    authSessionResolved: boolean
 }
 
 export const initialStateValue: ApplicationState = {
@@ -21,7 +23,8 @@ export const initialStateValue: ApplicationState = {
     apiUser: null,
     directory: [],
     operationsInProgress: 0,
-    authBootstrapStatus: 'idle'
+    authBootstrapStatus: 'idle',
+    authSessionResolved: false
 }
 
 export class AuthenticatedUserChanged { constructor(public authUser: AuthUser | null) { } }
@@ -46,14 +49,21 @@ export class Login { }
 
 export class Logout { }
 
+export class AuthSessionResolved { }
+
 export type Action =
     AuthenticatedUserChanged |
+    LoadAllHomes |
+    LoadAllHomesCompleted |
+    LoadAllUsers |
+    LoadAllUsersCompleted |
     LoadDirectory |
     LoadDirectoryCompleted |
     LoadUser |
     LoadUserCompleted |
     Login |
-    Logout;
+    Logout |
+    AuthSessionResolved;
 
 export const dispatcher = new InjectionToken<Subject<Action>>('dispatcher');
 
@@ -82,7 +92,19 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: null,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress,
-                    authBootstrapStatus: hasAccessToken ? 'inProgress' : 'idle'
+                    authBootstrapStatus: hasAccessToken ? 'inProgress' : 'idle',
+                    authSessionResolved: state.authSessionResolved
+                };
+            } else if (action instanceof AuthSessionResolved) {
+                newState = {
+                    allHomes: state.allHomes,
+                    allUsers: state.allUsers,
+                    authUser: state.authUser,
+                    apiUser: state.apiUser,
+                    directory: state.directory,
+                    operationsInProgress: state.operationsInProgress,
+                    authBootstrapStatus: state.authBootstrapStatus,
+                    authSessionResolved: true
                 };
             } else if (action instanceof LoadAllHomes) {
                 newState = addOperationInProgress(state);
@@ -94,7 +116,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress - 1,
-                    authBootstrapStatus: state.authBootstrapStatus
+                    authBootstrapStatus: state.authBootstrapStatus,
+                    authSessionResolved: state.authSessionResolved
                 };
             } else if (action instanceof LoadAllUsers) {
                 newState = addOperationInProgress(state);
@@ -106,7 +129,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress - 1,
-                    authBootstrapStatus: state.authBootstrapStatus
+                    authBootstrapStatus: state.authBootstrapStatus,
+                    authSessionResolved: state.authSessionResolved
                 };
             } else if (action instanceof LoadDirectory) {
                 newState = addOperationInProgress(state);
@@ -118,7 +142,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: state.apiUser,
                     directory: action.data,
                     operationsInProgress: state.operationsInProgress - 1,
-                    authBootstrapStatus: state.authBootstrapStatus
+                    authBootstrapStatus: state.authBootstrapStatus,
+                    authSessionResolved: state.authSessionResolved
                 };
             } else if (action instanceof LoadUser) {
                 newState = addOperationInProgress(state);
@@ -130,7 +155,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     apiUser: action.user,
                     directory: state.directory,
                     operationsInProgress: state.operationsInProgress - 1,
-                    authBootstrapStatus: state.authUser?.accessToken != null ? 'completed' : 'idle'
+                    authBootstrapStatus: state.authUser?.accessToken != null ? 'completed' : 'idle',
+                    authSessionResolved: state.authSessionResolved
                 };
             } else if (action instanceof Login) {
                 newState = state;
@@ -160,6 +186,7 @@ function addOperationInProgress(state: ApplicationState) {
         apiUser: state.apiUser,
         directory: state.directory,
         operationsInProgress: state.operationsInProgress + 1,
-        authBootstrapStatus: state.authBootstrapStatus
+        authBootstrapStatus: state.authBootstrapStatus,
+        authSessionResolved: state.authSessionResolved
     };
 }

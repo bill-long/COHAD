@@ -4,11 +4,13 @@ import { Observable, Subject } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
 import { IdentityClaims } from '../models';
-import { ApplicationState, dispatcher, Action, applicationState, AuthenticatedUserChanged, Login, Logout } from '../state';
+import { ApplicationState, dispatcher, Action, applicationState, AuthenticatedUserChanged, AuthSessionResolved, Login, Logout } from '../state';
 import { MockAuthTokenService } from './mock-auth-token.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
+
+  private authSessionResolvedDispatched = false;
 
   constructor(
     private oauthService: OAuthService,
@@ -52,7 +54,9 @@ export class AuthService {
           if (!environment.production) {
             console.log('OAuthService event', e);
           }
-          this.updateState();
+          if (this.updateState()) {
+            this.markAuthSessionResolvedOnce();
+          }
         });
     }
 
@@ -74,11 +78,25 @@ export class AuthService {
     });
 
     if (!environment.useMockAuth) {
-      this.updateState();
-      this.oauthService.tryLogin();
+      this.oauthService.tryLogin().then(() => {
+        if (this.updateState()) {
+          this.markAuthSessionResolvedOnce();
+        }
+      }).catch(() => {
+        this.updateState();
+        this.markAuthSessionResolvedOnce();
+      });
     } else {
       this.initMockAuth();
     }
+  }
+
+  private markAuthSessionResolvedOnce(): void {
+    if (this.authSessionResolvedDispatched) {
+      return;
+    }
+    this.authSessionResolvedDispatched = true;
+    this.dispatcher.next(new AuthSessionResolved());
   }
 
   private initMockAuth(): void {
@@ -94,25 +112,42 @@ export class AuthService {
           streetAddress: '123 Mock Lane'
         };
         this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken: r.accessToken }));
+        this.markAuthSessionResolvedOnce();
       },
       error: (err) => {
         console.error('Mock auth unavailable (is the API running with ASPNETCORE_ENVIRONMENT=MockData?)', err);
+        this.markAuthSessionResolvedOnce();
       }
     });
   }
 
-  private updateState(): void {
+  /** @returns true if AuthenticatedUserChanged was dispatched (false when refresh was started and dispatch is deferred). */
+  private updateState(): boolean {
     let accessToken = this.oauthService.getAccessToken();
     if (accessToken != null && this.oauthService.getAccessTokenExpiration() < Date.now()) {
       if (!environment.production) {
         console.log('Found expired token. Refreshing.');
-
       }
-      this.oauthService.refreshToken();
-      return;
+
+      try {
+        const refreshResult: any = this.oauthService.refreshToken();
+
+        // Handle refresh errors explicitly so that the auth session is resolved even on failure.
+        if (refreshResult && typeof refreshResult.catch === 'function') {
+          (refreshResult as Promise<unknown>).catch(err => {
+            console.error('Token refresh failed.', err);
+            this.markAuthSessionResolvedOnce();
+          });
+        }
+      } catch (err) {
+        console.error('Token refresh threw an error.', err);
+        this.markAuthSessionResolvedOnce();
+      }
+      return false;
     }
 
     let identityClaims = this.oauthService.getIdentityClaims() as IdentityClaims;
     this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken }));
+    return true;
   }
 }

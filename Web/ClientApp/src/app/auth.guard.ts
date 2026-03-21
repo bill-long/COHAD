@@ -1,19 +1,35 @@
 import { Injectable, Inject } from '@angular/core';
 import { ActivatedRouteSnapshot, RouterStateSnapshot, Router } from '@angular/router';
-import { AuthService } from './services/auth.service';
-import { map } from 'rxjs/operators';
+import { filter, map, take } from 'rxjs/operators';
 import { applicationState, ApplicationState } from './state';
-import { Observable } from 'rxjs';
+import { Observable, race, timer } from 'rxjs';
+import { AuthService } from './services/auth.service';
+
+const AUTH_RESOLVE_TIMEOUT_MS = 30000;
 
 @Injectable({ providedIn: 'root' })
 export class AuthGuard  {
-    constructor(@Inject(applicationState) private appState: Observable<ApplicationState>, private router: Router) { }
+    constructor(
+        @Inject(applicationState) private appState: Observable<ApplicationState>,
+        private router: Router,
+        // Injected to guarantee AuthService is created and dispatches AuthSessionResolved.
+        private _authService: AuthService
+    ) { }
 
     canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot) {
-        return this.appState.pipe(map(s => s.authUser), map(u => {
-            if (u != null) return true;
-            this.router.navigate(['/']);
-            return false;
-        }));
+        const resolved$ = this.appState.pipe(
+            filter(s => s.authSessionResolved),
+            take(1),
+            map(s => s.authUser != null || this.denyNavigation()));
+
+        return race(
+            resolved$,
+            timer(AUTH_RESOLVE_TIMEOUT_MS).pipe(map(() => this.denyNavigation()))
+        );
+    }
+
+    private denyNavigation(): boolean {
+        this.router.navigate(['/']);
+        return false;
     }
 }
