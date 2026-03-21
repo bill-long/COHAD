@@ -13,6 +13,7 @@
 @include mat.app-background();
 
 $cohad-app-primary: mat.m2-define-palette(mat.$m2-green-palette, 700, 300, 900);
+$cohad-app-primary-dark: mat.m2-define-palette(mat.$m2-green-palette, 300, 100, 600);
 $cohad-app-accent: mat.m2-define-palette(mat.$m2-brown-palette);
 $cohad-app-light-theme: mat.m2-define-light-theme((
   color: (
@@ -23,7 +24,7 @@ $cohad-app-light-theme: mat.m2-define-light-theme((
 
 $cohad-app-dark-theme: mat.m2-define-dark-theme((
   color: (
-    primary: $cohad-app-primary,
+    primary: $cohad-app-primary-dark,
     accent: $cohad-app-accent,
   ),
 ));

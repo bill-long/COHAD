@@ -7,6 +7,7 @@
 :root {
     --surface: #ffffff;
     --surface-muted: #fafafa;
+    --surface-section: #f5f5f5;
     --surface-subtle: rgba(0, 0, 0, 0.015);
     --surface-chip: rgba(0, 0, 0, 0.06);
     --text-primary: rgba(0, 0, 0, 0.87);
@@ -24,7 +25,8 @@
 
 body.dark-theme {
     --surface: #1f1f1f;
-    --surface-muted: #252525;
+    --surface-muted: #2c2c2c;
+    --surface-section: #1a1a1a;
     --surface-subtle: rgba(255, 255, 255, 0.04);
     --surface-chip: rgba(255, 255, 255, 0.1);
     --text-primary: rgba(255, 255, 255, 0.95);
@@ -61,6 +63,20 @@ body {
 
 body.dark-theme {
     color-scheme: dark;
+}
+
+/* Stronger stroked primary: default outline is nearly invisible on gray cards. */
+body.dark-theme .mat-mdc-outlined-button.mat-primary:not(:disabled) {
+    --mat-button-outlined-label-text-color: #a5d6a7;
+    --mat-button-outlined-outline-color: rgba(165, 214, 167, 0.45);
+    --mat-button-outlined-state-layer-color: #a5d6a7;
+    --mat-button-outlined-ripple-color: color-mix(in srgb, #a5d6a7 12%, transparent);
+}
+
+/* app-edit-resident: expansion panel surfaces (global avoids ::ng-deep / !important on Material internals). */
+mat-expansion-panel.residentPanel .mat-expansion-panel-header,
+mat-expansion-panel.residentPanel .mat-expansion-panel-body {
+    background: var(--surface-muted);
 }
 
 .container {
