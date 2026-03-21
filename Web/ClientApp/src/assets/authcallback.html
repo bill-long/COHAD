@@ -5,7 +5,6 @@
         window.history.replaceState({},
             window.document.title,
             window.location.origin);
-        console.log("authcallback.html saving user", u);
         if (u && u.state) {
             window.location = u.state;
         } else {
