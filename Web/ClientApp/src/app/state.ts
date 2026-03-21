@@ -53,6 +53,10 @@ export class AuthSessionResolved { }
 
 export type Action =
     AuthenticatedUserChanged |
+    LoadAllHomes |
+    LoadAllHomesCompleted |
+    LoadAllUsers |
+    LoadAllUsersCompleted |
     LoadDirectory |
     LoadDirectoryCompleted |
     LoadUser |
