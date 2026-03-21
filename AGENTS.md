@@ -27,7 +27,7 @@ Use this when you need a **signed-in** session and working APIs **without** Cosm
     `MockJwt__SigningKey='<your-local-secret>' ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://127.0.0.1:5000" dotnet run --project Web/Web.csproj`
 3. Open **http://127.0.0.1:5000** (same proxy pattern as Development: API serves the app and proxies the SPA from port 4200).
 
-The SPA obtains a dev JWT from `GET /api/dev/mock-auth` (only when `ASPNETCORE_ENVIRONMENT=MockData` and only from loopback requests). The token lifetime is short-lived (15 minutes). The mock user is **mock@cohad.local** with **Resident** and **Administrator** roles and owns a sample home at **123 Mock Lane** (editable under My Info / directory flows). Data resets when the process restarts.
+The SPA obtains a dev JWT from `GET /api/dev/mock-auth` (only when `ASPNETCORE_ENVIRONMENT=MockData` and only from loopback requests). The token lifetime is short-lived (15 minutes). The signed-in mock user is **mock@cohad.local** with **Resident** and **Administrator** roles and owns **123 Mock Lane**. Mock data also seeds a second user, **taylor@cohad.local**, who owns **456 Test Court** so administrators can exercise user/home/role management flows. Data resets when the process restarts.
 
 Mock mode is selected only by **`ASPNETCORE_ENVIRONMENT=MockData`** (not a separate `UseMockData` flag). This mode is for local testing only.
 

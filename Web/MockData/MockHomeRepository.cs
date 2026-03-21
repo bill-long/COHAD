@@ -13,7 +13,7 @@ namespace Web.MockData
 
         public MockHomeRepository()
         {
-            var home = new Home
+            var primaryHome = new Home
             {
                 Id = MockDataConstants.SampleHomeId,
                 StreetNumber = 123,
@@ -63,7 +63,59 @@ namespace Web.MockData
                 },
                 AssociatedUsers = new List<HomeAssociatedUser>()
             };
-            _homes[home.Id] = CloneHome(home);
+            _homes[primaryHome.Id] = CloneHome(primaryHome);
+
+            var secondaryHome = new Home
+            {
+                Id = MockDataConstants.SecondSampleHomeId,
+                StreetNumber = 456,
+                StreetName = "Test Court",
+                PhoneNumber = new PhoneNumber
+                {
+                    AreaCode = 555,
+                    Prefix = 987,
+                    LineNumber = 6543,
+                    Type = "Home",
+                    VisibleInDirectory = true
+                },
+                EmailAddress = new EmailAddress
+                {
+                    Address = "neighbor@cohad.local",
+                    VisibleInDirectory = true,
+                    BoardEmailOptedIn = false,
+                    WelcomeEmailOptedIn = false,
+                    GardenClubEmailOptedIn = false,
+                    SocialCommitteeEmailOptedIn = false,
+                    SunshineCommitteeEmailOptedIn = false
+                },
+                Residents = new List<Resident>
+                {
+                    new Resident
+                    {
+                        GivenName = "Taylor",
+                        Surname = "Neighbor",
+                        YearOfBirth = 1990,
+                        CollegeName = "",
+                        ResidentType = Resident.Type.Homeowner,
+                        EmailAddresses = new List<EmailAddress>
+                        {
+                            new EmailAddress
+                            {
+                                Address = "taylor@cohad.local",
+                                VisibleInDirectory = true,
+                                BoardEmailOptedIn = false,
+                                WelcomeEmailOptedIn = false,
+                                GardenClubEmailOptedIn = false,
+                                SocialCommitteeEmailOptedIn = false,
+                                SunshineCommitteeEmailOptedIn = false
+                            }
+                        },
+                        PhoneNumbers = new List<PhoneNumber>()
+                    }
+                },
+                AssociatedUsers = new List<HomeAssociatedUser>()
+            };
+            _homes[secondaryHome.Id] = CloneHome(secondaryHome);
         }
 
         public Task<List<Home>> GetAllAsync()

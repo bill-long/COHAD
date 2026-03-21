@@ -1,4 +1,4 @@
-<mat-form-field appearance="fill" [hidden]="focusedUser != null">
+<mat-form-field appearance="fill" *ngIf="focusedUser == null">
     <mat-label>Search</mat-label>
     <input matInput [formControl]="userFilter">
 </mat-form-field>

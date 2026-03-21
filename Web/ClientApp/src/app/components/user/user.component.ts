@@ -3,7 +3,7 @@ import { Component, OnInit, Input, ElementRef, ViewChild, ViewEncapsulation, Out
 import { ApiUser, Home } from 'src/app/models';
 import { UntypedFormControl } from '@angular/forms';
 import { MatChipInputEvent } from '@angular/material/chips';
-import { MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
+import { MatAutocompleteSelectedEvent, MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { Observable } from 'rxjs';
 import { startWith, map } from 'rxjs/operators';
 import { UserService } from 'src/app/services/user.service';
@@ -40,9 +40,15 @@ export class UserComponent implements OnInit {
 
   saveInProgress = false;
 
+  readonly administratorRole = 'Administrator';
+
   @ViewChild('homeInput') homeInput!: ElementRef<HTMLInputElement>;
 
   @ViewChild('roleInput') roleInput!: ElementRef<HTMLInputElement>;
+
+  @ViewChild('roleAutocompleteTrigger') roleAutocompleteTrigger!: MatAutocompleteTrigger;
+
+  @ViewChild('homeAutocompleteTrigger') homeAutocompleteTrigger!: MatAutocompleteTrigger;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -62,18 +68,25 @@ export class UserComponent implements OnInit {
     );
 
     this.appState.pipe(map(s => s.apiUser)).subscribe(u => {
-      if (u?.roles.includes('Administrator')) {
-        this.allRoles.push('Administrator');
+      if (u?.roles.includes(this.administratorRole) && !this.allRoles.includes(this.administratorRole)) {
+        this.allRoles.push(this.administratorRole);
       }
     })
 
     this.apiUserCopy = JSON.parse(JSON.stringify(this.apiUser));
+    this.apiUserCopy.roles ??= [];
+    this.apiUserCopy.ownedHomes ??= [];
   }
 
   removeHome(home: Home) {
     const index = this.apiUserCopy.ownedHomes.indexOf(home);
     if (index >= 0) {
       this.apiUserCopy.ownedHomes.splice(index, 1);
+      if (!this.hasAnyHomes()) {
+        this.apiUserCopy.roles = (this.apiUserCopy.roles ?? []).filter(r => r === this.administratorRole);
+      }
+      // Chip removal moves focus to the input and opens the home autocomplete; defer so we run after that.
+      this.suppressHomeAutocompleteAfterChipRemoved();
     }
   }
 
@@ -86,6 +99,7 @@ export class UserComponent implements OnInit {
         const streetName = value.substring(firstSpace + 1);
         let home = this.allHomes.find(h => h.streetName === streetName && h.streetNumber.toString() === streetNumberAsString);
         if (home) {
+          this.ensureHomeEditRole();
           this.apiUserCopy.ownedHomes.push(home);
         }
       }
@@ -99,6 +113,8 @@ export class UserComponent implements OnInit {
   }
 
   selectedHome(event: MatAutocompleteSelectedEvent) {
+    this.ensureHomeEditRole();
+
     if (this.apiUserCopy.ownedHomes == null) {
       this.apiUserCopy.ownedHomes = [];
     }
@@ -115,7 +131,28 @@ export class UserComponent implements OnInit {
     const index = this.apiUserCopy.roles.indexOf(role);
     if (index >= 0) {
       this.apiUserCopy.roles.splice(index, 1);
+      if (!this.hasAnyRoles()) {
+        this.apiUserCopy.ownedHomes = [];
+        // Chip removal moves focus to the input and opens the role autocomplete; defer so we run after that.
+        this.suppressRoleAutocompleteAfterLastChipRemoved();
+      }
     }
+  }
+
+  private suppressRoleAutocompleteAfterLastChipRemoved(): void {
+    setTimeout(() => {
+      this.roleAutocompleteTrigger?.closePanel();
+      this.roleInput?.nativeElement?.blur();
+      this.roleControl.setValue(null);
+    }, 0);
+  }
+
+  private suppressHomeAutocompleteAfterChipRemoved(): void {
+    setTimeout(() => {
+      this.homeAutocompleteTrigger?.closePanel();
+      this.homeInput?.nativeElement?.blur();
+      this.homeControl.setValue(null);
+    }, 0);
   }
 
   addRole(event: MatChipInputEvent) {
@@ -151,10 +188,52 @@ export class UserComponent implements OnInit {
   }
 
   save() {
+    if (this.shouldConfirmPurgeRisk()) {
+      const shouldProceed = window.confirm(
+        'This user has no roles and no homes. They will be eligible for purge after 30 days. Save changes?');
+      if (!shouldProceed) {
+        return;
+      }
+    }
+
     this.saveInProgress = true;
     this.userService.saveUser(this.apiUser, this.apiUserCopy).subscribe(r => {
       this.doneEvent.next();
     });
+  }
+
+  hasAnyHomes(): boolean {
+    return (this.apiUserCopy?.ownedHomes?.length ?? 0) > 0;
+  }
+
+  hasAnyRoles(): boolean {
+    return (this.apiUserCopy?.roles?.length ?? 0) > 0;
+  }
+
+  isValidForSave(): boolean {
+    this.apiUserCopy.roles ??= [];
+    this.apiUserCopy.ownedHomes ??= [];
+
+    if (this.hasAnyHomes() && !this.hasAnyRoles()) {
+      return false;
+    }
+
+    if (!this.hasAnyHomes() && this.apiUserCopy.roles.some(r => r !== this.administratorRole)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private shouldConfirmPurgeRisk(): boolean {
+    return !this.hasAnyRoles() && !this.hasAnyHomes();
+  }
+
+  private ensureHomeEditRole(): void {
+    this.apiUserCopy.roles ??= [];
+    if (this.apiUserCopy.roles.length < 1) {
+      this.apiUserCopy.roles.push('Resident');
+    }
   }
 
 }
