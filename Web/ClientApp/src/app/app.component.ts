@@ -17,7 +17,6 @@ import { applicationState, ApplicationState } from './state';
     standalone: false
 })
 export class AppComponent implements OnInit {
-  private static readonly homeHeroImageUrl = 'assets/trees1.jpg';
 
   constructor(
     private authService: AuthService,
@@ -30,15 +29,6 @@ export class AppComponent implements OnInit {
 
   ngOnInit(): void {
     this.themeService.initializeTheme();
-    this.warmHeaderHeroImages();
-  }
-
-  private warmHeaderHeroImages(): void {
-    const img = new Image();
-    img.onload = () => {
-      void img.decode?.().catch(() => { /* ignore decode errors */ });
-    };
-    img.src = AppComponent.homeHeroImageUrl;
   }
 
   get showPostLoginTransition$(): Observable<boolean> {
