@@ -8,6 +8,7 @@ using Moq;
 using Web.Controllers;
 using Web.Models;
 using Web.Services.Repositories;
+using Web.UpdateModels;
 using Xunit;
 
 namespace Web.UnitTests;
@@ -42,63 +43,24 @@ public sealed class UserControllerTests
 
     private static string UniqueId(string nameId, string idp = "google.com") => $"{idp}{nameId}";
 
-    // ── Issue 3: apiUser null-check tests ─────────────────────────────────────
-
     [Fact]
-    public async Task AddOwnedHome_returns_NotFound_when_apiUser_not_in_database()
+    public async Task UpdateUserAssociations_returns_NotFound_when_apiUser_not_in_database()
     {
         var mockUsers = new Mock<IUserRepository>();
         mockUsers.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
         var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>());
 
-        var result = await c.AddOwnedHome("some-user-id", Guid.NewGuid());
+        var result = await c.UpdateUserAssociations("some-user-id", new UpdatedUserAssociations());
 
         Assert.IsType<NotFoundResult>(result);
     }
 
     [Fact]
-    public async Task RemoveOwnedHome_returns_NotFound_when_apiUser_not_in_database()
-    {
-        var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
-        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>());
-
-        var result = await c.RemoveOwnedHome("some-user-id", Guid.NewGuid());
-
-        Assert.IsType<NotFoundResult>(result);
-    }
-
-    [Fact]
-    public async Task AddUserRole_returns_NotFound_when_apiUser_not_in_database()
-    {
-        var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
-        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>());
-
-        var result = await c.AddUserRole("some-user-id", "Resident");
-
-        Assert.IsType<NotFoundResult>(result);
-    }
-
-    [Fact]
-    public async Task RemoveUserRole_returns_NotFound_when_apiUser_not_in_database()
-    {
-        var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
-        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>());
-
-        var result = await c.RemoveUserRole("some-user-id", "Resident");
-
-        Assert.IsType<NotFoundResult>(result);
-    }
-
-    // ── Issue 2: null Roles list in AddUserRole / RemoveUserRole ─────────────
-
-    [Fact]
-    public async Task AddUserRole_succeeds_when_user_has_null_roles()
+    public async Task UpdateUserAssociations_updates_roles_and_homes_in_single_upsert()
     {
         var apiUniqueId = UniqueId("admin");
         var targetUniqueId = "target-user";
+        var homeId = Guid.NewGuid();
 
         var mockUsers = new Mock<IUserRepository>();
         mockUsers.Setup(r => r.GetByUniqueIdAsync(apiUniqueId)).ReturnsAsync(new User
@@ -111,23 +73,40 @@ public sealed class UserControllerTests
         mockUsers.Setup(r => r.GetByUniqueIdAsync(targetUniqueId)).ReturnsAsync(new User
         {
             UniqueId = targetUniqueId,
-            Roles = null   // null roles — this is the crash scenario
+            Emails = "target@example.com",
+            Roles = new List<User.Role>(),
+            OwnedHomeIds = new List<Guid>()
         });
-        mockUsers.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+
+        User? upserted = null;
+        mockUsers.Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .Callback<User>(u => upserted = u)
+            .ReturnsAsync((User u) => u);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync(new List<Home>
+        {
+            new Home { Id = homeId, StreetNumber = 1, StreetName = "Main", Residents = new List<Resident>() }
+        });
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), mockAudit.Object, nameId: "admin");
-
-        var result = await c.AddUserRole(targetUniqueId, "Resident");
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, nameId: "admin");
+        var result = await c.UpdateUserAssociations(targetUniqueId, new UpdatedUserAssociations
+        {
+            RoleNames = new List<string> { "Resident" },
+            OwnedHomeIds = new List<Guid> { homeId }
+        });
 
         Assert.IsType<OkResult>(result);
-        mockUsers.Verify(r => r.UpsertAsync(It.Is<User>(u => u.Roles != null && u.Roles.Contains(User.Role.Resident))), Times.Once);
+        Assert.NotNull(upserted);
+        Assert.Contains(User.Role.Resident, upserted!.Roles);
+        Assert.Contains(homeId, upserted.OwnedHomeIds);
     }
 
     [Fact]
-    public async Task RemoveUserRole_does_not_crash_when_user_has_null_roles()
+    public async Task UpdateUserAssociations_returns_BadRequest_for_unknown_role()
     {
         var apiUniqueId = UniqueId("admin");
         var targetUniqueId = "target-user";
@@ -136,54 +115,22 @@ public sealed class UserControllerTests
         mockUsers.Setup(r => r.GetByUniqueIdAsync(apiUniqueId)).ReturnsAsync(new User
         {
             UniqueId = apiUniqueId,
-            GivenName = "Admin",
-            Surname = "User",
             Roles = new List<User.Role> { User.Role.Administrator }
         });
         mockUsers.Setup(r => r.GetByUniqueIdAsync(targetUniqueId)).ReturnsAsync(new User
         {
             UniqueId = targetUniqueId,
-            Roles = null   // null roles — this is the crash scenario
-        });
-        mockUsers.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
-
-        var mockAudit = new Mock<IAuditLogRepository>();
-        mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
-
-        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), mockAudit.Object, nameId: "admin");
-
-        // Removing a role from a user who has no roles should be a no-op, not a crash
-        var result = await c.RemoveUserRole(targetUniqueId, "Resident");
-
-        Assert.IsType<OkResult>(result);
-    }
-
-    [Fact]
-    public async Task AddUserRole_returns_Ok_when_role_already_assigned()
-    {
-        var apiUniqueId = UniqueId("admin");
-        var targetUniqueId = "target-user";
-
-        var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(apiUniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = apiUniqueId,
-            GivenName = "Admin",
-            Surname = "User",
-            Roles = new List<User.Role> { User.Role.Administrator }
-        });
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(targetUniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = targetUniqueId,
-            Roles = new List<User.Role> { User.Role.Resident }  // role already present
+            Roles = new List<User.Role>(),
+            OwnedHomeIds = new List<Guid>()
         });
 
         var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>(), nameId: "admin");
+        var result = await c.UpdateUserAssociations(targetUniqueId, new UpdatedUserAssociations
+        {
+            RoleNames = new List<string> { "NotARole" },
+            OwnedHomeIds = new List<Guid>()
+        });
 
-        var result = await c.AddUserRole(targetUniqueId, "Resident");
-
-        // Idempotent — role already present, no error, no duplicate added, no upsert needed
-        Assert.IsType<OkResult>(result);
-        mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 }

@@ -22,16 +22,17 @@
                 {{role}}
                 <mat-icon matChipRemove *ngIf="removable">cancel</mat-icon>
             </mat-chip-row>
-            <input placeholder="Roles" #roleInput [formControl]="roleControl" [matChipInputFor]="roleChipGrid"
+            <input placeholder="Roles" #roleInput #roleAutocompleteTrigger="matAutocompleteTrigger"
+                [formControl]="roleControl" [matChipInputFor]="roleChipGrid"
                 [matAutocomplete]="roleAuto" [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
                 (matChipInputTokenEnd)="addRole($event)">
         </mat-chip-grid>
         <mat-autocomplete #roleAuto="matAutocomplete" (optionSelected)="selectedRole($event)">
-            <mat-option *ngFor="let role of allRoles" [value]="role" [disabled]="!canAddNonAdminRoles() && role !== administratorRole">
+            <mat-option *ngFor="let role of allRoles" [value]="role">
                 {{role}}
             </mat-option>
         </mat-autocomplete>
-        <mat-hint class="normalization-hint" *ngIf="!hasAnyHomes()">Users with no homes lose all roles.</mat-hint>
+        <mat-hint class="normalization-hint" *ngIf="!isValidForSave()">Save is disabled until roles/homes are in a valid combination.</mat-hint>
     </mat-form-field>
 </div>
 
@@ -43,7 +44,8 @@
                 {{home.streetName}}
                 <mat-icon matChipRemove *ngIf="removable">cancel</mat-icon>
             </mat-chip-row>
-            <input placeholder="Homes" #homeInput [formControl]="homeControl" [matChipInputFor]="chipGrid"
+            <input placeholder="Homes" #homeInput #homeAutocompleteTrigger="matAutocompleteTrigger"
+                [formControl]="homeControl" [matChipInputFor]="chipGrid"
                 [matAutocomplete]="auto" [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
                 (matChipInputTokenEnd)="addHome($event)">
         </mat-chip-grid>
@@ -57,6 +59,6 @@
 </div>
 
 <div class="action-bar">
-    <button mat-flat-button color="primary" (click)="save()" [disabled]="saveInProgress">Save Changes</button>
+    <button mat-flat-button color="primary" (click)="save()" [disabled]="saveInProgress || !isValidForSave()">Save Changes</button>
     <button mat-flat-button color="warn" (click)="cancel()" [disabled]="saveInProgress">Cancel</button>
 </div>

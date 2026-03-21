@@ -3,7 +3,7 @@ import { Component, OnInit, Input, ElementRef, ViewChild, ViewEncapsulation, Out
 import { ApiUser, Home } from 'src/app/models';
 import { UntypedFormControl } from '@angular/forms';
 import { MatChipInputEvent } from '@angular/material/chips';
-import { MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
+import { MatAutocompleteSelectedEvent, MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { Observable } from 'rxjs';
 import { startWith, map } from 'rxjs/operators';
 import { UserService } from 'src/app/services/user.service';
@@ -46,6 +46,10 @@ export class UserComponent implements OnInit {
 
   @ViewChild('roleInput') roleInput!: ElementRef<HTMLInputElement>;
 
+  @ViewChild('roleAutocompleteTrigger') roleAutocompleteTrigger!: MatAutocompleteTrigger;
+
+  @ViewChild('homeAutocompleteTrigger') homeAutocompleteTrigger!: MatAutocompleteTrigger;
+
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     private userService: UserService) { }
@@ -70,14 +74,19 @@ export class UserComponent implements OnInit {
     })
 
     this.apiUserCopy = JSON.parse(JSON.stringify(this.apiUser));
-    this.normalizeRoleHomeConsistency();
+    this.apiUserCopy.roles ??= [];
+    this.apiUserCopy.ownedHomes ??= [];
   }
 
   removeHome(home: Home) {
     const index = this.apiUserCopy.ownedHomes.indexOf(home);
     if (index >= 0) {
       this.apiUserCopy.ownedHomes.splice(index, 1);
-      this.normalizeRoleHomeConsistency();
+      if (!this.hasAnyHomes()) {
+        this.apiUserCopy.roles = (this.apiUserCopy.roles ?? []).filter(r => r === this.administratorRole);
+      }
+      // Chip removal moves focus to the input and opens the home autocomplete; defer so we run after that.
+      this.suppressHomeAutocompleteAfterChipRemoved();
     }
   }
 
@@ -92,7 +101,6 @@ export class UserComponent implements OnInit {
         if (home) {
           this.ensureHomeEditRole();
           this.apiUserCopy.ownedHomes.push(home);
-          this.normalizeRoleHomeConsistency();
         }
       }
     }
@@ -113,7 +121,6 @@ export class UserComponent implements OnInit {
 
     if (this.apiUserCopy.ownedHomes.find(h => h.id == event.option.value.id) == null) {
       this.apiUserCopy.ownedHomes.push(event.option.value);
-      this.normalizeRoleHomeConsistency();
     }
 
     this.homeInput.nativeElement.value = '';
@@ -124,24 +131,35 @@ export class UserComponent implements OnInit {
     const index = this.apiUserCopy.roles.indexOf(role);
     if (index >= 0) {
       this.apiUserCopy.roles.splice(index, 1);
-      this.normalizeRoleHomeConsistency();
+      if (!this.hasAnyRoles()) {
+        this.apiUserCopy.ownedHomes = [];
+        // Chip removal moves focus to the input and opens the role autocomplete; defer so we run after that.
+        this.suppressRoleAutocompleteAfterLastChipRemoved();
+      }
     }
+  }
+
+  private suppressRoleAutocompleteAfterLastChipRemoved(): void {
+    setTimeout(() => {
+      this.roleAutocompleteTrigger?.closePanel();
+      this.roleInput?.nativeElement?.blur();
+      this.roleControl.setValue(null);
+    }, 0);
+  }
+
+  private suppressHomeAutocompleteAfterChipRemoved(): void {
+    setTimeout(() => {
+      this.homeAutocompleteTrigger?.closePanel();
+      this.homeInput?.nativeElement?.blur();
+      this.homeControl.setValue(null);
+    }, 0);
   }
 
   addRole(event: MatChipInputEvent) {
     const value = event.value;
     if (value && value.length > 0) {
-      if (!this.canAddNonAdminRoles() && value !== this.administratorRole) {
-        if (event.input) {
-          event.input.value = '';
-        }
-        this.roleControl.setValue(null);
-        return;
-      }
-
       if (this.apiUserCopy.roles.indexOf(value) < 0) {
         this.apiUserCopy.roles.push(value);
-        this.normalizeRoleHomeConsistency();
       }
     }
 
@@ -153,19 +171,12 @@ export class UserComponent implements OnInit {
   }
 
   selectedRole(event: MatAutocompleteSelectedEvent) {
-    if (!this.canAddNonAdminRoles() && event.option.value !== this.administratorRole) {
-      this.roleInput.nativeElement.value = '';
-      this.roleControl.setValue(null);
-      return;
-    }
-
     if (this.apiUserCopy.roles == null) {
       this.apiUserCopy.roles = [];
     }
 
     if (this.apiUserCopy.roles.indexOf(event.option.value) < 0) {
       this.apiUserCopy.roles.push(event.option.value);
-      this.normalizeRoleHomeConsistency();
     }
 
     this.roleInput.nativeElement.value = '';
@@ -177,6 +188,14 @@ export class UserComponent implements OnInit {
   }
 
   save() {
+    if (this.shouldConfirmPurgeRisk()) {
+      const shouldProceed = window.confirm(
+        'This user has no roles and no homes. They will be eligible for purge after 30 days. Save changes?');
+      if (!shouldProceed) {
+        return;
+      }
+    }
+
     this.saveInProgress = true;
     this.userService.saveUser(this.apiUser, this.apiUserCopy).subscribe(r => {
       this.doneEvent.next();
@@ -191,25 +210,23 @@ export class UserComponent implements OnInit {
     return (this.apiUserCopy?.roles?.length ?? 0) > 0;
   }
 
-  canAddNonAdminRoles(): boolean {
-    return this.hasAnyHomes();
-  }
-
-  canEditHomes(): boolean {
-    return true;
-  }
-
-  private normalizeRoleHomeConsistency(): void {
+  isValidForSave(): boolean {
     this.apiUserCopy.roles ??= [];
     this.apiUserCopy.ownedHomes ??= [];
 
-    if (this.apiUserCopy.roles.length < 1) {
-      this.apiUserCopy.ownedHomes = [];
+    if (this.hasAnyHomes() && !this.hasAnyRoles()) {
+      return false;
     }
 
-    if (this.apiUserCopy.ownedHomes.length < 1) {
-      this.apiUserCopy.roles = this.apiUserCopy.roles.filter(r => r === this.administratorRole);
+    if (!this.hasAnyHomes() && this.apiUserCopy.roles.some(r => r !== this.administratorRole)) {
+      return false;
     }
+
+    return true;
+  }
+
+  private shouldConfirmPurgeRisk(): boolean {
+    return !this.hasAnyRoles() && !this.hasAnyHomes();
   }
 
   private ensureHomeEditRole(): void {
