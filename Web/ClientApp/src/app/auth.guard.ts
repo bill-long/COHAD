@@ -1,7 +1,6 @@
 import { Injectable, Inject } from '@angular/core';
 import { ActivatedRouteSnapshot, RouterStateSnapshot, Router } from '@angular/router';
-import { AuthService } from './services/auth.service';
-import { map } from 'rxjs/operators';
+import { filter, map, take } from 'rxjs/operators';
 import { applicationState, ApplicationState } from './state';
 import { Observable } from 'rxjs';
 
@@ -10,10 +9,13 @@ export class AuthGuard  {
     constructor(@Inject(applicationState) private appState: Observable<ApplicationState>, private router: Router) { }
 
     canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot) {
-        return this.appState.pipe(map(s => s.authUser), map(u => {
-            if (u != null) return true;
-            this.router.navigate(['/']);
-            return false;
-        }));
+        return this.appState.pipe(
+            filter(s => s.authSessionResolved),
+            take(1),
+            map(s => {
+                if (s.authUser != null) return true;
+                this.router.navigate(['/']);
+                return false;
+            }));
     }
 }
