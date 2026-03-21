@@ -127,9 +127,22 @@ export class AuthService {
     if (accessToken != null && this.oauthService.getAccessTokenExpiration() < Date.now()) {
       if (!environment.production) {
         console.log('Found expired token. Refreshing.');
-
       }
-      this.oauthService.refreshToken();
+
+      try {
+        const refreshResult: any = this.oauthService.refreshToken();
+
+        // Handle refresh errors explicitly so that the auth session is resolved even on failure.
+        if (refreshResult && typeof refreshResult.catch === 'function') {
+          (refreshResult as Promise<unknown>).catch(err => {
+            console.error('Token refresh failed.', err);
+            this.markAuthSessionResolvedOnce();
+          });
+        }
+      } catch (err) {
+        console.error('Token refresh threw an error.', err);
+        this.markAuthSessionResolvedOnce();
+      }
       return false;
     }
 
