@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Authorization;
+using Web.Configuration;
 using Web.MockData;
 using Web.Models;
 using Web.Services;
@@ -59,6 +60,7 @@ namespace Web
             });
 
             var useMockData = Environment.IsEnvironment("MockData");
+            services.Configure<DocumentStorageOptions>(Configuration.GetSection("DocumentStorage"));
 
             services
                 .AddAuthentication(options =>
@@ -131,6 +133,8 @@ namespace Web
                 services.AddSingleton<IHomeRepository, MockHomeRepository>();
                 services.AddSingleton<IPaymentRepository, MockPaymentRepository>();
                 services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
+                services.AddSingleton<IDocumentRepository, MockDocumentRepository>();
+                services.AddSingleton<IDocumentFileStore, MockDocumentFileStore>();
                 services.AddScoped<IEmailService, NoOpEmailService>();
             }
             else
@@ -148,6 +152,9 @@ namespace Web
                     new CosmosPaymentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments")));
                 services.AddScoped<IAuditLogRepository>(sp =>
                     new CosmosAuditLogRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog")));
+                services.AddScoped<IDocumentRepository>(sp =>
+                    new CosmosDocumentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
+                services.AddScoped<IDocumentFileStore, AzureBlobDocumentFileStore>();
 
                 services.AddScoped<IEmailService, EmailService>();
             }

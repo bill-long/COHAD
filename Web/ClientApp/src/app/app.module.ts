@@ -23,6 +23,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatDialogModule } from '@angular/material/dialog';
+import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 import { QuillModule } from 'ngx-quill';
@@ -62,6 +63,7 @@ import { RenderedPrintableMapComponent } from './components/rendered-printable-m
 import { DuesComponent } from './components/dues/dues.component';
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
 import { EditHomeContactDialogComponent } from './components/edit-home-contact-dialog/edit-home-contact-dialog.component';
+import { ManageDocumentsComponent } from './components/manage-documents/manage-documents.component';
 
 @NgModule({ declarations: [
         AppComponent,
@@ -89,7 +91,8 @@ import { EditHomeContactDialogComponent } from './components/edit-home-contact-d
         RenderedPrintableMapComponent,
         DuesComponent,
         ConfirmDialogComponent,
-        EditHomeContactDialogComponent
+        EditHomeContactDialogComponent,
+        ManageDocumentsComponent
     ],
     bootstrap: [AppComponent], imports: [BrowserModule,
         AppRoutingModule,
@@ -145,6 +148,7 @@ import { EditHomeContactDialogComponent } from './components/edit-home-contact-d
         MatTabsModule,
         MatExpansionModule,
         MatDialogModule,
+        MatSnackBarModule,
         DragDropModule], providers: [
         { provide: dispatcher, useValue: new Subject<Action>() },
         { provide: initialState, useValue: initialStateValue },
