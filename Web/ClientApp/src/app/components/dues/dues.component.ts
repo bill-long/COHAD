@@ -37,7 +37,13 @@ export class DuesComponent {
 
   async loadPayments() {
     this.paymentService.getMyPayments().subscribe(p => {
-      this.payments = p;
+      this.payments = [...p].sort((a, b) => {
+        const ta = a.date ? new Date(a.date).getTime() : 0;
+        const tb = b.date ? new Date(b.date).getTime() : 0;
+        const na = Number.isNaN(ta) ? 0 : ta;
+        const nb = Number.isNaN(tb) ? 0 : tb;
+        return nb - na;
+      });
     });
   }
 
@@ -63,6 +69,7 @@ export class DuesComponent {
         return new Promise((resolve, reject) => {
           actions.order!.capture().then(details => {
             console.log("Transaction completed", details);
+            const payPalTransactionId = paypalTransactionIdFromOrderCapture(details);
             let payment: Payment = {
               id: '00000000-0000-0000-0000-000000000000',
               payerUniqueId: '',
@@ -71,7 +78,8 @@ export class DuesComponent {
               amount: details.purchase_units[0].amount.value,
               date: details.create_time,
               paymentType: 0, // one time
-              fullDetailsJSON: JSON.stringify(details)
+              fullDetailsJSON: JSON.stringify(details),
+              ...(payPalTransactionId ? { payPalTransactionId } : {})
             }
 
             this.paymentService.recordPayment(payment).subscribe({
@@ -124,6 +132,7 @@ export class DuesComponent {
         return new Promise((resolve, reject) => {
           actions.subscription!.get().then((details: any) => {
             console.log("Subscription created", details);
+            const payPalTransactionId = paypalTransactionIdFromSubscription(details);
             let payment: Payment = {
               id: '00000000-0000-0000-0000-000000000000',
               payerUniqueId: '',
@@ -132,7 +141,8 @@ export class DuesComponent {
               amount: details.billing_info.last_payment.amount.value,
               date: details.create_time,
               paymentType: 1, // subscription
-              fullDetailsJSON: JSON.stringify(details)
+              fullDetailsJSON: JSON.stringify(details),
+              ...(payPalTransactionId ? { payPalTransactionId } : {})
             }
 
             this.paymentService.recordPayment(payment).subscribe({
@@ -160,4 +170,27 @@ export class DuesComponent {
       this.subscribeButtons = null;
     }
   }
+}
+
+/** PayPal Orders v2: capture id (matches Transaction Search transaction id for wallet payments). */
+function paypalTransactionIdFromOrderCapture(details: unknown): string | undefined {
+  const d = details as {
+    purchase_units?: Array<{
+      payments?: { captures?: Array<{ id?: string }> };
+    }>;
+  };
+  const id = d?.purchase_units?.[0]?.payments?.captures?.[0]?.id;
+  return typeof id === "string" && id.length > 0 ? id : undefined;
+}
+
+/** Subscription billing: last payment id when present. */
+function paypalTransactionIdFromSubscription(details: unknown): string | undefined {
+  const d = details as {
+    billing_info?: {
+      last_payment?: { id?: string; transaction_id?: string };
+    };
+  };
+  const lp = d?.billing_info?.last_payment;
+  const id = lp?.id ?? lp?.transaction_id;
+  return typeof id === "string" && id.length > 0 ? id : undefined;
 }

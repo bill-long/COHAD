@@ -17,15 +17,19 @@ Set these in **Azure App Settings** (or `local.settings.json` → `Values` for l
 | `UserPurge__DryRun` | `true` logs candidates only; no audit write or delete. |
 | `UserPurge__PurgeAfterDays` | Minimum days unassociated (default `30`). |
 | `UserPurge__MaxDeletesPerRun` | Cap per timer execution (default `100`). |
-| `UserPurge__Schedule` | NCRONTAB in UTC, 6 fields, e.g. `0 0 10 * * *` (10:00 daily). |
+| `UserPurgeSchedule` | NCRONTAB in UTC, 6 fields, e.g. `0 0 10 * * *` (10:00 daily). Use this exact key (not `UserPurge__Schedule`) so `%UserPurgeSchedule%` resolves in the timer binding. |
+| `PayPalSyncSchedule` | PayPal sync timer NCRONTAB, e.g. `0 0 6 * * 1` (Mondays 06:00 UTC). |
+| `PayPal__SyncEnabled`, `PayPal__ClientId`, … | See `PayPalSyncTimerFunction` / `PayPalOptions`; nested keys use `__` as usual. |
 | `AzureWebJobsStorage` | Required by Functions host (use a real storage account in Azure). |
 
 Users with role **Administrator** are never deleted.
 
 ## Local run
 
-1. Fill `CosmosUri`, `CosmosKey`, and `CosmosDatabase` in `local.settings.json`.
-2. Start Azurite or provide a valid `AzureWebJobsStorage` connection string.
+1. Fill `CosmosUri`, `CosmosKey`, and `CosmosDatabase` in `local.settings.json` (and/or user-secrets; see `Program.cs`).
+2. **Storage emulator (required for timer triggers):** The default `AzureWebJobsStorage` value `UseDevelopmentStorage=true` points at **Azurite** on `127.0.0.1` (blob **10000**, queue **10001**, table **10002**). If nothing is listening there, the host logs *connection refused* and timer listeners fail to start. Either:
+   - Start Azurite before `func start`, e.g. `npx azurite` (or the Azurite VS Code extension), or  
+   - Replace `AzureWebJobsStorage` with a **real** Azure Storage connection string (any cheap dev storage account is fine).
 3. From this folder: `func start` (Azure Functions Core Tools) or run/debug from Visual Studio.
 
 ## Deployment

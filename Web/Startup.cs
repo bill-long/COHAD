@@ -139,7 +139,10 @@ namespace Web
             {
                 services.AddSingleton<IUserRepository, MockUserRepository>();
                 services.AddSingleton<IHomeRepository, MockHomeRepository>();
-                services.AddSingleton<IPaymentRepository, MockPaymentRepository>();
+                services.AddSingleton<IPaymentRepository>(sp =>
+                    new MockPaymentRepository(
+                        sp.GetRequiredService<IHomeRepository>(),
+                        sp.GetRequiredService<IUserRepository>()));
                 services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
                 services.AddSingleton<IDocumentRepository, MockDocumentRepository>();
                 services.AddSingleton<IDocumentFileStore, MockDocumentFileStore>();
@@ -157,7 +160,10 @@ namespace Web
                 services.AddScoped<IHomeRepository>(sp =>
                     new CosmosHomeRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Homes")));
                 services.AddScoped<IPaymentRepository>(sp =>
-                    new CosmosPaymentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments")));
+                    new CosmosPaymentRepository(
+                        sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments"),
+                        sp.GetRequiredService<IHomeRepository>(),
+                        sp.GetRequiredService<IUserRepository>()));
                 services.AddScoped<IAuditLogRepository>(sp =>
                     new CosmosAuditLogRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog")));
                 services.AddScoped<IDocumentRepository>(sp =>

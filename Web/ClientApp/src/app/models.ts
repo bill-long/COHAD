@@ -131,4 +131,8 @@ export interface Payment {
     date: string;
     paymentType: number;
     fullDetailsJSON: string;
+    /** Orders capture id or subscription last_payment id; aligns with PayPal Transaction Search dedupe. */
+    payPalTransactionId?: string;
+    /** When set, payment is visible to owners of this home (PayPal sync / server). */
+    homeId?: string;
 }

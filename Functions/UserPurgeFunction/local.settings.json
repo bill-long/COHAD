@@ -10,6 +10,12 @@
     "UserPurge__DryRun": "true",
     "UserPurge__PurgeAfterDays": "30",
     "UserPurge__MaxDeletesPerRun": "100",
-    "UserPurge__Schedule": "0 0 10 * * *"
+    "UserPurgeSchedule": "0 0 10 * * *",
+    "PayPal__SyncEnabled": "false",
+    "PayPalSyncSchedule": "0 0 6 * * 1",
+    "PayPal__SyncLookbackDays": "90",
+    "PayPal__ClientId": "",
+    "PayPal__ClientSecret": "",
+    "PayPal__ApiBaseUrl": "https://api-m.paypal.com"
   }
 }

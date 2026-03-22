@@ -160,7 +160,9 @@ namespace Web.Services.Cosmos
                 Amount = doc.Value<string>("Amount"),
                 Date = doc["Date"]?.ToObject<DateTime?>(),
                 PaymentType = doc["PaymentType"]?.ToObject<Payment.Type>() ?? Payment.Type.OneTime,
-                FullDetailsJSON = doc.Value<string>("FullDetailsJSON")
+                FullDetailsJSON = doc.Value<string>("FullDetailsJSON"),
+                PayPalTransactionId = doc.Value<string>("PayPalTransactionId"),
+                HomeId = ParseNullableGuid(doc["HomeId"])
             };
         }
 
@@ -169,14 +171,27 @@ namespace Web.Services.Cosmos
             return new JObject
             {
                 ["id"] = ToPaymentDocumentId(payment.Id),
-                ["PayerUniqueId"] = payment.PayerUniqueId,
+                ["PayerUniqueId"] = payment.PayerUniqueId != null ? payment.PayerUniqueId : JValue.CreateNull(),
                 ["PayerEmail"] = payment.PayerEmail,
                 ["PayerName"] = payment.PayerName,
                 ["Amount"] = payment.Amount,
                 ["Date"] = payment.Date != null ? JToken.FromObject(payment.Date) : JValue.CreateNull(),
                 ["PaymentType"] = JToken.FromObject(payment.PaymentType),
-                ["FullDetailsJSON"] = payment.FullDetailsJSON
+                ["FullDetailsJSON"] = payment.FullDetailsJSON,
+                ["PayPalTransactionId"] = payment.PayPalTransactionId != null ? payment.PayPalTransactionId : JValue.CreateNull(),
+                ["HomeId"] = payment.HomeId != null ? payment.HomeId.Value.ToString("D") : JValue.CreateNull()
             };
+        }
+
+        private static Guid? ParseNullableGuid(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+            {
+                return null;
+            }
+
+            var s = token.Type == JTokenType.String ? token.Value<string>() : token.ToString();
+            return Guid.TryParse(s, out var g) ? g : null;
         }
 
         internal static NewAuditLogEntry ToAuditLog(JObject doc)

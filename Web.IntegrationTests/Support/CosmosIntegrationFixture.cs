@@ -33,7 +33,10 @@ public sealed class CosmosIntegrationFixture : IAsyncLifetime
         new CosmosAuditLogRepository(Client.GetContainer(DatabaseId, "AuditLog"));
 
     public IPaymentRepository CreatePaymentRepository() =>
-        new CosmosPaymentRepository(Client.GetContainer(DatabaseId, "Payments"));
+        new CosmosPaymentRepository(
+            Client.GetContainer(DatabaseId, "Payments"),
+            CreateHomeRepository(),
+            CreateUserRepository());
 
     public async Task InitializeAsync()
     {

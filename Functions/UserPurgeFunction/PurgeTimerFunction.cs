@@ -23,11 +23,11 @@ public sealed class PurgeTimerFunction
 
     /// <summary>
     /// Daily purge of users with no owned homes for longer than <c>UserPurge:PurgeAfterDays</c>.
-    /// Schedule: app setting <c>UserPurge__Schedule</c> (NCRONTAB, UTC), e.g. <c>0 0 10 * * *</c>.
+    /// Schedule: app setting <c>UserPurgeSchedule</c> (NCRONTAB, UTC), e.g. <c>0 0 10 * * *</c>.
     /// </summary>
     [Function("UserPurgeTimer")]
     public async Task RunAsync(
-        [TimerTrigger("%UserPurge__Schedule%")] TimerInfo timerInfo,
+        [TimerTrigger("%UserPurgeSchedule%")] TimerInfo timerInfo,
         CancellationToken cancellationToken)
     {
         var options = new UserPurgeOptions

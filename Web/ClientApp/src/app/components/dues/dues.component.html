@@ -56,10 +56,6 @@
   </div>
   <div class="transaction-section white-background">
     <h2>Transaction History</h2>
-    <p>
-      Note: This only shows transactions made through this web site. This does not include
-      payments made using PayPal on the public COHAD web site.
-    </p>
     <table mat-table *ngIf="payments.length > 0; else noPayments" [dataSource]="payments">
 
       <ng-container matColumnDef="date">
@@ -74,7 +70,7 @@
 
       <ng-container matColumnDef="description">
         <th mat-header-cell *matHeaderCellDef> Description </th>
-        <td mat-cell *matCellDef="let payment"> {{payment.paymentType == 0 ? 'One-Time' : 'Subscription'}} </td>
+        <td mat-cell *matCellDef="let payment"> {{payment.paymentType == 0 ? 'One-Time' : payment.paymentType == 1 ? 'Subscription' : 'PayPal (synced)'}} </td>
       </ng-container>
 
       <ng-container matColumnDef="payerEmail">
