@@ -1,3 +1,72 @@
-td {
-    padding: 5px !important;
+.audit-log-page {
+    width: 100%;
+}
+
+.audit-search-field {
+    width: min(480px, 100%);
+    margin-bottom: 0;
+}
+
+.audit-log-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.audit-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    color: rgba(0, 0, 0, 0.72);
+}
+
+.audit-status.error {
+    color: #b00020;
+}
+
+.audit-log-page .mat-mdc-header-cell,
+.audit-log-page .mat-mdc-cell {
+    padding: 10px 12px !important;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.audit-log-page .mat-mdc-header-cell {
+    font-weight: 600;
+}
+
+.audit-log-page .col-time {
+    width: 190px;
+}
+
+.audit-log-page .col-subject-id {
+    width: 210px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.audit-log-page .col-subject-name {
+    width: 260px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.audit-log-page .col-user {
+    width: 170px;
+}
+
+.audit-log-page .col-action {
+    width: auto;
+}
+
+@media (max-width: 960px) {
+    .audit-log-page .col-time {
+        width: 170px;
+    }
+
+    .audit-log-page .col-subject-name {
+        width: 180px;
+    }
 }

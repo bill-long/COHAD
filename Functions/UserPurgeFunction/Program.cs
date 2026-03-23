@@ -3,6 +3,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Services;
 using Web.Services.Repositories;
@@ -40,7 +41,9 @@ var host = new HostBuilder()
         services.AddSingleton<IHomeRepository>(sp =>
             new CosmosHomeRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Homes")));
         services.AddSingleton<IAuditLogRepository>(sp =>
-            new CosmosAuditLogRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog")));
+            new CosmosAuditLogRepository(
+                sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog"),
+                sp.GetRequiredService<ILogger<CosmosAuditLogRepository>>()));
         services.AddSingleton<IPaymentRepository>(sp =>
             new CosmosPaymentRepository(
                 sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments"),

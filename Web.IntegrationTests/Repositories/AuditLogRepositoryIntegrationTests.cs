@@ -31,4 +31,59 @@ public sealed class AuditLogRepositoryIntegrationTests
         var all = await repo.GetAllAsync().ConfigureAwait(false);
         Assert.Contains(all, e => e.Action != null && e.Action.Contains(marker, StringComparison.Ordinal));
     }
+
+    [SkippableFact]
+    public async Task GetPageAsync_supports_search_and_descending_time_order()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.UnavailableReason);
+
+        var repo = _fixture.CreateAuditLogRepository();
+        var marker = $"PagedSearch-{Guid.NewGuid():N}";
+        var baseTime = DateTime.UtcNow;
+
+        await repo.AddAsync(new NewAuditLogEntry
+        {
+            Id = Guid.NewGuid(),
+            Time = baseTime.AddMinutes(-3),
+            UserId = "user-1",
+            UserDisplayName = "Tester",
+            SubjectId = "subject-1",
+            SubjectName = "Subject",
+            Action = $"{marker} first"
+        }).ConfigureAwait(false);
+
+        await repo.AddAsync(new NewAuditLogEntry
+        {
+            Id = Guid.NewGuid(),
+            Time = baseTime.AddMinutes(-2),
+            UserId = "user-2",
+            UserDisplayName = "Tester",
+            SubjectId = "subject-2",
+            SubjectName = "Subject",
+            Action = $"{marker} second"
+        }).ConfigureAwait(false);
+
+        await repo.AddAsync(new NewAuditLogEntry
+        {
+            Id = Guid.NewGuid(),
+            Time = baseTime.AddMinutes(-1),
+            UserId = "user-3",
+            UserDisplayName = "Tester",
+            SubjectId = "subject-3",
+            SubjectName = "Subject",
+            Action = $"{marker} third"
+        }).ConfigureAwait(false);
+
+        var firstPage = await repo.GetPageAsync(2, null, marker).ConfigureAwait(false);
+
+        Assert.Equal(2, firstPage.Items.Count);
+        Assert.True(firstPage.Items[0].Time >= firstPage.Items[1].Time);
+        Assert.All(firstPage.Items, item => Assert.Contains(marker, item.Action, StringComparison.Ordinal));
+
+        if (!string.IsNullOrWhiteSpace(firstPage.ContinuationToken))
+        {
+            var secondPage = await repo.GetPageAsync(2, firstPage.ContinuationToken, marker).ConfigureAwait(false);
+            Assert.All(secondPage.Items, item => Assert.Contains(marker, item.Action, StringComparison.Ordinal));
+        }
+    }
 }

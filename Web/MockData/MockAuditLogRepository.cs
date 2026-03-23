@@ -1,3 +1,5 @@
+#nullable enable
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -28,12 +30,88 @@ namespace Web.MockData
             }
         }
 
+        public Task<AuditLogPage> GetPageAsync(int limit, string? continuationToken, string? searchQuery)
+        {
+            var pageSize = Math.Clamp(limit, 1, 200);
+            if (!TryGetContinuationOffset(continuationToken, out var offset))
+            {
+                return Task.FromResult(new AuditLogPage
+                {
+                    Items = new List<NewAuditLogEntry>(),
+                    ContinuationToken = null,
+                    HasMore = false
+                });
+            }
+
+            var normalizedSearch = searchQuery?.Trim();
+
+            lock (_entries)
+            {
+                IEnumerable<NewAuditLogEntry> query = _entries
+                    .OrderByDescending(e => e.Time);
+
+                if (!string.IsNullOrWhiteSpace(normalizedSearch))
+                {
+                    query = query.Where(e => MatchesSearch(e, normalizedSearch));
+                }
+
+                var filtered = query.ToList();
+                var pageItems = filtered.Skip(offset).Take(pageSize).Select(CloneEntry).ToList();
+                var nextOffset = offset + pageItems.Count;
+                var hasMore = nextOffset < filtered.Count;
+
+                return Task.FromResult(new AuditLogPage
+                {
+                    Items = pageItems,
+                    ContinuationToken = hasMore ? nextOffset.ToString() : null,
+                    HasMore = hasMore
+                });
+            }
+        }
+
+        private static bool MatchesSearch(NewAuditLogEntry entry, string searchQuery)
+        {
+            return ContainsIgnoreCase(entry?.UserDisplayName, searchQuery)
+                || ContainsIgnoreCase(entry?.UserId, searchQuery)
+                || ContainsIgnoreCase(entry?.SubjectName, searchQuery)
+                || ContainsIgnoreCase(entry?.SubjectId, searchQuery)
+                || ContainsIgnoreCase(entry?.Action, searchQuery);
+        }
+
+        private static bool ContainsIgnoreCase(string? value, string searchQuery)
+        {
+            if (string.IsNullOrWhiteSpace(value) || string.IsNullOrWhiteSpace(searchQuery))
+            {
+                return false;
+            }
+
+            return value.Contains(searchQuery, System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Aligns with <see cref="CosmosAuditLogRepository"/>: null/whitespace means first page; a non-empty
+        /// token that is not a valid non-negative offset is treated as an invalid cursor (empty page, no more).
+        /// </summary>
+        private static bool TryGetContinuationOffset(string? continuationToken, out int offset)
+        {
+            offset = 0;
+            if (string.IsNullOrWhiteSpace(continuationToken))
+            {
+                return true;
+            }
+
+            if (int.TryParse(continuationToken, out var parsed) && parsed >= 0)
+            {
+                offset = parsed;
+                return true;
+            }
+
+            return false;
+        }
+
         private static NewAuditLogEntry CloneEntry(NewAuditLogEntry e)
         {
-            if (e == null)
-            {
-                return null;
-            }
+            ArgumentNullException.ThrowIfNull(e);
 
             return new NewAuditLogEntry
             {

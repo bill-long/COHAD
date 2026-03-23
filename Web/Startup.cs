@@ -167,7 +167,9 @@ namespace Web
                         sp.GetRequiredService<IHomeRepository>(),
                         sp.GetRequiredService<IUserRepository>()));
                 services.AddScoped<IAuditLogRepository>(sp =>
-                    new CosmosAuditLogRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog")));
+                    new CosmosAuditLogRepository(
+                        sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog"),
+                        sp.GetRequiredService<ILogger<CosmosAuditLogRepository>>()));
                 services.AddScoped<IDocumentRepository>(sp =>
                     new CosmosDocumentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
                 services.AddScoped<ICommunityEventRepository>(sp =>
