@@ -24,49 +24,49 @@
     color: #b00020;
 }
 
-.mat-mdc-header-cell,
-.mat-mdc-cell {
+.audit-log-page .mat-mdc-header-cell,
+.audit-log-page .mat-mdc-cell {
     padding: 10px 12px !important;
     vertical-align: top;
     overflow-wrap: anywhere;
 }
 
-.mat-mdc-header-cell {
+.audit-log-page .mat-mdc-header-cell {
     font-weight: 600;
 }
 
-.col-time {
+.audit-log-page .col-time {
     width: 190px;
 }
 
-.col-subject-id {
+.audit-log-page .col-subject-id {
     width: 210px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.col-subject-name {
+.audit-log-page .col-subject-name {
     width: 260px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.col-user {
+.audit-log-page .col-user {
     width: 170px;
 }
 
-.col-action {
+.audit-log-page .col-action {
     width: auto;
 }
 
 @media (max-width: 960px) {
-    .col-time {
+    .audit-log-page .col-time {
         width: 170px;
     }
 
-    .col-subject-name {
+    .audit-log-page .col-subject-name {
         width: 180px;
     }
 }

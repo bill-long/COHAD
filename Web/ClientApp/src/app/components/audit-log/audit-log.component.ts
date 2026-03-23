@@ -1,14 +1,18 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Component, HostListener, OnDestroy, OnInit, ViewEncapsulation } from '@angular/core';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, NgZone, OnDestroy, OnInit, ViewEncapsulation } from '@angular/core';
 import { UntypedFormControl } from '@angular/forms';
-import { debounceTime, distinctUntilChanged, finalize, Subject, takeUntil } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize, fromEvent, map, Subject, takeUntil, throttleTime } from 'rxjs';
 import { AuditLogEntry, AuditLogPage } from 'src/app/models';
+
+/** Must match AuditLogController; long continuation tokens stay out of the query string. */
+const auditLogCursorHeader = 'X-Audit-Log-Cursor';
 
 @Component({
     selector: 'app-audit-log',
     templateUrl: './audit-log.component.html',
     styleUrls: ['./audit-log.component.css'],
     encapsulation: ViewEncapsulation.None,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     standalone: false
 })
 export class AuditLogComponent implements OnInit, OnDestroy {
@@ -31,20 +35,36 @@ export class AuditLogComponent implements OnInit, OnDestroy {
     'userDisplayName'
   ];
 
-  constructor(private httpClient: HttpClient) {}
+  constructor(
+    private httpClient: HttpClient,
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
+  ) {}
 
   ngOnInit(): void {
     this.searchControl.valueChanges
       .pipe(
         debounceTime(250),
+        map(value => (value ?? '').toString().trim()),
         distinctUntilChanged(),
         takeUntil(this.destroy$)
       )
-      .subscribe(value => {
-        this.resetAndLoad((value ?? '').toString().trim());
+      .subscribe(query => {
+        this.resetAndLoad(query);
       });
 
     this.resetAndLoad('');
+
+    this.ngZone.runOutsideAngular(() => {
+      fromEvent(window, 'scroll', { passive: true })
+        .pipe(
+          throttleTime(150, undefined, { leading: true, trailing: true }),
+          takeUntil(this.destroy$)
+        )
+        .subscribe(() => {
+          this.ngZone.run(() => this.onWindowScroll());
+        });
+    });
   }
 
   ngOnDestroy(): void {
@@ -52,8 +72,7 @@ export class AuditLogComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  @HostListener('window:scroll')
-  onWindowScroll(): void {
+  private onWindowScroll(): void {
     if (this.isLoadingInitial || this.isLoadingMore || !this.hasMore) {
       return;
     }
@@ -83,26 +102,33 @@ export class AuditLogComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (version === this.queryVersion) {
+      this.errorMessage = '';
+    }
+
     const isFirstPage = this.continuationToken == null;
     this.isLoadingInitial = isFirstPage;
     this.isLoadingMore = !isFirstPage;
+    this.cdr.markForCheck();
 
     let params = new HttpParams().set('limit', this.pageSize.toString());
-    if (this.continuationToken) {
-      params = params.set('cursor', this.continuationToken);
-    }
 
     if (query) {
       params = params.set('q', query);
     }
 
-    this.httpClient.get<AuditLogPage>('api/auditlog', { params })
+    let headers = new HttpHeaders();
+    if (this.continuationToken) {
+      headers = headers.set(auditLogCursorHeader, this.continuationToken);
+    }
+
+    this.httpClient.get<AuditLogPage>('api/auditlog', { params, headers })
       .pipe(
         finalize(() => {
           if (version === this.queryVersion) {
             this.isLoadingInitial = false;
             this.isLoadingMore = false;
-            this.loadMoreIfPageHasNoScroll(version, query);
+            this.cdr.markForCheck();
           }
         })
       )
@@ -113,10 +139,22 @@ export class AuditLogComponent implements OnInit, OnDestroy {
           }
 
           const incoming = response?.items ?? [];
-          this.entries = [...this.entries, ...incoming];
+          if (incoming.length > 0) {
+            this.entries.push(...incoming);
+          }
+
           this.continuationToken = response?.continuationToken ?? null;
           this.hasMore = response?.hasMore ?? false;
           this.errorMessage = '';
+          this.cdr.markForCheck();
+          // Run after finalize() clears loading flags; otherwise loadMoreIfPageHasNoScroll returns early.
+          queueMicrotask(() => {
+            if (version !== this.queryVersion) {
+              return;
+            }
+
+            this.loadMoreIfPageHasNoScroll(version, query);
+          });
         },
         error: () => {
           if (version !== this.queryVersion) {
@@ -124,6 +162,8 @@ export class AuditLogComponent implements OnInit, OnDestroy {
           }
 
           this.errorMessage = 'Could not load audit log entries. Try again.';
+          this.hasMore = false;
+          this.cdr.markForCheck();
         }
       });
   }

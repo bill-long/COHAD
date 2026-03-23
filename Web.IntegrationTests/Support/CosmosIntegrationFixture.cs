@@ -1,5 +1,6 @@
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Web.Services.Repositories;
 using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 
@@ -30,7 +31,9 @@ public sealed class CosmosIntegrationFixture : IAsyncLifetime
         new CosmosHomeRepository(Client.GetContainer(DatabaseId, "Homes"));
 
     public IAuditLogRepository CreateAuditLogRepository() =>
-        new CosmosAuditLogRepository(Client.GetContainer(DatabaseId, "AuditLog"));
+        new CosmosAuditLogRepository(
+            Client.GetContainer(DatabaseId, "AuditLog"),
+            NullLogger<CosmosAuditLogRepository>.Instance);
 
     public IPaymentRepository CreatePaymentRepository() =>
         new CosmosPaymentRepository(

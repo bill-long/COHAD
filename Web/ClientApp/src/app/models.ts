@@ -116,6 +116,12 @@ export interface AuditLogEntry {
     action: string;
 }
 
+export interface AuditLogPage {
+    items: AuditLogEntry[];
+    continuationToken: string | null;
+    hasMore: boolean;
+}
+
 export interface EmailInfo {
     subject: string;
     htmlBody: string;
