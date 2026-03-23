@@ -67,8 +67,8 @@ namespace Web.Controllers
         public async Task<IActionResult> GetUpcoming()
         {
             var now = DateTime.UtcNow;
-            var payload = (await _communityEventRepository.GetAllAsync())
-                .Where(e => IsInUpcomingWindow(e, now))
+            var minStartUtc = now - UpcomingGraceAfterStart;
+            var payload = (await _communityEventRepository.GetWithStartUtcOnOrAfterAsync(minStartUtc))
                 .OrderBy(e => e.StartUtc)
                 .Select(CommunityEventCard.FromStorageModel)
                 .ToList();
@@ -81,8 +81,8 @@ namespace Web.Controllers
         public async Task<IActionResult> GetNextUpcoming()
         {
             var now = DateTime.UtcNow;
-            var next = (await _communityEventRepository.GetAllAsync())
-                .Where(e => IsInUpcomingWindow(e, now))
+            var minStartUtc = now - UpcomingGraceAfterStart;
+            var next = (await _communityEventRepository.GetWithStartUtcOnOrAfterAsync(minStartUtc))
                 .OrderBy(e => e.StartUtc)
                 .FirstOrDefault();
 
@@ -195,23 +195,31 @@ namespace Web.Controllers
                 return BadRequest("Event date/time is required.");
             }
 
-            var stored = request.Id != null
-                ? await _communityEventRepository.GetByIdAsync(request.Id.Value)
-                : null;
-            if (request.Id != null && stored == null)
-            {
-                return NotFound();
-            }
-
             var now = DateTime.UtcNow;
-            var isCreate = stored == null;
-            var communityEvent = stored ?? new CommunityEvent
+            var isCreate = request.Id == null;
+            CommunityEvent communityEvent;
+            CommunityEventReadResult updateRead = null;
+
+            if (isCreate)
             {
-                Id = request.Id ?? Guid.NewGuid(),
-                CreatedByUniqueId = apiUser.UniqueId,
-                CreatedUtc = now,
-                Signups = new List<EventSignup>()
-            };
+                communityEvent = new CommunityEvent
+                {
+                    Id = Guid.NewGuid(),
+                    CreatedByUniqueId = apiUser.UniqueId,
+                    CreatedUtc = now,
+                    Signups = new List<EventSignup>()
+                };
+            }
+            else
+            {
+                updateRead = await _communityEventRepository.ReadAsync(request.Id!.Value);
+                if (updateRead == null)
+                {
+                    return NotFound();
+                }
+
+                communityEvent = updateRead.Event;
+            }
 
             if (request.PromotionalAsset != null && request.PromotionalAsset.Length > 0)
             {
@@ -275,7 +283,29 @@ namespace Web.Controllers
                 communityEvent.Title,
                 allEvents).ToLowerInvariant();
 
-            var saved = await _communityEventRepository.UpsertAsync(communityEvent);
+            CommunityEvent saved;
+            if (isCreate)
+            {
+                saved = await _communityEventRepository.UpsertAsync(communityEvent);
+            }
+            else
+            {
+                try
+                {
+                    saved = await _communityEventRepository.ReplaceAsync(communityEvent, updateRead!.ETag);
+                }
+                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return NotFound();
+                }
+                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+                {
+                    // Do not retry: a second read could merge signups while other fields stay stale vs that read.
+                    return StatusCode(StatusCodes.Status409Conflict,
+                        "Unable to save event due to concurrent updates. Please refresh and try again.");
+                }
+            }
+
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
@@ -391,6 +421,10 @@ namespace Web.Controllers
                 {
                     saved = await _communityEventRepository.ReplaceAsync(read.Event, read.ETag);
                     break;
+                }
+                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return NotFound();
                 }
                 catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
                 {

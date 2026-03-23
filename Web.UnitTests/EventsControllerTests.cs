@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -324,6 +325,46 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
+    public async Task SignUp_returns_NotFound_when_event_deleted_before_replace()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            GivenName = "Mock",
+            Surname = "Resident",
+            Emails = "mock@cohad.local",
+            Roles = new List<User.Role> { User.Role.Resident }
+        });
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>()
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents.Setup(r => r.ReadAsync(eventId)).ReturnsAsync(new CommunityEventReadResult
+        {
+            Event = stored,
+            ETag = "\"e1\""
+        });
+        mockEvents.Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .ThrowsAsync(new Microsoft.Azure.Cosmos.CosmosException("Not found", HttpStatusCode.NotFound, 0, string.Empty, 0));
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 1, Children = 0 });
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
     public async Task DownloadPromoMedia_returns_FileStreamResult_without_FileDownloadName_for_inline_embed()
     {
         var eventId = Guid.NewGuid();
@@ -370,5 +411,99 @@ public sealed class EventsControllerTests
         var result = await c.DownloadPromoMedia(eventId.ToString("D"));
 
         Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task GetUpcoming_passes_minStartUtc_six_hours_before_now_to_repository()
+    {
+        DateTime? capturedMin = null;
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents
+            .Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>()))
+            .Callback<DateTime>(d => capturedMin = d)
+            .ReturnsAsync(new List<CommunityEvent>());
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var baselineUtc = DateTime.UtcNow;
+        await c.GetUpcoming();
+
+        Assert.NotNull(capturedMin);
+        var expected = baselineUtc - TimeSpan.FromHours(6);
+        var delta = (capturedMin.Value - expected).Duration();
+        Assert.True(delta < TimeSpan.FromSeconds(3), $"Expected minStartUtc near {expected:o}, got {capturedMin.Value:o}");
+    }
+
+    [Fact]
+    public async Task GetUpcoming_returns_events_ordered_by_StartUtc()
+    {
+        var earlier = Guid.NewGuid();
+        var later = Guid.NewGuid();
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>())).ReturnsAsync(new List<CommunityEvent>
+        {
+            new()
+            {
+                Id = later,
+                Title = "Later",
+                StartUtc = DateTime.UtcNow.AddDays(2)
+            },
+            new()
+            {
+                Id = earlier,
+                Title = "Earlier",
+                StartUtc = DateTime.UtcNow.AddDays(1)
+            }
+        });
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var result = await c.GetUpcoming();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var list = Assert.IsAssignableFrom<IReadOnlyList<CommunityEventCard>>(ok.Value);
+        Assert.Equal(2, list.Count);
+        Assert.Equal("Earlier", list[0].Title);
+        Assert.Equal("Later", list[1].Title);
+    }
+
+    [Fact]
+    public async Task GetNextUpcoming_returns_NotFound_when_no_events_in_window()
+    {
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>())).ReturnsAsync(new List<CommunityEvent>());
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var result = await c.GetNextUpcoming();
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task GetNextUpcoming_returns_earliest_event_in_window()
+    {
+        var earliestId = Guid.NewGuid();
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>())).ReturnsAsync(new List<CommunityEvent>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Title = "Second",
+                StartUtc = DateTime.UtcNow.AddDays(3)
+            },
+            new()
+            {
+                Id = earliestId,
+                Title = "First",
+                StartUtc = DateTime.UtcNow.AddDays(1)
+            }
+        });
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var result = await c.GetNextUpcoming();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var card = Assert.IsType<CommunityEventCard>(ok.Value);
+        Assert.Equal(earliestId, card.Id);
+        Assert.Equal("First", card.Title);
     }
 }

@@ -36,6 +36,8 @@
 
 .event-card {
     display: block;
+    text-decoration: none;
+    color: inherit;
     border: 1px solid var(--border-faint);
     border-radius: 10px;
     overflow: hidden;
@@ -48,6 +50,11 @@
     transform: translateY(-2px);
     box-shadow: 0 6px 18px var(--surface-subtle);
     border-color: var(--border-subtle);
+}
+
+.event-card:focus-visible {
+    outline: 2px solid var(--border-subtle);
+    outline-offset: 3px;
 }
 
 .event-card-grid {

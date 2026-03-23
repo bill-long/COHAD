@@ -16,6 +16,12 @@ namespace Web.Services.Repositories
     public interface ICommunityEventRepository
     {
         Task<List<CommunityEvent>> GetAllAsync();
+
+        /// <summary>
+        /// Events with <see cref="CommunityEvent.StartUtc"/> &gt;= <paramref name="minStartUtcInclusive"/> (for upcoming lists without scanning the whole container).
+        /// </summary>
+        Task<List<CommunityEvent>> GetWithStartUtcOnOrAfterAsync(DateTime minStartUtcInclusive);
+
         Task<CommunityEvent> GetByIdAsync(Guid id);
 
         /// <summary>
@@ -51,6 +57,21 @@ namespace Web.Services.Repositories
         public async Task<List<CommunityEvent>> GetAllAsync()
         {
             var iterator = _eventsContainer.GetItemQueryIterator<JObject>(new CosmosQueryDefinition("SELECT * FROM c"));
+            var results = new List<CommunityEvent>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                results.AddRange(response.Select(CosmosLegacyDocumentMapper.ToCommunityEvent));
+            }
+
+            return results;
+        }
+
+        public async Task<List<CommunityEvent>> GetWithStartUtcOnOrAfterAsync(DateTime minStartUtcInclusive)
+        {
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.StartUtc >= @min")
+                .WithParameter("@min", minStartUtcInclusive);
+            var iterator = _eventsContainer.GetItemQueryIterator<JObject>(query);
             var results = new List<CommunityEvent>();
             while (iterator.HasMoreResults)
             {

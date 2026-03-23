@@ -77,6 +77,18 @@ namespace Web.MockData
             }
         }
 
+        public Task<List<CommunityEvent>> GetWithStartUtcOnOrAfterAsync(DateTime minStartUtcInclusive)
+        {
+            lock (_events)
+            {
+                var list = _events.Values
+                    .Where(e => e.StartUtc >= minStartUtcInclusive)
+                    .Select(CloneEvent)
+                    .ToList();
+                return Task.FromResult(list);
+            }
+        }
+
         public Task<CommunityEvent> GetByIdAsync(Guid id)
         {
             lock (_events)

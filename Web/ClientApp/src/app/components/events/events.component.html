@@ -9,7 +9,7 @@
     <div class="loading-state" *ngIf="loading">Loading events...</div>
 
     <section class="event-grid" *ngIf="!loading && events.length > 0">
-      <article class="event-card" *ngFor="let eventItem of events" [routerLink]="['/events', eventItem.publicSlug]">
+      <a class="event-card" *ngFor="let eventItem of events" [routerLink]="['/events', eventItem.publicSlug]">
         <div class="event-card-grid">
           <div class="event-flyer-frame" *ngIf="eventItem.hasPromoMedia">
             <img class="event-flyer-img" [src]="eventItem.promoMediaDownloadUrl" [alt]="eventItem.title">
@@ -27,7 +27,7 @@
             <div class="no-signup-label" *ngIf="!eventItem.allowSignups">No signups required</div>
           </div>
         </div>
-      </article>
+      </a>
     </section>
 
     <div *ngIf="!loading && events.length === 0" class="empty-state">

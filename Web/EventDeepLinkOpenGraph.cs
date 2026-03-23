@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Web.Models;
 using Web.Services.Repositories;
@@ -55,7 +56,8 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
             return;
         }
 
-        var html = await File.ReadAllTextAsync(indexPath);
+        var cache = context.RequestServices.GetRequiredService<IMemoryCache>();
+        var html = await ReadSpaIndexHtmlCachedAsync(indexPath, cache);
         var baseUrl = GetPublicBaseUrl(context.Request);
 
         if (ev != null)
@@ -84,6 +86,45 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
     {
         var dist = Path.Combine(env.ContentRootPath, "ClientApp", "dist", "cohad-app", "index.html");
         return File.Exists(dist) ? dist : string.Empty;
+    }
+
+    private sealed record SpaIndexHtmlCacheEntry(long LastWriteUtcTicks, string Html);
+
+    /// <summary>
+    /// Avoids re-reading <c>index.html</c> from disk on every crawler hit; invalidates when the file&apos;s last write time changes.
+    /// </summary>
+    private static async Task<string> ReadSpaIndexHtmlCachedAsync(string indexPath, IMemoryCache cache)
+    {
+        long ticks;
+        try
+        {
+            ticks = new FileInfo(indexPath).LastWriteTimeUtc.Ticks;
+        }
+        catch (IOException)
+        {
+            return await File.ReadAllTextAsync(indexPath);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return await File.ReadAllTextAsync(indexPath);
+        }
+        catch (ArgumentException)
+        {
+            return await File.ReadAllTextAsync(indexPath);
+        }
+
+        var cacheKey = $"SpaIndexHtml:{indexPath}";
+        if (cache.TryGetValue(cacheKey, out SpaIndexHtmlCacheEntry entry) && entry.LastWriteUtcTicks == ticks)
+        {
+            return entry.Html;
+        }
+
+        var html = await File.ReadAllTextAsync(indexPath);
+        cache.Set(
+            cacheKey,
+            new SpaIndexHtmlCacheEntry(ticks, html),
+            new MemoryCacheEntryOptions { SlidingExpiration = TimeSpan.FromHours(12) });
+        return html;
     }
 
     /// <summary>

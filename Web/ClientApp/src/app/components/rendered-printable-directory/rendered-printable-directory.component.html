@@ -1,3 +1,20 @@
-<div>
-  <app-directory [hideSearch]="true"></app-directory>
+<div class="printable-directory-root">
+  <section class="print-cover title-page" aria-label="Cover">
+    <h1 class="cover-title">Canyon Oaks</h1>
+    <p class="cover-subtitle">Neighborhood Directory</p>
+    <p class="cover-date">{{ printMonthYearLine }}</p>
+  </section>
+
+  <section #pageBodyProbe class="print-blank" aria-hidden="true"></section>
+
+  <div #directoryPrintRoot class="directory-print-root">
+    <app-directory [hideSearch]="true"></app-directory>
+  </div>
+
+  <section class="print-blank trailing-blank" *ngFor="let _ of trailingBlankIndices" aria-hidden="true"></section>
+
+  <section class="print-back title-page" aria-label="Back cover">
+    <p class="back-title">Canyon Oaks</p>
+    <p class="back-subtitle">Homeowners Association</p>
+  </section>
 </div>

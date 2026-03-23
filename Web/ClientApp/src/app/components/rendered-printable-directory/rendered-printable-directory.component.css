@@ -12,28 +12,37 @@
   margin: 0.25in 0.2in 0.25in 0.2in;
 }
 
-img {
-  display: block;
-  width: 100vw;
-  height: 100vh;
-  margin: 0;
-  object-fit: cover;
+/* One printed page per block; matches 8in page minus 0.25in top/bottom margins. */
+.print-cover,
+.print-blank,
+.print-back {
+  box-sizing: border-box;
+  min-height: calc(8in - 0.5in);
   break-inside: avoid;
-  break-after: always;
+  break-after: page;
+  page-break-inside: avoid;
+  page-break-after: always;
 }
 
-.full-page {
-  display: block;
-  width: 100vw;
-  height: 100vh;
-  margin: 0;
-  object-fit: cover;
-  break-inside: avoid;
-  break-after: always;
+.print-back {
+  break-after: auto;
+  page-break-after: auto;
 }
 
-.introduction {
-  break-after: always;
+/* Match directory layout to @page content box so scrollHeight / page parity matches print. */
+@media print {
+  .directory-print-root ::ng-deep .outerWrapper > div {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .directory-print-root ::ng-deep .large-screen {
+    width: 100%;
+  }
+
+  .directory-print-root ::ng-deep .home {
+    max-width: 100%;
+  }
 }
 
 .title-page {
@@ -42,4 +51,40 @@ img {
   align-content: center;
   justify-content: center;
   text-align: center;
+}
+
+.cover-title {
+  margin: 0 0 0.35rem;
+  font-size: 2.5rem;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.cover-subtitle {
+  margin: 0.4rem 0;
+  font-size: 1.65rem;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.cover-date {
+  margin: 0.4rem 0;
+  font-size: 1.4rem;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.back-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.back-subtitle {
+  margin: 0;
+}
+
+.directory-print-root {
+  /* Wrapper for scrollHeight; directory content flows across pages inside. */
+  display: block;
 }

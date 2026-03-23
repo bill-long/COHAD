@@ -41,6 +41,7 @@ namespace Web
             services.AddApplicationInsightsTelemetry();
 
             services.AddControllers();
+            services.AddMemoryCache();
 
             // In production, the Angular files will be served from this directory
             services.AddSpaStaticFiles(configuration =>
