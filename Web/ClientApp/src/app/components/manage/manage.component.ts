@@ -46,4 +46,11 @@ export class ManageComponent implements OnInit {
     return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageUsersRoles.includes(r)).length > 0))
   }
 
+  get manageEventsVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u =>
+      u !== null &&
+      u.roles.includes('Resident') &&
+      u.roles.filter(r => rolePermissions.manageEventsRoles.includes(r)).length > 0))
+  }
+
 }

@@ -1,0 +1,37 @@
+<div class="container events-page">
+  <section class="events-shell">
+    <div class="events-header">
+      <h1>Upcoming Events</h1>
+      <p>See what's happening around the neighborhood.</p>
+    </div>
+
+    <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="error" role="alert">{{ error }}</div>
+    <div class="loading-state" *ngIf="loading">Loading events...</div>
+
+    <section class="event-grid" *ngIf="!loading && events.length > 0">
+      <article class="event-card" *ngFor="let eventItem of events" [routerLink]="['/events', eventItem.publicSlug]">
+        <div class="event-card-grid">
+          <div class="event-flyer-frame" *ngIf="eventItem.hasPromoMedia">
+            <img class="event-flyer-img" [src]="eventItem.promoMediaDownloadUrl" [alt]="eventItem.title">
+          </div>
+
+          <div class="event-body">
+            <h2>{{ eventItem.title }}</h2>
+            <p class="event-time">{{ eventItem.startUtc | date:'fullDate' }} at {{ eventItem.startUtc | date:'shortTime' }}</p>
+            <p class="event-description">{{ eventItem.description }}</p>
+            <div class="signup-summary" *ngIf="eventItem.allowSignups">
+              <span>{{ eventItem.totalSignups }} signups</span>
+              <span>{{ eventItem.totalAdults }} adults</span>
+              <span>{{ eventItem.totalChildren }} children</span>
+            </div>
+            <div class="no-signup-label" *ngIf="!eventItem.allowSignups">No signups required</div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <div *ngIf="!loading && events.length === 0" class="empty-state">
+      No upcoming events are scheduled right now.
+    </div>
+  </section>
+</div>

@@ -16,6 +16,7 @@ namespace Web.Services.Cosmos
         internal static string ToPaymentDocumentId(Guid paymentId) => $"Payment|{paymentId:D}";
         internal static string ToAuditLogDocumentId(Guid auditLogId) => $"AuditLog|{auditLogId:D}";
         internal static string ToResidentDocumentId(Guid documentId) => $"ResidentDocument|{documentId:D}";
+        internal static string ToCommunityEventId(Guid eventId) => $"CommunityEvent|{eventId:D}";
 
         internal static Guid ParseLegacyGuid(string raw)
         {
@@ -251,6 +252,51 @@ namespace Web.Services.Cosmos
                 ["SizeBytes"] = document.SizeBytes,
                 ["UploadedByUniqueId"] = document.UploadedByUniqueId,
                 ["CreatedUtc"] = JToken.FromObject(document.CreatedUtc)
+            };
+        }
+
+        internal static CommunityEvent ToCommunityEvent(JObject doc)
+        {
+            var rawId = doc.Value<string>("id");
+            return new CommunityEvent
+            {
+                Id = ParseLegacyGuid(rawId),
+                PublicSlug = doc.Value<string>("PublicSlug"),
+                Title = doc.Value<string>("Title"),
+                Description = doc.Value<string>("Description"),
+                StartUtc = doc["StartUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
+                AllowSignups = doc["AllowSignups"]?.ToObject<bool>() ?? false,
+                PromoMediaBlobPath = doc.Value<string>("PromoMediaBlobPath"),
+                PromoMediaDisplayName = doc.Value<string>("PromoMediaDisplayName"),
+                PromoMediaContentType = doc.Value<string>("PromoMediaContentType"),
+                PromoMediaSizeBytes = doc["PromoMediaSizeBytes"]?.ToObject<long?>(),
+                CreatedByUniqueId = doc.Value<string>("CreatedByUniqueId"),
+                ModifiedByUniqueId = doc.Value<string>("ModifiedByUniqueId"),
+                CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
+                ModifiedUtc = doc["ModifiedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
+                Signups = DeserializeFlexible<List<EventSignup>>(doc["Signups"]) ?? new List<EventSignup>()
+            };
+        }
+
+        internal static JObject ToCommunityEventDocument(CommunityEvent communityEvent)
+        {
+            return new JObject
+            {
+                ["id"] = ToCommunityEventId(communityEvent.Id),
+                ["PublicSlug"] = communityEvent.PublicSlug != null ? communityEvent.PublicSlug : JValue.CreateNull(),
+                ["Title"] = communityEvent.Title,
+                ["Description"] = communityEvent.Description,
+                ["StartUtc"] = JToken.FromObject(communityEvent.StartUtc),
+                ["AllowSignups"] = communityEvent.AllowSignups,
+                ["PromoMediaBlobPath"] = communityEvent.PromoMediaBlobPath != null ? communityEvent.PromoMediaBlobPath : JValue.CreateNull(),
+                ["PromoMediaDisplayName"] = communityEvent.PromoMediaDisplayName != null ? communityEvent.PromoMediaDisplayName : JValue.CreateNull(),
+                ["PromoMediaContentType"] = communityEvent.PromoMediaContentType != null ? communityEvent.PromoMediaContentType : JValue.CreateNull(),
+                ["PromoMediaSizeBytes"] = communityEvent.PromoMediaSizeBytes != null ? JToken.FromObject(communityEvent.PromoMediaSizeBytes) : JValue.CreateNull(),
+                ["CreatedByUniqueId"] = communityEvent.CreatedByUniqueId,
+                ["ModifiedByUniqueId"] = communityEvent.ModifiedByUniqueId,
+                ["CreatedUtc"] = JToken.FromObject(communityEvent.CreatedUtc),
+                ["ModifiedUtc"] = JToken.FromObject(communityEvent.ModifiedUtc),
+                ["Signups"] = JsonConvert.SerializeObject(communityEvent.Signups ?? new List<EventSignup>())
             };
         }
     }

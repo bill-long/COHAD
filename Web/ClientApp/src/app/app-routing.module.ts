@@ -22,17 +22,33 @@ import { MapComponent } from './components/map/map.component';
 import { RenderedPrintableMapComponent } from './components/rendered-printable-map/rendered-printable-map.component';
 import { DuesComponent } from './components/dues/dues.component';
 import { ManageDocumentsComponent } from './components/manage-documents/manage-documents.component';
+import { EventsComponent } from './components/events/events.component';
+import { EventDetailComponent } from './components/event-detail/event-detail.component';
+import { ManageEventsComponent } from './components/manage-events/manage-events.component';
+import { ResidentsComponent } from './components/residents/residents.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
   { path: 'privacy', component: PrivacyComponent },
   { path: 'about', component: AboutComponent },
-  { path: 'directory', component: DirectoryComponent },
-  { path: 'map', component: MapComponent },
+  { path: 'directory', redirectTo: 'residents/directory', pathMatch: 'full' },
+  { path: 'map', redirectTo: 'residents/map', pathMatch: 'full' },
+  { path: 'documents', redirectTo: 'residents/documents', pathMatch: 'full' },
+  { path: 'myinfo', redirectTo: 'residents/myinfo', pathMatch: 'full' },
+  { path: 'mydues', redirectTo: 'residents/dues', pathMatch: 'full' },
   { path: 'news', component: NewsComponent },
-  { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
-  { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] },
-  { path: 'mydues', component: DuesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
+  { path: 'events', component: EventsComponent },
+  { path: 'events/:slug', component: EventDetailComponent },
+  {
+    path: 'residents', component: ResidentsComponent, children: [
+      { path: '', pathMatch: 'full', redirectTo: 'directory' },
+      { path: 'directory', component: DirectoryComponent },
+      { path: 'map', component: MapComponent },
+      { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
+      { path: 'dues', component: DuesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
+      { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] }
+    ]
+  },
   { path: 'rendered-print-directory', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
   { path: 'rendered-print-map', component: RenderedPrintableMapComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
   {
@@ -42,6 +58,12 @@ const routes: Routes = [
       { path: 'send-email', component: SendEmailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles } },
       { path: 'print', component: ManagePrintComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
       { path: 'documents', component: ManageDocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles } },
+      {
+        path: 'events',
+        component: ManageEventsComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageEventsRoles, requireResidentRole: true }
+      },
       { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageAuditLogRoles } }
     ]
   },

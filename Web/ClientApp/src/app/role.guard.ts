@@ -13,9 +13,17 @@ export class RoleGuard  {
           map(s => s.apiUser),
           filter(u => u != null),
           map(me => {
-            if (me != null && me.roles.filter(r => route.data["allowedRoles"].includes(r)).length > 0) return true;
-            this.router.navigate(['/']);
-            return false;
+            const allowedRoles: string[] = route.data['allowedRoles'] ?? [];
+            const hasAllowedRole = me != null && me.roles.filter(r => allowedRoles.includes(r)).length > 0;
+            if (!hasAllowedRole) {
+              this.router.navigate(['/']);
+              return false;
+            }
+            if (route.data['requireResidentRole'] === true && me != null && !me.roles.includes('Resident')) {
+              this.router.navigate(['/unauthorized']);
+              return false;
+            }
+            return true;
         }));
     }
 }

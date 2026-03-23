@@ -10,6 +10,8 @@
             *ngIf="printDirectoryVisible$ | async">Print Directory</a>
         <a mat-flat-button class="top-nav-button" color="primary" routerLink="documents" routerLinkActive="mat-accent"
             *ngIf="manageDocumentsVisible$ | async">Documents</a>
+        <a mat-flat-button class="top-nav-button" color="primary" routerLink="events" routerLinkActive="mat-accent"
+            *ngIf="manageEventsVisible$ | async">Events</a>
         <a mat-flat-button class="top-nav-button" color="primary" routerLink="audit-log" routerLinkActive="mat-accent"
             *ngIf="manageAuditVisible$ | async">Audit Log</a>
     </div>

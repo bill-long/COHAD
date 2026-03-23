@@ -43,6 +43,10 @@ See also `scripts/run-mock-data.sh` for the two commands in one place.
 
 No Angular lint target is configured (`ng lint` errors). The project has a legacy `tslint.json` without an architect target. TypeScript compilation (`ng build`) serves as the primary type check.
 
+### Facebook / Open Graph (event deep links)
+
+When `ClientApp/dist/cohad-app/index.html` exists (published or local `ng build`), `GET /events/{segment}` is handled on the server so the initial HTML includes Open Graph meta tags for link previews. `{segment}` is the public slug (e.g. `2025-neighborhood-picnic`) or a legacy GUID string. In Development with no dist build, `/events/…` is served by the SPA dev proxy instead (no server-injected OG tags until a build exists). After changing titles, descriptions, or promo images, use [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) with your deployed URL, then choose **Scrape Again** so Facebook refreshes its cached preview.
+
 ### Non-obvious gotchas
 
 - **SPA dev proxy vs `ng serve` host:** `Startup.cs` proxies to `http://127.0.0.1:4200`. Plain `ng serve` (no `--host`) may listen only on `localhost` / IPv6 (`::1`), so the proxy gets “connection refused” to `127.0.0.1`. Use `npm start` (binds `127.0.0.1`), or `npx ng serve --host 127.0.0.1 --port 4200`, or `--host 0.0.0.0` which also accepts IPv4 loopback.

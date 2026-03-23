@@ -1,0 +1,104 @@
+<div class="container event-detail-page">
+  <ng-container *ngIf="!loading && eventItem as event">
+    <mat-card class="event-detail-card">
+      <mat-card-content>
+        <p class="event-detail-nav">
+          <a mat-button color="primary" routerLink="/events">
+            <mat-icon>arrow_back</mat-icon>
+            Back to all events
+          </a>
+        </p>
+        <p class="mat-caption event-detail-overline">Event</p>
+        <h1 class="mat-headline-4">{{ event.title }}</h1>
+        <p class="mat-body-1 event-detail-datetime">{{ event.startUtc | date:'fullDate' }} at {{ event.startUtc | date:'shortTime' }}</p>
+      </mat-card-content>
+
+      <mat-divider *ngIf="event.hasPromoMedia || hasDescription(event)"></mat-divider>
+
+      <mat-card-content *ngIf="event.hasPromoMedia" class="event-detail-section">
+        <h2 class="mat-title event-detail-section-heading">Promotional flyer</h2>
+        <div class="promo-wrap">
+          <div class="promo-flyer-frame">
+            <img [src]="event.promoMediaDownloadUrl" [alt]="event.title" class="promo-image">
+          </div>
+        </div>
+      </mat-card-content>
+
+      <mat-divider *ngIf="event.hasPromoMedia && hasDescription(event)"></mat-divider>
+
+      <mat-card-content *ngIf="hasDescription(event)" class="event-detail-section">
+        <h2 class="mat-title event-detail-section-heading">About</h2>
+        <p class="mat-body-1 event-detail-description">{{ event.description }}</p>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined" class="signup-card">
+      <mat-card-content>
+        <h2 class="mat-title signup-card-title">Sign up</h2>
+
+        <ng-container *ngIf="event.allowSignups">
+          <p class="mat-body-2 signup-helper">
+            Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }}
+            · {{ event.totalAdults }} adults · {{ event.totalChildren }} children
+          </p>
+
+          <ng-container *ngIf="isSignedIn$ | async; else loginToSignup">
+            <div class="signup-form-fields">
+              <div class="signup-form-counts">
+                <mat-form-field appearance="outline" class="event-detail-field" subscriptSizing="dynamic">
+                  <mat-label>Adults</mat-label>
+                  <input matInput id="signup-adults" name="signupAdults" type="number" min="0" [(ngModel)]="adults">
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="event-detail-field" subscriptSizing="dynamic">
+                  <mat-label>Children</mat-label>
+                  <input matInput id="signup-children" name="signupChildren" type="number" min="0" [(ngModel)]="children">
+                </mat-form-field>
+              </div>
+              <mat-form-field appearance="outline" class="event-detail-field event-detail-field--textarea" subscriptSizing="dynamic">
+                <mat-label>Adult names (optional)</mat-label>
+                <textarea matInput id="signup-adult-names" name="signupAdultNames" rows="3" [(ngModel)]="adultNames" placeholder="Comma or newline separated"></textarea>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="event-detail-field event-detail-field--textarea" subscriptSizing="dynamic">
+                <mat-label>Child names (optional)</mat-label>
+                <textarea matInput id="signup-child-names" name="signupChildNames" rows="3" [(ngModel)]="childNames" placeholder="Comma or newline separated"></textarea>
+              </mat-form-field>
+            </div>
+            <button type="button" mat-flat-button color="primary" class="event-detail-signup-btn" (click)="submitSignup()" [disabled]="saving">
+              <mat-spinner *ngIf="saving" class="event-detail-signup-spinner" diameter="20" mode="indeterminate"></mat-spinner>
+              <span *ngIf="!saving">{{ event.mySignup ? 'Update signup' : 'Sign up' }}</span>
+              <span *ngIf="saving">Saving…</span>
+            </button>
+
+            <mat-card *ngIf="error" appearance="outlined" class="event-detail-feedback-card event-detail-feedback-card--error" role="alert">
+              <mat-card-content>
+                <p class="mat-body-2 event-detail-feedback-text">{{ error }}</p>
+              </mat-card-content>
+            </mat-card>
+            <mat-card *ngIf="success" appearance="outlined" class="event-detail-feedback-card event-detail-feedback-card--success" role="status">
+              <mat-card-content>
+                <p class="mat-body-2 event-detail-feedback-text">{{ success }}</p>
+              </mat-card-content>
+            </mat-card>
+          </ng-container>
+
+          <ng-template #loginToSignup>
+            <button type="button" mat-flat-button color="primary" (click)="logIn()">Log in to sign up</button>
+          </ng-template>
+        </ng-container>
+
+        <p *ngIf="!event.allowSignups" class="mat-body-2 signup-helper signup-helper--solo">This event does not require signups.</p>
+      </mat-card-content>
+    </mat-card>
+  </ng-container>
+
+  <div class="event-detail-loading" *ngIf="loading">
+    <mat-spinner diameter="40"></mat-spinner>
+    <p class="mat-body-1">Loading event…</p>
+  </div>
+
+  <mat-card *ngIf="!loading && !eventItem && error" appearance="outlined" class="event-detail-page-error">
+    <mat-card-content>
+      <p class="mat-body-1" role="alert">{{ error }}</p>
+    </mat-card-content>
+  </mat-card>
+</div>

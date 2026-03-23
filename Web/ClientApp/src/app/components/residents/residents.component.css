@@ -1,0 +1,29 @@
+.residents-container {
+    min-height: 80vh;
+    margin: 10px;
+}
+
+.top-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.top-nav-button {
+    min-width: 120px;
+}
+
+.residents-content {
+    width: 100%;
+}
+
+@media (max-width: 640px) {
+    .top-nav {
+        gap: 6px;
+    }
+
+    .top-nav-button {
+        min-width: 0;
+    }
+}

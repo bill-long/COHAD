@@ -101,3 +101,33 @@ mat-expansion-panel.residentPanel .mat-expansion-panel-body {
 .mat-tooltip {
     font-size: 12px;
 }
+
+/* Event editor dialog: balance scrollable content vs. footer actions */
+.event-editor-dialog-panel .mat-mdc-dialog-content {
+    max-height: min(70vh, 560px);
+    padding-top: 0.35rem;
+}
+
+.event-editor-dialog-panel .mat-mdc-dialog-title {
+    padding-bottom: 0.15rem;
+}
+
+/* Inline page alerts (not Bootstrap; use with .container pages) */
+.cohad-inline-alert {
+    padding: 0.55rem 0.65rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.cohad-inline-alert--error {
+    color: var(--error);
+    background: var(--error-bg);
+    border: 1px solid color-mix(in srgb, var(--error) 28%, transparent);
+}
+
+.cohad-inline-alert--success {
+    color: var(--success);
+    background: var(--success-bg);
+    border: 1px solid color-mix(in srgb, var(--success) 28%, transparent);
+}

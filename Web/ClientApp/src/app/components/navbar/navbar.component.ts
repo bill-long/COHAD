@@ -1,6 +1,7 @@
 import { Component, OnInit, ChangeDetectionStrategy, Inject } from '@angular/core';
-import { Observable, Observer } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Observable, Observer, of } from 'rxjs';
+import { map, catchError, shareReplay } from 'rxjs/operators';
+import { EventsService } from 'src/app/services/events.service';
 import { Router, NavigationStart, ActivatedRoute, UrlSegment, NavigationEnd } from '@angular/router';
 import { applicationState, ApplicationState, dispatcher, Action, Login, Logout } from 'src/app/state';
 import { ApiUser, AuthUser } from 'src/app/models';
@@ -19,11 +20,21 @@ export class NavbarComponent implements OnInit {
   isNavbarCollapsed = true;
   isHidden: boolean = false;
 
+  /** True when `GET api/events` returns at least one upcoming event (hides nav link if empty or on error). */
+  readonly showEventsNav$: Observable<boolean>;
+
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>,
     private router: Router,
-    private themeService: ThemeService) {
+    private themeService: ThemeService,
+    private readonly eventsService: EventsService) {
+
+    this.showEventsNav$ = this.eventsService.getUpcoming().pipe(
+      map(events => events.length > 0),
+      catchError(() => of(false)),
+      shareReplay({ bufferSize: 1, refCount: true })
+    );
 
     router.events.subscribe(e => {
       if (e instanceof NavigationStart) {

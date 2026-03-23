@@ -52,3 +52,11 @@
     text-shadow: black 3px 0 10px, black -3px 0 10px;
     text-align: center;
 }
+
+.header-overlay-slot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+}

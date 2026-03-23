@@ -1,0 +1,519 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Options;
+using Web.Configuration;
+using Web.Models;
+using Web.PresentationModels;
+using Web.Services;
+using Web.Services.Repositories;
+using Web.UpdateModels;
+
+namespace Web.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class EventsController : ControllerBase
+    {
+        private static readonly HashSet<string> AllowedMediaExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp"
+        };
+
+        /// <summary>
+        /// Events stay publicly &quot;upcoming&quot; until this long after <see cref="CommunityEvent.StartUtc"/>.
+        /// </summary>
+        private static readonly TimeSpan UpcomingGraceAfterStart = TimeSpan.FromHours(6);
+
+        /// <summary>Per-household limits for signup requests (avoids overflow in totals and abuse).</summary>
+        private const int MaxSignupAdultsPerHousehold = 50;
+
+        private const int MaxSignupChildrenPerHousehold = 50;
+
+        private readonly IUserRepository _userRepository;
+        private readonly ICommunityEventRepository _communityEventRepository;
+        private readonly IDocumentFileStore _documentFileStore;
+        private readonly IAuditLogRepository _auditLogRepository;
+        private readonly DocumentStorageOptions _storageOptions;
+
+        public EventsController(
+            IUserRepository userRepository,
+            ICommunityEventRepository communityEventRepository,
+            IDocumentFileStore documentFileStore,
+            IAuditLogRepository auditLogRepository,
+            IOptions<DocumentStorageOptions> storageOptions)
+        {
+            _userRepository = userRepository;
+            _communityEventRepository = communityEventRepository;
+            _documentFileStore = documentFileStore;
+            _auditLogRepository = auditLogRepository;
+            _storageOptions = storageOptions.Value;
+        }
+
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetUpcoming()
+        {
+            var now = DateTime.UtcNow;
+            var payload = (await _communityEventRepository.GetAllAsync())
+                .Where(e => IsInUpcomingWindow(e, now))
+                .OrderBy(e => e.StartUtc)
+                .Select(CommunityEventCard.FromStorageModel)
+                .ToList();
+
+            return Ok(payload);
+        }
+
+        [HttpGet("next")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetNextUpcoming()
+        {
+            var now = DateTime.UtcNow;
+            var next = (await _communityEventRepository.GetAllAsync())
+                .Where(e => IsInUpcomingWindow(e, now))
+                .OrderBy(e => e.StartUtc)
+                .FirstOrDefault();
+
+            if (next == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(CommunityEventCard.FromStorageModel(next));
+        }
+
+        [HttpGet("{segment}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetBySegment(string segment)
+        {
+            var stored = await _communityEventRepository.GetByRouteSegmentAsync(segment);
+            if (stored == null)
+            {
+                return NotFound();
+            }
+
+            var currentUserUniqueId = await TryGetCurrentUserUniqueIdAsync();
+            return Ok(CommunityEventDetail.FromStorageModel(stored, includeSignups: false, currentUserUniqueId));
+        }
+
+        [HttpGet("{segment}/promo")]
+        [AllowAnonymous]
+        public async Task<IActionResult> DownloadPromoMedia(string segment)
+        {
+            var stored = await _communityEventRepository.GetByRouteSegmentAsync(segment);
+            if (stored == null || string.IsNullOrWhiteSpace(stored.PromoMediaBlobPath))
+            {
+                return NotFound();
+            }
+
+            var file = await _documentFileStore.DownloadAsync(stored.PromoMediaBlobPath);
+            if (file == null)
+            {
+                return NotFound();
+            }
+
+            var contentType = string.IsNullOrWhiteSpace(file.ContentType)
+                ? "application/octet-stream"
+                : file.ContentType;
+            // Omit fileDownloadName so the response is served inline for browser display (e.g. img src) rather than as a download attachment.
+            return File(file.Stream, contentType);
+        }
+
+        [HttpGet("manage")]
+        [Authorize]
+        public async Task<IActionResult> GetManage()
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
+            if (!HasEventManagementAccess(apiUser))
+            {
+                return Forbid();
+            }
+
+            var now = DateTime.UtcNow;
+            var all = await _communityEventRepository.GetAllAsync();
+            var upcoming = all
+                .Where(e => IsInUpcomingWindow(e, now))
+                .OrderBy(e => e.StartUtc)
+                .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, null))
+                .ToList();
+            var past = all
+                .Where(e => !IsInUpcomingWindow(e, now))
+                .OrderByDescending(e => e.StartUtc)
+                .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, null))
+                .ToList();
+
+            return Ok(new ManageEventsPayload { Upcoming = upcoming, Past = past });
+        }
+
+        private static bool IsInUpcomingWindow(CommunityEvent e, DateTime utcNow) =>
+            e.StartUtc + UpcomingGraceAfterStart >= utcNow;
+
+        [HttpPost("manage")]
+        [Authorize]
+        public async Task<IActionResult> UpsertManage([FromForm] EventUpsertRequest request)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
+            if (!HasEventManagementAccess(apiUser))
+            {
+                return Forbid();
+            }
+
+            if (request == null)
+            {
+                return BadRequest("Request body is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return BadRequest("Event title is required.");
+            }
+
+            if (request.StartUtc == null)
+            {
+                return BadRequest("Event date/time is required.");
+            }
+
+            var stored = request.Id != null
+                ? await _communityEventRepository.GetByIdAsync(request.Id.Value)
+                : null;
+            if (request.Id != null && stored == null)
+            {
+                return NotFound();
+            }
+
+            var now = DateTime.UtcNow;
+            var isCreate = stored == null;
+            var communityEvent = stored ?? new CommunityEvent
+            {
+                Id = request.Id ?? Guid.NewGuid(),
+                CreatedByUniqueId = apiUser.UniqueId,
+                CreatedUtc = now,
+                Signups = new List<EventSignup>()
+            };
+
+            if (request.PromotionalAsset != null && request.PromotionalAsset.Length > 0)
+            {
+                if (request.PromotionalAsset.Length > _storageOptions.MaxUploadBytes)
+                {
+                    return BadRequest($"File size exceeds max allowed size of {_storageOptions.MaxUploadBytes} bytes.");
+                }
+
+                var extension = Path.GetExtension(request.PromotionalAsset.FileName);
+                if (string.IsNullOrWhiteSpace(extension) || !AllowedMediaExtensions.Contains(extension))
+                {
+                    return BadRequest("Promotional media must be an image file (PNG, JPEG, GIF, or WebP).");
+                }
+
+                var safeBaseName = SanitizeFileName(Path.GetFileNameWithoutExtension(request.PromotionalAsset.FileName));
+                if (string.IsNullOrWhiteSpace(safeBaseName))
+                {
+                    return BadRequest("Uploaded file name is invalid.");
+                }
+
+                var finalDisplayName = $"{safeBaseName}{extension.ToLowerInvariant()}";
+                var blobPath = $"events/{communityEvent.Id:D}/{finalDisplayName}";
+
+                await using (var stream = request.PromotionalAsset.OpenReadStream())
+                {
+                    await _documentFileStore.UploadAsync(blobPath, stream, request.PromotionalAsset.ContentType);
+                }
+
+                if (!string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath) &&
+                    !string.Equals(communityEvent.PromoMediaBlobPath, blobPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    await _documentFileStore.DeleteAsync(communityEvent.PromoMediaBlobPath);
+                }
+
+                communityEvent.PromoMediaBlobPath = blobPath;
+                communityEvent.PromoMediaDisplayName = finalDisplayName;
+                communityEvent.PromoMediaContentType = request.PromotionalAsset.ContentType;
+                communityEvent.PromoMediaSizeBytes = request.PromotionalAsset.Length;
+            }
+            else if (request.RemovePromoMedia && !string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath))
+            {
+                await _documentFileStore.DeleteAsync(communityEvent.PromoMediaBlobPath);
+                communityEvent.PromoMediaBlobPath = null;
+                communityEvent.PromoMediaDisplayName = null;
+                communityEvent.PromoMediaContentType = null;
+                communityEvent.PromoMediaSizeBytes = null;
+            }
+
+            communityEvent.Title = request.Title.Trim();
+            communityEvent.Description = (request.Description ?? string.Empty).Trim();
+            communityEvent.StartUtc = NormalizeToUtc(request.StartUtc.Value);
+            communityEvent.AllowSignups = request.AllowSignups;
+            communityEvent.ModifiedByUniqueId = apiUser.UniqueId;
+            communityEvent.ModifiedUtc = now;
+            communityEvent.Signups ??= new List<EventSignup>();
+
+            var allEvents = await _communityEventRepository.GetAllAsync();
+            communityEvent.PublicSlug = EventUrlSlug.EnsureUniquePublicSlug(
+                communityEvent.Id,
+                communityEvent.StartUtc,
+                communityEvent.Title,
+                allEvents).ToLowerInvariant();
+
+            var saved = await _communityEventRepository.UpsertAsync(communityEvent);
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
+            {
+                Id = Guid.NewGuid(),
+                SubjectId = saved.Id.ToString("D"),
+                SubjectName = saved.Title,
+                Action = isCreate ? "Created event." : "Updated event.",
+                Time = DateTime.UtcNow,
+                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
+                UserId = apiUser.UniqueId
+            });
+
+            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: true, apiUser.UniqueId));
+        }
+
+        [HttpDelete("manage/{id:guid}")]
+        [Authorize]
+        public async Task<IActionResult> DeleteManage(Guid id)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
+            if (!HasEventManagementAccess(apiUser))
+            {
+                return Forbid();
+            }
+
+            var stored = await _communityEventRepository.GetByIdAsync(id);
+            if (stored == null)
+            {
+                return NotFound();
+            }
+
+            if (!string.IsNullOrWhiteSpace(stored.PromoMediaBlobPath))
+            {
+                await _documentFileStore.DeleteAsync(stored.PromoMediaBlobPath);
+            }
+
+            await _communityEventRepository.DeleteAsync(id);
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
+            {
+                Id = Guid.NewGuid(),
+                SubjectId = stored.Id.ToString("D"),
+                SubjectName = stored.Title,
+                Action = "Deleted event.",
+                Time = DateTime.UtcNow,
+                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
+                UserId = apiUser.UniqueId
+            });
+
+            return Ok();
+        }
+
+        /// <summary>Creates or updates the current user's signup for an event.</summary>
+        /// <remarks>
+        /// Uses Cosmos optimistic concurrency (If-Match ETag) with bounded retries so concurrent signups do not overwrite each other.
+        /// </remarks>
+        [HttpPost("{segment}/signup")]
+        [Authorize]
+        public async Task<IActionResult> SignUp(string segment, [FromBody] EventSignupRequest request)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
+            var routeEvent = await _communityEventRepository.GetByRouteSegmentAsync(segment);
+            if (routeEvent == null)
+            {
+                return NotFound();
+            }
+
+            if (!routeEvent.AllowSignups)
+            {
+                return BadRequest("Signups are not enabled for this event.");
+            }
+
+            if (request == null || request.Adults < 0 || request.Children < 0 || request.Adults + request.Children <= 0)
+            {
+                return BadRequest("Please provide at least one attendee.");
+            }
+
+            if (request.Adults > MaxSignupAdultsPerHousehold || request.Children > MaxSignupChildrenPerHousehold)
+            {
+                return BadRequest(
+                    $"Please enter no more than {MaxSignupAdultsPerHousehold} adults and {MaxSignupChildrenPerHousehold} children per household.");
+            }
+
+            const int maxAttempts = 10;
+            CommunityEvent saved = null;
+            var isNewSignup = false;
+
+            for (var attempt = 0; attempt < maxAttempts; attempt++)
+            {
+                var read = await _communityEventRepository.ReadAsync(routeEvent.Id);
+                if (read == null)
+                {
+                    return NotFound();
+                }
+
+                if (!read.Event.AllowSignups)
+                {
+                    return BadRequest("Signups are not enabled for this event.");
+                }
+
+                isNewSignup = !(read.Event.Signups?.Any(s => s.UserUniqueId == apiUser.UniqueId) ?? false);
+                ApplySignupMutation(read.Event, apiUser, request);
+
+                try
+                {
+                    saved = await _communityEventRepository.ReplaceAsync(read.Event, read.ETag);
+                    break;
+                }
+                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+                {
+                    if (attempt == maxAttempts - 1)
+                    {
+                        return StatusCode(StatusCodes.Status409Conflict,
+                            "Unable to save your signup due to concurrent updates. Please try again.");
+                    }
+                }
+            }
+
+            if (saved == null)
+            {
+                return StatusCode(StatusCodes.Status409Conflict,
+                    "Unable to save your signup due to concurrent updates. Please try again.");
+            }
+
+            var countDetail = $" ({request.Adults} adults, {request.Children} children)";
+            var actionPrefix = isNewSignup ? "Signed up for event." : "Updated event signup.";
+            await _auditLogRepository.AddAsync(new NewAuditLogEntry
+            {
+                Id = Guid.NewGuid(),
+                SubjectId = saved.Id.ToString("D"),
+                SubjectName = saved.Title,
+                Action = actionPrefix + countDetail,
+                Time = DateTime.UtcNow,
+                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                UserId = apiUser.UniqueId
+            });
+
+            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: false, apiUser.UniqueId));
+        }
+
+        private static void ApplySignupMutation(CommunityEvent stored, Models.User apiUser, EventSignupRequest request)
+        {
+            stored.Signups ??= new List<EventSignup>();
+            var existingSignup = stored.Signups.FirstOrDefault(s => s.UserUniqueId == apiUser.UniqueId);
+            if (existingSignup == null)
+            {
+                existingSignup = new EventSignup
+                {
+                    UserUniqueId = apiUser.UniqueId
+                };
+                stored.Signups.Add(existingSignup);
+            }
+
+            existingSignup.UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim();
+            existingSignup.UserEmail = apiUser.Emails;
+            existingSignup.Adults = request.Adults;
+            existingSignup.Children = request.Children;
+            existingSignup.AdultNames = NormalizeNames(request.AdultNames);
+            existingSignup.ChildNames = NormalizeNames(request.ChildNames);
+            existingSignup.SignedUpUtc = DateTime.UtcNow;
+
+            stored.ModifiedByUniqueId = apiUser.UniqueId;
+            stored.ModifiedUtc = DateTime.UtcNow;
+        }
+
+        private async Task<Models.User> GetApiUserAsync()
+        {
+            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
+            return await _userRepository.GetByUniqueIdAsync(uniqueId);
+        }
+
+        private async Task<string> TryGetCurrentUserUniqueIdAsync()
+        {
+            if (User?.Identity?.IsAuthenticated != true)
+            {
+                return null;
+            }
+
+            try
+            {
+                var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
+                var apiUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
+                return apiUser?.UniqueId;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        private static bool HasEventManagementAccess(Models.User user)
+        {
+            if (user?.Roles == null || user.Roles.Count == 0)
+            {
+                return false;
+            }
+
+            return user.Roles.Contains(Models.User.Role.Resident) &&
+                   user.Roles.Any(r => r != Models.User.Role.Resident);
+        }
+
+        private static DateTime NormalizeToUtc(DateTime dateTime)
+        {
+            if (dateTime.Kind == DateTimeKind.Utc)
+            {
+                return dateTime;
+            }
+
+            if (dateTime.Kind == DateTimeKind.Local)
+            {
+                return dateTime.ToUniversalTime();
+            }
+
+            return DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+        }
+
+        private static List<string> NormalizeNames(IEnumerable<string> names)
+        {
+            return (names ?? Enumerable.Empty<string>())
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Select(n => n.Trim())
+                .Take(30)
+                .ToList();
+        }
+
+        private static string SanitizeFileName(string value)
+        {
+            var invalid = Path.GetInvalidFileNameChars();
+            var cleaned = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
+            return cleaned;
+        }
+    }
+}

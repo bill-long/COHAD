@@ -145,6 +145,7 @@ namespace Web
                         sp.GetRequiredService<IUserRepository>()));
                 services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
                 services.AddSingleton<IDocumentRepository, MockDocumentRepository>();
+                services.AddSingleton<ICommunityEventRepository, MockCommunityEventRepository>();
                 services.AddSingleton<IDocumentFileStore, MockDocumentFileStore>();
                 services.AddScoped<IEmailService, NoOpEmailService>();
             }
@@ -168,6 +169,8 @@ namespace Web
                     new CosmosAuditLogRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog")));
                 services.AddScoped<IDocumentRepository>(sp =>
                     new CosmosDocumentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
+                services.AddScoped<ICommunityEventRepository>(sp =>
+                    new CosmosCommunityEventRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Events")));
                 services.AddSingleton<IDocumentFileStore, AzureBlobDocumentFileStore>();
 
                 services.AddScoped<IEmailService, EmailService>();
@@ -232,6 +235,7 @@ namespace Web
 
             app.UseEndpoints(endpoints =>
             {
+                endpoints.MapEventDeepLinkOpenGraph(env);
                 endpoints.MapControllerRoute(
                     name: "default",
                     pattern: "{controller}/{action=Index}/{id?}");

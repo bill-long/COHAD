@@ -1,7 +1,9 @@
 import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { HttpEventType } from '@angular/common/http';
+import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { DocumentsService, ResidentDocument } from 'src/app/services/documents.service';
+import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import {
   formatFileSize,
   getFileIconName,
@@ -28,7 +30,8 @@ export class ManageDocumentsComponent implements OnInit {
 
   constructor(
     private readonly documentsService: DocumentsService,
-    private readonly snackBar: MatSnackBar) { }
+    private readonly snackBar: MatSnackBar,
+    private readonly dialog: MatDialog) { }
 
   ngOnInit(): void {
     this.loadDocuments();
@@ -117,22 +120,34 @@ export class ManageDocumentsComponent implements OnInit {
   }
 
   deleteDocument(doc: ResidentDocument): void {
-    if (!confirm(`Delete '${doc.displayName}'?`)) {
-      return;
-    }
-
-    this.error = '';
-    this.deletingId = doc.id;
-    this.documentsService.delete(doc.id).subscribe({
-      next: () => {
-        this.deletingId = null;
-        this.snackBar.open('Document deleted.', 'Dismiss', { duration: 2500 });
-        this.loadDocuments();
-      },
-      error: () => {
-        this.deletingId = null;
-        this.error = 'Delete failed.';
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete document?',
+        body: `This will permanently remove "${doc.displayName}".\n\nYou can’t undo this.`,
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        confirmColor: 'warn'
       }
+    });
+
+    ref.afterClosed().subscribe(confirmed => {
+      if (confirmed !== true) {
+        return;
+      }
+
+      this.error = '';
+      this.deletingId = doc.id;
+      this.documentsService.delete(doc.id).subscribe({
+        next: () => {
+          this.deletingId = null;
+          this.snackBar.open('Document deleted.', 'Dismiss', { duration: 2500 });
+          this.loadDocuments();
+        },
+        error: () => {
+          this.deletingId = null;
+          this.error = 'Delete failed.';
+        }
+      });
     });
   }
 

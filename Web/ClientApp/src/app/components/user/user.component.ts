@@ -4,6 +4,8 @@ import { ApiUser, Home } from 'src/app/models';
 import { UntypedFormControl } from '@angular/forms';
 import { MatChipInputEvent } from '@angular/material/chips';
 import { MatAutocompleteSelectedEvent, MatAutocompleteTrigger } from '@angular/material/autocomplete';
+import { MatDialog } from '@angular/material/dialog';
+import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { Observable } from 'rxjs';
 import { startWith, map } from 'rxjs/operators';
 import { UserService } from 'src/app/services/user.service';
@@ -52,7 +54,8 @@ export class UserComponent implements OnInit {
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    private userService: UserService) { }
+    private userService: UserService,
+    private readonly dialog: MatDialog) { }
 
   ngOnInit(): void {
     this.filteredHomes = this.homeControl.valueChanges.pipe(
@@ -189,13 +192,27 @@ export class UserComponent implements OnInit {
 
   save() {
     if (this.shouldConfirmPurgeRisk()) {
-      const shouldProceed = window.confirm(
-        'This user has no roles and no homes. They will be eligible for purge after 30 days. Save changes?');
-      if (!shouldProceed) {
-        return;
-      }
+      const ref = this.dialog.open(ConfirmDialogComponent, {
+        data: {
+          title: 'Save changes?',
+          body: 'This user has no roles and no homes. They will be eligible for purge after 30 days.',
+          confirmText: 'Save',
+          cancelText: 'Cancel',
+          confirmColor: 'primary'
+        }
+      });
+      ref.afterClosed().subscribe(confirmed => {
+        if (confirmed === true) {
+          this.runSave();
+        }
+      });
+      return;
     }
 
+    this.runSave();
+  }
+
+  private runSave(): void {
     this.saveInProgress = true;
     this.userService.saveUser(this.apiUser, this.apiUserCopy).subscribe(r => {
       this.doneEvent.next();

@@ -2,40 +2,40 @@
   <section class="manage-documents-shell">
     <div class="manage-documents-header">
       <h1>Documents</h1>
-      <p>Upload new files or remove outdated ones. Residents see these on the <a routerLink="/documents">Documents</a> page.</p>
+      <p>Upload new files or remove outdated ones. Residents see these on the <a routerLink="/residents/documents">Documents</a> page.</p>
     </div>
 
-    <div class="alert alert-danger mb-3" *ngIf="error">{{ error }}</div>
+    <div class="manage-documents-error" *ngIf="error" role="alert">{{ error }}</div>
 
-    <section class="admin-panel mb-4">
+    <section class="admin-panel admin-panel--upload">
       <h2>Upload</h2>
-      <div class="drop-zone mb-2" [class.drag-active]="dragActive" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+      <div class="drop-zone" [class.drag-active]="dragActive" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
         <div class="drop-title">Drag and drop a file here</div>
         <div class="drop-subtitle">or choose one below</div>
       </div>
 
       <div class="admin-upload-row">
         <input #fileInput id="manage-document-file" class="hidden-file-input" type="file" (change)="onFileSelected($event)" [disabled]="uploadInProgress">
-        <button class="btn btn-outline-secondary" type="button" (click)="triggerFilePicker()" [disabled]="uploadInProgress">
+        <button type="button" mat-stroked-button (click)="triggerFilePicker()" [disabled]="uploadInProgress">
           Choose File
         </button>
-        <button class="btn btn-primary" (click)="uploadDocument()" [disabled]="uploadInProgress">
+        <button type="button" mat-flat-button color="primary" (click)="uploadDocument()" [disabled]="uploadInProgress">
           {{ uploadInProgress ? 'Uploading...' : 'Upload Document' }}
         </button>
       </div>
 
-      <div class="selected-file mt-2" *ngIf="selectedFile">
+      <div class="selected-file selected-file-row" *ngIf="selectedFile">
         <span class="selected-file-label">Selected:</span>
         <span class="selected-file-name">{{ selectedFile.name }}</span>
-        <button class="btn btn-link btn-sm p-0 ml-2" type="button" (click)="clearSelectedFile()" [disabled]="uploadInProgress">
-          clear
+        <button type="button" mat-button class="selected-file-clear" (click)="clearSelectedFile()" [disabled]="uploadInProgress">
+          Clear
         </button>
       </div>
 
-      <div class="upload-progress mt-2" *ngIf="uploadInProgress">
+      <div class="upload-progress upload-progress-row" *ngIf="uploadInProgress">
         <div class="upload-progress-bar" [style.width.%]="uploadProgress"></div>
       </div>
-      <div class="upload-progress-label" *ngIf="uploadInProgress">{{ uploadProgress }}%</div>
+      <div class="upload-progress-label upload-progress-label-row" *ngIf="uploadInProgress">{{ uploadProgress }}%</div>
     </section>
 
     <h2 class="list-heading">Current documents</h2>
@@ -57,7 +57,10 @@
         </div>
 
         <button
-          class="btn btn-outline-danger btn-sm"
+          type="button"
+          mat-stroked-button
+          color="warn"
+          class="document-delete-btn"
           [disabled]="deletingId === doc.id"
           (click)="deleteDocument(doc)">
           Delete

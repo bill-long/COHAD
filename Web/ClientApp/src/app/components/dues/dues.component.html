@@ -70,7 +70,7 @@
 
       <ng-container matColumnDef="description">
         <th mat-header-cell *matHeaderCellDef> Description </th>
-        <td mat-cell *matCellDef="let payment"> {{payment.paymentType == 0 ? 'One-Time' : payment.paymentType == 1 ? 'Subscription' : 'PayPal (synced)'}} </td>
+        <td mat-cell *matCellDef="let payment"> {{payment.paymentType == 0 ? 'One-Time' : payment.paymentType == 1 ? 'Subscription' : 'PayPal'}} </td>
       </ng-container>
 
       <ng-container matColumnDef="payerEmail">

@@ -1,18 +1,14 @@
 <mat-toolbar *ngIf="isHidden !== true" color="primary">
   <ng-container *ngIf="navVm$ | async as vm">
   <div class="nav-desktop">
-    <span class="badge"> COHAD </span>
+    <span class="toolbar-app-title"> COHAD </span>
     <div>
       <a mat-flat-button color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a *ngIf="showEventsNav$ | async" mat-flat-button color="primary" routerLink="events" routerLinkActive="mat-accent">Events</a>
       <a *ngIf="vm.showGuestPrivacy" mat-flat-button color="primary" routerLink="privacy" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Privacy
         Policy</a>
-      <a mat-flat-button color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="directory" routerLinkActive="mat-accent">Directory</a>
-      <a mat-flat-button color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="map" routerLinkActive="mat-accent">Map</a>
-      <a mat-flat-button color="primary" *ngIf="vm.showAuthenticatedNav && (vm.apiUser?.roles?.includes('Resident') || vm.apiUser?.roles?.includes('Administrator'))" routerLink="documents" routerLinkActive="mat-accent">Documents</a>
-      <a mat-flat-button color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="mydues" routerLinkActive="mat-accent">Dues</a>
-      <a mat-flat-button color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="vm.showAuthenticatedNav">My
-        Info</a>
-      <a mat-flat-button color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent">Manage</a>
+      <a mat-flat-button color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
+      <a mat-flat-button color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
       <button mat-flat-button color="primary" *ngIf="vm.authUser?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
       <mat-menu #userMenu="matMenu">
         <button mat-menu-item (click)="toggleTheme()">{{ (isDarkTheme$ | async) ? 'Use light mode' : 'Use dark mode' }}</button>
@@ -27,13 +23,9 @@
     </button>
     <mat-menu #hamburgerMenu="matMenu">
       <a mat-menu-item color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
-      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="directory" routerLinkActive="mat-accent">Directory</a>
-      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="map" routerLinkActive="mat-accent">Map</a>
-      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav && (vm.apiUser?.roles?.includes('Resident') || vm.apiUser?.roles?.includes('Administrator'))" routerLink="documents" routerLinkActive="mat-accent">Documents</a>
-      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav && vm.apiUser?.roles?.includes('Resident')" routerLink="mydues" routerLinkActive="mat-accent">Dues</a>
-      <a mat-menu-item color="primary" routerLink="myinfo" routerLinkActive="mat-accent" *ngIf="vm.showAuthenticatedNav">My
-        Info</a>
-      <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent">Manage</a>
+      <a *ngIf="showEventsNav$ | async" mat-menu-item color="primary" routerLink="events" routerLinkActive="mat-accent">Events</a>
+      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
+      <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
       <button mat-button *ngIf="!vm.authUser?.identityClaims?.emails" (click)="login()" [disabled]="disabled">Sign In</button>
       <button mat-menu-item color="primary" *ngIf="vm.authUser?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
     </mat-menu>

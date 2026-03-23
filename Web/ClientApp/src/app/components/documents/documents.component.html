@@ -1,11 +1,11 @@
-<div class="documents-page container py-4">
+<div class="container documents-page">
   <section class="documents-shell">
     <div class="documents-header">
       <h1>Resident Documents</h1>
       <p>Download HOA documents shared with residents.</p>
     </div>
 
-    <div class="alert alert-danger mb-3" *ngIf="error">{{ error }}</div>
+    <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="error" role="alert">{{ error }}</div>
 
     <div class="loading-state" *ngIf="loading">Loading documents...</div>
 

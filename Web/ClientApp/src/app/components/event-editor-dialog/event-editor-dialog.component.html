@@ -1,0 +1,112 @@
+<h2 mat-dialog-title class="event-editor-dialog-title">
+  <span class="dialog-title-main">{{ dialogTitle }}</span>
+  <span class="dialog-title-sub" *ngIf="editingSubtitle">{{ editingSubtitle }}</span>
+</h2>
+
+<div mat-dialog-content class="event-editor-dialog-body">
+  <div class="event-editor-error" *ngIf="error" role="alert">{{ error }}</div>
+
+  <section class="event-editor-section">
+    <h3 class="event-editor-section-title">Event details</h3>
+    <div class="event-editor-field-row">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="event-editor-mat-field">
+        <mat-label>Title</mat-label>
+        <input
+          matInput
+          id="event-editor-title"
+          [(ngModel)]="title"
+          maxlength="160"
+          placeholder="Neighborhood Potluck">
+        <mat-hint align="end">{{ title.length }}/160</mat-hint>
+      </mat-form-field>
+    </div>
+    <div class="event-editor-field-row">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="event-editor-mat-field">
+        <mat-label>Description</mat-label>
+        <textarea
+          matInput
+          id="event-editor-description"
+          rows="3"
+          [(ngModel)]="description"
+          placeholder="What residents should know"></textarea>
+      </mat-form-field>
+    </div>
+    <div class="event-editor-field-row event-editor-datetime-row">
+      <span id="event-editor-start-label" class="event-editor-datetime-label">Date and time</span>
+      <div class="event-editor-datetime-fields" aria-labelledby="event-editor-start-label">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="event-editor-date-field">
+          <mat-label>Date</mat-label>
+          <input matInput [matDatepicker]="startPicker" [(ngModel)]="startDate" id="event-editor-start-date">
+          <mat-datepicker-toggle matIconSuffix [for]="startPicker"></mat-datepicker-toggle>
+          <mat-datepicker #startPicker></mat-datepicker>
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="event-editor-time-field">
+          <mat-label>Time</mat-label>
+          <input matInput type="time" [(ngModel)]="startTime" id="event-editor-start-time" step="60">
+        </mat-form-field>
+      </div>
+    </div>
+
+    <div class="event-editor-checkbox-row">
+      <mat-checkbox [(ngModel)]="allowSignups" color="primary" id="event-editor-allow-signups">Allow signups</mat-checkbox>
+    </div>
+  </section>
+
+  <section class="event-editor-section event-editor-section-promo">
+    <h3 class="event-editor-section-title">Promotional media</h3>
+    <p class="event-editor-section-hint">Optional flyer image (PNG, JPEG, GIF, or WebP) shown on the public Events page and in social link previews.</p>
+
+    <div class="promo-media-grid" [class.promo-media-grid--with-preview]="showPromoPreview">
+      <div class="promo-media-preview-column" *ngIf="showPromoPreview">
+        <div class="dialog-promo-label">Current file preview</div>
+        <div class="dialog-promo-frame" *ngIf="data.event as ev">
+          <img
+            [src]="ev.promoMediaDownloadUrl"
+            [alt]="ev.title"
+            class="dialog-promo-img">
+        </div>
+      </div>
+
+      <div class="promo-media-controls-column">
+        <input
+          #fileInput
+          id="event-editor-promo"
+          class="event-editor-file-input-hidden"
+          type="file"
+          accept=".png,.jpg,.jpeg,.gif,.webp"
+          (change)="onFileSelected($event)">
+
+        <div class="promo-file-actions">
+          <button type="button" mat-stroked-button class="event-editor-file-btn" (click)="fileInput.click()">Choose file…</button>
+        </div>
+
+        <div class="promo-file-status promo-file-status--muted" *ngIf="!selectedFile && existingPromoFileName && !removePromoMedia">
+          Current: <strong class="promo-file-status-emphasis">{{ existingPromoFileName }}</strong>
+        </div>
+        <div class="promo-file-status promo-file-status--new" *ngIf="selectedFile">
+          New file: <strong class="promo-file-status-emphasis">{{ selectedFile.name }}</strong>
+          <button type="button" mat-button class="event-editor-remove-file-btn" (click)="clearSelectedFile()">Remove</button>
+        </div>
+        <div class="promo-file-status promo-file-status--muted" *ngIf="!selectedFile && !existingPromoFileName && !removePromoMedia">
+          No file attached yet.
+        </div>
+        <div class="promo-file-status promo-file-status--muted" *ngIf="removePromoMedia && !selectedFile">
+          Current media will be removed when you save.
+        </div>
+
+        <div class="event-editor-checkbox-row" *ngIf="existingPromoFileName && !selectedFile">
+          <mat-checkbox [(ngModel)]="removePromoMedia" color="primary" id="event-editor-remove-promo">Remove current promotional media</mat-checkbox>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div mat-dialog-actions align="end" class="event-editor-dialog-actions">
+  <button type="button" mat-button (click)="cancel()" [disabled]="saving">Cancel</button>
+  <button type="button" mat-flat-button color="primary" (click)="save()" [disabled]="saving" class="event-editor-save-btn">
+    <mat-spinner *ngIf="saving" class="event-editor-save-spinner" diameter="20" mode="indeterminate"></mat-spinner>
+    <span *ngIf="!saving">{{ editingEventId ? 'Save changes' : 'Create event' }}</span>
+    <span *ngIf="saving">Saving…</span>
+  </button>
+</div>

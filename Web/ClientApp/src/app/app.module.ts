@@ -20,11 +20,14 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatListModule } from '@angular/material/list';
 import { MatCardModule } from '@angular/material/card';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import { DragDropModule } from '@angular/cdk/drag-drop';
+import { provideNativeDateAdapter } from '@angular/material/core';
 
 import { QuillModule } from 'ngx-quill';
 
@@ -47,6 +50,7 @@ import { dispatcher, Action, initialState, initialStateValue, applicationState, 
 import { Subject } from 'rxjs';
 import { DirectoryComponent } from './components/directory/directory.component';
 import { ManageComponent } from './components/manage/manage.component';
+import { ResidentsComponent } from './components/residents/residents.component';
 import { UserComponent } from './components/user/user.component';
 import { ManageUsersComponent } from './components/manage-users/manage-users.component';
 import { ManageHomesComponent } from './components/manage-homes/manage-homes.component';
@@ -64,6 +68,10 @@ import { DuesComponent } from './components/dues/dues.component';
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
 import { EditHomeContactDialogComponent } from './components/edit-home-contact-dialog/edit-home-contact-dialog.component';
 import { ManageDocumentsComponent } from './components/manage-documents/manage-documents.component';
+import { EventsComponent } from './components/events/events.component';
+import { EventDetailComponent } from './components/event-detail/event-detail.component';
+import { ManageEventsComponent } from './components/manage-events/manage-events.component';
+import { EventEditorDialogComponent } from './components/event-editor-dialog/event-editor-dialog.component';
 
 @NgModule({ declarations: [
         AppComponent,
@@ -77,6 +85,7 @@ import { ManageDocumentsComponent } from './components/manage-documents/manage-d
         MyinfoComponent,
         DirectoryComponent,
         ManageComponent,
+        ResidentsComponent,
         UserComponent,
         ManageUsersComponent,
         ManageHomesComponent,
@@ -92,7 +101,11 @@ import { ManageDocumentsComponent } from './components/manage-documents/manage-d
         DuesComponent,
         ConfirmDialogComponent,
         EditHomeContactDialogComponent,
-        ManageDocumentsComponent
+        ManageDocumentsComponent,
+        EventsComponent,
+        EventDetailComponent,
+        ManageEventsComponent,
+        EventEditorDialogComponent
     ],
     bootstrap: [AppComponent], imports: [BrowserModule,
         AppRoutingModule,
@@ -145,11 +158,14 @@ import { ManageDocumentsComponent } from './components/manage-documents/manage-d
         MatTooltipModule,
         MatListModule,
         MatCardModule,
+        MatDividerModule,
         MatTabsModule,
         MatExpansionModule,
         MatDialogModule,
         MatSnackBarModule,
+        MatDatepickerModule,
         DragDropModule], providers: [
+        provideNativeDateAdapter(),
         { provide: dispatcher, useValue: new Subject<Action>() },
         { provide: initialState, useValue: initialStateValue },
         { provide: applicationState, useFactory: applicationStateFactory, deps: [initialState, dispatcher] },

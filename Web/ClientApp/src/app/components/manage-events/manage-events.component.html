@@ -1,0 +1,100 @@
+<div class="manage-events-page">
+  <section class="manage-events-shell">
+    <div class="manage-events-header">
+      <div class="manage-events-header-row">
+        <div>
+          <h1>Events</h1>
+          <p>Create neighborhood events, attach promotional media, and review signups.</p>
+        </div>
+        <button type="button" mat-flat-button color="primary" class="manage-events-create" (click)="openEditor(null)">Create event</button>
+      </div>
+    </div>
+
+    <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="error" role="alert">{{ error }}</div>
+    <div class="cohad-inline-alert cohad-inline-alert--success" *ngIf="success" role="status">{{ success }}</div>
+
+    <div class="loading-state" *ngIf="loading">Loading events...</div>
+
+    <ng-container *ngIf="!loading">
+      <h2 class="list-heading" *ngIf="upcomingEvents.length > 0">Upcoming events</h2>
+      <section class="events-list" *ngIf="upcomingEvents.length > 0">
+        <ng-container *ngFor="let eventItem of upcomingEvents">
+          <ng-container *ngTemplateOutlet="eventManageRow; context: { $implicit: eventItem }"></ng-container>
+        </ng-container>
+      </section>
+
+      <p class="manage-events-no-upcoming" *ngIf="upcomingEvents.length === 0 && pastEvents.length > 0">
+        No upcoming events.
+      </p>
+
+      <h2 class="list-heading list-heading--past" *ngIf="pastEvents.length > 0">Past events</h2>
+      <section class="events-list" *ngIf="pastEvents.length > 0">
+        <ng-container *ngFor="let eventItem of pastEvents">
+          <ng-container *ngTemplateOutlet="eventManageRow; context: { $implicit: eventItem }"></ng-container>
+        </ng-container>
+      </section>
+
+      <div *ngIf="upcomingEvents.length === 0 && pastEvents.length === 0" class="empty-state">
+        No events created yet. Use <strong>Create event</strong> to add one.
+      </div>
+    </ng-container>
+  </section>
+</div>
+
+<ng-template #eventManageRow let-eventItem>
+  <article class="event-row">
+    <div class="event-row-main">
+      <div class="event-row-title-wrap">
+        <h3>{{ eventItem.title }}</h3>
+        <span class="event-row-time">{{ eventItem.startUtc | date:'medium' }}</span>
+      </div>
+      <p class="event-row-description">{{ eventItem.description }}</p>
+      <div class="event-row-meta">
+        <span>{{ eventItem.allowSignups ? 'Signups enabled' : 'No signups' }}</span>
+        <span *ngIf="eventItem.hasPromoMedia">{{ eventItem.promoMediaDisplayName }}</span>
+      </div>
+
+      <div class="event-row-flyer" *ngIf="eventItem.hasPromoMedia">
+        <div class="event-row-flyer-frame">
+          <img [src]="eventItem.promoMediaDownloadUrl" [alt]="eventItem.title" class="event-row-flyer-img">
+        </div>
+      </div>
+    </div>
+
+    <div class="event-row-actions">
+      <button type="button" mat-stroked-button color="primary" class="event-row-action-btn" (click)="openEditor(eventItem)">Edit</button>
+      <button type="button" mat-stroked-button color="warn" class="event-row-action-btn" [disabled]="deletingId === eventItem.id" (click)="deleteEvent(eventItem)">Delete</button>
+    </div>
+
+    <div class="signup-summary-panel" *ngIf="showSignupSection(eventItem)">
+      <div class="signup-summary-head">
+        <div class="signup-summary-title">
+          <strong>Signups</strong>
+          <span class="signup-totals" *ngIf="eventItem.totalSignups > 0">
+            {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}
+            · {{ eventItem.totalAdults }} adults · {{ eventItem.totalChildren }} children
+          </span>
+          <span class="signup-totals" *ngIf="eventItem.totalSignups === 0 && eventItem.allowSignups">0 households · 0 adults · 0 children</span>
+        </div>
+      </div>
+      <p class="signup-closed-note" *ngIf="!eventItem.allowSignups && eventItem.totalSignups > 0">
+        Signups are closed for this event; the list below shows everyone who registered.
+      </p>
+      <div class="signup-empty" *ngIf="eventItem.allowSignups && eventItem.signups.length === 0">No signups yet.</div>
+      <div class="signup-list" *ngIf="eventItem.signups.length > 0">
+        <div class="signup-row" *ngFor="let signup of eventItem.signups">
+          <div class="signup-row-top">
+            <div class="signup-name">{{ signup.userDisplayName || '—' }}</div>
+            <div class="signup-counts">{{ signup.adults }} adults · {{ signup.children }} children</div>
+          </div>
+          <div class="signup-email" *ngIf="signup.userEmail">{{ signup.userEmail }}</div>
+          <div class="signup-when" *ngIf="signup.signedUpUtc">Signed up {{ signup.signedUpUtc | date:'medium' }}</div>
+          <div class="signup-names" *ngIf="signup.adultNames.length > 0 || signup.childNames.length > 0">
+            <span *ngIf="signup.adultNames.length > 0">Named adults: {{ signup.adultNames.join(', ') }}</span>
+            <span *ngIf="signup.childNames.length > 0">Named children: {{ signup.childNames.join(', ') }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+</ng-template>

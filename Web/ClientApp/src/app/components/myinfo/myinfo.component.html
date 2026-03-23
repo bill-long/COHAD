@@ -4,7 +4,7 @@
         <div class="subtitle">View your account details and update home contact information.</div>
     </div>
 
-    <mat-card class="card">
+    <mat-card>
         <mat-card-header>
             <mat-card-title>Account</mat-card-title>
             <mat-card-subtitle>Read-only account details</mat-card-subtitle>
@@ -30,7 +30,7 @@
         <div class="mat-h2">My Home</div>
     </div>
 
-    <mat-card class="card infoCard" *ngIf="apiUser.ownedHomes == null || apiUser.ownedHomes.length < 1">
+    <mat-card class="infoCard" *ngIf="apiUser.ownedHomes == null || apiUser.ownedHomes.length < 1">
         <mat-card-content>
             <div class="emptyStateTitle">No homes are associated with this account.</div>
             <div class="emptyStateBody">You must be assigned permissions before you can see and edit your home information.</div>
@@ -44,7 +44,7 @@
 
 <ng-template #loadingState>
     <div class="page">
-        <mat-card class="card infoCard">
+        <mat-card class="infoCard">
             <mat-card-content>Loading your information…</mat-card-content>
         </mat-card>
     </div>

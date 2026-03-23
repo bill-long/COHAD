@@ -28,6 +28,16 @@
     text-decoration: underline;
 }
 
+.manage-documents-error {
+    padding: 0.55rem 0.65rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--error);
+    background: var(--error-bg);
+    border: 1px solid color-mix(in srgb, var(--error) 28%, transparent);
+}
+
 .list-heading {
     margin: 0 0 0.65rem;
     font-size: 1.1rem;
@@ -39,6 +49,10 @@
     border: 1px solid var(--border-faint);
     border-radius: 10px;
     padding: 0.85rem;
+}
+
+.admin-panel--upload {
+    margin-bottom: 1.5rem;
 }
 
 .admin-panel h2 {
@@ -56,6 +70,10 @@
 
 .hidden-file-input {
     display: none;
+}
+
+.admin-panel--upload .drop-zone {
+    margin-bottom: 0.5rem;
 }
 
 .drop-zone {
@@ -82,6 +100,14 @@
 
 .selected-file {
     font-size: 0.92rem;
+}
+
+.selected-file-row {
+    margin-top: 0.5rem;
+}
+
+.selected-file-clear {
+    margin-left: 0.35rem;
 }
 
 .selected-file-label {
@@ -111,6 +137,14 @@
     font-size: 0.85rem;
     color: var(--text-secondary);
     margin-top: 0.2rem;
+}
+
+.upload-progress-row {
+    margin-top: 0.5rem;
+}
+
+.upload-progress-label-row {
+    margin-top: 0.35rem;
 }
 
 .loading-state,
@@ -197,6 +231,10 @@
 .meta-separator {
     margin: 0 0.4rem;
     color: var(--text-separator);
+}
+
+.document-delete-btn {
+    flex-shrink: 0;
 }
 
 @media (max-width: 760px) {

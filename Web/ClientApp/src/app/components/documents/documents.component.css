@@ -1,5 +1,7 @@
 .documents-page {
     max-width: 900px;
+    padding: 1.5rem 1rem;
+    box-sizing: border-box;
 }
 
 .documents-shell {

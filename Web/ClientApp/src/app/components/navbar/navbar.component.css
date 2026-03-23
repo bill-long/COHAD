@@ -18,7 +18,7 @@ mat-toolbar {
     min-width: 75px;
 }
 
-.badge {
+.toolbar-app-title {
     margin-right: 15px;
 }
 

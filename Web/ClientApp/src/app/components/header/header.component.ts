@@ -10,6 +10,9 @@ import { Component, OnInit, Input } from '@angular/core';
       <h1 class="mat-headline-1 font-weight-bold">{{title}}</h1>
       <h1 class="mat-headline-3" *ngFor="let subtitle of subtitles || []">{{subtitle}}</h1>
     </div>
+    <div class="header-overlay-slot">
+      <ng-content></ng-content>
+    </div>
   </div>
   `,
     standalone: false

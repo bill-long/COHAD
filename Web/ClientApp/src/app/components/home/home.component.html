@@ -1,1 +1,12 @@
-<app-header [title]="title" [subtitles]="subtitles" imagePath="assets/trees1.jpg" [noBottomGap]="true" [fillViewport]="true" imageFetchPriority="high"></app-header>
+<app-header [title]="title" [subtitles]="subtitles" imagePath="assets/trees1.jpg" [noBottomGap]="true" [fillViewport]="true" imageFetchPriority="high">
+  <div class="home-hero-teaser" *ngIf="nextEvent as eventItem">
+    <div class="home-hero-teaser-inner">
+      <div class="home-hero-teaser-text">
+        <div class="home-hero-teaser-label">Upcoming event</div>
+        <h2 class="home-hero-teaser-title">{{ eventItem.title }}</h2>
+        <p class="home-hero-teaser-time">{{ eventItem.startUtc | date:'fullDate' }} · {{ eventItem.startUtc | date:'shortTime' }}</p>
+      </div>
+      <a mat-flat-button color="primary" class="home-hero-teaser-btn" [routerLink]="['/events', eventItem.publicSlug]">View event</a>
+    </div>
+  </div>
+</app-header>
