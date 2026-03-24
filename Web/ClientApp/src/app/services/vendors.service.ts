@@ -58,7 +58,6 @@ export interface VendorDetail extends VendorSummary {
   /** Present for edit/delete eligibility (creator or admin). */
   createdByUniqueId?: string | null;
   address: string | null;
-  notes: string | null;
   reviews: VendorReview[];
   /** All pending flags. Non-null (even if empty) for admins; null for residents. */
   pendingFlags: VendorFlag[] | null;
