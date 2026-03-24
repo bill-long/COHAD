@@ -39,4 +39,13 @@ export class ResidentsComponent {
   get myInfoVisible$(): Observable<boolean> {
     return this.apiUser$.pipe(map(u => u != null));
   }
+
+  get vendorsVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u =>
+      u != null && (u.roles.includes('Resident') || u.roles.includes('Administrator'))));
+  }
+
+  get youthServicesVisible$(): Observable<boolean> {
+    return this.vendorsVisible$;
+  }
 }

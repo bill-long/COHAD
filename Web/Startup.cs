@@ -147,6 +147,9 @@ namespace Web
                 services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
                 services.AddSingleton<IDocumentRepository, MockDocumentRepository>();
                 services.AddSingleton<ICommunityEventRepository, MockCommunityEventRepository>();
+                services.AddSingleton<IVendorRepository, MockVendorRepository>();
+                services.AddSingleton<IVendorReviewRepository, MockVendorReviewRepository>();
+                services.AddSingleton<IYouthServiceListingRepository, MockYouthServiceListingRepository>();
                 services.AddSingleton<IDocumentFileStore, MockDocumentFileStore>();
                 services.AddScoped<IEmailService, NoOpEmailService>();
             }
@@ -174,6 +177,12 @@ namespace Web
                     new CosmosDocumentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
                 services.AddScoped<ICommunityEventRepository>(sp =>
                     new CosmosCommunityEventRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Events")));
+                services.AddScoped<IVendorRepository>(sp =>
+                    new CosmosVendorRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Vendors")));
+                services.AddScoped<IVendorReviewRepository>(sp =>
+                    new CosmosVendorReviewRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "VendorReviews")));
+                services.AddScoped<IYouthServiceListingRepository>(sp =>
+                    new CosmosYouthServiceListingRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "YouthServices")));
                 services.AddSingleton<IDocumentFileStore, AzureBlobDocumentFileStore>();
 
                 services.AddScoped<IEmailService, EmailService>();

@@ -1,0 +1,148 @@
+import { HttpClient } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
+
+export interface VendorSummary {
+  id: string;
+  name: string;
+  categories: string[];
+  isNeighborAffiliated: boolean;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  reviewCount: number;
+}
+
+export interface VendorReview {
+  id: string;
+  reviewText: string;
+  authorDisplayName: string;
+  createdUtc: string;
+  modifiedUtc: string;
+  /** True when modified time is unknown (e.g. admin-imported reviews). */
+  modifiedUtcIsUnknown?: boolean;
+  canEdit: boolean;
+}
+
+export interface VendorDetail extends VendorSummary {
+  address: string | null;
+  notes: string | null;
+  reviews: VendorReview[];
+}
+
+export interface VendorUpsertPayload {
+  id?: string | null;
+  name: string;
+  categories: string[];
+  isNeighborAffiliated: boolean;
+  phone: string;
+  email: string;
+  website: string;
+  address: string;
+  notes: string;
+  initialReviewText?: string;
+}
+
+export interface VendorReviewUpsertPayload {
+  reviewText: string;
+}
+
+export type ContactMethod = 'Call' | 'Text';
+
+export interface YouthServiceListing {
+  id: string;
+  name: string;
+  services: string[];
+  bornYear: number | null;
+  phone: string | null;
+  contactMethod: ContactMethod;
+  email: string | null;
+  address: string | null;
+  parentNote: string | null;
+}
+
+export interface YouthServiceUpsertPayload {
+  id?: string | null;
+  name: string;
+  services: string[];
+  bornYear: number | null;
+  phone: string;
+  contactMethod: ContactMethod;
+  email: string;
+  address: string;
+  parentNote: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class VendorsService {
+  constructor(private readonly httpClient: HttpClient) { }
+
+  getVendors(search?: string, category?: string, neighborOnly?: boolean): Observable<VendorSummary[]> {
+    const params: string[] = [];
+    if (search?.trim()) {
+      params.push(`q=${encodeURIComponent(search.trim())}`);
+    }
+    if (category?.trim()) {
+      params.push(`category=${encodeURIComponent(category.trim())}`);
+    }
+    if (neighborOnly) {
+      params.push('neighborOnly=true');
+    }
+
+    const query = params.length > 0 ? `?${params.join('&')}` : '';
+    return this.httpClient.get<VendorSummary[]>(`api/vendors${query}`);
+  }
+
+  getVendor(id: string): Observable<VendorDetail> {
+    return this.httpClient.get<VendorDetail>(`api/vendors/${id}`);
+  }
+
+  createVendor(payload: VendorUpsertPayload): Observable<VendorDetail> {
+    return this.httpClient.post<VendorDetail>('api/vendors', payload);
+  }
+
+  updateVendor(id: string, payload: VendorUpsertPayload): Observable<VendorDetail> {
+    return this.httpClient.put<VendorDetail>(`api/vendors/${id}`, payload);
+  }
+
+  deleteVendor(id: string): Observable<void> {
+    return this.httpClient.delete<void>(`api/vendors/${id}`);
+  }
+
+  addReview(vendorId: string, payload: VendorReviewUpsertPayload): Observable<VendorReview> {
+    return this.httpClient.post<VendorReview>(`api/vendors/${vendorId}/reviews`, payload);
+  }
+
+  updateReview(vendorId: string, reviewId: string, payload: VendorReviewUpsertPayload): Observable<VendorReview> {
+    return this.httpClient.put<VendorReview>(`api/vendors/${vendorId}/reviews/${reviewId}`, payload);
+  }
+
+  deleteReview(vendorId: string, reviewId: string): Observable<void> {
+    return this.httpClient.delete<void>(`api/vendors/${vendorId}/reviews/${reviewId}`);
+  }
+
+  getYouthServices(search?: string, service?: string): Observable<YouthServiceListing[]> {
+    const params: string[] = [];
+    if (search?.trim()) {
+      params.push(`q=${encodeURIComponent(search.trim())}`);
+    }
+    if (service?.trim()) {
+      params.push(`service=${encodeURIComponent(service.trim())}`);
+    }
+
+    const query = params.length > 0 ? `?${params.join('&')}` : '';
+    return this.httpClient.get<YouthServiceListing[]>(`api/youthservices${query}`);
+  }
+
+  createYouthService(payload: YouthServiceUpsertPayload): Observable<YouthServiceListing> {
+    return this.httpClient.post<YouthServiceListing>('api/youthservices', payload);
+  }
+
+  updateYouthService(id: string, payload: YouthServiceUpsertPayload): Observable<YouthServiceListing> {
+    return this.httpClient.put<YouthServiceListing>(`api/youthservices/${id}`, payload);
+  }
+
+  deleteYouthService(id: string): Observable<void> {
+    return this.httpClient.delete<void>(`api/youthservices/${id}`);
+  }
+}

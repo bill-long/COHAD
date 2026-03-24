@@ -1,0 +1,67 @@
+<h2 mat-dialog-title>Add a Vendor</h2>
+
+<div mat-dialog-content>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <form [formGroup]="form" class="form-grid">
+    <mat-form-field>
+      <mat-label>Name</mat-label>
+      <input matInput formControlName="name" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Categories (comma-separated)</mat-label>
+      <input matInput formControlName="categories" />
+    </mat-form-field>
+
+    <mat-checkbox formControlName="isNeighborAffiliated">Neighbor affiliated</mat-checkbox>
+
+    <mat-form-field>
+      <mat-label>Phone</mat-label>
+      <input
+        matInput
+        type="tel"
+        inputmode="tel"
+        autocomplete="tel"
+        formControlName="phone"
+        mask="(000) 000-0000"
+        [showMaskTyped]="true"
+        [dropSpecialCharacters]="true"
+        placeholder="(555) 555-5555" />
+      <mat-hint>Optional — 10-digit US number</mat-hint>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Email</mat-label>
+      <input matInput formControlName="email" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Website</mat-label>
+      <input matInput formControlName="website" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Address</mat-label>
+      <input matInput formControlName="address" />
+    </mat-form-field>
+
+    <mat-form-field class="span-2">
+      <mat-label>Notes</mat-label>
+      <textarea matInput formControlName="notes"></textarea>
+    </mat-form-field>
+
+    <mat-form-field class="span-2">
+      <mat-label>Initial review (required)</mat-label>
+      <textarea matInput formControlName="initialReviewText"></textarea>
+    </mat-form-field>
+  </form>
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cancel()" [disabled]="saving">Cancel</button>
+  <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="saving">
+    {{ saving ? 'Saving…' : 'Add vendor' }}
+  </button>
+</div>
+

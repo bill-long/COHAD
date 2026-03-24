@@ -1,5 +1,7 @@
 <div class="residents-container">
   <div class="top-nav">
+    <a mat-flat-button class="top-nav-button" color="primary" routerLink="myinfo" routerLinkActive="mat-accent"
+      *ngIf="myInfoVisible$ | async">My Info</a>
     <a mat-flat-button class="top-nav-button" color="primary" routerLink="directory" routerLinkActive="mat-accent"
       *ngIf="directoryVisible$ | async">Directory</a>
     <a mat-flat-button class="top-nav-button" color="primary" routerLink="map" routerLinkActive="mat-accent"
@@ -8,8 +10,10 @@
       *ngIf="documentsVisible$ | async">Documents</a>
     <a mat-flat-button class="top-nav-button" color="primary" routerLink="dues" routerLinkActive="mat-accent"
       *ngIf="duesVisible$ | async">Dues</a>
-    <a mat-flat-button class="top-nav-button" color="primary" routerLink="myinfo" routerLinkActive="mat-accent"
-      *ngIf="myInfoVisible$ | async">My Info</a>
+    <a mat-flat-button class="top-nav-button" color="primary" routerLink="vendors" routerLinkActive="mat-accent"
+      *ngIf="vendorsVisible$ | async">Vendors</a>
+    <a mat-flat-button class="top-nav-button" color="primary" routerLink="youth-services" routerLinkActive="mat-accent"
+      *ngIf="youthServicesVisible$ | async">Babysitters/Tutors</a>
   </div>
 
   <div class="residents-content">
