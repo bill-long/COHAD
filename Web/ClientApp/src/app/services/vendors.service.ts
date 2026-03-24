@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { ApiUser } from '../models';
 
 export interface VendorSummary {
   id: string;
@@ -11,6 +12,7 @@ export interface VendorSummary {
   email: string | null;
   website: string | null;
   reviewCount: number;
+  lastReviewModifiedUtc: string | null;
 }
 
 export interface VendorReview {
@@ -89,6 +91,8 @@ export interface YouthServiceListing {
   email: string | null;
   address: string | null;
   parentNote: string | null;
+  ownerUniqueId?: string | null;
+  canEdit?: boolean;
 }
 
 export interface YouthServiceUpsertPayload {
@@ -195,12 +199,20 @@ export class VendorsService {
     return this.httpClient.get<YouthServiceListing[]>(`api/youthservices${query}`);
   }
 
+  getUsers(): Observable<ApiUser[]> {
+    return this.httpClient.get<ApiUser[]>('api/user');
+  }
+
   createYouthService(payload: YouthServiceUpsertPayload): Observable<YouthServiceListing> {
     return this.httpClient.post<YouthServiceListing>('api/youthservices', payload);
   }
 
   updateYouthService(id: string, payload: YouthServiceUpsertPayload): Observable<YouthServiceListing> {
     return this.httpClient.put<YouthServiceListing>(`api/youthservices/${id}`, payload);
+  }
+
+  reassignYouthServiceOwner(id: string, ownerUniqueId: string): Observable<YouthServiceListing> {
+    return this.httpClient.put<YouthServiceListing>(`api/youthservices/${id}/owner`, { ownerUniqueId });
   }
 
   deleteYouthService(id: string): Observable<void> {

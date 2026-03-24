@@ -69,10 +69,19 @@ namespace Web.Controllers
 
             var filtered = query.OrderBy(v => v.Name).ToList();
             var reviewCounts = await _vendorReviewRepository.GetReviewCountsByVendorAsync();
+            var latestReviewModifiedUtc = new Dictionary<Guid, DateTime?>();
+            foreach (var vendor in filtered)
+            {
+                var reviewsForVendor = await _vendorReviewRepository.GetByVendorIdAsync(vendor.Id);
+                latestReviewModifiedUtc[vendor.Id] = reviewsForVendor.Count == 0
+                    ? null
+                    : reviewsForVendor.Max(r => r.ModifiedUtc);
+            }
             var summaries = filtered
                 .Select(v => VendorSummary.FromStorageModel(
                     v,
-                    reviewCounts.TryGetValue(v.Id, out var c) ? c : 0))
+                    reviewCounts.TryGetValue(v.Id, out var c) ? c : 0,
+                    latestReviewModifiedUtc.TryGetValue(v.Id, out var latest) ? latest : null))
                 .ToList();
 
             return Ok(summaries);

@@ -34,6 +34,12 @@ namespace Web.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] string q = null, [FromQuery] string service = null)
         {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
             var all = await _youthServiceListingRepository.GetAllAsync();
             var query = all.AsEnumerable();
             if (!string.IsNullOrWhiteSpace(q))
@@ -52,7 +58,7 @@ namespace Web.Controllers
 
             var payload = query
                 .OrderBy(l => l.Name)
-                .Select(YouthServiceListingPresentation.FromStorageModel)
+                .Select(l => YouthServiceListingPresentation.FromStorageModel(l, CanEdit(apiUser, l.CreatedByUniqueId)))
                 .ToList();
             return Ok(payload);
         }
@@ -60,13 +66,19 @@ namespace Web.Controllers
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById(Guid id)
         {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
             var listing = await _youthServiceListingRepository.GetByIdAsync(id);
             if (listing == null)
             {
                 return NotFound();
             }
 
-            return Ok(YouthServiceListingPresentation.FromStorageModel(listing));
+            return Ok(YouthServiceListingPresentation.FromStorageModel(listing, CanEdit(apiUser, listing.CreatedByUniqueId)));
         }
 
         [HttpPost]
@@ -108,7 +120,7 @@ namespace Web.Controllers
 
             var saved = await _youthServiceListingRepository.UpsertAsync(listing);
             await WriteAudit(apiUser, saved.Id.ToString("D"), saved.Name, "Created youth service listing.");
-            return Ok(YouthServiceListingPresentation.FromStorageModel(saved));
+            return Ok(YouthServiceListingPresentation.FromStorageModel(saved, CanEdit(apiUser, saved.CreatedByUniqueId)));
         }
 
         [HttpPut("{id:guid}")]
@@ -154,7 +166,7 @@ namespace Web.Controllers
 
             var saved = await _youthServiceListingRepository.UpsertAsync(stored);
             await WriteAudit(apiUser, saved.Id.ToString("D"), saved.Name, "Updated youth service listing.");
-            return Ok(YouthServiceListingPresentation.FromStorageModel(saved));
+            return Ok(YouthServiceListingPresentation.FromStorageModel(saved, CanEdit(apiUser, saved.CreatedByUniqueId)));
         }
 
         [HttpDelete("{id:guid}")]
@@ -180,6 +192,43 @@ namespace Web.Controllers
             await _youthServiceListingRepository.DeleteAsync(id);
             await WriteAudit(apiUser, id.ToString("D"), stored.Name, "Deleted youth service listing.");
             return Ok();
+        }
+
+        [HttpPut("{id:guid}/owner")]
+        [Authorize(Policy = "Administrator")]
+        public async Task<IActionResult> ReassignOwner(Guid id, [FromBody] YouthServiceOwnerUpdateRequest request)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
+            var stored = await _youthServiceListingRepository.GetByIdAsync(id);
+            if (stored == null)
+            {
+                return NotFound();
+            }
+
+            var requestedOwnerUniqueId = request?.OwnerUniqueId?.Trim();
+            if (string.IsNullOrWhiteSpace(requestedOwnerUniqueId))
+            {
+                return BadRequest("OwnerUniqueId is required.");
+            }
+
+            var newOwner = await _userRepository.GetByUniqueIdAsync(requestedOwnerUniqueId);
+            if (newOwner == null)
+            {
+                return BadRequest("Specified owner does not exist.");
+            }
+
+            stored.CreatedByUniqueId = newOwner.UniqueId;
+            stored.ModifiedByUniqueId = apiUser.UniqueId;
+            stored.ModifiedUtc = DateTime.UtcNow;
+
+            var saved = await _youthServiceListingRepository.UpsertAsync(stored);
+            await WriteAudit(apiUser, saved.Id.ToString("D"), saved.Name, "Reassigned youth service listing owner.");
+            return Ok(YouthServiceListingPresentation.FromStorageModel(saved, CanEdit(apiUser, saved.CreatedByUniqueId)));
         }
 
         private static bool CanEdit(User user, string creatorUniqueId)

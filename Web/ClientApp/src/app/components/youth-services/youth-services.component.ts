@@ -86,6 +86,29 @@ export class YouthServicesComponent implements OnInit {
     });
   }
 
+  openEditListing(listing: YouthServiceListing): void {
+    if (listing.canEdit === false) {
+      return;
+    }
+
+    const ref = this.dialog.open(YouthServiceEditorDialogComponent, {
+      data: { listing } as YouthServiceEditorDialogData,
+      width: '720px',
+      maxWidth: 'calc(100vw - 32px)',
+      maxHeight: '90vh'
+    });
+
+    ref.afterClosed().subscribe(updated => {
+      if (!updated) {
+        return;
+      }
+
+      this.snackBar.open('Listing updated.', undefined, { duration: 4000 });
+      this.load();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
   serviceClass(service: string): string {
     const normalized = (service ?? '').toLowerCase().trim();
     let hash = 0;

@@ -31,6 +31,9 @@
 
 .card-grid mat-card {
   padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .card-grid mat-card-title {
@@ -48,6 +51,12 @@
 
 .card-grid mat-card-content {
   padding: 0 4px;
+  flex: 1 1 auto;
+}
+
+.card-grid mat-card-actions {
+  margin-top: auto;
+  padding: 8px 4px 0;
 }
 
 .service-chip {

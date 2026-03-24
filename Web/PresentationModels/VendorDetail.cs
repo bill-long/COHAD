@@ -23,7 +23,10 @@ namespace Web.PresentationModels
             var safeReviews = reviews ?? new List<VendorReview>();
             var safeFlags = flags ?? new List<VendorFlag>();
             var reviewCount = safeReviews.Count;
-            var summary = FromStorageModel(vendor, reviewCount);
+            var latestReviewModifiedUtc = safeReviews.Count > 0
+                ? safeReviews.Max(r => r.ModifiedUtc)
+                : (System.DateTime?)null;
+            var summary = FromStorageModel(vendor, reviewCount, latestReviewModifiedUtc);
 
             List<VendorFlagPresentation> pendingFlags = null;
             VendorFlagPresentation myFlag = null;
@@ -59,6 +62,7 @@ namespace Web.PresentationModels
                 Email = summary.Email,
                 Website = summary.Website,
                 ReviewCount = summary.ReviewCount,
+                LastReviewModifiedUtc = summary.LastReviewModifiedUtc,
                 Address = vendor.Address,
                 Notes = vendor.Notes,
                 Reviews = safeReviews

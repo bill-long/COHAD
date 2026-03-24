@@ -3,6 +3,7 @@ import { FormBuilder } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { map } from 'rxjs/operators';
 import { VendorSummary, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
 import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-editor-dialog/vendor-editor-dialog.component';
 
@@ -22,7 +23,8 @@ export class VendorsComponent implements OnInit {
   readonly filterForm = this.formBuilder.group({
     search: [''],
     category: [''],
-    neighborOnly: [false]
+    neighborOnly: [false],
+    sortBy: ['recent']
   });
 
   constructor(
@@ -62,8 +64,9 @@ export class VendorsComponent implements OnInit {
     const search = (value.search ?? '').trim().toLowerCase();
     const category = (value.category ?? '').trim();
     const neighborOnly = value.neighborOnly ?? false;
+    const sortBy = (value.sortBy ?? 'recent').toLowerCase();
 
-    this.vendors = this.allVendors.filter(vendor => {
+    const filtered = this.allVendors.filter(vendor => {
       if (neighborOnly && !vendor.isNeighborAffiliated) {
         return false;
       }
@@ -83,6 +86,21 @@ export class VendorsComponent implements OnInit {
         vendor.phone ?? ''
       ].join(' ').toLowerCase();
       return haystack.includes(search);
+    });
+
+    this.vendors = filtered.sort((a, b) => {
+      if (sortBy === 'name') {
+        return (a.name ?? '').localeCompare(b.name ?? '');
+      }
+
+      const aParsed = a.lastReviewModifiedUtc ? Date.parse(a.lastReviewModifiedUtc) : Number.NEGATIVE_INFINITY;
+      const bParsed = b.lastReviewModifiedUtc ? Date.parse(b.lastReviewModifiedUtc) : Number.NEGATIVE_INFINITY;
+      const aTs = Number.isFinite(aParsed) ? aParsed : Number.NEGATIVE_INFINITY;
+      const bTs = Number.isFinite(bParsed) ? bParsed : Number.NEGATIVE_INFINITY;
+      if (aTs === bTs) {
+        return (a.name ?? '').localeCompare(b.name ?? '');
+      }
+      return bTs - aTs;
     });
   }
 

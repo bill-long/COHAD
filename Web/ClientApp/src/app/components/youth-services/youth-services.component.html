@@ -47,6 +47,11 @@
         <div *ngIf="item.address">{{ item.address }}</div>
         <div *ngIf="item.parentNote">{{ item.parentNote }}</div>
       </mat-card-content>
+      <mat-card-actions align="end" *ngIf="item.canEdit !== false">
+        <button mat-stroked-button color="primary" type="button" (click)="openEditListing(item)">
+          Edit
+        </button>
+      </mat-card-actions>
     </mat-card>
   </div>
 </div>

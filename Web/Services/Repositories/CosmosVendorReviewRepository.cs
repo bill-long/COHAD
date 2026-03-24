@@ -17,6 +17,7 @@ namespace Web.Services.Repositories
         Task<VendorReview> UpsertAsync(VendorReview review);
         Task DeleteAsync(Guid vendorId, Guid reviewId);
         Task<IReadOnlyDictionary<Guid, int>> GetReviewCountsByVendorAsync();
+        Task<IReadOnlyDictionary<Guid, DateTime>> GetLatestReviewModifiedUtcByVendorAsync();
     }
 
     public class CosmosVendorReviewRepository : IVendorReviewRepository
@@ -117,6 +118,34 @@ namespace Web.Services.Repositories
             }
 
             return counts;
+        }
+
+        public async Task<IReadOnlyDictionary<Guid, DateTime>> GetLatestReviewModifiedUtcByVendorAsync()
+        {
+            var query = new CosmosQueryDefinition(
+                "SELECT c.VendorId, MAX(c.ModifiedUtc) AS latestModifiedUtc FROM c GROUP BY c.VendorId");
+            var iterator = _vendorReviewsContainer.GetItemQueryIterator<JObject>(query);
+            var latestByVendor = new Dictionary<Guid, DateTime>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                foreach (var row in response)
+                {
+                    var vendorRaw = row.Value<string>("VendorId");
+                    if (!Guid.TryParse(vendorRaw, out var vendorId))
+                    {
+                        continue;
+                    }
+
+                    var latest = row["latestModifiedUtc"]?.ToObject<DateTime?>();
+                    if (latest.HasValue)
+                    {
+                        latestByVendor[vendorId] = latest.Value;
+                    }
+                }
+            }
+
+            return latestByVendor;
         }
 
         private static string ToDocumentId(Guid id) => $"VendorReview|{id:D}";

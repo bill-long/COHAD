@@ -20,6 +20,14 @@
       </mat-select>
     </mat-form-field>
 
+    <mat-form-field>
+      <mat-label>Sort</mat-label>
+      <mat-select formControlName="sortBy">
+        <mat-option value="recent">Recently Reviewed</mat-option>
+        <mat-option value="name">Name</mat-option>
+      </mat-select>
+    </mat-form-field>
+
     <mat-checkbox formControlName="neighborOnly">Neighbor affiliated only</mat-checkbox>
   </form>
 

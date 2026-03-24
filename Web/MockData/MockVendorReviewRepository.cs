@@ -75,6 +75,17 @@ namespace Web.MockData
             }
         }
 
+        public Task<IReadOnlyDictionary<Guid, DateTime>> GetLatestReviewModifiedUtcByVendorAsync()
+        {
+            lock (_reviews)
+            {
+                var latest = _reviews.Values
+                    .GroupBy(r => r.VendorId)
+                    .ToDictionary(g => g.Key, g => g.Max(r => r.ModifiedUtc));
+                return Task.FromResult<IReadOnlyDictionary<Guid, DateTime>>(latest);
+            }
+        }
+
         private static VendorReview Clone(VendorReview review)
         {
             if (review == null)

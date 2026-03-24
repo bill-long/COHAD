@@ -222,13 +222,13 @@
 }
 
 .review-card mat-card-content {
-  padding: 0 4px;
+  padding: 0 16px;
   white-space: pre-wrap;
   line-height: 1.4;
 }
 
 .review-form-inline {
-  padding: 0 4px;
+  padding: 0 16px;
 }
 
 .review-form-inline textarea {
@@ -238,7 +238,7 @@
 .review-actions {
   display: flex;
   gap: 8px;
-  padding: 6px 4px 0;
+  padding: 6px 16px 0;
   align-items: center;
 }
 

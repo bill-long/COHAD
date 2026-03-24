@@ -22,7 +22,9 @@ namespace Web.PresentationModels
 
         public int ReviewCount { get; set; }
 
-        public static VendorSummary FromStorageModel(Vendor vendor, int reviewCount)
+        public DateTime? LastReviewModifiedUtc { get; set; }
+
+        public static VendorSummary FromStorageModel(Vendor vendor, int reviewCount, DateTime? lastReviewModifiedUtc)
         {
             return new VendorSummary
             {
@@ -33,7 +35,8 @@ namespace Web.PresentationModels
                 Phone = vendor.Phone,
                 Email = vendor.Email,
                 Website = vendor.Website,
-                ReviewCount = reviewCount
+                ReviewCount = reviewCount,
+                LastReviewModifiedUtc = lastReviewModifiedUtc
             };
         }
     }

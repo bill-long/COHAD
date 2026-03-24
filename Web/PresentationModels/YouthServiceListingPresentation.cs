@@ -24,7 +24,11 @@ namespace Web.PresentationModels
 
         public string ParentNote { get; set; }
 
-        public static YouthServiceListingPresentation FromStorageModel(YouthServiceListing listing)
+        public string OwnerUniqueId { get; set; }
+
+        public bool CanEdit { get; set; }
+
+        public static YouthServiceListingPresentation FromStorageModel(YouthServiceListing listing, bool canEdit = false)
         {
             return new YouthServiceListingPresentation
             {
@@ -36,7 +40,9 @@ namespace Web.PresentationModels
                 ContactMethod = listing.ContactMethod.ToString(),
                 Email = listing.Email,
                 Address = listing.Address,
-                ParentNote = listing.ParentNote
+                ParentNote = listing.ParentNote,
+                OwnerUniqueId = listing.CreatedByUniqueId,
+                CanEdit = canEdit
             };
         }
     }
