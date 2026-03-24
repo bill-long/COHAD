@@ -13,6 +13,19 @@ export class AuthService {
 
   private authSessionResolvedDispatched = false;
   private static readonly postLoginRedirectKey = 'auth.postLoginRedirect';
+  private static readonly defaultPostLoginPath = '/residents';
+
+  /** App-internal path only: must start with `/` and not `//` (blocks protocol-relative and open redirects). */
+  private sanitizePostLoginRedirect(redirectTo: string | undefined): string {
+    const t = (redirectTo ?? '').trim();
+    if (!t) {
+      return AuthService.defaultPostLoginPath;
+    }
+    if (!t.startsWith('/') || t.startsWith('//')) {
+      return AuthService.defaultPostLoginPath;
+    }
+    return t;
+  }
 
   constructor(
     private oauthService: OAuthService,
@@ -159,7 +172,7 @@ export class AuthService {
   }
 
   private markPostLoginRedirect(redirectTo?: string): void {
-    const target = (redirectTo ?? '').trim() || '/residents';
+    const target = this.sanitizePostLoginRedirect(redirectTo);
     try {
       sessionStorage.setItem(AuthService.postLoginRedirectKey, target);
     } catch {
@@ -183,7 +196,7 @@ export class AuthService {
     }
 
     if (redirectTo) {
-      this.router.navigateByUrl(redirectTo);
+      this.router.navigateByUrl(this.sanitizePostLoginRedirect(redirectTo));
     }
   }
 }

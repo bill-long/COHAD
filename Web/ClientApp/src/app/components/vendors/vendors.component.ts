@@ -3,7 +3,6 @@ import { FormBuilder } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { map } from 'rxjs/operators';
 import { VendorSummary, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
 import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-editor-dialog/vendor-editor-dialog.component';
 

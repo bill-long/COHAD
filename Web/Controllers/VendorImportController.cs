@@ -226,6 +226,7 @@ namespace Web.Controllers
                     ? PreferredContactMethod.Call
                     : PreferredContactMethod.Text;
 
+                var now = DateTime.UtcNow;
                 await _youthServiceListingRepository.UpsertAsync(new YouthServiceListing
                 {
                     Id = Guid.NewGuid(),
@@ -239,8 +240,8 @@ namespace Web.Controllers
                     ParentNote = row.ParentNote?.Trim(),
                     CreatedByUniqueId = apiUser.UniqueId,
                     ModifiedByUniqueId = apiUser.UniqueId,
-                    CreatedUtc = DateTime.UtcNow,
-                    ModifiedUtc = DateTime.UtcNow
+                    CreatedUtc = now,
+                    ModifiedUtc = now
                 });
                 importedYouthServices++;
             }
