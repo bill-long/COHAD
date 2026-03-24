@@ -3,7 +3,7 @@ import { FormBuilder } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { VendorSummary, VendorsService } from 'src/app/services/vendors.service';
+import { VendorSummary, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
 import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-editor-dialog/vendor-editor-dialog.component';
 
 @Component({
@@ -32,17 +32,6 @@ export class VendorsComponent implements OnInit {
     private readonly snackBar: MatSnackBar,
     private readonly router: Router
   ) { }
-
-  private readonly categoryChipClasses = [
-    'chip-blue',
-    'chip-green',
-    'chip-amber',
-    'chip-purple',
-    'chip-rose',
-    'chip-cyan',
-    'chip-teal',
-    'chip-slate'
-  ];
 
   ngOnInit(): void {
     this.filterForm.valueChanges.subscribe(() => this.applyFilters());
@@ -97,16 +86,7 @@ export class VendorsComponent implements OnInit {
     });
   }
 
-  categoryClass(category: string): string {
-    const normalized = (category ?? '').toLowerCase().trim();
-    let hash = 0;
-    for (let i = 0; i < normalized.length; i++) {
-      hash = ((hash << 5) - hash) + normalized.charCodeAt(i);
-      hash |= 0;
-    }
-    const idx = Math.abs(hash) % this.categoryChipClasses.length;
-    return this.categoryChipClasses[idx];
-  }
+  categoryClass = vendorCategoryClass;
 
   openAddVendor(): void {
     const presetCategory = (this.filterForm.controls.category.value ?? '').trim();

@@ -73,14 +73,14 @@ namespace Web.Controllers
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var apiUser = await GetApiUserAsync();
-            if (apiUser == null)
+            var vendor = await _vendorRepository.GetByIdAsync(id);
+            if (vendor == null)
             {
                 return NotFound();
             }
 
-var vendor = await _vendorRepository.GetByIdAsync(id);
-            if (vendor == null)
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
             {
                 return NotFound();
             }
@@ -102,7 +102,7 @@ var vendor = await _vendorRepository.GetByIdAsync(id);
                 return NotFound();
             }
 
-if (request == null || string.IsNullOrWhiteSpace(request.Name))
+            if (request == null || string.IsNullOrWhiteSpace(request.Name))
             {
                 return BadRequest("Vendor name is required.");
             }
@@ -163,7 +163,7 @@ if (request == null || string.IsNullOrWhiteSpace(request.Name))
                 return NotFound();
             }
 
-var stored = await _vendorRepository.GetByIdAsync(id);
+            var stored = await _vendorRepository.GetByIdAsync(id);
             if (stored == null)
             {
                 return NotFound();
@@ -205,7 +205,7 @@ var stored = await _vendorRepository.GetByIdAsync(id);
                 return NotFound();
             }
 
-var stored = await _vendorRepository.GetByIdAsync(id);
+            var stored = await _vendorRepository.GetByIdAsync(id);
             if (stored == null)
             {
                 return NotFound();
@@ -236,7 +236,7 @@ var stored = await _vendorRepository.GetByIdAsync(id);
                 return NotFound();
             }
 
-var vendor = await _vendorRepository.GetByIdAsync(id);
+            var vendor = await _vendorRepository.GetByIdAsync(id);
             if (vendor == null)
             {
                 return NotFound();
@@ -262,7 +262,7 @@ var vendor = await _vendorRepository.GetByIdAsync(id);
                 return NotFound();
             }
 
-var vendor = await _vendorRepository.GetByIdAsync(id);
+            var vendor = await _vendorRepository.GetByIdAsync(id);
             if (vendor == null)
             {
                 return NotFound();
@@ -299,7 +299,7 @@ var vendor = await _vendorRepository.GetByIdAsync(id);
                 return NotFound();
             }
 
-var existing = await _vendorReviewRepository.GetByIdAsync(vendorId, reviewId);
+            var existing = await _vendorReviewRepository.GetByIdAsync(vendorId, reviewId);
             if (existing == null)
             {
                 return NotFound();
@@ -331,7 +331,7 @@ var existing = await _vendorReviewRepository.GetByIdAsync(vendorId, reviewId);
                 return NotFound();
             }
 
-var existing = await _vendorReviewRepository.GetByIdAsync(vendorId, reviewId);
+            var existing = await _vendorReviewRepository.GetByIdAsync(vendorId, reviewId);
             if (existing == null)
             {
                 return NotFound();

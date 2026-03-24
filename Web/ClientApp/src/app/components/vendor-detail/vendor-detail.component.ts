@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { FormBuilder } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
-import { VendorDetail, VendorReview, VendorsService } from 'src/app/services/vendors.service';
+import { VendorDetail, VendorReview, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 
 @Component({
@@ -17,17 +17,6 @@ export class VendorDetailComponent implements OnInit {
   error: string | null = null;
   vendor: VendorDetail | null = null;
   editingReviewId: string | null = null;
-
-  private readonly categoryChipClasses = [
-    'chip-blue',
-    'chip-green',
-    'chip-amber',
-    'chip-purple',
-    'chip-rose',
-    'chip-cyan',
-    'chip-teal',
-    'chip-slate'
-  ];
 
   readonly reviewForm = this.formBuilder.group({
     reviewText: ['']
@@ -55,16 +44,7 @@ export class VendorDetailComponent implements OnInit {
     this.load(id);
   }
 
-  categoryClass(category: string): string {
-    const normalized = (category ?? '').toLowerCase().trim();
-    let hash = 0;
-    for (let i = 0; i < normalized.length; i++) {
-      hash = ((hash << 5) - hash) + normalized.charCodeAt(i);
-      hash |= 0;
-    }
-    const idx = Math.abs(hash) % this.categoryChipClasses.length;
-    return this.categoryChipClasses[idx];
-  }
+  categoryClass = vendorCategoryClass;
 
   /** Safe href for vendor website (adds https:// when missing). */
   websiteUrl(raw: string | null | undefined): string {

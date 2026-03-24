@@ -78,7 +78,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-if (request == null || string.IsNullOrWhiteSpace(request.Name))
+            if (request == null || string.IsNullOrWhiteSpace(request.Name))
             {
                 return BadRequest("Name is required.");
             }
@@ -120,7 +120,7 @@ if (request == null || string.IsNullOrWhiteSpace(request.Name))
                 return NotFound();
             }
 
-var stored = await _youthServiceListingRepository.GetByIdAsync(id);
+            var stored = await _youthServiceListingRepository.GetByIdAsync(id);
             if (stored == null)
             {
                 return NotFound();
@@ -166,7 +166,7 @@ var stored = await _youthServiceListingRepository.GetByIdAsync(id);
                 return NotFound();
             }
 
-var stored = await _youthServiceListingRepository.GetByIdAsync(id);
+            var stored = await _youthServiceListingRepository.GetByIdAsync(id);
             if (stored == null)
             {
                 return NotFound();

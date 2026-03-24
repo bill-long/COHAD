@@ -73,6 +73,21 @@ export interface YouthServiceUpsertPayload {
   parentNote: string;
 }
 
+const categoryChipClasses = [
+  'chip-blue', 'chip-green', 'chip-amber', 'chip-purple',
+  'chip-rose', 'chip-cyan', 'chip-teal', 'chip-slate'
+];
+
+export function vendorCategoryClass(category: string): string {
+  const normalized = (category ?? '').toLowerCase().trim();
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    hash = ((hash << 5) - hash) + normalized.charCodeAt(i);
+    hash |= 0;
+  }
+  return categoryChipClasses[Math.abs(hash) % categoryChipClasses.length];
+}
+
 @Injectable({ providedIn: 'root' })
 export class VendorsService {
   constructor(private readonly httpClient: HttpClient) { }
