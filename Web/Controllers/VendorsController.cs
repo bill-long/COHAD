@@ -273,15 +273,15 @@ namespace Web.Controllers
             }
 
             var reviews = await _vendorReviewRepository.GetByVendorIdAsync(id);
-            foreach (var review in reviews)
+            if (reviews.Count > 0)
             {
-                await _vendorReviewRepository.DeleteAsync(id, review.Id);
+                await Task.WhenAll(reviews.Select(r => _vendorReviewRepository.DeleteAsync(id, r.Id)));
             }
 
             var vendorFlags = await _vendorFlagRepository.GetByVendorIdAsync(id);
-            foreach (var flag in vendorFlags)
+            if (vendorFlags.Count > 0)
             {
-                await _vendorFlagRepository.DeleteAsync(id, flag.Id);
+                await Task.WhenAll(vendorFlags.Select(f => _vendorFlagRepository.DeleteAsync(id, f.Id)));
             }
             await _vendorFlagNotificationsHub.Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
                 .SendAsync("VendorDeleted", new { vendorId = id.ToString("D") });

@@ -14,6 +14,7 @@ export class VendorFlagNotificationsService {
   private readonly unreadIds = new Set<string>();
   private readonly unreadCountSubject = new BehaviorSubject<number>(0);
   private connection: HubConnection | null = null;
+  private hubConnectionStarting = false;
 
   readonly notifications$ = this.notificationsSubject.asObservable();
   readonly unreadCount$ = this.unreadCountSubject.asObservable();
@@ -84,7 +85,7 @@ export class VendorFlagNotificationsService {
   }
 
   private ensureConnection(): void {
-    if (this.connection) {
+    if (this.connection || this.hubConnectionStarting) {
       return;
     }
 
@@ -110,11 +111,18 @@ export class VendorFlagNotificationsService {
       this.removeNotificationsForVendor(payload.vendorId);
     });
 
-    connection.start().catch(() => {
-      // Keep a quiet failure path so navbar stays functional if realtime transport is unavailable.
-    });
-
-    this.connection = connection;
+    this.hubConnectionStarting = true;
+    connection
+      .start()
+      .then(() => {
+        this.connection = connection;
+      })
+      .catch(() => {
+        // Quiet failure; connection stays null so a later admin session can retry.
+      })
+      .finally(() => {
+        this.hubConnectionStarting = false;
+      });
   }
 
   private dedupeNotifications(items: VendorFlagNotification[]): VendorFlagNotification[] {
@@ -141,6 +149,8 @@ export class VendorFlagNotificationsService {
     this.notificationsSubject.next([]);
     this.unreadIds.clear();
     this.syncUnreadCount();
+
+    this.hubConnectionStarting = false;
 
     if (!this.connection) {
       return;

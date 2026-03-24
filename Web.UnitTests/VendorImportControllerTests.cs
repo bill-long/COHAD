@@ -233,6 +233,52 @@ public sealed class VendorImportControllerTests
     }
 
     [Fact]
+    public async Task ImportVendorsAndReviews_skips_youth_when_born_year_out_of_range()
+    {
+        var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        var vendorRepo = new Mock<IVendorRepository>(MockBehavior.Strict);
+        var reviewRepo = new Mock<IVendorReviewRepository>(MockBehavior.Strict);
+        var youthRepo = new Mock<IYouthServiceListingRepository>(MockBehavior.Strict);
+        var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+
+        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(new User
+            {
+                UniqueId = "idpuser-1",
+                GivenName = "Admin",
+                Surname = "User",
+                Roles = new List<User.Role> { User.Role.Administrator }
+            });
+
+        vendorRepo.Setup(r => r.UpsertAsync(It.IsAny<Vendor>()))
+            .ReturnsAsync((Vendor v) => v);
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
+            .Returns(Task.CompletedTask);
+
+        var controller = BuildController(userRepo.Object, vendorRepo.Object, reviewRepo.Object, youthRepo.Object, auditRepo.Object);
+        var result = await controller.ImportVendorsAndReviews(new VendorSeedImportRequest
+        {
+            Vendors = new List<VendorSeedImportVendor>
+            {
+                new() { Fingerprint = "only-v", Name = "Vendor Only" }
+            },
+            YouthServices = new List<VendorSeedImportYouthService>
+            {
+                new()
+                {
+                    Name = "Bad year",
+                    Services = new List<string> { "Sit" },
+                    BornYear = 1800,
+                    ContactMethod = 1
+                }
+            }
+        });
+
+        Assert.IsType<OkObjectResult>(result);
+        youthRepo.Verify(r => r.UpsertAsync(It.IsAny<YouthServiceListing>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ImportVendorsAndReviews_skips_duplicate_vendor_fingerprints()
     {
         var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);

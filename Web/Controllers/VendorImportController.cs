@@ -216,6 +216,12 @@ namespace Web.Controllers
                     continue;
                 }
 
+                if (row.BornYear != null && (row.BornYear < 1900 || row.BornYear > DateTime.UtcNow.Year))
+                {
+                    skippedYouthServices++;
+                    continue;
+                }
+
                 var contactMethod = row.ContactMethod == 0
                     ? PreferredContactMethod.Call
                     : PreferredContactMethod.Text;
