@@ -459,17 +459,13 @@ namespace Web.Controllers
         }
 
         [HttpDelete("{id:guid}/flags/{flagId:guid}")]
+        [Authorize(Policy = "Administrator")]
         public async Task<IActionResult> DismissFlag(Guid id, Guid flagId)
         {
             var apiUser = await GetApiUserAsync();
             if (apiUser == null)
             {
                 return NotFound();
-            }
-
-            if (apiUser.Roles?.Contains(Models.User.Role.Administrator) != true)
-            {
-                return Forbid();
             }
 
             var flag = await _vendorFlagRepository.GetByIdAsync(id, flagId);

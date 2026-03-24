@@ -67,9 +67,10 @@ export class VendorFlagNotificationsService {
   private initializeForAdmin(): void {
     this.vendorsService.getPendingFlagNotifications().subscribe({
       next: notifications => {
-        this.notificationsSubject.next(this.sortNotifications(this.dedupeNotifications(notifications)));
+        const dedupedSorted = this.sortNotifications(this.dedupeNotifications(notifications));
+        this.notificationsSubject.next(dedupedSorted);
         this.unreadIds.clear();
-        notifications.forEach(n => this.unreadIds.add(n.flagId));
+        dedupedSorted.forEach(n => this.unreadIds.add(n.flagId));
         this.syncUnreadCount();
       },
       error: () => {
@@ -119,7 +120,12 @@ export class VendorFlagNotificationsService {
   private dedupeNotifications(items: VendorFlagNotification[]): VendorFlagNotification[] {
     const byFlagId = new Map<string, VendorFlagNotification>();
     items.forEach(item => {
-      byFlagId.set(item.flagId, item);
+      const prev = byFlagId.get(item.flagId);
+      const nextTs = Date.parse(item.createdUtc);
+      const prevTs = prev ? Date.parse(prev.createdUtc) : Number.NEGATIVE_INFINITY;
+      if (!prev || (Number.isFinite(nextTs) && (!Number.isFinite(prevTs) || nextTs >= prevTs))) {
+        byFlagId.set(item.flagId, item);
+      }
     });
 
     return [...byFlagId.values()];

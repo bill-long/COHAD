@@ -143,10 +143,9 @@ namespace Web
                     .RequireClaim("http://schemas.microsoft.com/identity/claims/scope", "API")
                     .Build();
 
-                // Role hierarchy: every Administrator is also assigned the Resident role.
-                // This is enforced at assignment time in UserController.UpdateUserAssociations.
-                // Controllers using [Authorize(Policy = "Resident")] therefore implicitly permit Administrators.
-                // Do not add a separate "Resident OR Administrator" check — it is unnecessary.
+                // Role hierarchy: new Administrators are also assigned Resident in UserController.UpdateUserAssociations.
+                // RoleAuthorizationHandler additionally treats Administrator as satisfying the Resident policy so legacy
+                // admin-only accounts still pass Resident-gated APIs. Do not add redundant OR checks on controllers.
                 options.AddPolicy("Resident", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Resident)));
                 options.AddPolicy("Administrator", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Administrator)));
                 options.AddPolicy("WelcomeCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.WelcomeCommittee)));

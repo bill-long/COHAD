@@ -270,3 +270,6 @@ __pycache__/
 # Vendor import (Tools/VendorImport): local spreadsheets and generated seed JSON — do not commit vendor data
 vendor-import-output/
 *.xlsx
+
+# Claude Code — machine-local settings
+.claude/settings.local.json

@@ -103,6 +103,28 @@ public sealed class RoleAuthorizationHandlerTests
     }
 
     [Fact]
+    public async Task Succeeds_for_Resident_requirement_when_user_has_Administrator_only()
+    {
+        var uniqueId = "google.comu1";
+        var mockRepo = new Mock<IUserRepository>();
+        mockRepo.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role> { User.Role.Administrator }
+        });
+        var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
+        var requirement = new RoleAuthorizationRequirement(User.Role.Resident);
+        var context = new AuthorizationHandlerContext(
+            new IAuthorizationRequirement[] { requirement },
+            Principal("u1", "google.com"),
+            resource: null);
+
+        await ((IAuthorizationHandler)handler).HandleAsync(context);
+
+        Assert.True(context.HasSucceeded);
+    }
+
+    [Fact]
     public async Task Succeeds_when_user_has_required_role()
     {
         var uniqueId = "google.comu1";

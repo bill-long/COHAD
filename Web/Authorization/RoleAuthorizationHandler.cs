@@ -37,13 +37,27 @@ namespace Web.Authorization
                 return;
             }
 
-            if (storedUser.Roles == null || !storedUser.Roles.Contains(requirement.RequiredRole))
+            if (storedUser.Roles == null)
             {
-                _logger.LogWarning("Authorization failed: user {UniqueId} does not have required role {Role}.", uniqueId, requirement.RequiredRole);
+                _logger.LogWarning("Authorization failed for requirement {Role}: user {UniqueId} has null roles.", requirement.RequiredRole, uniqueId);
                 return;
             }
 
-            context.Succeed(requirement);
+            if (storedUser.Roles.Contains(requirement.RequiredRole))
+            {
+                context.Succeed(requirement);
+                return;
+            }
+
+            // Legacy accounts may have Administrator without Resident; Resident-gated endpoints should still allow them.
+            if (requirement.RequiredRole == Models.User.Role.Resident &&
+                storedUser.Roles.Contains(Models.User.Role.Administrator))
+            {
+                context.Succeed(requirement);
+                return;
+            }
+
+            _logger.LogWarning("Authorization failed: user {UniqueId} does not have required role {Role}.", uniqueId, requirement.RequiredRole);
         }
     }
 }

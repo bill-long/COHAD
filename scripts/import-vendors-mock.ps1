@@ -80,7 +80,7 @@ $payload = @{
     youthServices = $youth
 } | ConvertTo-Json -Depth 8
 
-$tmp = Join-Path $env:TEMP "cohad-seed-import-all.json"
+$tmp = Join-Path $env:TEMP ("cohad-seed-import-all-" + [Guid]::NewGuid().ToString("n") + ".json")
 Set-Content -Path $tmp -Value $payload -Encoding UTF8
 
 try {
