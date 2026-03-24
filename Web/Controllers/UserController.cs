@@ -113,6 +113,13 @@ namespace Web.Controllers
                 return BadRequest("One or more specified homes do not exist.");
             }
 
+            // Enforce role hierarchy: every Administrator also receives Resident.
+            if (requestedRoles.Contains(Models.User.Role.Administrator) &&
+                !requestedRoles.Contains(Models.User.Role.Resident))
+            {
+                requestedRoles.Add(Models.User.Role.Resident);
+            }
+
             userToModify.Roles = requestedRoles;
             userToModify.OwnedHomeIds = requestedHomeIds;
 

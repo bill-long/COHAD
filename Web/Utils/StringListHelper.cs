@@ -11,7 +11,7 @@ namespace Web.Utils
             .Where(v => !string.IsNullOrWhiteSpace(v))
             .Select(v => v.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(v => v)
+            .OrderBy(v => v, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 }

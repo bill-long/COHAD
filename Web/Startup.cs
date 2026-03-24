@@ -125,6 +125,7 @@ namespace Web
                     .Build();
 
                 // Role hierarchy: every Administrator is also assigned the Resident role.
+                // This is enforced at assignment time in UserController.UpdateAssociations.
                 // Controllers using [Authorize(Policy = "Resident")] therefore implicitly permit Administrators.
                 // Do not add a separate "Resident OR Administrator" check — it is unnecessary.
                 options.AddPolicy("Resident", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Resident)));
