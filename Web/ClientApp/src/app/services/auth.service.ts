@@ -4,7 +4,7 @@ import { Observable, Subject } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
 import { IdentityClaims } from '../models';
-import { ApplicationState, dispatcher, Action, applicationState, AuthenticatedUserChanged, AuthSessionResolved, Login, Logout } from '../state';
+import { ApplicationState, dispatcher, Action, applicationState, AuthenticatedUserChanged, AuthSessionResolved, Login, MockLogin, Logout } from '../state';
 import { MockAuthTokenService } from './mock-auth-token.service';
 
 @Injectable({ providedIn: 'root' })
@@ -62,8 +62,8 @@ export class AuthService {
 
     this.dispatcher.subscribe(a => {
       if (environment.useMockAuth) {
-        if (a instanceof Login) {
-          this.initMockAuth();
+        if (a instanceof MockLogin) {
+          this.initMockAuth(a.userId);
         } else if (a instanceof Logout) {
           this.mockTokens.setToken(null);
           this.dispatcher.next(new AuthenticatedUserChanged(null));
@@ -87,7 +87,8 @@ export class AuthService {
         this.markAuthSessionResolvedOnce();
       });
     } else {
-      this.initMockAuth();
+      // In mock mode, don't auto-login — wait for the user to select a mock user.
+      this.markAuthSessionResolvedOnce();
     }
   }
 
@@ -99,18 +100,17 @@ export class AuthService {
     this.dispatcher.next(new AuthSessionResolved());
   }
 
-  private initMockAuth(): void {
-    this.http.get<{ accessToken: string }>('api/dev/mock-auth').subscribe({
+  private readonly mockUserClaims: Record<string, Omit<IdentityClaims, 'idp'>> = {
+    'user-1': { sub: 'user-1', given_name: 'Mock', family_name: 'Resident', emails: ['mock@cohad.local'], streetAddress: '123 Mock Lane' },
+    'user-2': { sub: 'user-2', given_name: 'Taylor', family_name: 'Neighbor', emails: ['taylor@cohad.local'], streetAddress: '456 Test Court' },
+  };
+
+  private initMockAuth(userId: string): void {
+    this.http.get<{ accessToken: string }>(`api/dev/mock-auth?userId=${encodeURIComponent(userId)}`).subscribe({
       next: (r) => {
         this.mockTokens.setToken(r.accessToken);
-        const identityClaims: IdentityClaims = {
-          sub: 'user-1',
-          given_name: 'Mock',
-          family_name: 'Resident',
-          emails: ['mock@cohad.local'],
-          idp: 'https://cohad.mock/',
-          streetAddress: '123 Mock Lane'
-        };
+        const claims = this.mockUserClaims[userId] ?? this.mockUserClaims['user-1'];
+        const identityClaims: IdentityClaims = { ...claims, idp: 'https://cohad.mock/' };
         this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken: r.accessToken }));
         this.markAuthSessionResolvedOnce();
       },

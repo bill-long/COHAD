@@ -47,6 +47,8 @@ export class LoadUserCompleted { constructor(public user: ApiUser | null) { } }
 
 export class Login { }
 
+export class MockLogin { constructor(public userId: string) { } }
+
 export class Logout { }
 
 export class AuthSessionResolved { }
@@ -62,6 +64,7 @@ export type Action =
     LoadUser |
     LoadUserCompleted |
     Login |
+    MockLogin |
     Logout |
     AuthSessionResolved;
 
@@ -159,6 +162,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
                     authSessionResolved: state.authSessionResolved
                 };
             } else if (action instanceof Login) {
+                newState = state;
+            } else if (action instanceof MockLogin) {
                 newState = state;
             } else if (action instanceof Logout) {
                 newState = state;
