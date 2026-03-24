@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { FormBuilder } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
-import { VendorDetail, VendorReview, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
+import { VendorDetail, VendorFlag, VendorReview, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 
 @Component({
@@ -17,6 +17,8 @@ export class VendorDetailComponent implements OnInit {
   error: string | null = null;
   vendor: VendorDetail | null = null;
   editingReviewId: string | null = null;
+  submittingFlag = false;
+  flagError: string | null = null;
 
   readonly reviewForm = this.formBuilder.group({
     reviewText: ['']
@@ -26,7 +28,12 @@ export class VendorDetailComponent implements OnInit {
     reviewText: ['']
   });
 
+  readonly flagForm = this.formBuilder.group({
+    flagNote: ['']
+  });
+
   private static readonly minNewReviewLength = 10;
+  private static readonly minFlagNoteLength = 10;
 
   constructor(
     private readonly route: ActivatedRoute,
@@ -62,6 +69,21 @@ export class VendorDetailComponent implements OnInit {
   get canSubmitNewReview(): boolean {
     const t = (this.reviewForm.controls.reviewText.value ?? '').trim();
     return t.length >= VendorDetailComponent.minNewReviewLength;
+  }
+
+  /** True for admins (API sets pendingFlags to a non-null array for admins, null for residents). */
+  get isAdmin(): boolean {
+    return this.vendor?.pendingFlags !== null && this.vendor?.pendingFlags !== undefined;
+  }
+
+  /** True when this resident already has a pending (unresolved) flag on this vendor. */
+  get hasPendingFlag(): boolean {
+    return this.vendor?.myFlag?.status === 'Pending';
+  }
+
+  /** True when the flag note field meets the minimum length requirement. */
+  get canSubmitFlag(): boolean {
+    return (this.flagForm.controls.flagNote.value ?? '').trim().length >= VendorDetailComponent.minFlagNoteLength;
   }
 
   /** Imported / legacy reviews may have unknown modified time (API flag or year 0001). */
@@ -188,6 +210,66 @@ export class VendorDetailComponent implements OnInit {
         },
         error: () => {
           this.error = 'Unable to delete review.';
+          this.saving = false;
+        }
+      });
+    });
+  }
+
+  submitFlag(): void {
+    if (!this.vendor || this.hasPendingFlag) {
+      return;
+    }
+
+    const flagNote = (this.flagForm.controls.flagNote.value ?? '').trim();
+    if (flagNote.length < VendorDetailComponent.minFlagNoteLength) {
+      return;
+    }
+
+    this.submittingFlag = true;
+    this.flagError = null;
+    this.vendorsService.submitFlag(this.vendor.id, { flagNote }).subscribe({
+      next: () => {
+        this.flagForm.reset({ flagNote: '' });
+        this.submittingFlag = false;
+        this.load(this.vendor!.id);
+      },
+      error: () => {
+        this.flagError = 'Unable to submit report. Please try again.';
+        this.submittingFlag = false;
+      }
+    });
+  }
+
+  dismissFlag(flag: VendorFlag): void {
+    if (!this.vendor) {
+      return;
+    }
+
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Dismiss report?',
+        body: 'This will mark the report as resolved. The resident will see that it has been addressed.',
+        confirmText: 'Dismiss',
+        cancelText: 'Cancel',
+        confirmColor: 'warn'
+      }
+    });
+
+    ref.afterClosed().subscribe(confirmed => {
+      if (confirmed !== true) {
+        return;
+      }
+
+      this.saving = true;
+      this.error = null;
+      this.vendorsService.dismissFlag(this.vendor!.id, flag.id).subscribe({
+        next: () => {
+          this.saving = false;
+          this.load(this.vendor!.id);
+        },
+        error: () => {
+          this.error = 'Unable to dismiss report.';
           this.saving = false;
         }
       });

@@ -19,17 +19,20 @@ namespace Web.Controllers
     {
         private readonly IVendorRepository _vendorRepository;
         private readonly IVendorReviewRepository _vendorReviewRepository;
+        private readonly IVendorFlagRepository _vendorFlagRepository;
         private readonly IUserRepository _userRepository;
         private readonly IAuditLogRepository _auditLogRepository;
 
         public VendorsController(
             IVendorRepository vendorRepository,
             IVendorReviewRepository vendorReviewRepository,
+            IVendorFlagRepository vendorFlagRepository,
             IUserRepository userRepository,
             IAuditLogRepository auditLogRepository)
         {
             _vendorRepository = vendorRepository;
             _vendorReviewRepository = vendorReviewRepository;
+            _vendorFlagRepository = vendorFlagRepository;
             _userRepository = userRepository;
             _auditLogRepository = auditLogRepository;
         }
@@ -85,12 +88,10 @@ namespace Web.Controllers
                 return NotFound();
             }
 
+            var isAdmin = apiUser.Roles?.Contains(Models.User.Role.Administrator) == true;
             var reviews = await _vendorReviewRepository.GetByVendorIdAsync(vendor.Id);
-            return Ok(VendorDetail.FromStorageModel(
-                vendor,
-                reviews,
-                apiUser.UniqueId,
-                apiUser.Roles?.Contains(Models.User.Role.Administrator) == true));
+            var flags = await _vendorFlagRepository.GetByVendorIdAsync(vendor.Id);
+            return Ok(VendorDetail.FromStorageModel(vendor, reviews, flags, apiUser.UniqueId, isAdmin));
         }
 
         [HttpPost]
@@ -151,7 +152,7 @@ namespace Web.Controllers
                 throw;
             }
             await WriteAudit(apiUser, saved.Id.ToString("D"), saved.Name, "Created vendor.");
-            return Ok(VendorDetail.FromStorageModel(saved, new List<VendorReview> { initialReview }, apiUser.UniqueId, apiUser.Roles?.Contains(Models.User.Role.Administrator) == true));
+            return Ok(VendorDetail.FromStorageModel(saved, new List<VendorReview> { initialReview }, new List<VendorFlag>(), apiUser.UniqueId, apiUser.Roles?.Contains(Models.User.Role.Administrator) == true));
         }
 
         [HttpPut("{id:guid}")]
@@ -192,8 +193,9 @@ namespace Web.Controllers
 
             var saved = await _vendorRepository.UpsertAsync(stored);
             var reviews = await _vendorReviewRepository.GetByVendorIdAsync(saved.Id);
+            var flags = await _vendorFlagRepository.GetByVendorIdAsync(saved.Id);
             await WriteAudit(apiUser, saved.Id.ToString("D"), saved.Name, "Updated vendor.");
-            return Ok(VendorDetail.FromStorageModel(saved, reviews, apiUser.UniqueId, apiUser.Roles?.Contains(Models.User.Role.Administrator) == true));
+            return Ok(VendorDetail.FromStorageModel(saved, reviews, flags, apiUser.UniqueId, apiUser.Roles?.Contains(Models.User.Role.Administrator) == true));
         }
 
         [HttpDelete("{id:guid}")]
@@ -220,6 +222,12 @@ namespace Web.Controllers
             foreach (var review in reviews)
             {
                 await _vendorReviewRepository.DeleteAsync(id, review.Id);
+            }
+
+            var vendorFlags = await _vendorFlagRepository.GetByVendorIdAsync(id);
+            foreach (var flag in vendorFlags)
+            {
+                await _vendorFlagRepository.DeleteAsync(id, flag.Id);
             }
 
             await _vendorRepository.DeleteAsync(id);
@@ -344,6 +352,79 @@ namespace Web.Controllers
 
             await _vendorReviewRepository.DeleteAsync(vendorId, reviewId);
             await WriteAudit(apiUser, vendorId.ToString("D"), "Vendor review", "Deleted vendor review.");
+            return Ok();
+        }
+
+        [HttpPost("{id:guid}/flags")]
+        public async Task<IActionResult> CreateFlag(Guid id, [FromBody] VendorFlagRequest request)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
+            var vendor = await _vendorRepository.GetByIdAsync(id);
+            if (vendor == null)
+            {
+                return NotFound();
+            }
+
+            if (string.IsNullOrWhiteSpace(request?.FlagNote))
+            {
+                return BadRequest("Flag note is required.");
+            }
+
+            var existing = await _vendorFlagRepository.GetPendingByAuthorAsync(id, apiUser.UniqueId);
+            if (existing != null)
+            {
+                return Conflict("You already have a pending report for this vendor.");
+            }
+
+            var now = DateTime.UtcNow;
+            var flag = new VendorFlag
+            {
+                Id = Guid.NewGuid(),
+                VendorId = id,
+                AuthorUniqueId = apiUser.UniqueId,
+                AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                FlagNote = request.FlagNote.Trim(),
+                Status = "Pending",
+                CreatedUtc = now,
+                ResolvedUtc = DateTime.MinValue
+            };
+
+            var saved = await _vendorFlagRepository.UpsertAsync(flag);
+            await WriteAudit(apiUser, id.ToString("D"), vendor.Name, "Flagged vendor.");
+            return Ok(VendorFlagPresentation.FromStorageModel(saved, includeAuthor: false));
+        }
+
+        [HttpDelete("{id:guid}/flags/{flagId:guid}")]
+        public async Task<IActionResult> DismissFlag(Guid id, Guid flagId)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
+            if (apiUser.Roles?.Contains(Models.User.Role.Administrator) != true)
+            {
+                return Forbid();
+            }
+
+            var flag = await _vendorFlagRepository.GetByIdAsync(id, flagId);
+            if (flag == null)
+            {
+                return NotFound();
+            }
+
+            var vendor = await _vendorRepository.GetByIdAsync(id);
+
+            flag.Status = "Resolved";
+            flag.ResolvedUtc = DateTime.UtcNow;
+            await _vendorFlagRepository.UpsertAsync(flag);
+            await WriteAudit(apiUser, id.ToString("D"), vendor?.Name ?? id.ToString("D"), "Dismissed vendor flag.");
             return Ok();
         }
 

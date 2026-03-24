@@ -129,5 +129,59 @@
         Submit Review
       </button>
     </form>
+
+    <!-- Resident: report outdated info -->
+    <ng-container *ngIf="!isAdmin">
+      <h3 class="section-heading">Report an Issue</h3>
+
+      <mat-card *ngIf="v.myFlag" class="flag-status-card">
+        <mat-card-content>
+          <p><strong>Your report:</strong> "{{ v.myFlag.flagNote }}"</p>
+          <p *ngIf="v.myFlag.status === 'Pending'" class="flag-status-pending">
+            Pending review by an administrator.
+          </p>
+          <p *ngIf="v.myFlag.status === 'Resolved'" class="flag-status-resolved">
+            This report has been resolved. You may submit a new report if needed.
+          </p>
+        </mat-card-content>
+      </mat-card>
+
+      <form *ngIf="!hasPendingFlag" [formGroup]="flagForm" (ngSubmit)="submitFlag()" class="flag-form">
+        <mat-form-field>
+          <mat-label>Describe the issue (e.g. phone changed, no longer in business)</mat-label>
+          <textarea matInput formControlName="flagNote"></textarea>
+        </mat-form-field>
+        <div *ngIf="flagError" class="error">{{ flagError }}</div>
+        <button
+          mat-stroked-button
+          color="warn"
+          type="submit"
+          [disabled]="submittingFlag || !canSubmitFlag">
+          Report Issue
+        </button>
+      </form>
+    </ng-container>
+
+    <!-- Admin: pending flags panel -->
+    <ng-container *ngIf="isAdmin && (v.pendingFlags?.length ?? 0) > 0">
+      <h3 class="section-heading">Pending Reports</h3>
+      <mat-card *ngFor="let flag of v.pendingFlags" class="flag-card">
+        <mat-card-title>{{ flag.authorDisplayName }}</mat-card-title>
+        <mat-card-content>
+          <p>{{ flag.flagNote }}</p>
+          <p class="flag-meta">Submitted {{ flag.createdUtc | date:'mediumDate' }}</p>
+        </mat-card-content>
+        <div class="flag-actions">
+          <button
+            mat-stroked-button
+            color="warn"
+            type="button"
+            [disabled]="saving"
+            (click)="dismissFlag(flag)">
+            Dismiss
+          </button>
+        </div>
+      </mat-card>
+    </ng-container>
   </ng-container>
 </div>

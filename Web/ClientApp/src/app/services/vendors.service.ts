@@ -24,10 +24,25 @@ export interface VendorReview {
   canEdit: boolean;
 }
 
+export interface VendorFlag {
+  id: string;
+  flagNote: string;
+  status: 'Pending' | 'Resolved';
+  /** Populated for admin responses only. */
+  authorDisplayName: string | null;
+  /** Populated for admin responses only. */
+  authorUniqueId: string | null;
+  createdUtc: string;
+}
+
 export interface VendorDetail extends VendorSummary {
   address: string | null;
   notes: string | null;
   reviews: VendorReview[];
+  /** All pending flags. Non-null (even if empty) for admins; null for residents. */
+  pendingFlags: VendorFlag[] | null;
+  /** The current resident's most recent flag (any status), or null. Always null for admins. */
+  myFlag: VendorFlag | null;
 }
 
 export interface VendorUpsertPayload {
@@ -134,6 +149,14 @@ export class VendorsService {
 
   deleteReview(vendorId: string, reviewId: string): Observable<void> {
     return this.httpClient.delete<void>(`api/vendors/${vendorId}/reviews/${reviewId}`);
+  }
+
+  submitFlag(vendorId: string, payload: { flagNote: string }): Observable<VendorFlag> {
+    return this.httpClient.post<VendorFlag>(`api/vendors/${vendorId}/flags`, payload);
+  }
+
+  dismissFlag(vendorId: string, flagId: string): Observable<void> {
+    return this.httpClient.delete<void>(`api/vendors/${vendorId}/flags/${flagId}`);
   }
 
   getYouthServices(search?: string, service?: string): Observable<YouthServiceListing[]> {
