@@ -8,6 +8,7 @@ using Web.Models;
 using Web.PresentationModels;
 using Web.Services.Repositories;
 using Web.UpdateModels;
+using Web.Utils;
 
 namespace Web.Controllers
 {
@@ -78,7 +79,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var vendor = await _vendorRepository.GetByIdAsync(id);
+var vendor = await _vendorRepository.GetByIdAsync(id);
             if (vendor == null)
             {
                 return NotFound();
@@ -101,7 +102,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            if (request == null || string.IsNullOrWhiteSpace(request.Name))
+if (request == null || string.IsNullOrWhiteSpace(request.Name))
             {
                 return BadRequest("Vendor name is required.");
             }
@@ -116,7 +117,7 @@ namespace Web.Controllers
             {
                 Id = Guid.NewGuid(),
                 Name = request.Name.Trim(),
-                Categories = NormalizeStringList(request.Categories),
+                Categories = StringListHelper.NormalizeStringList(request.Categories),
                 IsNeighborAffiliated = request.IsNeighborAffiliated,
                 Phone = request.Phone?.Trim(),
                 Email = request.Email?.Trim(),
@@ -162,7 +163,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var stored = await _vendorRepository.GetByIdAsync(id);
+var stored = await _vendorRepository.GetByIdAsync(id);
             if (stored == null)
             {
                 return NotFound();
@@ -179,7 +180,7 @@ namespace Web.Controllers
             }
 
             stored.Name = request.Name.Trim();
-            stored.Categories = NormalizeStringList(request.Categories);
+            stored.Categories = StringListHelper.NormalizeStringList(request.Categories);
             stored.IsNeighborAffiliated = request.IsNeighborAffiliated;
             stored.Phone = request.Phone?.Trim();
             stored.Email = request.Email?.Trim();
@@ -204,7 +205,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var stored = await _vendorRepository.GetByIdAsync(id);
+var stored = await _vendorRepository.GetByIdAsync(id);
             if (stored == null)
             {
                 return NotFound();
@@ -235,7 +236,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var vendor = await _vendorRepository.GetByIdAsync(id);
+var vendor = await _vendorRepository.GetByIdAsync(id);
             if (vendor == null)
             {
                 return NotFound();
@@ -261,7 +262,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var vendor = await _vendorRepository.GetByIdAsync(id);
+var vendor = await _vendorRepository.GetByIdAsync(id);
             if (vendor == null)
             {
                 return NotFound();
@@ -298,7 +299,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var existing = await _vendorReviewRepository.GetByIdAsync(vendorId, reviewId);
+var existing = await _vendorReviewRepository.GetByIdAsync(vendorId, reviewId);
             if (existing == null)
             {
                 return NotFound();
@@ -330,7 +331,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var existing = await _vendorReviewRepository.GetByIdAsync(vendorId, reviewId);
+var existing = await _vendorReviewRepository.GetByIdAsync(vendorId, reviewId);
             if (existing == null)
             {
                 return NotFound();
@@ -345,14 +346,6 @@ namespace Web.Controllers
             await WriteAudit(apiUser, vendorId.ToString("D"), "Vendor review", "Deleted vendor review.");
             return Ok();
         }
-
-        private static List<string> NormalizeStringList(IEnumerable<string> values) =>
-            (values ?? Enumerable.Empty<string>())
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Select(v => v.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(v => v)
-            .ToList();
 
         private static bool CanEdit(User user, string creatorUniqueId)
         {

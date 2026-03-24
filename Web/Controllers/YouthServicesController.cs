@@ -8,6 +8,7 @@ using Web.Models;
 using Web.PresentationModels;
 using Web.Services.Repositories;
 using Web.UpdateModels;
+using Web.Utils;
 
 namespace Web.Controllers
 {
@@ -77,7 +78,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            if (request == null || string.IsNullOrWhiteSpace(request.Name))
+if (request == null || string.IsNullOrWhiteSpace(request.Name))
             {
                 return BadRequest("Name is required.");
             }
@@ -92,7 +93,7 @@ namespace Web.Controllers
             {
                 Id = Guid.NewGuid(),
                 Name = request.Name.Trim(),
-                Services = NormalizeStringList(request.Services),
+                Services = StringListHelper.NormalizeStringList(request.Services),
                 BornYear = request.BornYear,
                 Phone = request.Phone?.Trim(),
                 ContactMethod = request.ContactMethod,
@@ -119,7 +120,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var stored = await _youthServiceListingRepository.GetByIdAsync(id);
+var stored = await _youthServiceListingRepository.GetByIdAsync(id);
             if (stored == null)
             {
                 return NotFound();
@@ -141,7 +142,7 @@ namespace Web.Controllers
             }
 
             stored.Name = request.Name.Trim();
-            stored.Services = NormalizeStringList(request.Services);
+            stored.Services = StringListHelper.NormalizeStringList(request.Services);
             stored.BornYear = request.BornYear;
             stored.Phone = request.Phone?.Trim();
             stored.ContactMethod = request.ContactMethod;
@@ -165,7 +166,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var stored = await _youthServiceListingRepository.GetByIdAsync(id);
+var stored = await _youthServiceListingRepository.GetByIdAsync(id);
             if (stored == null)
             {
                 return NotFound();
@@ -180,14 +181,6 @@ namespace Web.Controllers
             await WriteAudit(apiUser, id.ToString("D"), stored.Name, "Deleted youth service listing.");
             return Ok();
         }
-
-        private static List<string> NormalizeStringList(IEnumerable<string> values) =>
-            (values ?? Enumerable.Empty<string>())
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Select(v => v.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(v => v)
-            .ToList();
 
         private static bool CanEdit(User user, string creatorUniqueId)
         {

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Web.Models;
 using Web.Services.Repositories;
 using Web.UpdateModels;
+using Web.Utils;
 
 namespace Web.Controllers
 {
@@ -145,7 +146,7 @@ namespace Web.Controllers
                 {
                     Id = Guid.NewGuid(),
                     Name = row.Name.Trim(),
-                    Categories = NormalizeStringList(row.Categories),
+                    Categories = StringListHelper.NormalizeStringList(row.Categories),
                     IsNeighborAffiliated = row.IsNeighborAffiliated,
                     Phone = row.Phone?.Trim(),
                     Email = row.Email?.Trim(),
@@ -207,7 +208,7 @@ namespace Web.Controllers
                 {
                     Id = Guid.NewGuid(),
                     Name = row.Name.Trim(),
-                    Services = NormalizeStringList(row.Services),
+                    Services = StringListHelper.NormalizeStringList(row.Services),
                     BornYear = row.BornYear,
                     Phone = row.Phone?.Trim(),
                     ContactMethod = contactMethod,
@@ -250,12 +251,5 @@ namespace Web.Controllers
             return await _userRepository.GetByUniqueIdAsync(uniqueId);
         }
 
-        private static List<string> NormalizeStringList(IEnumerable<string> values) =>
-            (values ?? Enumerable.Empty<string>())
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Select(v => v.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(v => v)
-            .ToList();
     }
 }

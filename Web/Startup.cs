@@ -124,6 +124,9 @@ namespace Web
                     .RequireClaim("http://schemas.microsoft.com/identity/claims/scope", "API")
                     .Build();
 
+                // Role hierarchy: every Administrator is also assigned the Resident role.
+                // Controllers using [Authorize(Policy = "Resident")] therefore implicitly permit Administrators.
+                // Do not add a separate "Resident OR Administrator" check — it is unnecessary.
                 options.AddPolicy("Resident", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Resident)));
                 options.AddPolicy("Administrator", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Administrator)));
                 options.AddPolicy("WelcomeCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.WelcomeCommittee)));

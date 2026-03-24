@@ -53,6 +53,7 @@ Or use `scripts/run-mock-data.sh`. Open http://127.0.0.1:5000. The mock user is 
 
 - **Repository pattern:** All data access goes through interfaces in `Services/Repositories/`. Production implementations use Cosmos DB; `MockData` environment swaps in in-memory implementations. This is the key abstraction for testability and local development.
 - **Auth:** JWT Bearer — Azure AD B2C in production (`cohadorgb2c.b2clogin.com`), HS256 mock tokens in `MockData` environment (via `GET /api/dev/mock-auth`, loopback only). Role-based authorization uses custom `RoleAuthorizationHandler` + policies (Resident, Administrator, WelcomeCommittee, GardenClub, Board, SocialCommittee, SunshineCommittee).
+- **Role hierarchy:** Every Administrator is also assigned the Resident role. Controllers using `[Authorize(Policy = "Resident")]` therefore implicitly permit Administrators — do not add a redundant "Resident OR Administrator" check.
 - **Startup:** `Startup.cs` wires auth, DI, and SPA proxy. `MockData` environment is selected solely by `ASPNETCORE_ENVIRONMENT=MockData` — there is no separate feature flag.
 - **Open Graph:** `EventsController` serves `/events/{segment}` server-side (when `dist/cohad-app/index.html` exists) to inject OG meta tags for link previews.
 
