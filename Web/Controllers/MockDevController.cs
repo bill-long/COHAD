@@ -18,7 +18,7 @@ namespace Web.Controllers
 
         [HttpGet("mock-auth")]
         [AllowAnonymous]
-        public IActionResult GetMockToken([FromServices] IWebHostEnvironment env, [FromServices] IConfiguration config)
+        public IActionResult GetMockToken([FromServices] IWebHostEnvironment env, [FromServices] IConfiguration config, [FromQuery] string userId = null)
         {
             if (!env.IsEnvironment("MockData"))
             {
@@ -40,7 +40,7 @@ namespace Web.Controllers
                 return StatusCode(500, ex.Message);
             }
 
-            var token = MockJwtIssuer.CreateAccessToken(signingKey, MockTokenLifetime);
+            var token = MockJwtIssuer.CreateAccessToken(signingKey, MockTokenLifetime, userId);
             return Ok(new { accessToken = token, expiresIn = (int)MockTokenLifetime.TotalSeconds });
         }
 

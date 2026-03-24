@@ -3,10 +3,11 @@ import { Observable, Observer, of } from 'rxjs';
 import { map, catchError, shareReplay } from 'rxjs/operators';
 import { EventsService } from 'src/app/services/events.service';
 import { Router, NavigationStart, ActivatedRoute, UrlSegment, NavigationEnd } from '@angular/router';
-import { applicationState, ApplicationState, dispatcher, Action, Login, Logout } from 'src/app/state';
+import { applicationState, ApplicationState, dispatcher, Action, Login, MockLogin, Logout } from 'src/app/state';
 import { ApiUser, AuthUser } from 'src/app/models';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { ThemeService } from 'src/app/services/theme.service';
+import { environment } from 'src/environments/environment';
 
 @Component({
     selector: 'app-navbar',
@@ -19,6 +20,11 @@ export class NavbarComponent implements OnInit {
   disabled = false;
   isNavbarCollapsed = true;
   isHidden: boolean = false;
+  readonly useMockAuth = environment.useMockAuth;
+  readonly mockUsers = [
+    { id: 'user-1', label: 'Mock Resident (Admin)' },
+    { id: 'user-2', label: 'Taylor Neighbor' },
+  ];
 
   /** True when `GET api/events` returns at least one upcoming event (hides nav link if empty or on error). */
   readonly showEventsNav$: Observable<boolean>;
@@ -52,11 +58,16 @@ export class NavbarComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.authUser$.subscribe(() => { this.disabled = false; });
   }
 
   login() {
     this.disabled = true;
     this.dispatcher.next(new Login());
+  }
+
+  loginAs(userId: string) {
+    this.dispatcher.next(new MockLogin(userId));
   }
 
   logout() {

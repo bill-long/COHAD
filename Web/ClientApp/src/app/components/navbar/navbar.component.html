@@ -14,7 +14,13 @@
         <button mat-menu-item (click)="toggleTheme()">{{ (isDarkTheme$ | async) ? 'Use light mode' : 'Use dark mode' }}</button>
         <button mat-menu-item (click)="logout()" [disabled]="disabled">Sign Out</button>
       </mat-menu>
-      <button mat-button *ngIf="!vm.authUser?.identityClaims?.emails" (click)="login()" [disabled]="disabled">Sign In</button>
+      <ng-container *ngIf="!vm.authUser?.identityClaims?.emails">
+        <button mat-button *ngIf="!useMockAuth" (click)="login()" [disabled]="disabled">Sign In</button>
+        <button mat-button *ngIf="useMockAuth" [matMenuTriggerFor]="mockLoginMenu" [disabled]="disabled">Sign In As...</button>
+        <mat-menu #mockLoginMenu="matMenu">
+          <button mat-menu-item *ngFor="let u of mockUsers" (click)="loginAs(u.id)">{{u.label}}</button>
+        </mat-menu>
+      </ng-container>
     </div>
   </div>
   <div class="nav-mobile">
@@ -26,7 +32,13 @@
       <a *ngIf="showEventsNav$ | async" mat-menu-item color="primary" routerLink="events" routerLinkActive="mat-accent">Events</a>
       <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
       <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
-      <button mat-button *ngIf="!vm.authUser?.identityClaims?.emails" (click)="login()" [disabled]="disabled">Sign In</button>
+      <ng-container *ngIf="!vm.authUser?.identityClaims?.emails">
+        <button mat-menu-item *ngIf="!useMockAuth" (click)="login()" [disabled]="disabled">Sign In</button>
+        <button mat-menu-item *ngIf="useMockAuth" [matMenuTriggerFor]="mockLoginMenuMobile" [disabled]="disabled">Sign In As...</button>
+        <mat-menu #mockLoginMenuMobile="matMenu">
+          <button mat-menu-item *ngFor="let u of mockUsers" (click)="loginAs(u.id)">{{u.label}}</button>
+        </mat-menu>
+      </ng-container>
       <button mat-menu-item color="primary" *ngIf="vm.authUser?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
     </mat-menu>
   </div>
