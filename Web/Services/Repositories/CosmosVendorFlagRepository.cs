@@ -18,6 +18,8 @@ namespace Web.Services.Repositories
         Task<List<VendorFlag>> GetAllPendingAsync();
         Task<VendorFlag> UpsertAsync(VendorFlag flag);
         Task DeleteAsync(Guid vendorId, Guid flagId);
+        /// <summary>Deletes by id without an extra read. Use only when ids came from <see cref="GetByVendorIdAsync"/> for <paramref name="vendorId"/> (e.g. vendor cascade delete).</summary>
+        Task DeleteByVendorCascadeAsync(Guid vendorId, Guid flagId);
     }
 
     public class CosmosVendorFlagRepository : IVendorFlagRepository
@@ -116,6 +118,19 @@ namespace Web.Services.Repositories
                 return;
             }
 
+            try
+            {
+                await _vendorFlagsContainer.DeleteItemAsync<JObject>(ToDocumentId(flagId), CosmosPartitionKey.None);
+            }
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // idempotent
+            }
+        }
+
+        public async Task DeleteByVendorCascadeAsync(Guid vendorId, Guid flagId)
+        {
+            _ = vendorId;
             try
             {
                 await _vendorFlagsContainer.DeleteItemAsync<JObject>(ToDocumentId(flagId), CosmosPartitionKey.None);

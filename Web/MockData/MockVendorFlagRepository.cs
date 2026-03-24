@@ -85,6 +85,8 @@ namespace Web.MockData
             return Task.CompletedTask;
         }
 
+        public Task DeleteByVendorCascadeAsync(Guid vendorId, Guid flagId) => DeleteAsync(vendorId, flagId);
+
         private static VendorFlag Clone(VendorFlag flag)
         {
             if (flag == null)

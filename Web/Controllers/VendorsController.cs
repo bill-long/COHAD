@@ -275,18 +275,19 @@ namespace Web.Controllers
             var reviews = await _vendorReviewRepository.GetByVendorIdAsync(id);
             if (reviews.Count > 0)
             {
-                await Task.WhenAll(reviews.Select(r => _vendorReviewRepository.DeleteAsync(id, r.Id)));
+                await Task.WhenAll(reviews.Select(r => _vendorReviewRepository.DeleteByVendorCascadeAsync(id, r.Id)));
             }
 
             var vendorFlags = await _vendorFlagRepository.GetByVendorIdAsync(id);
             if (vendorFlags.Count > 0)
             {
-                await Task.WhenAll(vendorFlags.Select(f => _vendorFlagRepository.DeleteAsync(id, f.Id)));
+                await Task.WhenAll(vendorFlags.Select(f => _vendorFlagRepository.DeleteByVendorCascadeAsync(id, f.Id)));
             }
-            await _vendorFlagNotificationsHub.Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
-                .SendAsync("VendorDeleted", new { vendorId = id.ToString("D") });
 
             await _vendorRepository.DeleteAsync(id);
+
+            await _vendorFlagNotificationsHub.Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
+                .SendAsync("VendorDeleted", new { vendorId = id.ToString("D") });
             await WriteAudit(apiUser, id.ToString("D"), stored.Name, "Deleted vendor.");
             return Ok();
         }

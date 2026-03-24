@@ -64,6 +64,8 @@ namespace Web.MockData
             return Task.CompletedTask;
         }
 
+        public Task DeleteByVendorCascadeAsync(Guid vendorId, Guid reviewId) => DeleteAsync(vendorId, reviewId);
+
         public Task<IReadOnlyDictionary<Guid, int>> GetReviewCountsByVendorAsync()
         {
             lock (_reviews)

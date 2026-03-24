@@ -16,6 +16,8 @@ namespace Web.Services.Repositories
         Task<VendorReview> GetByIdAsync(Guid vendorId, Guid reviewId);
         Task<VendorReview> UpsertAsync(VendorReview review);
         Task DeleteAsync(Guid vendorId, Guid reviewId);
+        /// <summary>Deletes by id without an extra read. Use only when ids came from <see cref="GetByVendorIdAsync"/> for <paramref name="vendorId"/> (e.g. vendor cascade delete).</summary>
+        Task DeleteByVendorCascadeAsync(Guid vendorId, Guid reviewId);
         Task<IReadOnlyDictionary<Guid, int>> GetReviewCountsByVendorAsync();
         Task<IReadOnlyDictionary<Guid, DateTime>> GetLatestReviewModifiedUtcByVendorAsync();
     }
@@ -82,6 +84,19 @@ namespace Web.Services.Repositories
                 return;
             }
 
+            try
+            {
+                await _vendorReviewsContainer.DeleteItemAsync<JObject>(ToDocumentId(reviewId), CosmosPartitionKey.None);
+            }
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // idempotent
+            }
+        }
+
+        public async Task DeleteByVendorCascadeAsync(Guid vendorId, Guid reviewId)
+        {
+            _ = vendorId;
             try
             {
                 await _vendorReviewsContainer.DeleteItemAsync<JObject>(ToDocumentId(reviewId), CosmosPartitionKey.None);
