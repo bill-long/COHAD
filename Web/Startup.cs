@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -108,6 +109,22 @@ namespace Web
                         options.MetadataAddress =
                             "https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/v2.0/.well-known/openid-configuration";
                     }
+
+                    // SignalR WebSockets cannot send Authorization headers; the JS client passes the JWT via ?access_token=...
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnMessageReceived = context =>
+                        {
+                            var accessToken = context.Request.Query["access_token"];
+                            if (!string.IsNullOrEmpty(accessToken) &&
+                                context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                            {
+                                context.Token = accessToken;
+                            }
+
+                            return Task.CompletedTask;
+                        }
+                    };
                 });
 
             // Allow reverse proxy from nginx
@@ -127,7 +144,7 @@ namespace Web
                     .Build();
 
                 // Role hierarchy: every Administrator is also assigned the Resident role.
-                // This is enforced at assignment time in UserController.UpdateAssociations.
+                // This is enforced at assignment time in UserController.UpdateUserAssociations.
                 // Controllers using [Authorize(Policy = "Resident")] therefore implicitly permit Administrators.
                 // Do not add a separate "Resident OR Administrator" check — it is unnecessary.
                 options.AddPolicy("Resident", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Resident)));

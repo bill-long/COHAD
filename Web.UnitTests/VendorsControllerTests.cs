@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Moq;
 using Web.Controllers;
+using Web.Hubs;
 using Web.Models;
 using Web.Services.Repositories;
 using Web.UpdateModels;
@@ -248,7 +251,16 @@ public sealed class VendorsControllerTests
         IVendorReviewRepository reviewRepository,
         IAuditLogRepository auditLogRepository)
     {
-        var controller = new VendorsController(vendorRepository, reviewRepository, userRepository, auditLogRepository)
+        var flagRepo = new Mock<IVendorFlagRepository>(MockBehavior.Loose);
+        var hubContext = CreateVendorFlagHubMock();
+
+        var controller = new VendorsController(
+            vendorRepository,
+            reviewRepository,
+            flagRepo.Object,
+            userRepository,
+            auditLogRepository,
+            hubContext.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -266,5 +278,20 @@ public sealed class VendorsControllerTests
         };
 
         return controller;
+    }
+
+    private static Mock<IHubContext<VendorFlagNotificationsHub>> CreateVendorFlagHubMock()
+    {
+        var clientProxy = new Mock<IClientProxy>(MockBehavior.Loose);
+        clientProxy
+            .Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var clients = new Mock<IHubClients>(MockBehavior.Loose);
+        clients.Setup(c => c.Group(VendorFlagNotificationsHub.AdminGroupName)).Returns(clientProxy.Object);
+
+        var hubContext = new Mock<IHubContext<VendorFlagNotificationsHub>>(MockBehavior.Loose);
+        hubContext.Setup(h => h.Clients).Returns(clients.Object);
+        return hubContext;
     }
 }

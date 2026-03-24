@@ -1,8 +1,11 @@
 import { Inject, Injectable } from '@angular/core';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
+import { OAuthService } from 'angular-oauth2-oidc';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { distinctUntilChanged, map } from 'rxjs/operators';
+import { environment } from 'src/environments/environment';
 import { ApplicationState, applicationState } from 'src/app/state';
+import { MockAuthTokenService } from './mock-auth-token.service';
 import { VendorFlagNotification, VendorsService } from './vendors.service';
 
 @Injectable({ providedIn: 'root' })
@@ -17,7 +20,9 @@ export class VendorFlagNotificationsService {
 
   constructor(
     @Inject(applicationState) appState$: Observable<ApplicationState>,
-    private readonly vendorsService: VendorsService
+    private readonly vendorsService: VendorsService,
+    private readonly oauthService: OAuthService,
+    private readonly mockAuthTokens: MockAuthTokenService
   ) {
     appState$.pipe(
       map(s => s.apiUser?.roles?.includes('Administrator') ?? false),
@@ -83,7 +88,9 @@ export class VendorFlagNotificationsService {
     }
 
     const connection = new HubConnectionBuilder()
-      .withUrl('/hubs/vendor-flags')
+      .withUrl('/hubs/vendor-flags', {
+        accessTokenFactory: () => this.getHubAccessToken()
+      })
       .withAutomaticReconnect()
       .build();
 
@@ -141,5 +148,13 @@ export class VendorFlagNotificationsService {
 
   private syncUnreadCount(): void {
     this.unreadCountSubject.next(this.unreadIds.size);
+  }
+
+  private getHubAccessToken(): string {
+    if (environment.useMockAuth) {
+      return this.mockAuthTokens.getToken() ?? '';
+    }
+
+    return this.oauthService.getAccessToken() ?? '';
   }
 }
