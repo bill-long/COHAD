@@ -14,7 +14,8 @@ export class VendorFlagNotificationsService {
   private readonly unreadIds = new Set<string>();
   private readonly unreadCountSubject = new BehaviorSubject<number>(0);
   private connection: HubConnection | null = null;
-  private hubConnectionStarting = false;
+  /** Set while start() is in flight; cleared on success, failure, or teardown so we never orphan a live hub after teardown. */
+  private pendingConnection: HubConnection | null = null;
 
   readonly notifications$ = this.notificationsSubject.asObservable();
   readonly unreadCount$ = this.unreadCountSubject.asObservable();
@@ -85,7 +86,7 @@ export class VendorFlagNotificationsService {
   }
 
   private ensureConnection(): void {
-    if (this.connection || this.hubConnectionStarting) {
+    if (this.connection || this.pendingConnection) {
       return;
     }
 
@@ -111,17 +112,24 @@ export class VendorFlagNotificationsService {
       this.removeNotificationsForVendor(payload.vendorId);
     });
 
-    this.hubConnectionStarting = true;
+    this.pendingConnection = connection;
     connection
       .start()
       .then(() => {
+        if (this.pendingConnection !== connection) {
+          connection.stop().catch(() => {
+            // No-op.
+          });
+          return;
+        }
         this.connection = connection;
+        this.pendingConnection = null;
       })
       .catch(() => {
-        // Quiet failure; connection stays null so a later admin session can retry.
-      })
-      .finally(() => {
-        this.hubConnectionStarting = false;
+        if (this.pendingConnection === connection) {
+          this.pendingConnection = null;
+        }
+        // Quiet failure; a later admin session can retry.
       });
   }
 
@@ -150,16 +158,20 @@ export class VendorFlagNotificationsService {
     this.unreadIds.clear();
     this.syncUnreadCount();
 
-    this.hubConnectionStarting = false;
-
-    if (!this.connection) {
-      return;
+    if (this.pendingConnection) {
+      const pending = this.pendingConnection;
+      this.pendingConnection = null;
+      pending.stop().catch(() => {
+        // No-op.
+      });
     }
 
-    this.connection.stop().catch(() => {
-      // No-op.
-    });
-    this.connection = null;
+    if (this.connection) {
+      this.connection.stop().catch(() => {
+        // No-op.
+      });
+      this.connection = null;
+    }
   }
 
   private syncUnreadCount(): void {
