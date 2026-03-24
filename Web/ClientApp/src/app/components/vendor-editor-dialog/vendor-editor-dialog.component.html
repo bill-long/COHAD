@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>Add a Vendor</h2>
+<h2 mat-dialog-title>{{ isEditMode ? 'Edit Vendor' : 'Add a Vendor' }}</h2>
 
 <div mat-dialog-content>
   <div *ngIf="error" class="error">{{ error }}</div>
@@ -51,7 +51,7 @@
       <textarea matInput formControlName="notes"></textarea>
     </mat-form-field>
 
-    <mat-form-field class="span-2">
+    <mat-form-field class="span-2" *ngIf="!isEditMode">
       <mat-label>Initial review (required)</mat-label>
       <textarea matInput formControlName="initialReviewText"></textarea>
     </mat-form-field>
@@ -61,7 +61,7 @@
 <div mat-dialog-actions align="end">
   <button mat-button type="button" (click)="cancel()" [disabled]="saving">Cancel</button>
   <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="saving">
-    {{ saving ? 'Saving…' : 'Add vendor' }}
+    {{ saving ? 'Saving…' : (isEditMode ? 'Save changes' : 'Add vendor') }}
   </button>
 </div>
 

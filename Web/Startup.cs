@@ -16,6 +16,7 @@ using Microsoft.IdentityModel.Tokens;
 using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Authorization;
 using Web.Configuration;
+using Web.Hubs;
 using Web.MockData;
 using Web.Models;
 using Web.Services;
@@ -41,6 +42,7 @@ namespace Web
             services.AddApplicationInsightsTelemetry();
 
             services.AddControllers();
+            services.AddSignalR();
             services.AddMemoryCache();
 
             // In production, the Angular files will be served from this directory
@@ -255,6 +257,7 @@ namespace Web
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapEventDeepLinkOpenGraph(env);
+                endpoints.MapHub<VendorFlagNotificationsHub>("/hubs/vendor-flags");
                 endpoints.MapControllerRoute(
                     name: "default",
                     pattern: "{controller}/{action=Index}/{id?}");

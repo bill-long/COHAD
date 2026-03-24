@@ -44,7 +44,7 @@ const routes: Routes = [
   { path: 'events/:slug', component: EventDetailComponent },
   {
     path: 'residents', component: ResidentsComponent, children: [
-      { path: '', pathMatch: 'full', redirectTo: 'directory' },
+      { path: '', pathMatch: 'full', redirectTo: 'myinfo' },
       { path: 'directory', component: DirectoryComponent },
       { path: 'map', component: MapComponent },
       { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },

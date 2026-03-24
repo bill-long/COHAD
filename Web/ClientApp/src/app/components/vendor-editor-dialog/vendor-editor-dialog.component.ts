@@ -7,6 +7,7 @@ import { normalizeOptionalUsPhoneForStorage } from 'src/app/utils/format-phone';
 
 export interface VendorEditorDialogData {
   presetCategory?: string | null;
+  vendor?: VendorDetail | null;
 }
 
 @Component({
@@ -37,9 +38,25 @@ export class VendorEditorDialogComponent {
     public readonly dialogRef: MatDialogRef<VendorEditorDialogComponent, VendorDetail | null>,
     @Inject(MAT_DIALOG_DATA) public readonly data: VendorEditorDialogData
   ) {
-    if (data?.presetCategory) {
+    if (data?.vendor) {
+      this.form.patchValue({
+        name: data.vendor.name ?? '',
+        categories: (data.vendor.categories ?? []).join(', '),
+        isNeighborAffiliated: data.vendor.isNeighborAffiliated ?? false,
+        phone: data.vendor.phone ?? '',
+        email: data.vendor.email ?? '',
+        website: data.vendor.website ?? '',
+        address: data.vendor.address ?? '',
+        notes: data.vendor.notes ?? '',
+        initialReviewText: ''
+      });
+    } else if (data?.presetCategory) {
       this.form.patchValue({ categories: data.presetCategory });
     }
+  }
+
+  get isEditMode(): boolean {
+    return !!this.data?.vendor;
   }
 
   cancel(): void {
@@ -55,7 +72,7 @@ export class VendorEditorDialogComponent {
       this.error = 'Vendor name is required.';
       return;
     }
-    if (!initialReviewText) {
+    if (!this.isEditMode && !initialReviewText) {
       this.error = 'Initial review is required.';
       return;
     }
@@ -77,19 +94,24 @@ export class VendorEditorDialogComponent {
       email: (raw.email ?? '').trim(),
       website: (raw.website ?? '').trim(),
       address: (raw.address ?? '').trim(),
-      notes: (raw.notes ?? '').trim(),
-      initialReviewText
+      notes: (raw.notes ?? '').trim()
     };
+    if (!this.isEditMode) {
+      payload.initialReviewText = initialReviewText;
+    }
 
     this.saving = true;
     this.error = null;
-    this.vendorsService.createVendor(payload).subscribe({
+    const save$ = this.isEditMode
+      ? this.vendorsService.updateVendor(this.data.vendor!.id, payload)
+      : this.vendorsService.createVendor(payload);
+    save$.subscribe({
       next: (created) => {
         this.saving = false;
         this.dialogRef.close(created);
       },
       error: () => {
-        this.error = 'Unable to create vendor.';
+        this.error = this.isEditMode ? 'Unable to update vendor.' : 'Unable to create vendor.';
         this.saving = false;
       }
     });

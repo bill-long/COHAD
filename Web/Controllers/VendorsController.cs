@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using Web.Hubs;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services.Repositories;
@@ -22,19 +24,22 @@ namespace Web.Controllers
         private readonly IVendorFlagRepository _vendorFlagRepository;
         private readonly IUserRepository _userRepository;
         private readonly IAuditLogRepository _auditLogRepository;
+        private readonly IHubContext<VendorFlagNotificationsHub> _vendorFlagNotificationsHub;
 
         public VendorsController(
             IVendorRepository vendorRepository,
             IVendorReviewRepository vendorReviewRepository,
             IVendorFlagRepository vendorFlagRepository,
             IUserRepository userRepository,
-            IAuditLogRepository auditLogRepository)
+            IAuditLogRepository auditLogRepository,
+            IHubContext<VendorFlagNotificationsHub> vendorFlagNotificationsHub)
         {
             _vendorRepository = vendorRepository;
             _vendorReviewRepository = vendorReviewRepository;
             _vendorFlagRepository = vendorFlagRepository;
             _userRepository = userRepository;
             _auditLogRepository = auditLogRepository;
+            _vendorFlagNotificationsHub = vendorFlagNotificationsHub;
         }
 
         [HttpGet]
@@ -71,6 +76,53 @@ namespace Web.Controllers
                 .ToList();
 
             return Ok(summaries);
+        }
+
+        [HttpGet("flagged")]
+        [Authorize(Policy = "Administrator")]
+        public async Task<IActionResult> GetFlaggedVendors()
+        {
+            var pendingFlags = await _vendorFlagRepository.GetAllPendingAsync();
+            var grouped = pendingFlags.GroupBy(f => f.VendorId).ToList();
+
+            var result = new List<object>();
+            foreach (var group in grouped)
+            {
+                var vendor = await _vendorRepository.GetByIdAsync(group.Key);
+                if (vendor == null)
+                {
+                    continue;
+                }
+
+                result.Add(new
+                {
+                    vendorId = vendor.Id,
+                    vendorName = vendor.Name,
+                    pendingFlagCount = group.Count()
+                });
+            }
+
+            return Ok(result);
+        }
+
+        [HttpGet("flagged/notifications")]
+        [Authorize(Policy = "Administrator")]
+        public async Task<IActionResult> GetFlagNotifications()
+        {
+            var pendingFlags = await _vendorFlagRepository.GetAllPendingAsync();
+            var notifications = new List<VendorFlagNotificationPresentation>();
+            foreach (var flag in pendingFlags)
+            {
+                var vendor = await _vendorRepository.GetByIdAsync(flag.VendorId);
+                if (vendor == null)
+                {
+                    continue;
+                }
+
+                notifications.Add(VendorFlagNotificationPresentation.FromStorageModel(flag, vendor));
+            }
+
+            return Ok(notifications.OrderByDescending(n => n.CreatedUtc).ToList());
         }
 
         [HttpGet("{id:guid}")]
@@ -229,6 +281,8 @@ namespace Web.Controllers
             {
                 await _vendorFlagRepository.DeleteAsync(id, flag.Id);
             }
+            await _vendorFlagNotificationsHub.Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
+                .SendAsync("VendorDeleted", new { vendorId = id.ToString("D") });
 
             await _vendorRepository.DeleteAsync(id);
             await WriteAudit(apiUser, id.ToString("D"), stored.Name, "Deleted vendor.");
@@ -396,6 +450,9 @@ namespace Web.Controllers
 
             var saved = await _vendorFlagRepository.UpsertAsync(flag);
             await WriteAudit(apiUser, id.ToString("D"), vendor.Name, "Flagged vendor.");
+            var notification = VendorFlagNotificationPresentation.FromStorageModel(saved, vendor);
+            await _vendorFlagNotificationsHub.Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
+                .SendAsync("VendorFlagCreated", notification);
             return Ok(VendorFlagPresentation.FromStorageModel(saved, includeAuthor: false));
         }
 
@@ -425,6 +482,8 @@ namespace Web.Controllers
             flag.ResolvedUtc = DateTime.UtcNow;
             await _vendorFlagRepository.UpsertAsync(flag);
             await WriteAudit(apiUser, id.ToString("D"), vendor?.Name ?? id.ToString("D"), "Dismissed vendor flag.");
+            await _vendorFlagNotificationsHub.Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
+                .SendAsync("VendorFlagResolved", new { flagId = flagId.ToString("D"), vendorId = id.ToString("D") });
             return Ok();
         }
 

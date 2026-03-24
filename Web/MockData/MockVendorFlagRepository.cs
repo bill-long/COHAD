@@ -49,6 +49,14 @@ namespace Web.MockData
             }
         }
 
+        public Task<List<VendorFlag>> GetAllPendingAsync()
+        {
+            lock (_flags)
+            {
+                return Task.FromResult(_flags.Values.Where(f => f.Status == "Pending").Select(Clone).ToList());
+            }
+        }
+
         public Task<VendorFlag> UpsertAsync(VendorFlag flag)
         {
             lock (_flags)

@@ -1,9 +1,13 @@
-import { Component, OnInit } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { Component, OnInit, ViewChild } from '@angular/core';
+import { MatExpansionPanel } from '@angular/material/expansion';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { VendorDetail, VendorFlag, VendorReview, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
+import { VendorFlagNotificationsService } from 'src/app/services/vendor-flag-notifications.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
+import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-editor-dialog/vendor-editor-dialog.component';
 
 @Component({
   selector: 'app-vendor-detail',
@@ -12,6 +16,8 @@ import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.compone
   standalone: false
 })
 export class VendorDetailComponent implements OnInit {
+  @ViewChild('reviewPanel') reviewPanel?: MatExpansionPanel;
+
   loading = false;
   saving = false;
   error: string | null = null;
@@ -37,9 +43,12 @@ export class VendorDetailComponent implements OnInit {
 
   constructor(
     private readonly route: ActivatedRoute,
+    private readonly router: Router,
     private readonly formBuilder: FormBuilder,
     private readonly vendorsService: VendorsService,
-    private readonly dialog: MatDialog) { }
+    private readonly vendorFlagNotificationsService: VendorFlagNotificationsService,
+    private readonly dialog: MatDialog,
+    private readonly snackBar: MatSnackBar) { }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -135,6 +144,7 @@ export class VendorDetailComponent implements OnInit {
     }).subscribe({
       next: () => {
         this.reviewForm.reset({ reviewText: '' });
+        this.reviewPanel?.close();
         this.saving = false;
         this.load(this.vendor!.id);
       },
@@ -265,11 +275,71 @@ export class VendorDetailComponent implements OnInit {
       this.error = null;
       this.vendorsService.dismissFlag(this.vendor!.id, flag.id).subscribe({
         next: () => {
+          this.vendorFlagNotificationsService.removeNotification(flag.id);
           this.saving = false;
           this.load(this.vendor!.id);
         },
         error: () => {
           this.error = 'Unable to dismiss report.';
+          this.saving = false;
+        }
+      });
+    });
+  }
+
+  editVendor(): void {
+    if (!this.vendor || !this.isAdmin) {
+      return;
+    }
+
+    const ref = this.dialog.open(VendorEditorDialogComponent, {
+      data: { vendor: this.vendor } as VendorEditorDialogData,
+      width: '720px',
+      maxWidth: 'calc(100vw - 32px)',
+      maxHeight: '90vh'
+    });
+
+    ref.afterClosed().subscribe(updated => {
+      if (!updated) {
+        return;
+      }
+
+      this.vendor = updated;
+      this.snackBar.open('Vendor updated.', '', { duration: 4000 });
+    });
+  }
+
+  deleteVendor(): void {
+    if (!this.vendor || !this.isAdmin) {
+      return;
+    }
+
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete vendor?',
+        body: 'This vendor and all associated reviews/reports will be permanently deleted. This action cannot be undone.',
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        confirmColor: 'warn'
+      }
+    });
+
+    ref.afterClosed().subscribe(confirmed => {
+      if (confirmed !== true) {
+        return;
+      }
+
+      this.saving = true;
+      this.error = null;
+      this.vendorsService.deleteVendor(this.vendor!.id).subscribe({
+        next: () => {
+          this.vendorFlagNotificationsService.removeNotificationsForVendor(this.vendor!.id);
+          this.saving = false;
+          this.snackBar.open('Vendor deleted.', '', { duration: 4000 });
+          this.router.navigate(['/residents/vendors']);
+        },
+        error: () => {
+          this.error = 'Unable to delete vendor.';
           this.saving = false;
         }
       });

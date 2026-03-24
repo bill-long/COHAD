@@ -52,5 +52,4 @@ export class ManageComponent implements OnInit {
       u.roles.includes('Resident') &&
       u.roles.filter(r => rolePermissions.manageEventsRoles.includes(r)).length > 0))
   }
-
 }

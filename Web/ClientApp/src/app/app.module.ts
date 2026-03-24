@@ -26,6 +26,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatBadgeModule } from '@angular/material/badge';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { provideNativeDateAdapter } from '@angular/material/core';
 
@@ -176,6 +177,7 @@ import { FormatPhonePipe } from './pipes/format-phone.pipe';
         MatDialogModule,
         MatSnackBarModule,
         MatDatepickerModule,
+        MatBadgeModule,
         DragDropModule], providers: [
         provideNativeDateAdapter(),
         { provide: dispatcher, useValue: new Subject<Action>() },

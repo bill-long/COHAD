@@ -9,6 +9,10 @@
 
 .detail-nav {
   margin: 0 0 16px 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .back-to-list {
@@ -186,23 +190,31 @@
   padding: 6px 8px;
 }
 
-.review-card mat-card-title {
-  margin: 0 0 8px 0;
-  padding: 0 4px;
-}
-
-.review-meta {
-  padding: 0 4px;
-  margin-bottom: 8px;
-  font-size: 12px;
-  opacity: 0.75;
+.review-expansion-panel {
+  max-width: 820px;
+  margin-top: 22px;
 }
 
 .review-form {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.report-issue-panel {
   max-width: 820px;
+  margin-top: 16px;
+}
+
+.report-issue-panel .flag-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.flag-card {
+  max-width: 820px;
+  margin-bottom: 10px;
 }
 
 .review-form textarea {
