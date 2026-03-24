@@ -186,6 +186,53 @@ public sealed class VendorImportControllerTests
     }
 
     [Fact]
+    public async Task ImportVendorsAndReviews_writes_initial_review_when_initial_review_text_set()
+    {
+        var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        var vendorRepo = new Mock<IVendorRepository>(MockBehavior.Strict);
+        var reviewRepo = new Mock<IVendorReviewRepository>(MockBehavior.Strict);
+        var youthRepo = new Mock<IYouthServiceListingRepository>(MockBehavior.Strict);
+        var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+
+        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(new User
+            {
+                UniqueId = "idpuser-1",
+                GivenName = "Admin",
+                Surname = "User",
+                Roles = new List<User.Role> { User.Role.Administrator }
+            });
+
+        vendorRepo.Setup(r => r.UpsertAsync(It.IsAny<Vendor>()))
+            .ReturnsAsync((Vendor v) => v);
+        reviewRepo.Setup(r => r.UpsertAsync(It.IsAny<VendorReview>()))
+            .ReturnsAsync((VendorReview r) => r);
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
+            .Returns(Task.CompletedTask);
+
+        var controller = BuildController(userRepo.Object, vendorRepo.Object, reviewRepo.Object, youthRepo.Object, auditRepo.Object);
+        var result = await controller.ImportVendorsAndReviews(new VendorSeedImportRequest
+        {
+            Vendors = new List<VendorSeedImportVendor>
+            {
+                new()
+                {
+                    Fingerprint = "fp-1",
+                    Name = "Vendor With Seed Review",
+                    InitialReviewText = "Seed import opening review."
+                }
+            },
+            Reviews = new List<VendorSeedImportReview>()
+        });
+
+        Assert.IsType<OkObjectResult>(result);
+        reviewRepo.Verify(r => r.UpsertAsync(It.Is<VendorReview>(v =>
+            v.ReviewText == "Seed import opening review."
+            && v.AuthorUniqueId == "idpuser-1"
+            && !VendorReviewTimestamps.IsUnknown(v.CreatedUtc))), Times.Once);
+    }
+
+    [Fact]
     public async Task ImportVendorsAndReviews_skips_duplicate_vendor_fingerprints()
     {
         var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);

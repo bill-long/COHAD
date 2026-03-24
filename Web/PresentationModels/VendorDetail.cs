@@ -6,6 +6,9 @@ namespace Web.PresentationModels
 {
     public class VendorDetail : VendorSummary
     {
+        /// <summary>Id of the resident who created this listing (for client edit/delete eligibility).</summary>
+        public string CreatedByUniqueId { get; set; }
+
         public string Address { get; set; }
 
         public string Notes { get; set; }
@@ -63,6 +66,7 @@ namespace Web.PresentationModels
                 Website = summary.Website,
                 ReviewCount = summary.ReviewCount,
                 LastReviewModifiedUtc = summary.LastReviewModifiedUtc,
+                CreatedByUniqueId = vendor.CreatedByUniqueId,
                 Address = vendor.Address,
                 Notes = vendor.Notes,
                 Reviews = safeReviews

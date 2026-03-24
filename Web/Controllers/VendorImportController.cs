@@ -162,6 +162,22 @@ namespace Web.Controllers
                 var saved = await _vendorRepository.UpsertAsync(vendor);
                 vendorIdByFingerprint[fingerprint] = saved.Id;
                 importedVendors++;
+
+                if (!string.IsNullOrWhiteSpace(row.InitialReviewText))
+                {
+                    var now = DateTime.UtcNow;
+                    await _vendorReviewRepository.UpsertAsync(new VendorReview
+                    {
+                        Id = Guid.NewGuid(),
+                        VendorId = saved.Id,
+                        AuthorUniqueId = apiUser.UniqueId,
+                        AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                        ReviewText = row.InitialReviewText.Trim(),
+                        CreatedUtc = now,
+                        ModifiedUtc = now
+                    });
+                    importedReviews++;
+                }
             }
 
             foreach (var row in request.Reviews ?? Enumerable.Empty<VendorSeedImportReview>())

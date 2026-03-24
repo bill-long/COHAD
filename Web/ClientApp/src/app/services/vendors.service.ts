@@ -53,6 +53,8 @@ export interface VendorFlagNotification {
 }
 
 export interface VendorDetail extends VendorSummary {
+  /** Present for edit/delete eligibility (creator or admin). */
+  createdByUniqueId?: string | null;
   address: string | null;
   notes: string | null;
   reviews: VendorReview[];

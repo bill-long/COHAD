@@ -86,12 +86,12 @@ namespace Web.Controllers
         {
             var pendingFlags = await _vendorFlagRepository.GetAllPendingAsync();
             var grouped = pendingFlags.GroupBy(f => f.VendorId).ToList();
+            var vendorsById = (await _vendorRepository.GetAllAsync()).ToDictionary(v => v.Id);
 
             var result = new List<object>();
             foreach (var group in grouped)
             {
-                var vendor = await _vendorRepository.GetByIdAsync(group.Key);
-                if (vendor == null)
+                if (!vendorsById.TryGetValue(group.Key, out var vendor))
                 {
                     continue;
                 }
@@ -112,11 +112,11 @@ namespace Web.Controllers
         public async Task<IActionResult> GetFlagNotifications()
         {
             var pendingFlags = await _vendorFlagRepository.GetAllPendingAsync();
+            var vendorsById = (await _vendorRepository.GetAllAsync()).ToDictionary(v => v.Id);
             var notifications = new List<VendorFlagNotificationPresentation>();
             foreach (var flag in pendingFlags)
             {
-                var vendor = await _vendorRepository.GetByIdAsync(flag.VendorId);
-                if (vendor == null)
+                if (!vendorsById.TryGetValue(flag.VendorId, out var vendor))
                 {
                     continue;
                 }

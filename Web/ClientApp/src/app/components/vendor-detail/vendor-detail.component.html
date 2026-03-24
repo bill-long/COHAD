@@ -4,7 +4,7 @@
       <mat-icon>arrow_back</mat-icon>
       All vendors
     </a>
-    <ng-container *ngIf="isAdmin">
+    <ng-container *ngIf="canManageVendor">
       <button mat-flat-button color="primary" type="button" [disabled]="saving" (click)="editVendor()">
         Edit
       </button>

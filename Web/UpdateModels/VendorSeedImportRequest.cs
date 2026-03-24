@@ -30,6 +30,9 @@ namespace Web.UpdateModels
         public string Address { get; set; }
 
         public string Notes { get; set; }
+
+        /// <summary>Optional review text saved with the new vendor (same semantics as vendor create API).</summary>
+        public string InitialReviewText { get; set; }
     }
 
     public class VendorSeedImportReview

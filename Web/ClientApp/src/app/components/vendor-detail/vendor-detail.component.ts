@@ -1,10 +1,12 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { MatExpansionPanel } from '@angular/material/expansion';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Observable, Subscription } from 'rxjs';
 import { VendorDetail, VendorFlag, VendorReview, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
+import { ApplicationState, applicationState } from 'src/app/state';
 import { VendorFlagNotificationsService } from 'src/app/services/vendor-flag-notifications.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-editor-dialog/vendor-editor-dialog.component';
@@ -15,7 +17,7 @@ import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-e
   styleUrls: ['./vendor-detail.component.css'],
   standalone: false
 })
-export class VendorDetailComponent implements OnInit {
+export class VendorDetailComponent implements OnInit, OnDestroy {
   @ViewChild('reviewPanel') reviewPanel?: MatExpansionPanel;
 
   loading = false;
@@ -41,6 +43,9 @@ export class VendorDetailComponent implements OnInit {
   private static readonly minNewReviewLength = 10;
   private static readonly minFlagNoteLength = 10;
 
+  private currentUserUniqueId: string | null = null;
+  private appStateSub?: Subscription;
+
   constructor(
     private readonly route: ActivatedRoute,
     private readonly router: Router,
@@ -48,9 +53,14 @@ export class VendorDetailComponent implements OnInit {
     private readonly vendorsService: VendorsService,
     private readonly vendorFlagNotificationsService: VendorFlagNotificationsService,
     private readonly dialog: MatDialog,
-    private readonly snackBar: MatSnackBar) { }
+    private readonly snackBar: MatSnackBar,
+    @Inject(applicationState) private readonly appState: Observable<ApplicationState>) { }
 
   ngOnInit(): void {
+    this.appStateSub = this.appState.subscribe(s => {
+      this.currentUserUniqueId = s.apiUser?.uniqueId ?? null;
+    });
+
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) {
       this.error = 'Vendor not found.';
@@ -83,6 +93,19 @@ export class VendorDetailComponent implements OnInit {
   /** True for admins (API sets pendingFlags to a non-null array for admins, null for residents). */
   get isAdmin(): boolean {
     return this.vendor?.pendingFlags !== null && this.vendor?.pendingFlags !== undefined;
+  }
+
+  /** Matches API rules: administrator or vendor creator may edit/delete the listing. */
+  get canManageVendor(): boolean {
+    if (!this.vendor) {
+      return false;
+    }
+    if (this.isAdmin) {
+      return true;
+    }
+    const owner = (this.vendor.createdByUniqueId ?? '').trim().toLowerCase();
+    const me = (this.currentUserUniqueId ?? '').trim().toLowerCase();
+    return owner.length > 0 && me.length > 0 && owner === me;
   }
 
   /** True when this resident already has a pending (unresolved) flag on this vendor. */
@@ -288,7 +311,7 @@ export class VendorDetailComponent implements OnInit {
   }
 
   editVendor(): void {
-    if (!this.vendor || !this.isAdmin) {
+    if (!this.vendor || !this.canManageVendor) {
       return;
     }
 
@@ -310,7 +333,7 @@ export class VendorDetailComponent implements OnInit {
   }
 
   deleteVendor(): void {
-    if (!this.vendor || !this.isAdmin) {
+    if (!this.vendor || !this.canManageVendor) {
       return;
     }
 
@@ -344,5 +367,9 @@ export class VendorDetailComponent implements OnInit {
         }
       });
     });
+  }
+
+  ngOnDestroy(): void {
+    this.appStateSub?.unsubscribe();
   }
 }
