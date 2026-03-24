@@ -30,6 +30,12 @@ namespace Web.Controllers
                 return NotFound();
             }
 
+            var validUserIds = new[] { MockDataConstants.AdminNameIdentifier, MockDataConstants.SecondaryUserNameIdentifier };
+            if (userId != null && Array.IndexOf(validUserIds, userId) < 0)
+            {
+                return BadRequest($"Unknown userId '{userId}'. Valid values: {string.Join(", ", validUserIds)}.");
+            }
+
             string signingKey;
             try
             {
