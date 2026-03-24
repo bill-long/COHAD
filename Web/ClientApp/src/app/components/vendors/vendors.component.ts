@@ -83,7 +83,8 @@ export class VendorsComponent implements OnInit {
         vendor.name ?? '',
         ...(vendor.categories ?? []),
         vendor.email ?? '',
-        vendor.phone ?? ''
+        vendor.phone ?? '',
+        vendor.notes ?? ''
       ].join(' ').toLowerCase();
       return haystack.includes(search);
     });

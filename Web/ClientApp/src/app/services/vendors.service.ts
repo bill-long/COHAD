@@ -11,6 +11,8 @@ export interface VendorSummary {
   phone: string | null;
   email: string | null;
   website: string | null;
+  /** Included for list search (matches server-side q filter). */
+  notes: string | null;
   reviewCount: number;
   lastReviewModifiedUtc: string | null;
 }
@@ -114,14 +116,19 @@ const categoryChipClasses = [
   'chip-rose', 'chip-cyan', 'chip-teal', 'chip-slate'
 ];
 
-export function vendorCategoryClass(category: string): string {
-  const normalized = (category ?? '').toLowerCase().trim();
+/** Stable CSS chip class from a string (vendor categories, youth service labels, etc.). */
+export function chipClassForString(value: string): string {
+  const normalized = (value ?? '').toLowerCase().trim();
   let hash = 0;
   for (let i = 0; i < normalized.length; i++) {
     hash = ((hash << 5) - hash) + normalized.charCodeAt(i);
     hash |= 0;
   }
   return categoryChipClasses[Math.abs(hash) % categoryChipClasses.length];
+}
+
+export function vendorCategoryClass(category: string): string {
+  return chipClassForString(category);
 }
 
 @Injectable({ providedIn: 'root' })

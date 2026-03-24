@@ -20,6 +20,8 @@ namespace Web.PresentationModels
 
         public string Website { get; set; }
 
+        public string Notes { get; set; }
+
         public int ReviewCount { get; set; }
 
         public DateTime? LastReviewModifiedUtc { get; set; }
@@ -35,6 +37,7 @@ namespace Web.PresentationModels
                 Phone = vendor.Phone,
                 Email = vendor.Email,
                 Website = vendor.Website,
+                Notes = vendor.Notes,
                 ReviewCount = reviewCount,
                 LastReviewModifiedUtc = lastReviewModifiedUtc
             };

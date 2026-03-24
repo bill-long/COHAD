@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { YouthServiceListing, VendorsService } from 'src/app/services/vendors.service';
+import { chipClassForString, YouthServiceListing, VendorsService } from 'src/app/services/vendors.service';
 import {
   YouthServiceEditorDialogComponent,
   YouthServiceEditorDialogData
@@ -31,17 +31,6 @@ export class YouthServicesComponent implements OnInit {
     private readonly dialog: MatDialog,
     private readonly snackBar: MatSnackBar
   ) { }
-
-  private readonly serviceChipClasses = [
-    'chip-blue',
-    'chip-green',
-    'chip-amber',
-    'chip-purple',
-    'chip-rose',
-    'chip-cyan',
-    'chip-teal',
-    'chip-slate'
-  ];
 
   ngOnInit(): void {
     this.load();
@@ -110,13 +99,6 @@ export class YouthServicesComponent implements OnInit {
   }
 
   serviceClass(service: string): string {
-    const normalized = (service ?? '').toLowerCase().trim();
-    let hash = 0;
-    for (let i = 0; i < normalized.length; i++) {
-      hash = ((hash << 5) - hash) + normalized.charCodeAt(i);
-      hash |= 0;
-    }
-    const idx = Math.abs(hash) % this.serviceChipClasses.length;
-    return this.serviceChipClasses[idx];
+    return chipClassForString(service);
   }
 }

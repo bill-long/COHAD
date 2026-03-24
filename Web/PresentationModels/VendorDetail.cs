@@ -11,8 +11,6 @@ namespace Web.PresentationModels
 
         public string Address { get; set; }
 
-        public string Notes { get; set; }
-
         public List<VendorReviewPresentation> Reviews { get; set; }
 
         /// <summary>All pending flags on this vendor. Non-null (even if empty) for admins; null for residents.</summary>
@@ -66,9 +64,9 @@ namespace Web.PresentationModels
                 Website = summary.Website,
                 ReviewCount = summary.ReviewCount,
                 LastReviewModifiedUtc = summary.LastReviewModifiedUtc,
+                Notes = summary.Notes,
                 CreatedByUniqueId = vendor.CreatedByUniqueId,
                 Address = vendor.Address,
-                Notes = vendor.Notes,
                 Reviews = safeReviews
                     .OrderByDescending(r => r.ModifiedUtc)
                     .Select(r => VendorReviewPresentation.FromStorageModel(
