@@ -43,13 +43,16 @@ const routes: Routes = [
   { path: 'events', component: EventsComponent },
   { path: 'events/:slug', component: EventDetailComponent },
   {
-    path: 'residents', component: ResidentsComponent, children: [
+    path: 'residents',
+    component: ResidentsComponent,
+    canActivate: [AuthGuard],
+    children: [
       { path: '', pathMatch: 'full', redirectTo: 'myinfo' },
-      { path: 'directory', component: DirectoryComponent },
-      { path: 'map', component: MapComponent },
+      { path: 'directory', component: DirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
+      { path: 'map', component: MapComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
       { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
       { path: 'dues', component: DuesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
-      { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] },
+      { path: 'myinfo', component: MyinfoComponent },
       { path: 'vendors', component: VendorsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
       { path: 'vendors/:id', component: VendorDetailComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
       { path: 'youth-services', component: YouthServicesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } }
