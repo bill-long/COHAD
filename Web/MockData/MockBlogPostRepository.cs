@@ -67,6 +67,24 @@ namespace Web.MockData
             }
         }
 
+        public Task<List<BlogPost>> GetSlugCandidatesAsync()
+        {
+            lock (_posts)
+            {
+                var list = _posts.Values
+                    .Select(p => new BlogPost
+                    {
+                        Id = p.Id,
+                        PublicSlug = p.PublicSlug,
+                        Title = p.Title,
+                        PublishUtc = p.PublishUtc,
+                        Content = null
+                    })
+                    .ToList();
+                return Task.FromResult(list);
+            }
+        }
+
         public Task<List<BlogPost>> GetPublishedAsync(DateTime asOfUtc)
         {
             lock (_posts)

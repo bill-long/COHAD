@@ -17,6 +17,11 @@ namespace Web.Services.Repositories
         Task<List<BlogPost>> GetAllAsync();
 
         /// <summary>
+        /// Minimal fields for slug uniqueness checks (avoids loading full markdown content).
+        /// </summary>
+        Task<List<BlogPost>> GetSlugCandidatesAsync();
+
+        /// <summary>
         /// Published posts with <see cref="BlogPost.PublishUtc"/> &lt;= <paramref name="asOfUtc"/>, newest first.
         /// </summary>
         Task<List<BlogPost>> GetPublishedAsync(DateTime asOfUtc);
@@ -80,6 +85,23 @@ ORDER BY c.PublishUtc DESC")
             {
                 var response = await iterator.ReadNextAsync();
                 results.AddRange(response.Select(ToBlogPostCardProjection));
+            }
+
+            return results;
+        }
+
+        public async Task<List<BlogPost>> GetSlugCandidatesAsync()
+        {
+            var query = new CosmosQueryDefinition(@"
+SELECT
+  c.id, c.PublicSlug, c.Title, c.PublishUtc
+FROM c");
+            var iterator = _container.GetItemQueryIterator<JObject>(query);
+            var results = new List<BlogPost>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                results.AddRange(response.Select(ToBlogPostSlugProjection));
             }
 
             return results;
@@ -196,6 +218,19 @@ ORDER BY c.PublishUtc DESC")
                 FeaturedImageDisplayName = doc.Value<string>("FeaturedImageDisplayName"),
                 FeaturedImageContentType = doc.Value<string>("FeaturedImageContentType"),
                 FeaturedImageSizeBytes = doc["FeaturedImageSizeBytes"]?.ToObject<long?>(),
+                Content = null
+            };
+        }
+
+        private static BlogPost ToBlogPostSlugProjection(JObject doc)
+        {
+            var idStr = doc["id"]?.ToString() ?? doc["Id"]?.ToString();
+            return new BlogPost
+            {
+                Id = Guid.TryParse(idStr, out var gid) ? gid : Guid.Empty,
+                PublicSlug = doc.Value<string>("PublicSlug"),
+                Title = doc.Value<string>("Title"),
+                PublishUtc = doc["PublishUtc"]?.ToObject<DateTime>() ?? default,
                 Content = null
             };
         }

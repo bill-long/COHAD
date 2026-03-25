@@ -157,6 +157,9 @@ namespace Web.Controllers
             var isCreate = request.Id == null;
             BlogPost post;
             BlogPostReadResult updateRead = null;
+            string previousFeaturedImageBlobPath = null;
+            string uploadedFeaturedImageBlobPath = null;
+            var shouldDeletePreviousFeaturedImageOnSuccess = false;
 
             if (isCreate)
             {
@@ -177,6 +180,8 @@ namespace Web.Controllers
 
                 post = updateRead.Post;
             }
+
+            previousFeaturedImageBlobPath = post.FeaturedImageBlobPath;
 
             // Handle featured image upload
             if (request.FeaturedImage != null && request.FeaturedImage.Length > 0)
@@ -212,11 +217,10 @@ namespace Web.Controllers
                     await _documentFileStore.UploadAsync(blobPath, stream, trustedContentType);
                 }
 
-                if (!string.IsNullOrWhiteSpace(post.FeaturedImageBlobPath) &&
-                    !string.Equals(post.FeaturedImageBlobPath, blobPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    await _documentFileStore.DeleteAsync(post.FeaturedImageBlobPath);
-                }
+                uploadedFeaturedImageBlobPath = blobPath;
+                shouldDeletePreviousFeaturedImageOnSuccess =
+                    !string.IsNullOrWhiteSpace(previousFeaturedImageBlobPath) &&
+                    !string.Equals(previousFeaturedImageBlobPath, blobPath, StringComparison.OrdinalIgnoreCase);
 
                 post.FeaturedImageBlobPath = blobPath;
                 post.FeaturedImageDisplayName = finalDisplayName;
@@ -225,7 +229,7 @@ namespace Web.Controllers
             }
             else if (request.RemoveFeaturedImage && !string.IsNullOrWhiteSpace(post.FeaturedImageBlobPath))
             {
-                await _documentFileStore.DeleteAsync(post.FeaturedImageBlobPath);
+                shouldDeletePreviousFeaturedImageOnSuccess = true;
                 post.FeaturedImageBlobPath = null;
                 post.FeaturedImageDisplayName = null;
                 post.FeaturedImageContentType = null;
@@ -244,7 +248,7 @@ namespace Web.Controllers
             post.ModifiedByUniqueId = apiUser.UniqueId;
             post.ModifiedUtc = now;
 
-            var allPosts = await _blogPostRepository.GetAllAsync();
+            var allPosts = await _blogPostRepository.GetSlugCandidatesAsync();
             post.PublicSlug = BlogUrlSlug.EnsureUniquePublicSlug(
                 post.Id,
                 post.PublishUtc,
@@ -264,13 +268,20 @@ namespace Web.Controllers
                 }
                 catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
                 {
+                    await DeleteUploadedFeaturedImageOnSaveFailureAsync(uploadedFeaturedImageBlobPath, previousFeaturedImageBlobPath);
                     return NotFound();
                 }
                 catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
                 {
+                    await DeleteUploadedFeaturedImageOnSaveFailureAsync(uploadedFeaturedImageBlobPath, previousFeaturedImageBlobPath);
                     return StatusCode(StatusCodes.Status409Conflict,
                         "Unable to save post due to concurrent updates. Please refresh and try again.");
                 }
+            }
+
+            if (shouldDeletePreviousFeaturedImageOnSuccess && !string.IsNullOrWhiteSpace(previousFeaturedImageBlobPath))
+            {
+                await _documentFileStore.DeleteAsync(previousFeaturedImageBlobPath);
             }
 
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
@@ -617,6 +628,21 @@ namespace Web.Controllers
             }
 
             return contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task DeleteUploadedFeaturedImageOnSaveFailureAsync(string uploadedBlobPath, string previousBlobPath)
+        {
+            if (string.IsNullOrWhiteSpace(uploadedBlobPath))
+            {
+                return;
+            }
+
+            if (string.Equals(uploadedBlobPath, previousBlobPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            await _documentFileStore.DeleteAsync(uploadedBlobPath);
         }
     }
 }

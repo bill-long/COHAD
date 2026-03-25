@@ -274,7 +274,7 @@ public sealed class BlogControllerTests
         };
 
         var mockPosts = new Mock<IBlogPostRepository>();
-        mockPosts.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<BlogPost> { existing });
+        mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost> { existing });
         mockPosts.Setup(r => r.ReadAsync(id)).ReturnsAsync(new BlogPostReadResult
         {
             Post = existing,
@@ -301,6 +301,80 @@ public sealed class BlogControllerTests
 
         var status = Assert.IsType<ObjectResult>(result);
         Assert.Equal(StatusCodes.Status409Conflict, status.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpsertManage_update_with_new_featured_image_conflict_deletes_new_blob_not_existing_blob()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            GivenName = "Test",
+            Surname = "User"
+        });
+
+        var id = Guid.NewGuid();
+        var existing = new BlogPost
+        {
+            Id = id,
+            PublicSlug = "2026-old",
+            Title = "Old",
+            Content = "body",
+            Excerpt = "ex",
+            PublishUtc = DateTime.UtcNow,
+            AuthorDisplayName = "Test User",
+            FeaturedImageBlobPath = $"blog/{id:D}/old.jpg"
+        };
+
+        var mockPosts = new Mock<IBlogPostRepository>();
+        mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost> { existing });
+        mockPosts.Setup(r => r.ReadAsync(id)).ReturnsAsync(new BlogPostReadResult
+        {
+            Post = existing,
+            ETag = "\"etag\""
+        });
+        mockPosts
+            .Setup(r => r.ReplaceAsync(It.IsAny<BlogPost>(), It.IsAny<string>()))
+            .ThrowsAsync(new Microsoft.Azure.Cosmos.CosmosException(
+                "conflict", HttpStatusCode.PreconditionFailed, 0, string.Empty, 0));
+
+        var deleted = new List<string>();
+        var mockFiles = new Mock<IDocumentFileStore>();
+        mockFiles.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+        mockFiles.Setup(f => f.DeleteAsync(It.IsAny<string>()))
+            .Returns(Task.CompletedTask)
+            .Callback<string>(deleted.Add);
+
+        var c = CreateController(mockUsers.Object, mockPosts.Object, Mock.Of<IBlogCommentRepository>(),
+            mockFiles.Object, Mock.Of<IAuditLogRepository>());
+
+        var imgBytes = new byte[] { 1, 2, 3 };
+        IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "FeaturedImage", "new image.jpg")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "image/jpeg"
+        };
+
+        var request = new BlogPostUpsertRequest
+        {
+            Id = id,
+            Title = "New title",
+            Content = "New content that is long enough for excerpt.",
+            Excerpt = "manual",
+            PublishUtc = DateTime.UtcNow,
+            FeaturedImage = formFile
+        };
+
+        var result = await c.UpsertManage(request);
+
+        var status = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, status.StatusCode);
+        Assert.Contains(deleted, p => p.StartsWith($"blog/{id:D}/", StringComparison.OrdinalIgnoreCase) && p.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) && !p.EndsWith("/old.jpg", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain($"blog/{id:D}/old.jpg", deleted);
     }
 
     [Fact]
