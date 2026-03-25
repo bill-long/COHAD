@@ -55,12 +55,12 @@
       <mat-icon>menu</mat-icon>
     </button>
     <mat-menu #hamburgerMenu="matMenu">
-      <a mat-menu-item color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
-      <a mat-menu-item color="primary" routerLink="news" routerLinkActive="mat-accent">News</a>
-      <a *ngIf="showEventsNav$ | async" mat-menu-item color="primary" routerLink="events" routerLinkActive="mat-accent">Events</a>
-      <a mat-menu-item color="primary" routerLink="about" routerLinkActive="mat-accent">About</a>
-      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
-      <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
+      <a mat-menu-item color="primary" routerLink="" routerLinkActive="active-link" [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a mat-menu-item color="primary" routerLink="news" routerLinkActive="active-link">News</a>
+      <a *ngIf="showEventsNav$ | async" mat-menu-item color="primary" routerLink="events" routerLinkActive="active-link">Events</a>
+      <a mat-menu-item color="primary" routerLink="about" routerLinkActive="active-link">About</a>
+      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
+      <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
       <button
         mat-menu-item
         color="primary"

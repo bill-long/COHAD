@@ -77,6 +77,12 @@ mat-toolbar {
     font-weight: 600;
 }
 
+/* Mobile menu active route highlight */
+a.mat-mdc-menu-item.active-link {
+    color: var(--primary-sage);
+    font-weight: 600;
+}
+
 /* Desktop user/notification buttons */
 .nav-desktop button.mat-mdc-button {
     color: var(--text-secondary);
