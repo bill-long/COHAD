@@ -143,7 +143,7 @@ const vendorCategoryKeywordsByBucket: Readonly<Record<VendorCategoryBucket, read
   ],
   'Personal, Health & Professional': [
     'beautician', 'barber', 'chiropractor', 'dentist', 'doctor', 'acupuncturist',
-    'optometrist', 'opthomologist', 'orthopedic', 'financial planning', 'insurance', 'lawyer'
+    'optometrist', 'ophthalmologist', 'orthopedic', 'financial planning', 'insurance', 'lawyer'
   ],
   'Auto, Pet & Community': [
     'mechanic', 'towing', 'detailer', 'veterinarians', 'library',
