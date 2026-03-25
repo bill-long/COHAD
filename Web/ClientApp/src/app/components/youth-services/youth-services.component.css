@@ -69,86 +69,8 @@
   letter-spacing: 0.02em;
 }
 
-.chip-blue {
-  background: #dbeafe;
-  color: #1e3a8a;
-}
-
-.chip-green {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.chip-amber {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.chip-purple {
-  background: #ede9fe;
-  color: #5b21b6;
-}
-
-.chip-rose {
-  background: #ffe4e6;
-  color: #9f1239;
-}
-
-.chip-cyan {
-  background: #cffafe;
-  color: #155e75;
-}
-
-.chip-teal {
-  background: #ccfbf1;
-  color: #115e59;
-}
-
-.chip-slate {
-  background: #e2e8f0;
-  color: #334155;
-}
+/* Chip color palette is defined globally in styles.css */
 
 .error {
   color: var(--error);
-}
-
-:host-context(body.dark-theme) .chip-blue {
-  background: rgba(30, 58, 138, 0.25);
-  color: #93b4f0;
-}
-
-:host-context(body.dark-theme) .chip-green {
-  background: rgba(22, 101, 52, 0.25);
-  color: #86d4a0;
-}
-
-:host-context(body.dark-theme) .chip-amber {
-  background: rgba(146, 64, 14, 0.25);
-  color: #dab06a;
-}
-
-:host-context(body.dark-theme) .chip-purple {
-  background: rgba(91, 33, 182, 0.25);
-  color: #b8a0e0;
-}
-
-:host-context(body.dark-theme) .chip-rose {
-  background: rgba(159, 18, 57, 0.25);
-  color: #e08a9e;
-}
-
-:host-context(body.dark-theme) .chip-cyan {
-  background: rgba(21, 94, 117, 0.25);
-  color: #7ec4d6;
-}
-
-:host-context(body.dark-theme) .chip-teal {
-  background: rgba(17, 94, 89, 0.25);
-  color: #7ec4be;
-}
-
-:host-context(body.dark-theme) .chip-slate {
-  background: rgba(51, 65, 85, 0.25);
-  color: #a8b4c4;
 }

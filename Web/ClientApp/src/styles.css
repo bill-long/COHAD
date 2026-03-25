@@ -190,10 +190,19 @@ body.dark-theme .chip-slate { background: rgba(74, 68, 62, 0.25); color: #b8b0a6
         transition: none !important;
         animation: none !important;
     }
+}
 
-    *[style*="transform"] {
-        transform: none !important;
-    }
+/* Screen-reader-only text (visually hidden but accessible) */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* Global focus-visible styling */
