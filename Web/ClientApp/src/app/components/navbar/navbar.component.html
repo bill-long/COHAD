@@ -59,7 +59,7 @@
       <a mat-menu-item color="primary" routerLink="news" routerLinkActive="mat-accent">News</a>
       <a *ngIf="showEventsNav$ | async" mat-menu-item color="primary" routerLink="events" routerLinkActive="mat-accent">Events</a>
       <a mat-menu-item color="primary" routerLink="about" routerLinkActive="mat-accent">About</a>
-      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents"routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
+      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
       <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
       <button
         mat-menu-item

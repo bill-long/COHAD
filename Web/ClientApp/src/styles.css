@@ -82,16 +82,18 @@ body.dark-theme {
     color-scheme: dark;
 }
 
-/* Stronger stroked primary: default outline is nearly invisible on gray cards. */
-body.dark-theme .mat-mdc-outlined-button:not(:disabled) {
+/* Stronger stroked primary: default outline is nearly invisible on gray cards.
+   Scoped to exclude warn buttons so destructive actions keep their own styling. */
+body.dark-theme .mat-mdc-outlined-button:not(:disabled):not([color="warn"]) {
     --mat-button-outlined-label-text-color: var(--primary-sage);
     --mat-button-outlined-outline-color: rgba(156, 187, 161, 0.45);
     --mat-button-outlined-state-layer-color: var(--primary-sage);
     --mat-button-outlined-ripple-color: color-mix(in srgb, var(--primary-sage) 12%, transparent);
 }
 
-/* Softer filled primary: M3 green is too vivid on dark surfaces. */
-body.dark-theme .mat-mdc-unelevated-button:not(:disabled) {
+/* Softer filled primary: M3 green is too vivid on dark surfaces.
+   Scoped to exclude warn buttons so destructive actions keep their own styling. */
+body.dark-theme .mat-mdc-unelevated-button:not(:disabled):not([color="warn"]) {
     --mat-button-filled-container-color: var(--primary-sage);
     --mat-button-filled-label-text-color: #1c1a17;
     --mat-button-filled-state-layer-color: #1c1a17;
