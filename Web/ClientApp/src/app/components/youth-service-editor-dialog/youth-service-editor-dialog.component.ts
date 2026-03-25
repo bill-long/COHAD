@@ -77,12 +77,16 @@ export class YouthServiceEditorDialogComponent {
       if (this.isAdmin && this.isEditMode) {
         this.vendorsService.getUsers().subscribe({
           next: users => {
-            this.owners = [...users].sort((a, b) => a.displayName.localeCompare(b.displayName));
+            this.owners = [...users].sort((a, b) =>
+              (a.displayName ?? '').localeCompare(b.displayName ?? '', undefined, { sensitivity: 'base' }));
             this.filteredOwners = this.owners.slice(0, 8);
             if (!(this.form.controls.ownerUniqueId.value ?? '').trim()) {
               this.form.patchValue({ ownerUniqueId: this.data.listing?.ownerUniqueId ?? '' });
             }
-            this.syncOwnerSearchFromOwnerId();
+            // Do not overwrite text the admin already typed while users were loading.
+            if (!this.form.controls.ownerSearch.dirty) {
+              this.syncOwnerSearchFromOwnerId();
+            }
           },
           error: () => {
             this.owners = [];
@@ -107,11 +111,34 @@ export class YouthServiceEditorDialogComponent {
       }
 
       this.filteredOwners = this.owners
-        .filter(owner =>
-          owner.displayName.toLowerCase().includes(query) ||
-          owner.email.toLowerCase().includes(query))
+        .filter(owner => this.ownerMatchesQuery(owner, query))
         .slice(0, 8);
     });
+  }
+
+  /** Mat-autocomplete: show label for stored uniqueId; pass through typed search text or full labels. */
+  readonly displayOwnerOption = (value: string | null): string => {
+    if (value == null || value === '') {
+      return '';
+    }
+    const byId = this.owners.find(u => u.uniqueId === value);
+    if (byId) {
+      return this.ownerLabel(byId);
+    }
+    return value;
+  };
+
+  private ownerMatchesQuery(owner: ApiUser, query: string): boolean {
+    const name = (owner.displayName ?? '').toLowerCase();
+    const email = (owner.email ?? '').toLowerCase();
+    const given = (owner.givenName ?? '').toLowerCase();
+    const surname = (owner.surname ?? '').toLowerCase();
+    return (
+      name.includes(query) ||
+      email.includes(query) ||
+      given.includes(query) ||
+      surname.includes(query)
+    );
   }
 
   get isEditMode(): boolean {
@@ -194,7 +221,10 @@ export class YouthServiceEditorDialogComponent {
   }
 
   ownerLabel(owner: ApiUser): string {
-    return `${owner.displayName} (${owner.email})`;
+    const name =
+      (owner.displayName?.trim() || `${owner.givenName ?? ''} ${owner.surname ?? ''}`.trim()) || '(no name)';
+    const email = (owner.email ?? '').trim();
+    return email.length > 0 ? `${name} (${email})` : name;
   }
 
   private syncOwnerSearchFromOwnerId(): void {

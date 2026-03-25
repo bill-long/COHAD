@@ -66,6 +66,7 @@
         placeholder="Search by name or email" />
       <mat-autocomplete
         #ownerAutocomplete="matAutocomplete"
+        [displayWith]="displayOwnerOption"
         (optionSelected)="onOwnerSelected($event)">
         <mat-option *ngFor="let owner of filteredOwners" [value]="owner.uniqueId">
           {{ ownerLabel(owner) }}
