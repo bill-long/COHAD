@@ -110,5 +110,45 @@
 }
 
 .error {
-  color: #c62828;
+  color: var(--error);
+}
+
+:host-context(body.dark-theme) .chip-blue {
+  background: rgba(30, 58, 138, 0.25);
+  color: #93b4f0;
+}
+
+:host-context(body.dark-theme) .chip-green {
+  background: rgba(22, 101, 52, 0.25);
+  color: #86d4a0;
+}
+
+:host-context(body.dark-theme) .chip-amber {
+  background: rgba(146, 64, 14, 0.25);
+  color: #dab06a;
+}
+
+:host-context(body.dark-theme) .chip-purple {
+  background: rgba(91, 33, 182, 0.25);
+  color: #b8a0e0;
+}
+
+:host-context(body.dark-theme) .chip-rose {
+  background: rgba(159, 18, 57, 0.25);
+  color: #e08a9e;
+}
+
+:host-context(body.dark-theme) .chip-cyan {
+  background: rgba(21, 94, 117, 0.25);
+  color: #7ec4d6;
+}
+
+:host-context(body.dark-theme) .chip-teal {
+  background: rgba(17, 94, 89, 0.25);
+  color: #7ec4be;
+}
+
+:host-context(body.dark-theme) .chip-slate {
+  background: rgba(51, 65, 85, 0.25);
+  color: #a8b4c4;
 }

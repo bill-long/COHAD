@@ -1,21 +1,22 @@
 .events-page {
     max-width: 1000px;
-    padding: 1.5rem 1rem;
+    padding: 2rem 1.25rem;
     box-sizing: border-box;
 }
 
 .events-shell {
     background: var(--surface-muted);
     border: 1px solid var(--border-faint);
-    border-radius: 12px;
-    padding: 1.35rem;
+    border-radius: 16px;
+    padding: 1.75rem;
     box-shadow: 0 6px 18px var(--surface-subtle);
 }
 
 .events-header h1 {
     margin: 0;
     font-size: 1.9rem;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.02em;
 }
 
 .events-header p {
@@ -39,16 +40,16 @@
     text-decoration: none;
     color: inherit;
     border: 1px solid var(--border-faint);
-    border-radius: 10px;
+    border-radius: 14px;
     overflow: hidden;
     background: var(--surface);
     cursor: pointer;
-    transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
 .event-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px var(--surface-subtle);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px var(--surface-subtle), 0 2px 8px rgba(0, 0, 0, 0.06);
     border-color: var(--border-subtle);
 }
 

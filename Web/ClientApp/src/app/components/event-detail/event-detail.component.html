@@ -8,15 +8,15 @@
             Back to all events
           </a>
         </p>
-        <p class="mat-caption event-detail-overline">Event</p>
-        <h1 class="mat-headline-4">{{ event.title }}</h1>
-        <p class="mat-body-1 event-detail-datetime">{{ event.startUtc | date:'fullDate' }} at {{ event.startUtc | date:'shortTime' }}</p>
+        <p class="mat-label-small event-detail-overline">Event</p>
+        <h1 class="mat-headline-medium">{{ event.title }}</h1>
+        <p class="mat-body-large event-detail-datetime">{{ event.startUtc | date:'fullDate' }} at {{ event.startUtc | date:'shortTime' }}</p>
       </mat-card-content>
 
       <mat-divider *ngIf="event.hasPromoMedia || hasDescription(event)"></mat-divider>
 
       <mat-card-content *ngIf="event.hasPromoMedia" class="event-detail-section">
-        <h2 class="mat-title event-detail-section-heading">Promotional flyer</h2>
+        <h2 class="mat-title-medium event-detail-section-heading">Promotional flyer</h2>
         <div class="promo-wrap">
           <div class="promo-flyer-frame">
             <img [src]="event.promoMediaDownloadUrl" [alt]="event.title" class="promo-image">
@@ -27,17 +27,17 @@
       <mat-divider *ngIf="event.hasPromoMedia && hasDescription(event)"></mat-divider>
 
       <mat-card-content *ngIf="hasDescription(event)" class="event-detail-section">
-        <h2 class="mat-title event-detail-section-heading">About</h2>
-        <p class="mat-body-1 event-detail-description">{{ event.description }}</p>
+        <h2 class="mat-title-medium event-detail-section-heading">About</h2>
+        <p class="mat-body-large event-detail-description">{{ event.description }}</p>
       </mat-card-content>
     </mat-card>
 
     <mat-card appearance="outlined" class="signup-card">
       <mat-card-content>
-        <h2 class="mat-title signup-card-title">Sign up</h2>
+        <h2 class="mat-title-medium signup-card-title">Sign up</h2>
 
         <ng-container *ngIf="event.allowSignups">
-          <p class="mat-body-2 signup-helper">
+          <p class="mat-body-medium signup-helper">
             Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }}
             · {{ event.totalAdults }} adults · {{ event.totalChildren }} children
           </p>
@@ -71,12 +71,12 @@
 
             <mat-card *ngIf="error" appearance="outlined" class="event-detail-feedback-card event-detail-feedback-card--error" role="alert">
               <mat-card-content>
-                <p class="mat-body-2 event-detail-feedback-text">{{ error }}</p>
+                <p class="mat-body-medium event-detail-feedback-text">{{ error }}</p>
               </mat-card-content>
             </mat-card>
             <mat-card *ngIf="success" appearance="outlined" class="event-detail-feedback-card event-detail-feedback-card--success" role="status">
               <mat-card-content>
-                <p class="mat-body-2 event-detail-feedback-text">{{ success }}</p>
+                <p class="mat-body-medium event-detail-feedback-text">{{ success }}</p>
               </mat-card-content>
             </mat-card>
           </ng-container>
@@ -86,19 +86,19 @@
           </ng-template>
         </ng-container>
 
-        <p *ngIf="!event.allowSignups" class="mat-body-2 signup-helper signup-helper--solo">This event does not require signups.</p>
+        <p *ngIf="!event.allowSignups" class="mat-body-medium signup-helper signup-helper--solo">This event does not require signups.</p>
       </mat-card-content>
     </mat-card>
   </ng-container>
 
   <div class="event-detail-loading" *ngIf="loading">
     <mat-spinner diameter="40"></mat-spinner>
-    <p class="mat-body-1">Loading event…</p>
+    <p class="mat-body-large">Loading event…</p>
   </div>
 
   <mat-card *ngIf="!loading && !eventItem && error" appearance="outlined" class="event-detail-page-error">
     <mat-card-content>
-      <p class="mat-body-1" role="alert">{{ error }}</p>
+      <p class="mat-body-large" role="alert">{{ error }}</p>
     </mat-card-content>
   </mat-card>
 </div>

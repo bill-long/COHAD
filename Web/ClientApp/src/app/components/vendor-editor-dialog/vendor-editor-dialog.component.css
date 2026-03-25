@@ -15,7 +15,7 @@ textarea {
 }
 
 .error {
-  color: #c62828;
+  color: var(--error);
   margin-bottom: 8px;
 }
 

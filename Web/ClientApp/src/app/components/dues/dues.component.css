@@ -1,34 +1,37 @@
-.outer-wrapper {
-  width: 100%;
+.dues-page {
+  max-width: 700px;
+  margin: 24px auto 56px;
+  padding: 0 20px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  background-image: url(../../../assets/trees1.jpg);
-  background-size: cover;
-  height: 100vh;
+  gap: 20px;
 }
 
-.white-background {
-  background-color: var(--surface);
-  padding: 20px;
+.dues-title {
+  margin: 0 0 0.75rem;
 }
 
-.outer-wrapper > div {
-  max-width: 614px;
-}
-
-.outer-wrapper > :nth-child(1) {
-  margin-top: 20px;
+.dues-section-title {
+  margin: 0 0 1rem;
 }
 
 .payment-description {
-  margin-bottom: 20px;
+  margin: 0 0 1rem;
+  color: var(--text-secondary);
 }
 
-.transaction-section {
-  width: 100%;
+.empty-state {
+  color: var(--text-muted);
 }
 
 table {
   width: 100%;
+}
+
+a {
+  color: var(--primary-sage);
+}
+
+a:hover {
+  text-decoration: underline;
 }

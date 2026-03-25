@@ -85,7 +85,7 @@
 }
 
 .drop-zone.drag-active {
-    border-color: #3f51b5;
+    border-color: var(--primary-sage);
     background: var(--surface-subtle);
 }
 

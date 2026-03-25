@@ -1,15 +1,16 @@
-<mat-toolbar *ngIf="isHidden !== true" color="primary">
+<mat-toolbar *ngIf="isHidden !== true">
   <ng-container *ngIf="navVm$ | async as vm">
   <div class="nav-desktop">
     <span class="toolbar-app-title"> COHAD </span>
     <div class="nav-left">
-      <a mat-flat-button color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
-      <a mat-flat-button color="primary" routerLink="news" routerLinkActive="mat-accent">News</a>
-      <a *ngIf="showEventsNav$ | async" mat-flat-button color="primary" routerLink="events" routerLinkActive="mat-accent">Events</a>
-      <a *ngIf="vm.showGuestPrivacy" mat-flat-button color="primary" routerLink="privacy" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Privacy
+      <a mat-button routerLink="" routerLinkActive="active-link" [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a mat-button routerLink="news" routerLinkActive="active-link">News</a>
+      <a *ngIf="showEventsNav$ | async" mat-button routerLink="events" routerLinkActive="active-link">Events</a>
+      <a mat-button routerLink="about" routerLinkActive="active-link">About</a>
+      <a *ngIf="vm.showGuestPrivacy" mat-button routerLink="privacy" routerLinkActive="active-link" [routerLinkActiveOptions]="{exact: true}">Privacy
         Policy</a>
-      <a mat-flat-button color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
-      <a mat-flat-button color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
+      <a mat-button *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
+      <a mat-button *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
       <button
         mat-icon-button
         class="notification-bell-button"
@@ -35,7 +36,7 @@
           <span class="menu-empty-state">No new notifications</span>
         </ng-template>
       </mat-menu>
-      <button mat-flat-button color="primary" *ngIf="vm.authUser?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
+      <button mat-button *ngIf="vm.authUser?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
       <mat-menu #userMenu="matMenu">
         <button mat-menu-item (click)="toggleTheme()">{{ (isDarkTheme$ | async) ? 'Use light mode' : 'Use dark mode' }}</button>
         <button mat-menu-item (click)="logout()" [disabled]="disabled">Sign Out</button>
@@ -50,14 +51,15 @@
     </div>
   </div>
   <div class="nav-mobile">
-    <button mat-flat-button color="primary" [matMenuTriggerFor]="hamburgerMenu">
+    <button mat-button [matMenuTriggerFor]="hamburgerMenu">
       <mat-icon>menu</mat-icon>
     </button>
     <mat-menu #hamburgerMenu="matMenu">
       <a mat-menu-item color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
       <a mat-menu-item color="primary" routerLink="news" routerLinkActive="mat-accent">News</a>
       <a *ngIf="showEventsNav$ | async" mat-menu-item color="primary" routerLink="events" routerLinkActive="mat-accent">Events</a>
-      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
+      <a mat-menu-item color="primary" routerLink="about" routerLinkActive="mat-accent">About</a>
+      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents"routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
       <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
       <button
         mat-menu-item

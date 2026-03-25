@@ -1,8 +1,33 @@
-.editor-wrapper {
+.send-email-page {
     max-width: 800px;
+    margin: 24px auto 56px;
+    padding: 0 20px;
+}
+
+.page-title {
+    margin: 0 0 1.25rem;
+    font-size: 1.9rem;
+    font-weight: 600;
+}
+
+.full-width {
+    width: 100%;
+}
+
+.editor-wrapper {
+    margin-bottom: 1.25rem;
     min-height: 200px;
 }
 
-button {
-    margin-top: 5px;
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 1rem;
+}
+
+.error-detail {
+    margin: 0.5rem 0 0;
+    white-space: pre-wrap;
+    font-size: 0.85rem;
 }

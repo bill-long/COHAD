@@ -6,10 +6,20 @@
 mat-toolbar {
     width: 100%;
     box-sizing: border-box;
+    /* Frosted glass effect */
+    background: color-mix(in srgb, var(--surface) 85%, transparent) !important;
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    border-bottom: 1px solid var(--border-faint);
+    --mdc-toolbar-container-color: transparent;
+    color: var(--text-primary) !important;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
 }
 
 .example-fill-remaining-space {
-    /* This fills the remaining space, by using flexbox. 
+    /* This fills the remaining space, by using flexbox.
        Every toolbar row uses a flexbox row layout. */
     flex: 1 1 auto;
 }
@@ -19,7 +29,11 @@ mat-toolbar {
 }
 
 .toolbar-app-title {
-    margin-right: 15px;
+    margin-right: 20px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    letter-spacing: 0.04em;
+    color: var(--primary-sage);
 }
 
 .getting-details {
@@ -41,7 +55,31 @@ mat-toolbar {
 }
 
 .nav-left {
-    gap: 2px;
+    gap: 4px;
+}
+
+/* Desktop nav link styling */
+.nav-desktop a.mat-mdc-button {
+    color: var(--text-secondary);
+    font-weight: 500;
+    border-radius: 8px;
+    transition: background 150ms ease, color 150ms ease;
+}
+
+.nav-desktop a.mat-mdc-button:hover {
+    background: var(--surface-chip);
+}
+
+.nav-desktop a.mat-mdc-button.active-link {
+    color: var(--primary-sage);
+    background: color-mix(in srgb, var(--primary-sage) 10%, transparent);
+    font-weight: 600;
+}
+
+/* Desktop user/notification buttons */
+.nav-desktop button.mat-mdc-button {
+    color: var(--text-secondary);
+    font-weight: 500;
 }
 
 .notification-row {
@@ -53,7 +91,7 @@ mat-toolbar {
 }
 
 .notification-bell-button {
-    color: inherit;
+    color: var(--text-secondary) !important;
     margin-right: 2px;
 }
 
@@ -100,6 +138,7 @@ mat-toolbar {
         min-width: 0;
         justify-content: flex-start;
         border-radius: 0;
+        color: var(--text-primary);
     }
 }
 

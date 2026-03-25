@@ -8,9 +8,9 @@
             Back to all news
           </a>
         </p>
-        <p class="mat-caption blog-detail-overline">News</p>
-        <h1 class="mat-headline-4">{{ p.title }}</h1>
-        <p class="mat-body-2 blog-detail-meta">
+        <p class="mat-label-small blog-detail-overline">News</p>
+        <h1 class="mat-headline-medium">{{ p.title }}</h1>
+        <p class="mat-body-medium blog-detail-meta">
           <span class="blog-detail-author">{{ p.authorDisplayName }}</span>
           <span class="blog-detail-date">{{ p.publishUtc | date:'mediumDate' }}</span>
         </p>
@@ -37,7 +37,7 @@
     <div id="comments" #commentsSection class="blog-comments-section">
       <mat-card>
         <mat-card-content>
-          <h2 class="mat-headline-6 blog-comments-title">Comments</h2>
+          <h2 class="mat-title-large blog-comments-title">Comments</h2>
 
           <div *ngIf="commentsLoading" class="comments-loading">
             <mat-spinner diameter="24"></mat-spinner>
@@ -46,7 +46,7 @@
           <div *ngFor="let c of comments" class="blog-comment">
             <div class="blog-comment-header">
               <span class="blog-comment-author">{{ c.authorDisplayName }}</span>
-              <span class="blog-comment-date mat-caption">{{ c.createdUtc | date:'medium' }}</span>
+              <span class="blog-comment-date mat-label-small">{{ c.createdUtc | date:'medium' }}</span>
               <span class="blog-comment-spacer"></span>
               <button *ngIf="c.canDelete" mat-icon-button (click)="deleteComment(c.id)"
                       aria-label="Delete comment" class="blog-comment-delete">
@@ -56,7 +56,7 @@
             <div class="blog-comment-body" [innerHTML]="renderCommentHtml(c)"></div>
           </div>
 
-          <p *ngIf="!commentsLoading && comments.length === 0" class="mat-body-2 comments-empty">
+          <p *ngIf="!commentsLoading && comments.length === 0" class="mat-body-medium comments-empty">
             No comments yet. Be the first to comment!
           </p>
 
@@ -76,7 +76,7 @@
                   {{ commentSubmitting ? 'Posting\u2026' : 'Post Comment' }}
                 </button>
               </div>
-              <p *ngIf="commentError" class="mat-body-2 comment-error" role="alert">{{ commentError }}</p>
+              <p *ngIf="commentError" class="mat-body-medium comment-error" role="alert">{{ commentError }}</p>
             </div>
           </ng-container>
 
@@ -95,12 +95,12 @@
 
   <div class="blog-detail-loading" *ngIf="loading">
     <mat-spinner diameter="40"></mat-spinner>
-    <p class="mat-body-1">Loading post…</p>
+    <p class="mat-body-large">Loading post…</p>
   </div>
 
   <mat-card *ngIf="!loading && !post && error" appearance="outlined" class="blog-detail-page-error">
     <mat-card-content>
-      <p class="mat-body-1" role="alert">{{ error }}</p>
+      <p class="mat-body-large" role="alert">{{ error }}</p>
     </mat-card-content>
   </mat-card>
 </div>
