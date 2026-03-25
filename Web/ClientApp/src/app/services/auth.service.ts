@@ -1,5 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, Inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { Observable, Subject } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
@@ -11,11 +12,26 @@ import { MockAuthTokenService } from './mock-auth-token.service';
 export class AuthService {
 
   private authSessionResolvedDispatched = false;
+  private static readonly postLoginRedirectKey = 'auth.postLoginRedirect';
+  private static readonly defaultPostLoginPath = '/residents';
+
+  /** App-internal path only: must start with `/` and not `//` (blocks protocol-relative and open redirects). */
+  private sanitizePostLoginRedirect(redirectTo: string | undefined): string {
+    const t = (redirectTo ?? '').trim();
+    if (!t) {
+      return AuthService.defaultPostLoginPath;
+    }
+    if (!t.startsWith('/') || t.startsWith('//')) {
+      return AuthService.defaultPostLoginPath;
+    }
+    return t;
+  }
 
   constructor(
     private oauthService: OAuthService,
     private http: HttpClient,
     private mockTokens: MockAuthTokenService,
+    private router: Router,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Subject<Action>) {
 
@@ -63,6 +79,7 @@ export class AuthService {
     this.dispatcher.subscribe(a => {
       if (environment.useMockAuth) {
         if (a instanceof MockLogin) {
+          this.markPostLoginRedirect(a.redirectTo);
           this.initMockAuth(a.userId);
         } else if (a instanceof Logout) {
           this.mockTokens.setToken(null);
@@ -70,6 +87,7 @@ export class AuthService {
         }
       } else {
         if (a instanceof Login) {
+          this.markPostLoginRedirect(a.redirectTo);
           this.oauthService.initCodeFlow();
         } else if (a instanceof Logout) {
           this.oauthService.logOut();
@@ -112,6 +130,7 @@ export class AuthService {
         const claims = this.mockUserClaims[userId] ?? this.mockUserClaims['user-1'];
         const identityClaims: IdentityClaims = { ...claims, idp: 'https://cohad.mock/' };
         this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken: r.accessToken }));
+        this.redirectAfterLoginIfRequested(r.accessToken);
         this.markAuthSessionResolvedOnce();
       },
       error: (err) => {
@@ -148,6 +167,36 @@ export class AuthService {
 
     let identityClaims = this.oauthService.getIdentityClaims() as IdentityClaims;
     this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken }));
+    this.redirectAfterLoginIfRequested(accessToken);
     return true;
+  }
+
+  private markPostLoginRedirect(redirectTo?: string): void {
+    const target = this.sanitizePostLoginRedirect(redirectTo);
+    try {
+      sessionStorage.setItem(AuthService.postLoginRedirectKey, target);
+    } catch {
+      // Ignore storage failures.
+    }
+  }
+
+  private redirectAfterLoginIfRequested(accessToken: string | null | undefined): void {
+    if (!accessToken) {
+      return;
+    }
+
+    let redirectTo: string | null = null;
+    try {
+      redirectTo = sessionStorage.getItem(AuthService.postLoginRedirectKey);
+      if (redirectTo) {
+        sessionStorage.removeItem(AuthService.postLoginRedirectKey);
+      }
+    } catch {
+      redirectTo = null;
+    }
+
+    if (redirectTo) {
+      this.router.navigateByUrl(this.sanitizePostLoginRedirect(redirectTo));
+    }
   }
 }

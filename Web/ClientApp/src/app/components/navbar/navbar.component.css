@@ -30,12 +30,55 @@ mat-toolbar {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
+    width: min(920px, 100%);
+    margin: 0 auto;
 }
 
 .nav-desktop > div {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
+}
+
+.nav-left {
+    gap: 2px;
+}
+
+.notification-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 320px;
+    white-space: normal;
+}
+
+.notification-bell-button {
+    color: inherit;
+    margin-right: 2px;
+}
+
+:host ::ng-deep .notification-bell-button .mat-badge-content {
+    top: 4px;
+    transform: translateX(-10px);
+}
+
+.notification-title {
+    font-weight: 500;
+    line-height: 1.25;
+}
+
+.notification-note {
+    font-size: 0.85rem;
+    opacity: 0.85;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.menu-empty-state {
+    display: block;
+    padding: 10px 16px;
+    opacity: 0.8;
 }
 
 .nav-mobile {

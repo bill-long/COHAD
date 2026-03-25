@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -16,6 +17,7 @@ using Microsoft.IdentityModel.Tokens;
 using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Authorization;
 using Web.Configuration;
+using Web.Hubs;
 using Web.MockData;
 using Web.Models;
 using Web.Services;
@@ -41,6 +43,7 @@ namespace Web
             services.AddApplicationInsightsTelemetry();
 
             services.AddControllers();
+            services.AddSignalR();
             services.AddMemoryCache();
 
             // In production, the Angular files will be served from this directory
@@ -106,6 +109,22 @@ namespace Web
                         options.MetadataAddress =
                             "https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/v2.0/.well-known/openid-configuration";
                     }
+
+                    // SignalR WebSockets cannot send Authorization headers; the JS client passes the JWT via ?access_token=...
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnMessageReceived = context =>
+                        {
+                            var accessToken = context.Request.Query["access_token"];
+                            if (!string.IsNullOrEmpty(accessToken) &&
+                                context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                            {
+                                context.Token = accessToken;
+                            }
+
+                            return Task.CompletedTask;
+                        }
+                    };
                 });
 
             // Allow reverse proxy from nginx
@@ -124,6 +143,9 @@ namespace Web
                     .RequireClaim("http://schemas.microsoft.com/identity/claims/scope", "API")
                     .Build();
 
+                // Role hierarchy: new Administrators are also assigned Resident in UserController.UpdateUserAssociations.
+                // RoleAuthorizationHandler additionally treats Administrator as satisfying the Resident policy so legacy
+                // admin-only accounts still pass Resident-gated APIs. Do not add redundant OR checks on controllers.
                 options.AddPolicy("Resident", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Resident)));
                 options.AddPolicy("Administrator", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Administrator)));
                 options.AddPolicy("WelcomeCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.WelcomeCommittee)));
@@ -147,6 +169,10 @@ namespace Web
                 services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
                 services.AddSingleton<IDocumentRepository, MockDocumentRepository>();
                 services.AddSingleton<ICommunityEventRepository, MockCommunityEventRepository>();
+                services.AddSingleton<IVendorRepository, MockVendorRepository>();
+                services.AddSingleton<IVendorReviewRepository, MockVendorReviewRepository>();
+                services.AddSingleton<IVendorFlagRepository, MockVendorFlagRepository>();
+                services.AddSingleton<IYouthServiceListingRepository, MockYouthServiceListingRepository>();
                 services.AddSingleton<IDocumentFileStore, MockDocumentFileStore>();
                 services.AddScoped<IEmailService, NoOpEmailService>();
             }
@@ -174,6 +200,14 @@ namespace Web
                     new CosmosDocumentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
                 services.AddScoped<ICommunityEventRepository>(sp =>
                     new CosmosCommunityEventRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Events")));
+                services.AddScoped<IVendorRepository>(sp =>
+                    new CosmosVendorRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Vendors")));
+                services.AddScoped<IVendorReviewRepository>(sp =>
+                    new CosmosVendorReviewRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "VendorReviews")));
+                services.AddScoped<IVendorFlagRepository>(sp =>
+                    new CosmosVendorFlagRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "VendorFlags")));
+                services.AddScoped<IYouthServiceListingRepository>(sp =>
+                    new CosmosYouthServiceListingRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "YouthServices")));
                 services.AddSingleton<IDocumentFileStore, AzureBlobDocumentFileStore>();
 
                 services.AddScoped<IEmailService, EmailService>();
@@ -239,6 +273,7 @@ namespace Web
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapEventDeepLinkOpenGraph(env);
+                endpoints.MapHub<VendorFlagNotificationsHub>("/hubs/vendor-flags");
                 endpoints.MapControllerRoute(
                     name: "default",
                     pattern: "{controller}/{action=Index}/{id?}");

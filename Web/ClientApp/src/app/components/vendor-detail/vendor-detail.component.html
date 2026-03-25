@@ -1,0 +1,203 @@
+<div class="feature-page">
+  <nav class="detail-nav" aria-label="Vendor detail">
+    <a mat-stroked-button color="primary" routerLink="/residents/vendors" class="back-to-list">
+      <mat-icon>arrow_back</mat-icon>
+      All vendors
+    </a>
+    <ng-container *ngIf="canManageVendor">
+      <button mat-flat-button color="primary" type="button" [disabled]="saving" (click)="editVendor()">
+        Edit
+      </button>
+      <button mat-stroked-button color="warn" type="button" [disabled]="saving" (click)="deleteVendor()">
+        Delete
+      </button>
+    </ng-container>
+  </nav>
+
+  <div *ngIf="loading">Loading vendor...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <ng-container *ngIf="vendor as v">
+    <section class="vendor-summary" aria-label="Vendor information">
+      <h2 class="vendor-name">{{ v.name }}</h2>
+
+      <div class="vendor-categories" aria-label="Categories">
+        <ng-container *ngIf="(v.categories?.length ?? 0) > 0; else uncategorizedDetail">
+          <span
+            *ngFor="let category of v.categories"
+            class="category-chip"
+            [ngClass]="categoryClass(category)">
+            {{ category }}
+          </span>
+        </ng-container>
+        <ng-template #uncategorizedDetail>
+          <span class="category-chip chip-slate">Uncategorized</span>
+        </ng-template>
+      </div>
+
+      <p *ngIf="v.isNeighborAffiliated" class="neighbor-badge">Neighbor affiliated</p>
+
+      <dl *ngIf="v.phone || v.email || v.website || v.address" class="vendor-contact">
+        <div *ngIf="v.phone" class="contact-row">
+          <dt>Phone</dt>
+          <dd>{{ v.phone | formatPhone }}</dd>
+        </div>
+        <div *ngIf="v.email" class="contact-row">
+          <dt>Email</dt>
+          <dd>
+            <a [href]="'mailto:' + v.email">{{ v.email }}</a>
+          </dd>
+        </div>
+        <div *ngIf="v.website" class="contact-row">
+          <dt>Website</dt>
+          <dd>
+            <a [href]="websiteUrl(v.website)" target="_blank" rel="noopener noreferrer">{{ v.website }}</a>
+          </dd>
+        </div>
+        <div *ngIf="v.address" class="contact-row">
+          <dt>Address</dt>
+          <dd>{{ v.address }}</dd>
+        </div>
+      </dl>
+
+      <div *ngIf="v.notes" class="vendor-notes">
+        <span class="vendor-notes-label">Notes</span>
+        <p class="vendor-notes-body">{{ v.notes }}</p>
+      </div>
+    </section>
+
+    <h3 class="section-heading">Reviews</h3>
+    <mat-card *ngFor="let review of v.reviews" class="review-card">
+      <mat-card-header>
+        <mat-card-title>{{ review.authorDisplayName }}</mat-card-title>
+        <mat-card-subtitle>
+          <ng-container *ngIf="!isUnknownReviewModified(review); else unknownModified">
+            Last updated {{ review.modifiedUtc | date:'mediumDate' }}
+          </ng-container>
+          <ng-template #unknownModified>Last updated: Unknown</ng-template>
+        </mat-card-subtitle>
+      </mat-card-header>
+
+      <mat-card-content *ngIf="editingReviewId !== review.id">{{ review.reviewText }}</mat-card-content>
+
+      <form *ngIf="editingReviewId === review.id" [formGroup]="editReviewForm" class="review-form-inline">
+        <mat-form-field>
+          <mat-label>Edit review</mat-label>
+          <textarea matInput formControlName="reviewText"></textarea>
+        </mat-form-field>
+      </form>
+
+      <div class="review-actions" *ngIf="review.canEdit">
+        <button
+          *ngIf="editingReviewId !== review.id"
+          mat-stroked-button
+          color="primary"
+          type="button"
+          (click)="startEdit(review)">
+          Edit
+        </button>
+        <button
+          *ngIf="editingReviewId === review.id"
+          mat-flat-button
+          color="primary"
+          type="button"
+          [disabled]="saving"
+          (click)="saveEdit(review)">
+          Save
+        </button>
+        <button
+          *ngIf="editingReviewId === review.id"
+          mat-button
+          type="button"
+          [disabled]="saving"
+          (click)="cancelEdit()">
+          Cancel
+        </button>
+        <button
+          *ngIf="editingReviewId !== review.id"
+          mat-button
+          color="warn"
+          type="button"
+          [disabled]="saving"
+          (click)="deleteReview(review)">
+          Delete
+        </button>
+      </div>
+    </mat-card>
+
+    <mat-expansion-panel #reviewPanel class="review-expansion-panel">
+      <mat-expansion-panel-header>
+        <mat-panel-title>Write a Review</mat-panel-title>
+      </mat-expansion-panel-header>
+      <form [formGroup]="reviewForm" (ngSubmit)="submitReview()" class="review-form">
+        <mat-form-field>
+          <mat-label>Review</mat-label>
+          <textarea matInput formControlName="reviewText"></textarea>
+        </mat-form-field>
+        <button
+          mat-flat-button
+          color="primary"
+          type="submit"
+          [disabled]="saving || !canSubmitNewReview">
+          Submit Review
+        </button>
+      </form>
+    </mat-expansion-panel>
+
+    <!-- Resident: report outdated info -->
+    <mat-expansion-panel *ngIf="!isAdmin" class="report-issue-panel">
+      <mat-expansion-panel-header>
+        <mat-panel-title>Report an Issue</mat-panel-title>
+      </mat-expansion-panel-header>
+
+      <ng-container *ngIf="v.myFlag">
+        <p><strong>Your report:</strong> "{{ v.myFlag.flagNote }}"</p>
+        <p *ngIf="v.myFlag.status === 'Pending'" class="flag-status-pending">
+          Pending review by an administrator.
+        </p>
+        <p *ngIf="v.myFlag.status === 'Resolved'" class="flag-status-resolved">
+          This report has been resolved. You may submit a new report if needed.
+        </p>
+      </ng-container>
+
+      <form *ngIf="!hasPendingFlag" [formGroup]="flagForm" (ngSubmit)="submitFlag()" class="flag-form">
+        <mat-form-field>
+          <mat-label>Describe the issue (e.g. phone changed, no longer in business)</mat-label>
+          <textarea matInput formControlName="flagNote"></textarea>
+        </mat-form-field>
+        <div *ngIf="flagError" class="error">{{ flagError }}</div>
+        <button
+          mat-stroked-button
+          color="warn"
+          type="submit"
+          [disabled]="submittingFlag || !canSubmitFlag">
+          Report Issue
+        </button>
+      </form>
+    </mat-expansion-panel>
+
+    <!-- Admin: pending flags panel -->
+    <ng-container *ngIf="isAdmin && (v.pendingFlags?.length ?? 0) > 0">
+      <h3 class="section-heading">Pending Reports</h3>
+      <mat-card *ngFor="let flag of v.pendingFlags" class="flag-card">
+        <mat-card-header>
+          <mat-card-title>{{ flag.authorDisplayName }}</mat-card-title>
+          <mat-card-subtitle>Submitted {{ flag.createdUtc | date:'mediumDate' }}</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <p>{{ flag.flagNote }}</p>
+        </mat-card-content>
+        <mat-card-actions align="end">
+          <button
+            mat-stroked-button
+            color="warn"
+            type="button"
+            [disabled]="saving"
+            (click)="dismissFlag(flag)">
+            Dismiss
+          </button>
+        </mat-card-actions>
+      </mat-card>
+    </ng-container>
+  </ng-container>
+</div>

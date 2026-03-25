@@ -266,3 +266,10 @@ __pycache__/
 
 # Cake - Uncomment if you are using it
 # tools/
+
+# Vendor import (Tools/VendorImport): local spreadsheets and generated seed JSON — do not commit vendor data
+vendor-import-output/
+*.xlsx
+
+# Claude Code — machine-local settings
+.claude/settings.local.json

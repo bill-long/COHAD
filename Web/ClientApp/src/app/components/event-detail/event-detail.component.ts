@@ -51,7 +51,9 @@ export class EventDetailComponent implements OnInit {
   }
 
   logIn(): void {
-    this.dispatcher.next(new Login());
+    const slug = this.route.snapshot.paramMap.get('slug');
+    const redirectTo = slug ? `/events/${slug}` : '/events';
+    this.dispatcher.next(new Login(redirectTo));
   }
 
   submitSignup(): void {

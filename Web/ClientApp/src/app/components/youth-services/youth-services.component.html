@@ -1,0 +1,57 @@
+<div class="feature-page">
+  <div class="page-header">
+    <h2>Babysitters and Tutors</h2>
+    <button mat-flat-button color="primary" type="button" (click)="openAddListing()">
+      Add listing
+    </button>
+  </div>
+
+  <form class="filter-row" [formGroup]="filterForm" (ngSubmit)="load()">
+    <mat-form-field>
+      <mat-label>Search</mat-label>
+      <input matInput formControlName="search" placeholder="Name or parent note" />
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Service</mat-label>
+      <mat-select formControlName="service">
+        <mat-option value="">All</mat-option>
+        <mat-option *ngFor="let service of knownServices" [value]="service">{{ service }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <button mat-flat-button color="primary" type="submit">Apply</button>
+  </form>
+
+  <div *ngIf="loading">Loading listings...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <div class="card-grid">
+    <mat-card *ngFor="let item of listings">
+      <mat-card-title>{{ item.name }}</mat-card-title>
+      <mat-card-subtitle>
+        <ng-container *ngIf="(item.services?.length ?? 0) > 0; else noServices">
+          <span
+            *ngFor="let service of item.services"
+            class="service-chip"
+            [ngClass]="serviceClass(service)">
+            {{ service }}
+          </span>
+        </ng-container>
+        <ng-template #noServices>
+          <span class="service-chip chip-slate">No services listed</span>
+        </ng-template>
+      </mat-card-subtitle>
+      <mat-card-content>
+        <div *ngIf="item.bornYear">Born: {{ item.bornYear }}</div>
+        <div *ngIf="item.phone">{{ item.contactMethod }}: {{ item.phone | formatPhone }}</div>
+        <div *ngIf="item.email">{{ item.email }}</div>
+        <div *ngIf="item.address">{{ item.address }}</div>
+        <div *ngIf="item.parentNote">{{ item.parentNote }}</div>
+      </mat-card-content>
+      <mat-card-actions align="end" *ngIf="item.canEdit !== false">
+        <button mat-stroked-button color="primary" type="button" (click)="openEditListing(item)">
+          Edit
+        </button>
+      </mat-card-actions>
+    </mat-card>
+  </div>
+</div>

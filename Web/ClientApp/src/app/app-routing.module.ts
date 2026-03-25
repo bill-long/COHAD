@@ -26,6 +26,9 @@ import { EventsComponent } from './components/events/events.component';
 import { EventDetailComponent } from './components/event-detail/event-detail.component';
 import { ManageEventsComponent } from './components/manage-events/manage-events.component';
 import { ResidentsComponent } from './components/residents/residents.component';
+import { VendorsComponent } from './components/vendors/vendors.component';
+import { VendorDetailComponent } from './components/vendor-detail/vendor-detail.component';
+import { YouthServicesComponent } from './components/youth-services/youth-services.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
@@ -40,13 +43,19 @@ const routes: Routes = [
   { path: 'events', component: EventsComponent },
   { path: 'events/:slug', component: EventDetailComponent },
   {
-    path: 'residents', component: ResidentsComponent, children: [
-      { path: '', pathMatch: 'full', redirectTo: 'directory' },
-      { path: 'directory', component: DirectoryComponent },
-      { path: 'map', component: MapComponent },
+    path: 'residents',
+    component: ResidentsComponent,
+    canActivate: [AuthGuard],
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'myinfo' },
+      { path: 'directory', component: DirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
+      { path: 'map', component: MapComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
       { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
       { path: 'dues', component: DuesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
-      { path: 'myinfo', component: MyinfoComponent, canActivate: [AuthGuard] }
+      { path: 'myinfo', component: MyinfoComponent },
+      { path: 'vendors', component: VendorsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
+      { path: 'vendors/:id', component: VendorDetailComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
+      { path: 'youth-services', component: YouthServicesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } }
     ]
   },
   { path: 'rendered-print-directory', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },

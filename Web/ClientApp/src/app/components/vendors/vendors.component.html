@@ -1,0 +1,70 @@
+<div class="feature-page">
+  <div class="page-header">
+    <h2>Neighborhood Vendor List</h2>
+    <button mat-flat-button color="primary" type="button" (click)="openAddVendor()">
+      Add vendor
+    </button>
+  </div>
+
+  <form class="filter-row" [formGroup]="filterForm">
+    <mat-form-field>
+      <mat-label>Search</mat-label>
+      <input matInput formControlName="search" placeholder="Name, category, note" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Category</mat-label>
+      <mat-select formControlName="category">
+        <mat-option value="">All</mat-option>
+        <mat-option *ngFor="let category of categories" [value]="category">{{ category }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Sort</mat-label>
+      <mat-select formControlName="sortBy">
+        <mat-option value="recent">Recently Reviewed</mat-option>
+        <mat-option value="name">Name</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-checkbox formControlName="neighborOnly">Neighbor affiliated only</mat-checkbox>
+  </form>
+
+  <div *ngIf="loading">Loading vendors...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <div class="card-grid">
+    <mat-card
+      *ngFor="let vendor of vendors"
+      class="vendor-card--clickable"
+      tabindex="0"
+      role="link"
+      (click)="openVendor(vendor.id)"
+      (keydown.enter)="openVendor(vendor.id)"
+      (keydown.space)="openVendor(vendor.id); $event.preventDefault()">
+      <mat-card-title>
+        {{ vendor.name }}
+      </mat-card-title>
+      <mat-card-subtitle>
+        <ng-container *ngIf="(vendor.categories?.length ?? 0) > 0; else uncategorized">
+          <span
+            *ngFor="let category of vendor.categories"
+            class="category-chip"
+            [ngClass]="categoryClass(category)">
+            {{ category }}
+          </span>
+        </ng-container>
+        <ng-template #uncategorized>
+          <span class="category-chip chip-slate">Uncategorized</span>
+        </ng-template>
+      </mat-card-subtitle>
+      <mat-card-content>
+        <div *ngIf="vendor.isNeighborAffiliated">Neighbor affiliated</div>
+        <div *ngIf="vendor.phone">{{ vendor.phone | formatPhone }}</div>
+        <div *ngIf="vendor.email">{{ vendor.email }}</div>
+        <div>Reviews: {{ vendor.reviewCount }}</div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

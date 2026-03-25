@@ -1,13 +1,15 @@
-import { Component, OnInit, ChangeDetectionStrategy, Inject } from '@angular/core';
+import { Component, Inject, OnInit } from '@angular/core';
 import { Observable, Observer, of } from 'rxjs';
-import { map, catchError, shareReplay } from 'rxjs/operators';
+import { catchError, map, shareReplay } from 'rxjs/operators';
 import { EventsService } from 'src/app/services/events.service';
-import { Router, NavigationStart, ActivatedRoute, UrlSegment, NavigationEnd } from '@angular/router';
+import { VendorFlagNotification } from 'src/app/services/vendors.service';
+import { Router, NavigationEnd, NavigationStart } from '@angular/router';
 import { applicationState, ApplicationState, dispatcher, Action, Login, MockLogin, Logout } from 'src/app/state';
 import { ApiUser, AuthUser } from 'src/app/models';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { ThemeService } from 'src/app/services/theme.service';
 import { environment } from 'src/environments/environment';
+import { VendorFlagNotificationsService } from 'src/app/services/vendor-flag-notifications.service';
 
 @Component({
     selector: 'app-navbar',
@@ -29,18 +31,25 @@ export class NavbarComponent implements OnInit {
   /** True when `GET api/events` returns at least one upcoming event (hides nav link if empty or on error). */
   readonly showEventsNav$: Observable<boolean>;
 
+  readonly vendorFlagNotifications$: Observable<VendorFlagNotification[]>;
+  readonly unreadVendorFlagNotificationCount$: Observable<number>;
+
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>,
     private router: Router,
     private themeService: ThemeService,
-    private readonly eventsService: EventsService) {
+    private readonly eventsService: EventsService,
+    private readonly vendorFlagNotificationsService: VendorFlagNotificationsService) {
 
     this.showEventsNav$ = this.eventsService.getUpcoming().pipe(
       map(events => events.length > 0),
       catchError(() => of(false)),
       shareReplay({ bufferSize: 1, refCount: true })
     );
+
+    this.vendorFlagNotifications$ = this.vendorFlagNotificationsService.notifications$;
+    this.unreadVendorFlagNotificationCount$ = this.vendorFlagNotificationsService.unreadCount$;
 
     router.events.subscribe(e => {
       if (e instanceof NavigationStart) {
@@ -105,12 +114,21 @@ export class NavbarComponent implements OnInit {
     return this.navVm$.pipe(map(vm => vm.showAuthenticatedNav && vm.apiUser !== null && vm.apiUser.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0))
   }
 
+  get adminNotificationsVisible$(): Observable<boolean> {
+    return this.navVm$.pipe(map(vm => vm.showAuthenticatedNav && vm.apiUser !== null && vm.apiUser.roles.includes('Administrator')));
+  }
+
   get isDarkTheme$(): Observable<boolean> {
     return this.themeService.isDarkTheme$;
   }
 
   toggleTheme(): void {
     this.themeService.toggleTheme();
+  }
+
+  openFlagNotification(notification: VendorFlagNotification): void {
+    this.vendorFlagNotificationsService.markAsRead(notification.flagId);
+    this.router.navigate(['/residents/vendors', notification.vendorId]);
   }
 
 }

@@ -45,9 +45,9 @@ export class LoadUser { }
 
 export class LoadUserCompleted { constructor(public user: ApiUser | null) { } }
 
-export class Login { }
+export class Login { constructor(public redirectTo?: string) { } }
 
-export class MockLogin { constructor(public userId: string) { } }
+export class MockLogin { constructor(public userId: string, public redirectTo?: string) { } }
 
 export class Logout { }
 

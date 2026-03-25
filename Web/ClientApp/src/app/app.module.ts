@@ -26,6 +26,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatBadgeModule } from '@angular/material/badge';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { provideNativeDateAdapter } from '@angular/material/core';
 
@@ -72,6 +73,12 @@ import { EventsComponent } from './components/events/events.component';
 import { EventDetailComponent } from './components/event-detail/event-detail.component';
 import { ManageEventsComponent } from './components/manage-events/manage-events.component';
 import { EventEditorDialogComponent } from './components/event-editor-dialog/event-editor-dialog.component';
+import { VendorsComponent } from './components/vendors/vendors.component';
+import { VendorDetailComponent } from './components/vendor-detail/vendor-detail.component';
+import { YouthServicesComponent } from './components/youth-services/youth-services.component';
+import { VendorEditorDialogComponent } from './components/vendor-editor-dialog/vendor-editor-dialog.component';
+import { YouthServiceEditorDialogComponent } from './components/youth-service-editor-dialog/youth-service-editor-dialog.component';
+import { FormatPhonePipe } from './pipes/format-phone.pipe';
 
 @NgModule({ declarations: [
         AppComponent,
@@ -105,7 +112,13 @@ import { EventEditorDialogComponent } from './components/event-editor-dialog/eve
         EventsComponent,
         EventDetailComponent,
         ManageEventsComponent,
-        EventEditorDialogComponent
+        EventEditorDialogComponent,
+        VendorsComponent,
+        VendorDetailComponent,
+        YouthServicesComponent,
+        VendorEditorDialogComponent,
+        YouthServiceEditorDialogComponent,
+        FormatPhonePipe
     ],
     bootstrap: [AppComponent], imports: [BrowserModule,
         AppRoutingModule,
@@ -164,6 +177,7 @@ import { EventEditorDialogComponent } from './components/event-editor-dialog/eve
         MatDialogModule,
         MatSnackBarModule,
         MatDatepickerModule,
+        MatBadgeModule,
         DragDropModule], providers: [
         provideNativeDateAdapter(),
         { provide: dispatcher, useValue: new Subject<Action>() },
