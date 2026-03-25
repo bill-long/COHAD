@@ -37,4 +37,13 @@ public sealed class BlogInlineImageBlobPathsTests
         Assert.Single(paths);
         Assert.Equal("blog/images/guid/f.jpg", paths[0]);
     }
+
+    [Fact]
+    public void ExtractFromMarkdown_decodes_percent_encoded_file_name()
+    {
+        var md = "![](/api/blog/images/guid/my%20photo%23final.jpg)";
+        var paths = BlogInlineImageBlobPaths.ExtractFromMarkdown(md);
+        Assert.Single(paths);
+        Assert.Equal("blog/images/guid/my photo#final.jpg", paths[0]);
+    }
 }

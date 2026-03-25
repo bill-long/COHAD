@@ -58,26 +58,45 @@ internal static class BlogInlineImageBlobPaths
 
         if (url.StartsWith(apiPrefix, o))
         {
-            return blobPrefix + url[apiPrefix.Length..];
+            return blobPrefix + DecodeBlobRelativePath(url[apiPrefix.Length..]);
         }
 
         if (url.StartsWith(blobPrefix, o))
         {
-            return url;
+            var relative = url[blobPrefix.Length..];
+            return blobPrefix + DecodeBlobRelativePath(relative);
         }
 
         var apiIdx = url.IndexOf(apiPrefix, o);
         if (apiIdx >= 0)
         {
-            return blobPrefix + url[(apiIdx + apiPrefix.Length)..];
+            return blobPrefix + DecodeBlobRelativePath(url[(apiIdx + apiPrefix.Length)..]);
         }
 
         var blobIdx = url.IndexOf(blobPrefix, o);
         if (blobIdx >= 0)
         {
-            return url[blobIdx..];
+            var relative = url[(blobIdx + blobPrefix.Length)..];
+            return blobPrefix + DecodeBlobRelativePath(relative);
         }
 
         return null;
+    }
+
+    private static string DecodeBlobRelativePath(string relativePath)
+    {
+        if (string.IsNullOrEmpty(relativePath))
+        {
+            return relativePath;
+        }
+
+        try
+        {
+            return Uri.UnescapeDataString(relativePath);
+        }
+        catch (UriFormatException)
+        {
+            return relativePath;
+        }
     }
 }

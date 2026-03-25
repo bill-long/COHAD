@@ -104,7 +104,7 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
             return await File.ReadAllTextAsync(indexPath);
         }
 
-        var cacheKey = $"SpaIndexHtml:Blog:{indexPath}";
+        var cacheKey = $"SpaIndexHtml:{indexPath}";
         if (cache.TryGetValue(cacheKey, out SpaIndexHtmlCacheEntry entry) && entry.LastWriteUtcTicks == ticks)
         {
             return entry.Html;

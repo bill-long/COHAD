@@ -34,7 +34,7 @@
           </div>
 
           <div class="post-row-actions">
-            <a mat-stroked-button color="primary" class="post-row-action-btn" [routerLink]="['/news', post.publicSlug]" target="_blank">View</a>
+            <a mat-stroked-button color="primary" class="post-row-action-btn" [routerLink]="['/news', post.publicSlug]" target="_blank" rel="noopener noreferrer">View</a>
             <button type="button" mat-stroked-button color="primary" class="post-row-action-btn" (click)="openEditor(post)">Edit</button>
             <button type="button" mat-stroked-button color="warn" class="post-row-action-btn" [disabled]="deletingId === post.id" (click)="deletePost(post)">Delete</button>
           </div>

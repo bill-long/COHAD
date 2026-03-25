@@ -192,7 +192,7 @@ namespace Web.Controllers
                     return BadRequest("Featured image must be an image file (PNG, JPEG, GIF, or WebP).");
                 }
 
-                var safeBaseName = SanitizeFileName(Path.GetFileNameWithoutExtension(request.FeaturedImage.FileName));
+                var safeBaseName = ToUrlSafeFileNameBase(SanitizeFileName(Path.GetFileNameWithoutExtension(request.FeaturedImage.FileName)));
                 if (string.IsNullOrWhiteSpace(safeBaseName))
                 {
                     return BadRequest("Uploaded file name is invalid.");
@@ -318,14 +318,15 @@ namespace Web.Controllers
                 return BadRequest("Image must be PNG, JPEG, GIF, or WebP.");
             }
 
-            var safeBaseName = SanitizeFileName(Path.GetFileNameWithoutExtension(file.FileName));
+            var safeBaseName = ToUrlSafeFileNameBase(SanitizeFileName(Path.GetFileNameWithoutExtension(file.FileName)));
             if (string.IsNullOrWhiteSpace(safeBaseName))
             {
                 return BadRequest("File name is invalid.");
             }
 
             var finalName = $"{safeBaseName}{extension.ToLowerInvariant()}";
-            var inlinePath = $"{Guid.NewGuid():D}/{finalName}";
+            var inlineFolder = $"{Guid.NewGuid():D}";
+            var inlinePath = $"{inlineFolder}/{finalName}";
             var blobPath = $"blog/images/{inlinePath}";
 
             if (!ClientImageContentTypeAcceptable(file.ContentType))
@@ -339,7 +340,8 @@ namespace Web.Controllers
                 await _documentFileStore.UploadAsync(blobPath, stream, trustedContentType);
             }
 
-            return Ok(new { url = $"/api/blog/images/{inlinePath}" });
+            var encodedFinalName = Uri.EscapeDataString(finalName);
+            return Ok(new { url = $"/api/blog/images/{inlineFolder}/{encodedFinalName}" });
         }
 
         [HttpGet("images/{**blobPath}")]
@@ -562,6 +564,35 @@ namespace Web.Controllers
             var invalid = Path.GetInvalidFileNameChars();
             var cleaned = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
             return cleaned;
+        }
+
+        /// <summary>
+        /// Produces a URL-safe filename base so returned image URLs remain valid and stable.
+        /// </summary>
+        private static string ToUrlSafeFileNameBase(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var chars = value.Trim().Select(ch =>
+            {
+                if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '_')
+                {
+                    return ch;
+                }
+
+                return '-';
+            }).ToArray();
+
+            var collapsed = new string(chars);
+            while (collapsed.Contains("--", StringComparison.Ordinal))
+            {
+                collapsed = collapsed.Replace("--", "-", StringComparison.Ordinal);
+            }
+
+            return collapsed.Trim('-', '_', '.');
         }
 
         /// <summary>Trusted image/* MIME for blob metadata from the already-validated file extension.</summary>
