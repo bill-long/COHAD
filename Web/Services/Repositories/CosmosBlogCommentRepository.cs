@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json.Linq;
 using Web.Models;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
@@ -45,20 +47,17 @@ namespace Web.Services.Repositories
 
         public async Task<BlogComment> GetByIdAsync(Guid commentId)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id")
-                .WithParameter("@id", ToDocumentId(commentId));
-            var iterator = _container.GetItemQueryIterator<JObject>(query);
-            while (iterator.HasMoreResults)
+            try
             {
-                var response = await iterator.ReadNextAsync();
-                var doc = response.FirstOrDefault();
-                if (doc != null)
-                {
-                    return ToBlogComment(doc);
-                }
+                var response = await _container.ReadItemAsync<JObject>(
+                    ToDocumentId(commentId),
+                    CosmosPartitionKey.None);
+                return ToBlogComment(response.Resource);
             }
-
-            return null;
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
         }
 
         public async Task<BlogComment> UpsertAsync(BlogComment comment)
