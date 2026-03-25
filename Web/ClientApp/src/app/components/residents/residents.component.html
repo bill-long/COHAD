@@ -1,5 +1,5 @@
 <div class="residents-container">
-  <nav mat-tab-nav-bar [tabPanel]="residentsPanel">
+  <nav mat-tab-nav-bar [tabPanel]="residentsPanel" aria-label="Residents navigation">
     <a mat-tab-link *ngIf="myInfoVisible$ | async"
        routerLink="myinfo" routerLinkActive #rla1="routerLinkActive"
        [active]="rla1.isActive">My Info</a>
