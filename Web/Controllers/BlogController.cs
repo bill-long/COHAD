@@ -256,27 +256,32 @@ namespace Web.Controllers
                 allPosts).ToLowerInvariant();
 
             BlogPost saved;
-            if (isCreate)
+            try
             {
-                saved = await _blogPostRepository.UpsertAsync(post);
-            }
-            else
-            {
-                try
+                if (isCreate)
+                {
+                    saved = await _blogPostRepository.UpsertAsync(post);
+                }
+                else
                 {
                     saved = await _blogPostRepository.ReplaceAsync(post, updateRead!.ETag);
                 }
-                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-                {
-                    await DeleteUploadedFeaturedImageOnSaveFailureAsync(uploadedFeaturedImageBlobPath, previousFeaturedImageBlobPath);
-                    return NotFound();
-                }
-                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
-                {
-                    await DeleteUploadedFeaturedImageOnSaveFailureAsync(uploadedFeaturedImageBlobPath, previousFeaturedImageBlobPath);
-                    return StatusCode(StatusCodes.Status409Conflict,
-                        "Unable to save post due to concurrent updates. Please refresh and try again.");
-                }
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                await DeleteUploadedFeaturedImageOnSaveFailureAsync(uploadedFeaturedImageBlobPath, previousFeaturedImageBlobPath);
+                return NotFound();
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+            {
+                await DeleteUploadedFeaturedImageOnSaveFailureAsync(uploadedFeaturedImageBlobPath, previousFeaturedImageBlobPath);
+                return StatusCode(StatusCodes.Status409Conflict,
+                    "Unable to save post due to concurrent updates. Please refresh and try again.");
+            }
+            catch
+            {
+                await DeleteUploadedFeaturedImageOnSaveFailureAsync(uploadedFeaturedImageBlobPath, previousFeaturedImageBlobPath);
+                throw;
             }
 
             if (shouldDeletePreviousFeaturedImageOnSuccess && !string.IsNullOrWhiteSpace(previousFeaturedImageBlobPath))
@@ -495,7 +500,7 @@ namespace Web.Controllers
         }
 
         [HttpDelete("{segment}/comments/{commentId:guid}")]
-        [Authorize]
+        [Authorize(Policy = "Resident")]
         public async Task<IActionResult> DeleteComment(string segment, Guid commentId)
         {
             var stored = await _blogPostRepository.GetByRouteSegmentAsync(segment);
@@ -528,8 +533,20 @@ namespace Web.Controllers
 
         private async Task<Models.User> GetApiUserAsync()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
+            if (User?.Identity?.IsAuthenticated != true)
+            {
+                return null;
+            }
+
+            try
+            {
+                var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
+                return await _userRepository.GetByUniqueIdAsync(uniqueId);
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
         }
 
         /// <summary>

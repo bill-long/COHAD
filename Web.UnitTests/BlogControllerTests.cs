@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
@@ -195,6 +197,42 @@ public sealed class BlogControllerTests
     }
 
     [Fact]
+    public async Task GetComments_with_authenticated_user_missing_required_claims_does_not_throw()
+    {
+        var postId = Guid.NewGuid();
+        var mockPosts = new Mock<IBlogPostRepository>();
+        mockPosts.Setup(r => r.GetByRouteSegmentAsync("2026-post")).ReturnsAsync(new BlogPost
+        {
+            Id = postId,
+            PublicSlug = "2026-post",
+            Title = "T",
+            Content = "c",
+            PublishUtc = DateTime.UtcNow,
+            AuthorDisplayName = "A"
+        });
+
+        var mockComments = new Mock<IBlogCommentRepository>();
+        mockComments.Setup(r => r.GetByBlogPostIdAsync(postId)).ReturnsAsync(new List<BlogComment>());
+
+        var c = CreateAnonymousController(mockPosts.Object, mockComments.Object);
+        c.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.Name, "broken-user")
+                }, "Test"))
+            }
+        };
+
+        var result = await c.GetComments("2026-post");
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsAssignableFrom<IReadOnlyList<BlogCommentPresentation>>(ok.Value);
+        Assert.Empty(payload);
+    }
+
+    [Fact]
     public async Task GetManage_returns_Forbid_when_user_is_only_resident()
     {
         var uniqueId = UniqueId("u1");
@@ -375,6 +413,66 @@ public sealed class BlogControllerTests
         Assert.Equal(StatusCodes.Status409Conflict, status.StatusCode);
         Assert.Contains(deleted, p => p.StartsWith($"blog/{id:D}/", StringComparison.OrdinalIgnoreCase) && p.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) && !p.EndsWith("/old.jpg", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain($"blog/{id:D}/old.jpg", deleted);
+    }
+
+    [Fact]
+    public async Task UpsertManage_create_with_upload_and_save_exception_deletes_uploaded_blob()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            GivenName = "Test",
+            Surname = "User"
+        });
+
+        var mockPosts = new Mock<IBlogPostRepository>();
+        mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost>());
+        mockPosts.Setup(r => r.UpsertAsync(It.IsAny<BlogPost>())).ThrowsAsync(new InvalidOperationException("save failed"));
+
+        var deleted = new List<string>();
+        var mockFiles = new Mock<IDocumentFileStore>();
+        mockFiles.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+        mockFiles.Setup(f => f.DeleteAsync(It.IsAny<string>()))
+            .Returns(Task.CompletedTask)
+            .Callback<string>(deleted.Add);
+
+        var c = CreateController(mockUsers.Object, mockPosts.Object, Mock.Of<IBlogCommentRepository>(),
+            mockFiles.Object, Mock.Of<IAuditLogRepository>());
+
+        var imgBytes = new byte[] { 1, 2, 3 };
+        IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "FeaturedImage", "new-image.jpg")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "image/jpeg"
+        };
+
+        var request = new BlogPostUpsertRequest
+        {
+            Title = "New title",
+            Content = "New content that is long enough for excerpt.",
+            Excerpt = "manual",
+            PublishUtc = DateTime.UtcNow,
+            FeaturedImage = formFile
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => c.UpsertManage(request));
+        Assert.Single(deleted);
+        Assert.StartsWith("blog/", deleted[0], StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DeleteComment_requires_resident_policy()
+    {
+        var method = typeof(BlogController).GetMethod(nameof(BlogController.DeleteComment));
+        Assert.NotNull(method);
+
+        var authorize = method!.GetCustomAttribute<AuthorizeAttribute>();
+        Assert.NotNull(authorize);
+        Assert.Equal("Resident", authorize!.Policy);
     }
 
     [Fact]
