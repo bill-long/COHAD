@@ -1,0 +1,23 @@
+.milkdown-editor-container {
+    border: 1px solid var(--border-faint);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+:host ::ng-deep .milkdown-editor-container .milkdown {
+    min-height: 200px;
+}
+
+:host ::ng-deep .milkdown-editor-container .ProseMirror {
+    min-height: 200px;
+    padding: 0.75rem 1rem;
+    outline: none;
+}
+
+:host ::ng-deep .milkdown-editor-container .ProseMirror p {
+    margin: 0 0 0.75rem;
+}
+
+:host ::ng-deep .milkdown-editor-container .ProseMirror:focus-within {
+    outline: none;
+}

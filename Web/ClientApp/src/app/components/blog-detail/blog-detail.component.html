@@ -1,0 +1,106 @@
+<div class="container blog-detail-page">
+  <ng-container *ngIf="!loading && post as p">
+    <mat-card class="blog-detail-card">
+      <mat-card-content>
+        <p class="blog-detail-nav">
+          <a mat-button color="primary" routerLink="/news">
+            <mat-icon>arrow_back</mat-icon>
+            Back to all news
+          </a>
+        </p>
+        <p class="mat-caption blog-detail-overline">News</p>
+        <h1 class="mat-headline-4">{{ p.title }}</h1>
+        <p class="mat-body-2 blog-detail-meta">
+          <span class="blog-detail-author">{{ p.authorDisplayName }}</span>
+          <span class="blog-detail-date">{{ p.publishUtc | date:'mediumDate' }}</span>
+        </p>
+      </mat-card-content>
+
+      <mat-divider *ngIf="p.hasFeaturedImage"></mat-divider>
+
+      <mat-card-content *ngIf="p.hasFeaturedImage" class="blog-detail-section">
+        <div class="featured-image-wrap">
+          <div class="featured-image-frame">
+            <img [src]="p.featuredImageDownloadUrl" [alt]="p.title" class="featured-image">
+          </div>
+        </div>
+      </mat-card-content>
+
+      <mat-divider></mat-divider>
+
+      <mat-card-content class="blog-detail-section">
+        <div class="blog-content" [innerHTML]="renderedHtml"></div>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Comments -->
+    <div id="comments" #commentsSection class="blog-comments-section">
+      <mat-card>
+        <mat-card-content>
+          <h2 class="mat-headline-6 blog-comments-title">Comments</h2>
+
+          <div *ngIf="commentsLoading" class="comments-loading">
+            <mat-spinner diameter="24"></mat-spinner>
+          </div>
+
+          <div *ngFor="let c of comments" class="blog-comment">
+            <div class="blog-comment-header">
+              <span class="blog-comment-author">{{ c.authorDisplayName }}</span>
+              <span class="blog-comment-date mat-caption">{{ c.createdUtc | date:'medium' }}</span>
+              <span class="blog-comment-spacer"></span>
+              <button *ngIf="c.canDelete" mat-icon-button (click)="deleteComment(c.id)"
+                      aria-label="Delete comment" class="blog-comment-delete">
+                <mat-icon>delete_outline</mat-icon>
+              </button>
+            </div>
+            <div class="blog-comment-body" [innerHTML]="renderCommentHtml(c)"></div>
+          </div>
+
+          <p *ngIf="!commentsLoading && comments.length === 0" class="mat-body-2 comments-empty">
+            No comments yet. Be the first to comment!
+          </p>
+
+          <!-- Signed-in: comment form -->
+          <ng-container *ngIf="isSignedIn$ | async; else signInPrompt">
+            <div class="comment-form">
+              <mat-form-field appearance="outline" class="comment-field">
+                <mat-label>Add a comment</mat-label>
+                <textarea matInput [(ngModel)]="commentContent" rows="3"
+                          placeholder="Supports **bold**, *italic*, and [links](url)"></textarea>
+                <mat-hint>Markdown: bold, italic, links</mat-hint>
+              </mat-form-field>
+              <div class="comment-form-actions">
+                <button mat-flat-button color="primary"
+                        (click)="submitComment()"
+                        [disabled]="commentSubmitting || !commentContent.trim()">
+                  {{ commentSubmitting ? 'Posting\u2026' : 'Post Comment' }}
+                </button>
+              </div>
+              <p *ngIf="commentError" class="mat-body-2 comment-error" role="alert">{{ commentError }}</p>
+            </div>
+          </ng-container>
+
+          <ng-template #signInPrompt>
+            <div class="comment-sign-in">
+              <button mat-flat-button color="primary" (click)="logIn()">
+                <mat-icon>login</mat-icon>
+                Sign in to comment
+              </button>
+            </div>
+          </ng-template>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  </ng-container>
+
+  <div class="blog-detail-loading" *ngIf="loading">
+    <mat-spinner diameter="40"></mat-spinner>
+    <p class="mat-body-1">Loading post…</p>
+  </div>
+
+  <mat-card *ngIf="!loading && !post && error" appearance="outlined" class="blog-detail-page-error">
+    <mat-card-content>
+      <p class="mat-body-1" role="alert">{{ error }}</p>
+    </mat-card-content>
+  </mat-card>
+</div>

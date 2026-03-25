@@ -1,0 +1,126 @@
+.blog-page {
+    max-width: 1000px;
+    padding: 1.5rem 1rem;
+    box-sizing: border-box;
+}
+
+.blog-shell {
+    background: var(--surface-muted);
+    border: 1px solid var(--border-faint);
+    border-radius: 12px;
+    padding: 1.35rem;
+    box-shadow: 0 6px 18px var(--surface-subtle);
+}
+
+.blog-header h1 {
+    margin: 0;
+    font-size: 1.9rem;
+    font-weight: 600;
+}
+
+.blog-header p {
+    margin: 0.45rem 0 1.15rem;
+    color: var(--text-secondary);
+}
+
+.loading-state,
+.empty-state {
+    color: var(--text-muted);
+}
+
+.blog-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+}
+
+.blog-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid var(--border-faint);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--surface);
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.blog-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px var(--surface-subtle);
+    border-color: var(--border-subtle);
+}
+
+.blog-card:focus-visible {
+    outline: 2px solid var(--border-subtle);
+    outline-offset: 3px;
+}
+
+.blog-card-grid {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 0.9rem;
+    align-items: start;
+    padding: 0.75rem 0.85rem 0.9rem;
+}
+
+.blog-card-grid--no-image {
+    grid-template-columns: 1fr;
+}
+
+@media (max-width: 640px) {
+    .blog-card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.blog-card-image-frame {
+    aspect-ratio: 16 / 9;
+    width: 100%;
+    background: var(--surface-section);
+    border-radius: 8px;
+    border: 1px solid var(--border-faint);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.blog-card-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.blog-card-body {
+    min-width: 0;
+}
+
+.blog-card-body h2 {
+    margin: 0;
+    font-size: 1.15rem;
+}
+
+.blog-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 0.35rem 0 0.55rem;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}
+
+.blog-card-author {
+    font-weight: 500;
+}
+
+.blog-card-excerpt {
+    margin: 0;
+    color: var(--text-primary);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.5;
+}

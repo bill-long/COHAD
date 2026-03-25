@@ -52,4 +52,11 @@ export class ManageComponent implements OnInit {
       u.roles.includes('Resident') &&
       u.roles.filter(r => rolePermissions.manageEventsRoles.includes(r)).length > 0))
   }
+
+  get manageBlogVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u =>
+      u !== null &&
+      u.roles.includes('Resident') &&
+      u.roles.filter(r => rolePermissions.manageBlogRoles.includes(r)).length > 0))
+  }
 }

@@ -29,6 +29,9 @@ import { ResidentsComponent } from './components/residents/residents.component';
 import { VendorsComponent } from './components/vendors/vendors.component';
 import { VendorDetailComponent } from './components/vendor-detail/vendor-detail.component';
 import { YouthServicesComponent } from './components/youth-services/youth-services.component';
+import { BlogComponent } from './components/blog/blog.component';
+import { BlogDetailComponent } from './components/blog-detail/blog-detail.component';
+import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
@@ -39,7 +42,8 @@ const routes: Routes = [
   { path: 'documents', redirectTo: 'residents/documents', pathMatch: 'full' },
   { path: 'myinfo', redirectTo: 'residents/myinfo', pathMatch: 'full' },
   { path: 'mydues', redirectTo: 'residents/dues', pathMatch: 'full' },
-  { path: 'news', component: NewsComponent },
+  { path: 'news', component: BlogComponent },
+  { path: 'news/:slug', component: BlogDetailComponent },
   { path: 'events', component: EventsComponent },
   { path: 'events/:slug', component: EventDetailComponent },
   {
@@ -72,6 +76,12 @@ const routes: Routes = [
         component: ManageEventsComponent,
         canActivate: [RoleGuard],
         data: { allowedRoles: rolePermissions.manageEventsRoles, requireResidentRole: true }
+      },
+      {
+        path: 'blog',
+        component: ManageBlogComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageBlogRoles, requireResidentRole: true }
       },
       { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageAuditLogRoles } }
     ]

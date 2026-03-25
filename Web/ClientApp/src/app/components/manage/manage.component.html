@@ -12,6 +12,8 @@
             *ngIf="manageDocumentsVisible$ | async">Documents</a>
         <a mat-flat-button class="top-nav-button" color="primary" routerLink="events" routerLinkActive="mat-accent"
             *ngIf="manageEventsVisible$ | async">Events</a>
+        <a mat-flat-button class="top-nav-button" color="primary" routerLink="blog" routerLinkActive="mat-accent"
+            *ngIf="manageBlogVisible$ | async">News</a>
         <a mat-flat-button class="top-nav-button" color="primary" routerLink="audit-log" routerLinkActive="mat-accent"
             *ngIf="manageAuditVisible$ | async">Audit Log</a>
     </div>

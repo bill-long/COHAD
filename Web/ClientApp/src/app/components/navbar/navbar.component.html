@@ -4,6 +4,7 @@
     <span class="toolbar-app-title"> COHAD </span>
     <div class="nav-left">
       <a mat-flat-button color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a mat-flat-button color="primary" routerLink="news" routerLinkActive="mat-accent">News</a>
       <a *ngIf="showEventsNav$ | async" mat-flat-button color="primary" routerLink="events" routerLinkActive="mat-accent">Events</a>
       <a *ngIf="vm.showGuestPrivacy" mat-flat-button color="primary" routerLink="privacy" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Privacy
         Policy</a>
@@ -54,6 +55,7 @@
     </button>
     <mat-menu #hamburgerMenu="matMenu">
       <a mat-menu-item color="primary" routerLink="" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a mat-menu-item color="primary" routerLink="news" routerLinkActive="mat-accent">News</a>
       <a *ngIf="showEventsNav$ | async" mat-menu-item color="primary" routerLink="events" routerLinkActive="mat-accent">Events</a>
       <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
       <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="mat-accent" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
