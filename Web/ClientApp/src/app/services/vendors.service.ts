@@ -131,7 +131,7 @@ const vendorCategoryKeywordsByBucket: Readonly<Record<VendorCategoryBucket, read
     'foundation repair', 'electrician', 'plumber', 'handy man', 'garage doors',
     'fence', 'fences', 'gutters', 'chimney', 'septic', 'shower doors', 'skylight',
     'window replacement', 'window treatments', 'window cleaning', 'reupholster',
-    'uphosltery', 'tailor'
+    'upholstery', 'tailor'
   ],
   'Outdoor & Property': [
     'landscape', 'lawn', 'tree service', 'tree trimming', 'sprinklers',
