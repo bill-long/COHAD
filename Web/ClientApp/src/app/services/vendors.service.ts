@@ -110,6 +110,63 @@ export interface YouthServiceUpsertPayload {
   parentNote: string;
 }
 
+export type VendorCategoryBucket =
+  | 'Home Construction & Repair'
+  | 'Outdoor & Property'
+  | 'Home Services & Household'
+  | 'Personal, Health & Professional'
+  | 'Auto, Pet & Community';
+
+export const VENDOR_CATEGORY_BUCKETS: readonly VendorCategoryBucket[] = [
+  'Home Construction & Repair',
+  'Outdoor & Property',
+  'Home Services & Household',
+  'Personal, Health & Professional',
+  'Auto, Pet & Community'
+];
+
+const vendorCategoryKeywordsByBucket: Readonly<Record<VendorCategoryBucket, readonly string[]>> = {
+  'Home Construction & Repair': [
+    'roofer', 'contractor', 'construction', 'carpenter', 'builder', 'concrete',
+    'foundation repair', 'electrician', 'plumber', 'handy man', 'garage doors',
+    'fence', 'fences', 'gutters', 'chimney', 'septic', 'shower doors', 'skylight',
+    'window replacement', 'window treatments', 'window cleaning', 'reupholster',
+    'uphosltery', 'tailor'
+  ],
+  'Outdoor & Property': [
+    'landscape', 'lawn', 'tree service', 'tree trimming', 'sprinklers',
+    'debris removal', 'mulch', 'dyno dirt', 'wells', 'pool', 'pool maintenance',
+    'outdoor kitchen', 'stone', 'french drains'
+  ],
+  'Home Services & Household': [
+    'housekeeper', 'pest control', 'animal control', 'security systems', 'appliance repair'
+  ],
+  'Personal, Health & Professional': [
+    'beautician', 'barber', 'chiropractor', 'dentist', 'doctor', 'acupuncturist',
+    'optometrist', 'opthomologist', 'orthopedic', 'financial planning', 'insurance', 'lawyer'
+  ],
+  'Auto, Pet & Community': [
+    'mechanic', 'towing', 'detailer', 'veterinarians', 'library',
+    'music instruction', 'piano teacher', 'catering', 'conference', 'restaurant', 'desserts'
+  ]
+};
+
+function normalizeCategory(value: string): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+export function getVendorCategoryBucket(category: string): VendorCategoryBucket {
+  const normalizedCategory = normalizeCategory(category);
+  for (const bucket of VENDOR_CATEGORY_BUCKETS) {
+    const keywords = vendorCategoryKeywordsByBucket[bucket];
+    if (keywords.some(keyword => normalizedCategory === normalizeCategory(keyword))) {
+      return bucket;
+    }
+  }
+
+  return 'Auto, Pet & Community';
+}
+
 const categoryChipClasses = [
   'chip-blue', 'chip-green', 'chip-amber', 'chip-purple',
   'chip-rose', 'chip-cyan', 'chip-teal', 'chip-slate'
