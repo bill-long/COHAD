@@ -22,7 +22,7 @@
     color: var(--text-tertiary);
 }
 
-.blog-detail-card > mat-card-content:first-of-type h1.mat-headline-4 {
+.blog-detail-card > mat-card-content:first-of-type h1.mat-headline-medium {
     margin: 0 0 0.35rem;
 }
 
@@ -119,7 +119,7 @@
     background: var(--error-bg);
 }
 
-.blog-detail-page-error .mat-body-1 {
+.blog-detail-page-error .mat-body-large {
     margin: 0;
     color: var(--error);
 }

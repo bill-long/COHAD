@@ -40,10 +40,16 @@ mat-form-field {
 }
 
 .home {
-  padding-top: 30px;
+  padding-top: 24px;
+  padding-bottom: 24px;
   break-inside: avoid;
   width: 100%;
   max-width: 100%;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.home:last-child {
+  border-bottom: none;
 }
 
 mat-spinner {

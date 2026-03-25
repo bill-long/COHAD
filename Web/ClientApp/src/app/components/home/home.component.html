@@ -1,4 +1,4 @@
-<app-header [title]="title" [subtitles]="subtitles" imagePath="assets/trees1.jpg" [noBottomGap]="true" [fillViewport]="true" imageFetchPriority="high">
+<app-header [title]="title" [subtitles]="subtitles" imagePath="assets/trees1.jpg" [noBottomGap]="true" imageFetchPriority="high">
   <div class="home-hero-teaser" *ngIf="nextEvent as eventItem">
     <div class="home-hero-teaser-inner">
       <div class="home-hero-teaser-text">
@@ -10,3 +10,31 @@
     </div>
   </div>
 </app-header>
+
+<div class="home-content">
+  <section class="home-welcome">
+    <h2 class="home-welcome-title">Welcome to Canyon Oaks</h2>
+    <p class="home-welcome-text">
+      A friendly, voluntary homeowners association in Denton, Texas. We maintain our neighborhood
+      entrances, sponsor community events, and help neighbors stay connected.
+    </p>
+  </section>
+
+  <section class="home-cards">
+    <a class="home-card" routerLink="/events">
+      <mat-icon class="home-card-icon">event</mat-icon>
+      <h3 class="home-card-title">Events</h3>
+      <p class="home-card-desc">See what's coming up in the neighborhood</p>
+    </a>
+    <a class="home-card" routerLink="/news">
+      <mat-icon class="home-card-icon">article</mat-icon>
+      <h3 class="home-card-title">News</h3>
+      <p class="home-card-desc">Stay up to date with neighborhood updates</p>
+    </a>
+    <a class="home-card" routerLink="/about">
+      <mat-icon class="home-card-icon">info</mat-icon>
+      <h3 class="home-card-title">About</h3>
+      <p class="home-card-desc">Learn about COHAD and what we do</p>
+    </a>
+  </section>
+</div>

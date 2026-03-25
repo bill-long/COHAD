@@ -1,28 +1,16 @@
-.constrained-image {
-    max-width: 100%;
-    margin-top: 5px;
-}
-
-.centered {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-}
-
+/* Hero event teaser overlay */
 .home-hero-teaser {
     width: 100%;
     box-sizing: border-box;
     padding: 1.25rem 1rem 2rem;
     background: linear-gradient(
         to bottom,
-        rgba(15, 20, 15, 0.92) 0%,
-        rgba(15, 20, 15, 0.55) 55%,
+        rgba(28, 26, 23, 0.92) 0%,
+        rgba(28, 26, 23, 0.55) 55%,
         transparent 100%
     );
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
 }
 
 .home-hero-teaser-inner {
@@ -86,5 +74,101 @@
     .home-hero-teaser-btn {
         align-self: stretch;
         text-align: center;
+    }
+}
+
+/* Below-hero content */
+.home-content {
+    width: min(960px, 100%);
+    margin: 0 auto;
+    padding: 0 1.25rem 3rem;
+}
+
+/* Welcome section */
+.home-welcome {
+    text-align: center;
+    padding: 3rem 1rem 2.5rem;
+}
+
+.home-welcome-title {
+    margin: 0 0 0.75rem;
+    font-size: clamp(1.5rem, 3.5vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+
+.home-welcome-text {
+    margin: 0 auto;
+    max-width: 600px;
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+/* Quick-link cards */
+.home-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.home-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    text-decoration: none;
+    color: inherit;
+    padding: 1.75rem 1.25rem;
+    border-radius: 14px;
+    border: 1px solid var(--border-faint);
+    background: var(--surface-muted);
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    cursor: pointer;
+}
+
+.home-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px var(--surface-subtle), 0 2px 8px rgba(0, 0, 0, 0.06);
+    border-color: var(--border-subtle);
+}
+
+.home-card:focus-visible {
+    outline: 2px solid var(--primary-sage);
+    outline-offset: 2px;
+}
+
+.home-card-icon {
+    font-size: 2rem;
+    width: 2rem;
+    height: 2rem;
+    color: var(--primary-sage);
+    margin-bottom: 0.75rem;
+}
+
+.home-card-title {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.home-card-desc {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+    .home-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 400px) {
+    .home-cards {
+        grid-template-columns: 1fr;
     }
 }

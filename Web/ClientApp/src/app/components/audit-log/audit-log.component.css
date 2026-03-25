@@ -17,11 +17,11 @@
     align-items: center;
     gap: 10px;
     padding: 12px;
-    color: rgba(0, 0, 0, 0.72);
+    color: var(--text-secondary);
 }
 
 .audit-status.error {
-    color: #b00020;
+    color: var(--error);
 }
 
 .audit-log-page .mat-mdc-header-cell,

@@ -1,35 +1,50 @@
-<h2>Send Neighborhood Email</h2>
-<div>
-    <mat-form-field appearance="fill">
-        <mat-label>From</mat-label>
-        <mat-select [(value)]="senderEndpoint">
-            <mat-option *ngIf="canSendFromBoard | async" [value]="'from-board'">COHAD Board</mat-option>
-            <mat-option *ngIf="canSendFromWelcomeCommittee | async" [value]="'from-welcome'">COHAD Welcome Committee</mat-option>
-            <mat-option *ngIf="canSendFromGardenClub | async" [value]="'from-garden'">COHAD Garden Club</mat-option>
-            <mat-option *ngIf="canSendFromSocialCommittee | async" [value]="'from-social'">COHAD Social Committee</mat-option>
-            <mat-option *ngIf="canSendFromSunshineCommittee | async" [value]="'from-sunshine'">COHAD Sunshine Committee</mat-option>
-        </mat-select>
-    </mat-form-field>
+<div class="send-email-page">
+    <mat-card>
+        <mat-card-content>
+            <h2 class="page-title">Send Neighborhood Email</h2>
+
+            <mat-form-field appearance="outline" class="full-width">
+                <mat-label>From</mat-label>
+                <mat-select [(value)]="senderEndpoint">
+                    <mat-option *ngIf="canSendFromBoard | async" [value]="'from-board'">COHAD Board</mat-option>
+                    <mat-option *ngIf="canSendFromWelcomeCommittee | async" [value]="'from-welcome'">COHAD Welcome Committee</mat-option>
+                    <mat-option *ngIf="canSendFromGardenClub | async" [value]="'from-garden'">COHAD Garden Club</mat-option>
+                    <mat-option *ngIf="canSendFromSocialCommittee | async" [value]="'from-social'">COHAD Social Committee</mat-option>
+                    <mat-option *ngIf="canSendFromSunshineCommittee | async" [value]="'from-sunshine'">COHAD Sunshine Committee</mat-option>
+                </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Subject</mat-label>
+                <input matInput [(ngModel)]="subject" [disabled]="!editEnabled">
+            </mat-form-field>
+
+            <div class="editor-wrapper">
+                <quill-editor [readOnly]="!editEnabled" [(ngModel)]="htmlBody"></quill-editor>
+            </div>
+
+            <div class="actions">
+                <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(true)" [disabled]="!editEnabled">
+                    Send Test Email To {{apiUserEmail | async}}
+                </button>
+                <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(false)" [disabled]="!editEnabled">
+                    Send Email To Neighborhood
+                </button>
+                <button *ngIf="sendSucceeded" mat-flat-button color="primary" (click)="sendNew()">
+                    Compose a new email
+                </button>
+            </div>
+
+            <div *ngIf="testSucceeded" class="cohad-inline-alert cohad-inline-alert--success">
+                Test email was sent!
+            </div>
+            <div *ngIf="sendSucceeded" class="cohad-inline-alert cohad-inline-alert--success">
+                Email was sent!
+            </div>
+            <div *ngIf="errorText != null" class="cohad-inline-alert cohad-inline-alert--error">
+                <div>Error occurred. Detailed error information:</div>
+                <pre class="error-detail">{{errorText}}</pre>
+            </div>
+        </mat-card-content>
+    </mat-card>
 </div>
-<div>
-    <mat-form-field appearance="fill">
-        <mat-label>Subject</mat-label>
-        <input matInput [(ngModel)]="subject" [disabled]="!editEnabled">
-    </mat-form-field>
-</div>
-<div class="editor-wrapper">
-    <quill-editor [readOnly]="!editEnabled" [(ngModel)]="htmlBody"></quill-editor>
-</div>
-<div>
-    <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(true)" [disabled]="!editEnabled">Send Test Email To {{apiUserEmail | async}}</button>
-    <div *ngIf="testSucceeded">Test email was sent!</div>
-</div>
-<div>
-    <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(false)" [disabled]="!editEnabled">Send Email To Neighborhood</button>
-    <div *ngIf="sendSucceeded">Email was sent!</div>
-    <div *ngIf="errorText != null">
-      <div>Error occurred. Detailed error information:</div>
-      <pre>{{errorText}}</pre>
-    </div>
-</div>
-<button *ngIf="sendSucceeded" mat-flat-button color="primary" (click)="sendNew()">Compose a new email</button>

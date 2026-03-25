@@ -1,37 +1,40 @@
 @use '@angular/material' as mat;
 
-// TODO(v15): As of v15 mat.legacy-core no longer includes default typography styles.
-//  The following line adds:
-//    1. Default typography styles for all components
-//    2. Styles for typography hierarchy classes (e.g. .mat-headline-1)
-//  If you specify typography styles for the components you use elsewhere, you should delete this line.
-//  If you don't need the default component typographies but still want the hierarchy styles,
-//  you can delete this line and instead use:
-//    `@include mat.legacy-typography-hierarchy(mat.define-typography-config());`
-@include mat.all-component-typographies();
+// M3 typography with Inter
+$cohad-typography: mat.define-typography((
+  plain-family: #{"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"},
+  brand-family: #{"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"},
+));
+@include mat.all-component-typographies($cohad-typography);
+@include mat.typography-hierarchy($cohad-typography);
 @include mat.elevation-classes();
 @include mat.app-background();
 
-$cohad-app-primary: mat.m2-define-palette(mat.$m2-green-palette, 700, 300, 900);
-$cohad-app-primary-dark: mat.m2-define-palette(mat.$m2-green-palette, 300, 100, 600);
-$cohad-app-accent: mat.m2-define-palette(mat.$m2-brown-palette);
-$cohad-app-light-theme: mat.m2-define-light-theme((
+// Earthy Sage Light Theme (M3)
+$cohad-light-theme: mat.define-theme((
   color: (
-    primary: $cohad-app-primary,
-    accent: $cohad-app-accent,
+    theme-type: light,
+    primary: mat.$green-palette,
+    tertiary: mat.$orange-palette,
   ),
 ));
 
-$cohad-app-dark-theme: mat.m2-define-dark-theme((
+// Earthy Sage Dark Theme (M3)
+$cohad-dark-theme: mat.define-theme((
   color: (
-    primary: $cohad-app-primary-dark,
-    accent: $cohad-app-accent,
+    theme-type: dark,
+    primary: mat.$green-palette,
+    tertiary: mat.$orange-palette,
   ),
 ));
 
-@include mat.all-component-themes($cohad-app-light-theme);
+// Apply light theme globally
+html {
+  @include mat.all-component-themes($cohad-light-theme);
+}
 
+// Dark mode override
 body.dark-theme {
-  @include mat.all-component-colors($cohad-app-dark-theme);
+  @include mat.all-component-colors($cohad-dark-theme);
   color-scheme: dark;
 }

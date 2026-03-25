@@ -1,17 +1,19 @@
-<div>
-  <div>
-    <h2>Print Directory</h2>
-  </div>
-  <div class="button-row">
-    <div>
-      <a mat-raised-button color="primary" routerLink="/rendered-print-directory">Print Directory</a>
-    </div>
-    <div>
-      <a mat-raised-button color="primary" routerLink="/rendered-print-map">Print Map</a>
-    </div>
-  </div>
-  <mat-card class="pd-card">
-    <p>Print settings for the directory must be <strong>5x8 paper</strong> in <strong>portrait mode</strong> to achieve the intended result.</p>
-    <p>Print settings for the map must be <strong>8x10 paper</strong> in <strong>landscape mode</strong> to achieve the intended result.</p>
-  </mat-card>
+<div class="print-page">
+    <mat-card>
+        <mat-card-content>
+            <h2 class="page-title">Print Directory</h2>
+            <div class="button-row">
+                <a mat-flat-button color="primary" routerLink="/rendered-print-directory">Print Directory</a>
+                <a mat-flat-button color="primary" routerLink="/rendered-print-map">Print Map</a>
+            </div>
+        </mat-card-content>
+    </mat-card>
+
+    <mat-card>
+        <mat-card-content>
+            <h3 class="section-title">Print Settings</h3>
+            <p>Print settings for the directory must be <strong>5x8 paper</strong> in <strong>portrait mode</strong> to achieve the intended result.</p>
+            <p>Print settings for the map must be <strong>8x10 paper</strong> in <strong>landscape mode</strong> to achieve the intended result.</p>
+        </mat-card-content>
+    </mat-card>
 </div>
