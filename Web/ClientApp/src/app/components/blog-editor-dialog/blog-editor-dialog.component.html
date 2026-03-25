@@ -1,0 +1,145 @@
+<h2 mat-dialog-title class="blog-editor-dialog-title">
+  <span class="dialog-title-main">{{ dialogTitle }}</span>
+  <span class="dialog-title-sub" *ngIf="editingSubtitle">{{ editingSubtitle }}</span>
+</h2>
+
+<div mat-dialog-content class="blog-editor-dialog-body">
+  <div class="blog-editor-error" *ngIf="error" role="alert">{{ error }}</div>
+
+  <section class="blog-editor-section">
+    <h3 class="blog-editor-section-title">Post details</h3>
+    <div class="blog-editor-field-row">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="blog-editor-mat-field">
+        <mat-label>Title</mat-label>
+        <input
+          matInput
+          id="blog-editor-title"
+          [(ngModel)]="title"
+          maxlength="200"
+          placeholder="Spring Garden Tips">
+        <mat-hint align="end">{{ title.length }}/200</mat-hint>
+      </mat-form-field>
+    </div>
+
+    <div class="blog-editor-field-row blog-editor-datetime-row">
+      <span id="blog-editor-publish-label" class="blog-editor-datetime-label">Publish date and time</span>
+      <div class="blog-editor-datetime-fields" aria-labelledby="blog-editor-publish-label">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="blog-editor-date-field">
+          <mat-label>Date</mat-label>
+          <input matInput [matDatepicker]="publishPicker" [(ngModel)]="publishDate" id="blog-editor-publish-date">
+          <mat-datepicker-toggle matIconSuffix [for]="publishPicker"></mat-datepicker-toggle>
+          <mat-datepicker #publishPicker></mat-datepicker>
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="blog-editor-time-field">
+          <mat-label>Time</mat-label>
+          <input matInput type="time" [(ngModel)]="publishTime" id="blog-editor-publish-time" step="60">
+        </mat-form-field>
+      </div>
+    </div>
+
+    <div class="blog-editor-field-row">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="blog-editor-mat-field">
+        <mat-label>Excerpt (optional)</mat-label>
+        <textarea
+          matInput
+          id="blog-editor-excerpt"
+          rows="2"
+          [(ngModel)]="excerpt"
+          maxlength="400"
+          placeholder="Auto-generated from content if left blank"></textarea>
+        <mat-hint align="end">{{ excerpt.length }}/400</mat-hint>
+      </mat-form-field>
+    </div>
+  </section>
+
+  <section class="blog-editor-section">
+    <div class="blog-editor-content-header">
+      <h3 class="blog-editor-section-title">Content</h3>
+      <mat-button-toggle-group
+        [value]="editorMode"
+        (change)="editorMode = $event.value"
+        class="blog-editor-mode-toggle">
+        <mat-button-toggle value="visual">Visual</mat-button-toggle>
+        <mat-button-toggle value="markdown">Markdown</mat-button-toggle>
+      </mat-button-toggle-group>
+    </div>
+    <app-milkdown-editor
+      *ngIf="editorMode === 'visual'"
+      [value]="content"
+      (valueChange)="content = $event"
+      class="blog-editor-milkdown">
+    </app-milkdown-editor>
+    <mat-form-field
+      *ngIf="editorMode === 'markdown'"
+      appearance="outline"
+      subscriptSizing="dynamic"
+      class="blog-editor-mat-field blog-editor-source-field">
+      <mat-label>Markdown source</mat-label>
+      <textarea
+        matInput
+        [(ngModel)]="content"
+        rows="12"
+        class="blog-editor-source-textarea"
+        placeholder="# My Post Title&#10;&#10;Write your content in Markdown…"
+        spellcheck="true"></textarea>
+    </mat-form-field>
+  </section>
+
+  <section class="blog-editor-section blog-editor-section-image">
+    <h3 class="blog-editor-section-title">Featured image</h3>
+    <p class="blog-editor-section-hint">Optional image (PNG, JPEG, GIF, or WebP) shown in news cards and social link previews.</p>
+
+    <div class="image-grid" [class.image-grid--with-preview]="showImagePreview">
+      <div class="image-preview-column" *ngIf="showImagePreview">
+        <div class="dialog-image-label">Current image</div>
+        <div class="dialog-image-frame" *ngIf="data.post as p">
+          <img
+            [src]="p.featuredImageDownloadUrl"
+            [alt]="p.title"
+            class="dialog-image-img">
+        </div>
+      </div>
+
+      <div class="image-controls-column">
+        <input
+          #fileInput
+          id="blog-editor-image"
+          class="blog-editor-file-input-hidden"
+          type="file"
+          accept=".png,.jpg,.jpeg,.gif,.webp"
+          (change)="onFileSelected($event)">
+
+        <div class="image-file-actions">
+          <button type="button" mat-stroked-button class="blog-editor-file-btn" (click)="fileInput.click()">Choose file…</button>
+        </div>
+
+        <div class="image-file-status image-file-status--muted" *ngIf="!selectedFile && existingImageFileName && !removeFeaturedImage">
+          Current: <strong class="image-file-status-emphasis">{{ existingImageFileName }}</strong>
+        </div>
+        <div class="image-file-status image-file-status--new" *ngIf="selectedFile">
+          New file: <strong class="image-file-status-emphasis">{{ selectedFile.name }}</strong>
+          <button type="button" mat-button class="blog-editor-remove-file-btn" (click)="clearSelectedFile()">Remove</button>
+        </div>
+        <div class="image-file-status image-file-status--muted" *ngIf="!selectedFile && !existingImageFileName && !removeFeaturedImage">
+          No image attached yet.
+        </div>
+        <div class="image-file-status image-file-status--muted" *ngIf="removeFeaturedImage && !selectedFile">
+          Current image will be removed when you save.
+        </div>
+
+        <div class="blog-editor-checkbox-row" *ngIf="existingImageFileName && !selectedFile">
+          <mat-checkbox [(ngModel)]="removeFeaturedImage" color="primary" id="blog-editor-remove-image">Remove current featured image</mat-checkbox>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div mat-dialog-actions align="end" class="blog-editor-dialog-actions">
+  <button type="button" mat-button (click)="cancel()" [disabled]="saving">Cancel</button>
+  <button type="button" mat-flat-button color="primary" (click)="save()" [disabled]="saving" class="blog-editor-save-btn">
+    <mat-spinner *ngIf="saving" class="blog-editor-save-spinner" diameter="20" mode="indeterminate"></mat-spinner>
+    <span *ngIf="!saving">{{ editingPostId ? 'Save changes' : 'Create post' }}</span>
+    <span *ngIf="saving">Saving…</span>
+  </button>
+</div>

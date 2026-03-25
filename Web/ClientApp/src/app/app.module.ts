@@ -79,6 +79,11 @@ import { YouthServicesComponent } from './components/youth-services/youth-servic
 import { VendorEditorDialogComponent } from './components/vendor-editor-dialog/vendor-editor-dialog.component';
 import { YouthServiceEditorDialogComponent } from './components/youth-service-editor-dialog/youth-service-editor-dialog.component';
 import { FormatPhonePipe } from './pipes/format-phone.pipe';
+import { BlogComponent } from './components/blog/blog.component';
+import { BlogDetailComponent } from './components/blog-detail/blog-detail.component';
+import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
+import { BlogEditorDialogComponent } from './components/blog-editor-dialog/blog-editor-dialog.component';
+import { MilkdownEditorComponent } from './components/milkdown-editor/milkdown-editor.component';
 
 @NgModule({ declarations: [
         AppComponent,
@@ -118,7 +123,12 @@ import { FormatPhonePipe } from './pipes/format-phone.pipe';
         YouthServicesComponent,
         VendorEditorDialogComponent,
         YouthServiceEditorDialogComponent,
-        FormatPhonePipe
+        FormatPhonePipe,
+        BlogComponent,
+        BlogDetailComponent,
+        ManageBlogComponent,
+        BlogEditorDialogComponent,
+        MilkdownEditorComponent
     ],
     bootstrap: [AppComponent], imports: [BrowserModule,
         AppRoutingModule,

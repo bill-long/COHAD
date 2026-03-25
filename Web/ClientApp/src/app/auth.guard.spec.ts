@@ -1,7 +1,7 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 import { Router } from '@angular/router';
-import { AuthGuard } from './auth.guard';
+import { AuthGuard, AUTH_RESOLVE_TIMEOUT_MS } from './auth.guard';
 import { ApplicationState, applicationState, initialStateValue } from './state';
 import { AuthService } from './services/auth.service';
 
@@ -69,7 +69,7 @@ describe('AuthGuard', () => {
     let result: boolean | undefined;
     guard.canActivate({} as any, {} as any).subscribe(v => (result = v));
 
-    tick(9999);
+    tick(AUTH_RESOLVE_TIMEOUT_MS - 1);
     expect(result).toBeUndefined();
     expect(router.navigate).not.toHaveBeenCalled();
 

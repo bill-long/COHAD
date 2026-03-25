@@ -1,0 +1,49 @@
+<div class="manage-blog-page">
+  <section class="manage-blog-shell">
+    <div class="manage-blog-header">
+      <div class="manage-blog-header-row">
+        <div>
+          <h1>News</h1>
+          <p>Create and manage community news posts.</p>
+        </div>
+        <button type="button" mat-flat-button color="primary" class="manage-blog-create" (click)="openEditor(null)">Create post</button>
+      </div>
+    </div>
+
+    <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="error" role="alert">{{ error }}</div>
+    <div class="cohad-inline-alert cohad-inline-alert--success" *ngIf="success" role="status">{{ success }}</div>
+
+    <div class="loading-state" *ngIf="loading">Loading posts...</div>
+
+    <ng-container *ngIf="!loading">
+      <section class="posts-list" *ngIf="posts.length > 0">
+        <article class="post-row" *ngFor="let post of posts">
+          <div class="post-row-main">
+            <div class="post-row-title-wrap">
+              <h3>{{ post.title }}</h3>
+              <span class="post-row-meta">
+                {{ post.authorDisplayName }} · {{ post.publishUtc | date:'mediumDate' }}
+              </span>
+            </div>
+            <p class="post-row-excerpt">{{ post.excerpt }}</p>
+            <div class="post-row-image" *ngIf="post.hasFeaturedImage">
+              <div class="post-row-image-frame">
+                <img [src]="post.featuredImageDownloadUrl" [alt]="post.title" class="post-row-image-img">
+              </div>
+            </div>
+          </div>
+
+          <div class="post-row-actions">
+            <a mat-stroked-button color="primary" class="post-row-action-btn" [routerLink]="['/news', post.publicSlug]" target="_blank" rel="noopener noreferrer">View</a>
+            <button type="button" mat-stroked-button color="primary" class="post-row-action-btn" (click)="openEditor(post)">Edit</button>
+            <button type="button" mat-stroked-button color="warn" class="post-row-action-btn" [disabled]="deletingId === post.id" (click)="deletePost(post)">Delete</button>
+          </div>
+        </article>
+      </section>
+
+      <div *ngIf="posts.length === 0" class="empty-state">
+        No posts created yet. Use <strong>Create post</strong> to add one.
+      </div>
+    </ng-container>
+  </section>
+</div>

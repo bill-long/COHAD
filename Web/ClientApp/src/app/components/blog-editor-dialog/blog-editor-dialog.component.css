@@ -1,0 +1,203 @@
+.blog-editor-dialog-title {
+    margin: 0 0 0.5rem;
+}
+
+.dialog-title-main {
+    display: block;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.dialog-title-sub {
+    display: block;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    margin-top: 0.15rem;
+}
+
+.blog-editor-dialog-body {
+    padding-top: 0.25rem;
+}
+
+.blog-editor-error {
+    background: var(--error-bg);
+    color: var(--error);
+    border: 1px solid color-mix(in srgb, var(--error) 30%, var(--border-faint));
+    border-radius: 6px;
+    padding: 0.55rem 0.85rem;
+    margin-bottom: 0.85rem;
+    font-size: 0.92rem;
+}
+
+.blog-editor-section {
+    margin-bottom: 1.5rem;
+}
+
+.blog-editor-section-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.6rem;
+}
+
+.blog-editor-section-hint {
+    margin: -0.3rem 0 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.blog-editor-field-row {
+    margin-bottom: 0.65rem;
+}
+
+.blog-editor-mat-field {
+    width: 100%;
+}
+
+/* Datetime row */
+.blog-editor-datetime-row {
+    margin-bottom: 0.75rem;
+}
+
+.blog-editor-datetime-label {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+    color: var(--text-secondary);
+}
+
+.blog-editor-datetime-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+    align-items: start;
+}
+
+@media (max-width: 480px) {
+    .blog-editor-datetime-fields {
+        grid-template-columns: 1fr;
+    }
+}
+
+.blog-editor-date-field,
+.blog-editor-time-field {
+    width: 100%;
+}
+
+/* Content header with mode toggle */
+.blog-editor-content-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.6rem;
+}
+
+.blog-editor-content-header .blog-editor-section-title {
+    margin: 0;
+}
+
+.blog-editor-mode-toggle {
+    flex-shrink: 0;
+}
+
+/* Milkdown editor */
+.blog-editor-milkdown {
+    display: block;
+}
+
+/* Source textarea */
+.blog-editor-source-field {
+    width: 100%;
+}
+
+.blog-editor-source-textarea {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 200px;
+}
+
+/* Featured image section */
+.image-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+.image-grid--with-preview {
+    grid-template-columns: 200px 1fr;
+}
+
+@media (max-width: 560px) {
+    .image-grid--with-preview {
+        grid-template-columns: 1fr;
+    }
+}
+
+.dialog-image-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.35rem;
+}
+
+.dialog-image-frame {
+    aspect-ratio: 16 / 9;
+    width: 100%;
+    background: var(--surface-section);
+    border-radius: 6px;
+    border: 1px solid var(--border-faint);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dialog-image-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.blog-editor-file-input-hidden {
+    display: none;
+}
+
+.image-file-actions {
+    margin-bottom: 0.55rem;
+}
+
+.image-file-status {
+    font-size: 0.88rem;
+    margin-bottom: 0.45rem;
+}
+
+.image-file-status--muted {
+    color: var(--text-secondary);
+}
+
+.image-file-status-emphasis {
+    font-weight: 500;
+}
+
+.blog-editor-checkbox-row {
+    margin-top: 0.25rem;
+}
+
+/* Dialog actions */
+.blog-editor-dialog-actions {
+    padding-top: 0.25rem;
+}
+
+.blog-editor-save-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-width: 8rem;
+}
+
+.blog-editor-save-spinner {
+    display: inline-block;
+}

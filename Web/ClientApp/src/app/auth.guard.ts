@@ -5,7 +5,7 @@ import { applicationState, ApplicationState } from './state';
 import { Observable, race, timer } from 'rxjs';
 import { AuthService } from './services/auth.service';
 
-const AUTH_RESOLVE_TIMEOUT_MS = 30000;
+export const AUTH_RESOLVE_TIMEOUT_MS = 30000;
 
 @Injectable({ providedIn: 'root' })
 export class AuthGuard  {

@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject, of } from 'rxjs';
+import * as SignalR from '@microsoft/signalr';
 import { OAuthService } from 'angular-oauth2-oidc';
 import { ApplicationState, applicationState, initialStateValue } from '../state';
 import { ApiUser } from '../models';
@@ -29,6 +30,33 @@ describe('VendorFlagNotificationsService', () => {
   let vendorsSpy: jasmine.SpyObj<VendorsService>;
   let state$: BehaviorSubject<ApplicationState>;
   let oauthSpy: jasmine.SpyObj<OAuthService>;
+
+  /** ES module exports cannot be spied; stub the builder chain so start() never hits Karma's server. */
+  const hubProto = SignalR.HubConnectionBuilder.prototype;
+  const originalWithUrl = hubProto.withUrl;
+  const originalWithAutomaticReconnect = hubProto.withAutomaticReconnect;
+  const originalBuild = hubProto.build;
+
+  beforeAll(() => {
+    const connection = {
+      on: jasmine.createSpy('hubOn'),
+      start: jasmine.createSpy('hubStart').and.returnValue(Promise.resolve()),
+      stop: jasmine.createSpy('hubStop').and.returnValue(Promise.resolve())
+    };
+    spyOn(hubProto, 'withUrl').and.callFake(function (this: SignalR.HubConnectionBuilder) {
+      return this;
+    });
+    spyOn(hubProto, 'withAutomaticReconnect').and.callFake(function (this: SignalR.HubConnectionBuilder) {
+      return this;
+    });
+    spyOn(hubProto, 'build').and.returnValue(connection as unknown as SignalR.HubConnection);
+  });
+
+  afterAll(() => {
+    hubProto.withUrl = originalWithUrl;
+    hubProto.withAutomaticReconnect = originalWithAutomaticReconnect;
+    hubProto.build = originalBuild;
+  });
 
   beforeEach(() => {
     state$ = new BehaviorSubject<ApplicationState>({

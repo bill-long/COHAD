@@ -1,0 +1,33 @@
+<div class="container blog-page">
+  <section class="blog-shell">
+    <div class="blog-header">
+      <h1>News</h1>
+      <p>Updates and stories from the Canyon Oaks community.</p>
+    </div>
+
+    <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="error" role="alert">{{ error }}</div>
+    <div class="loading-state" *ngIf="loading">Loading posts...</div>
+
+    <section class="blog-grid" *ngIf="!loading && posts.length > 0">
+      <a class="blog-card" *ngFor="let post of posts" [routerLink]="['/news', post.publicSlug]">
+        <div class="blog-card-grid" [class.blog-card-grid--no-image]="!post.hasFeaturedImage">
+          <div class="blog-card-image-frame" *ngIf="post.hasFeaturedImage">
+            <img class="blog-card-image" [src]="post.featuredImageDownloadUrl" [alt]="post.title">
+          </div>
+          <div class="blog-card-body">
+            <h2>{{ post.title }}</h2>
+            <p class="blog-card-meta">
+              <span class="blog-card-author">{{ post.authorDisplayName }}</span>
+              <span class="blog-card-date">{{ post.publishUtc | date:'mediumDate' }}</span>
+            </p>
+            <p class="blog-card-excerpt">{{ post.excerpt }}</p>
+          </div>
+        </div>
+      </a>
+    </section>
+
+    <div *ngIf="!loading && posts.length === 0 && !error" class="empty-state">
+      No news posts yet. Check back soon!
+    </div>
+  </section>
+</div>

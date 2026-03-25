@@ -169,6 +169,8 @@ namespace Web
                 services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
                 services.AddSingleton<IDocumentRepository, MockDocumentRepository>();
                 services.AddSingleton<ICommunityEventRepository, MockCommunityEventRepository>();
+                services.AddSingleton<IBlogPostRepository, MockBlogPostRepository>();
+                services.AddSingleton<IBlogCommentRepository, MockBlogCommentRepository>();
                 services.AddSingleton<IVendorRepository, MockVendorRepository>();
                 services.AddSingleton<IVendorReviewRepository, MockVendorReviewRepository>();
                 services.AddSingleton<IVendorFlagRepository, MockVendorFlagRepository>();
@@ -200,6 +202,10 @@ namespace Web
                     new CosmosDocumentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
                 services.AddScoped<ICommunityEventRepository>(sp =>
                     new CosmosCommunityEventRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Events")));
+                services.AddScoped<IBlogPostRepository>(sp =>
+                    new CosmosBlogPostRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "BlogPosts")));
+                services.AddScoped<IBlogCommentRepository>(sp =>
+                    new CosmosBlogCommentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "BlogComments")));
                 services.AddScoped<IVendorRepository>(sp =>
                     new CosmosVendorRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Vendors")));
                 services.AddScoped<IVendorReviewRepository>(sp =>
@@ -273,6 +279,7 @@ namespace Web
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapEventDeepLinkOpenGraph(env);
+                endpoints.MapBlogDeepLinkOpenGraph(env);
                 endpoints.MapHub<VendorFlagNotificationsHub>("/hubs/vendor-flags");
                 endpoints.MapControllerRoute(
                     name: "default",
