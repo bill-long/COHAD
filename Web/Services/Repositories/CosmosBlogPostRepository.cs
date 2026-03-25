@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
+using Newtonsoft.Json.Linq;
 using Web.Models;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
 using CosmosPartitionKey = Microsoft.Azure.Cosmos.PartitionKey;
@@ -64,14 +65,21 @@ namespace Web.Services.Repositories
 
         public async Task<List<BlogPost>> GetPublishedAsync(DateTime asOfUtc)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PublishUtc <= @asOf ORDER BY c.PublishUtc DESC")
+            // Project fields needed for listing cards only — avoids loading full Markdown bodies.
+            var query = new CosmosQueryDefinition(@"
+SELECT
+  c.id, c.PublicSlug, c.Title, c.Excerpt, c.PublishUtc, c.AuthorDisplayName,
+  c.FeaturedImageBlobPath, c.FeaturedImageDisplayName, c.FeaturedImageContentType, c.FeaturedImageSizeBytes
+FROM c
+WHERE c.PublishUtc <= @asOf
+ORDER BY c.PublishUtc DESC")
                 .WithParameter("@asOf", asOfUtc);
-            var iterator = _container.GetItemQueryIterator<BlogPost>(query);
+            var iterator = _container.GetItemQueryIterator<JObject>(query);
             var results = new List<BlogPost>();
             while (iterator.HasMoreResults)
             {
                 var response = await iterator.ReadNextAsync();
-                results.AddRange(response);
+                results.AddRange(response.Select(ToBlogPostCardProjection));
             }
 
             return results;
@@ -102,8 +110,9 @@ namespace Web.Services.Repositories
                 return await GetByIdAsync(guid);
             }
 
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE LOWER(c.PublicSlug) = LOWER(@slug)")
-                .WithParameter("@slug", segment);
+            var normalizedSlug = segment.Trim().ToLowerInvariant();
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PublicSlug = @slug")
+                .WithParameter("@slug", normalizedSlug);
             var iterator = _container.GetItemQueryIterator<BlogPost>(query);
             while (iterator.HasMoreResults)
             {
@@ -167,6 +176,28 @@ namespace Web.Services.Repositories
             {
                 // Idempotent delete
             }
+        }
+
+        /// <summary>
+        /// Maps a partial Cosmos document (no <see cref="BlogPost.Content"/>) to <see cref="BlogPost"/> for card APIs.
+        /// </summary>
+        private static BlogPost ToBlogPostCardProjection(JObject doc)
+        {
+            var idStr = doc["id"]?.ToString() ?? doc["Id"]?.ToString();
+            return new BlogPost
+            {
+                Id = Guid.TryParse(idStr, out var gid) ? gid : Guid.Empty,
+                PublicSlug = doc.Value<string>("PublicSlug"),
+                Title = doc.Value<string>("Title"),
+                Excerpt = doc.Value<string>("Excerpt"),
+                PublishUtc = doc["PublishUtc"]?.ToObject<DateTime>() ?? default,
+                AuthorDisplayName = doc.Value<string>("AuthorDisplayName"),
+                FeaturedImageBlobPath = doc.Value<string>("FeaturedImageBlobPath"),
+                FeaturedImageDisplayName = doc.Value<string>("FeaturedImageDisplayName"),
+                FeaturedImageContentType = doc.Value<string>("FeaturedImageContentType"),
+                FeaturedImageSizeBytes = doc["FeaturedImageSizeBytes"]?.ToObject<long?>(),
+                Content = null
+            };
         }
     }
 }

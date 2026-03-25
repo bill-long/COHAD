@@ -1,9 +1,12 @@
 using System;
+using Newtonsoft.Json;
 
 namespace Web.Models
 {
     public class BlogPost
     {
+        /// <summary>Cosmos DB requires the JSON property <c>id</c> (lowercase).</summary>
+        [JsonProperty("id")]
         public Guid Id { get; set; }
 
         /// <summary>

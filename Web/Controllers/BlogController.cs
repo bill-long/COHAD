@@ -380,6 +380,11 @@ namespace Web.Controllers
                 await _documentFileStore.DeleteAsync(stored.FeaturedImageBlobPath);
             }
 
+            foreach (var blobPath in BlogInlineImageBlobPaths.ExtractFromMarkdown(stored.Content))
+            {
+                await _documentFileStore.DeleteAsync(blobPath);
+            }
+
             await _blogCommentRepository.DeleteByBlogPostCascadeAsync(id);
             await _blogPostRepository.DeleteAsync(id);
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
