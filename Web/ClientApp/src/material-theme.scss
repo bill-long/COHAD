@@ -1,14 +1,12 @@
 @use '@angular/material' as mat;
 
 // M3 typography with Inter
-@include mat.all-component-typographies(mat.define-typography((
+$cohad-typography: mat.define-typography((
   plain-family: #{"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"},
   brand-family: #{"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"},
-)));
-@include mat.typography-hierarchy(mat.define-typography((
-  plain-family: #{"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"},
-  brand-family: #{"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"},
-)));
+));
+@include mat.all-component-typographies($cohad-typography);
+@include mat.typography-hierarchy($cohad-typography);
 @include mat.elevation-classes();
 @include mat.app-background();
 

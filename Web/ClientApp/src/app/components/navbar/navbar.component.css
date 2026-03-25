@@ -6,7 +6,8 @@
 mat-toolbar {
     width: 100%;
     box-sizing: border-box;
-    /* Frosted glass effect */
+    /* Frosted glass effect — solid fallback for browsers without color-mix() */
+    background: var(--surface) !important;
     background: color-mix(in srgb, var(--surface) 85%, transparent) !important;
     backdrop-filter: blur(16px) saturate(1.4);
     -webkit-backdrop-filter: blur(16px) saturate(1.4);
