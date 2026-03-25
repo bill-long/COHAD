@@ -3,7 +3,7 @@ import { FormBuilder } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { VendorSummary, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
+import { VENDOR_CATEGORY_BUCKETS, VendorSummary, VendorsService, getVendorCategoryBucket, vendorCategoryClass } from 'src/app/services/vendors.service';
 import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-editor-dialog/vendor-editor-dialog.component';
 
 @Component({
@@ -17,7 +17,7 @@ export class VendorsComponent implements OnInit {
   error: string | null = null;
   vendors: VendorSummary[] = [];
   private allVendors: VendorSummary[] = [];
-  categories: string[] = [];
+  readonly categories = [...VENDOR_CATEGORY_BUCKETS];
 
   readonly filterForm = this.formBuilder.group({
     search: [''],
@@ -45,9 +45,6 @@ export class VendorsComponent implements OnInit {
     this.vendorsService.getVendors().subscribe({
       next: (vendors) => {
         this.allVendors = vendors;
-        const categorySet = new Set<string>();
-        vendors.forEach(vendor => (vendor.categories ?? []).forEach(category => categorySet.add(category)));
-        this.categories = Array.from(categorySet).sort((a, b) => a.localeCompare(b));
         this.applyFilters();
         this.loading = false;
       },
@@ -70,7 +67,7 @@ export class VendorsComponent implements OnInit {
         return false;
       }
 
-      if (category && !(vendor.categories ?? []).some(c => c.toLowerCase() === category.toLowerCase())) {
+      if (category && !(vendor.categories ?? []).some(c => getVendorCategoryBucket(c) === category)) {
         return false;
       }
 
@@ -107,9 +104,8 @@ export class VendorsComponent implements OnInit {
   categoryClass = vendorCategoryClass;
 
   openAddVendor(): void {
-    const presetCategory = (this.filterForm.controls.category.value ?? '').trim();
     const ref = this.dialog.open(VendorEditorDialogComponent, {
-      data: { presetCategory: presetCategory || null } as VendorEditorDialogData,
+      data: { presetCategory: null } as VendorEditorDialogData,
       width: '720px',
       maxWidth: 'calc(100vw - 32px)',
       maxHeight: '90vh'
