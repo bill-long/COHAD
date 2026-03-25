@@ -185,10 +185,8 @@ body.dark-theme .chip-slate { background: rgba(74, 68, 62, 0.25); color: #b8b0a6
 
 /* Respect reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
-    .mat-mdc-card,
-    .mat-mdc-card * {
+    .mat-mdc-card {
         transition: none !important;
-        animation: none !important;
     }
 }
 
