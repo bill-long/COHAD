@@ -23,6 +23,10 @@
   flex-wrap: wrap;
 }
 
+.filter-row .category-filter {
+  width: min(420px, 100%);
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
