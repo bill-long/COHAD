@@ -8,6 +8,7 @@ import { Observable, Subscription } from 'rxjs';
 import { VendorDetail, VendorFlag, VendorReview, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
 import { ApplicationState, applicationState } from 'src/app/state';
 import { VendorFlagNotificationsService } from 'src/app/services/vendor-flag-notifications.service';
+import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-editor-dialog/vendor-editor-dialog.component';
 
@@ -54,6 +55,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
     private readonly vendorFlagNotificationsService: VendorFlagNotificationsService,
     private readonly dialog: MatDialog,
     private readonly snackBar: MatSnackBar,
+    private readonly telemetry: ApplicationInsightsService,
     @Inject(applicationState) private readonly appState: Observable<ApplicationState>) { }
 
   ngOnInit(): void {
@@ -137,6 +139,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       next: (vendor) => {
         this.vendor = vendor;
         this.loading = false;
+        this.telemetry.trackEvent('VendorDetailViewed', { vendorName: vendor.name ?? id });
       },
       error: () => {
         this.error = 'Unable to load vendor.';
@@ -166,6 +169,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       reviewText
     }).subscribe({
       next: () => {
+        this.telemetry.trackEvent('VendorReviewSubmitted');
         this.reviewForm.reset({ reviewText: '' });
         this.reviewPanel?.close();
         this.saving = false;

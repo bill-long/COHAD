@@ -1,5 +1,5 @@
 import { BrowserModule } from '@angular/platform-browser';
-import { NgModule } from '@angular/core';
+import { ErrorHandler, NgModule } from '@angular/core';
 
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
@@ -84,6 +84,7 @@ import { BlogDetailComponent } from './components/blog-detail/blog-detail.compon
 import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
 import { BlogEditorDialogComponent } from './components/blog-editor-dialog/blog-editor-dialog.component';
 import { MilkdownEditorComponent } from './components/milkdown-editor/milkdown-editor.component';
+import { GlobalErrorHandler } from './services/global-error-handler';
 
 @NgModule({ declarations: [
         AppComponent,
@@ -190,6 +191,7 @@ import { MilkdownEditorComponent } from './components/milkdown-editor/milkdown-e
         MatBadgeModule,
         DragDropModule], providers: [
         provideNativeDateAdapter(),
+        { provide: ErrorHandler, useClass: GlobalErrorHandler },
         { provide: dispatcher, useValue: new Subject<Action>() },
         { provide: initialState, useValue: initialStateValue },
         { provide: applicationState, useFactory: applicationStateFactory, deps: [initialState, dispatcher] },

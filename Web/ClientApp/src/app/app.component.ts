@@ -8,6 +8,7 @@ import { DirectoryService } from './services/directory.service';
 import { UserService } from './services/user.service';
 import { HomeService } from './services/home.service';
 import { ThemeService } from './services/theme.service';
+import { ApplicationInsightsService } from './services/application-insights.service';
 import { applicationState, ApplicationState } from './state';
 
 @Component({
@@ -25,10 +26,12 @@ export class AppComponent implements OnInit {
     private userService: UserService,
     private homeService: HomeService,
     private themeService: ThemeService,
+    private telemetry: ApplicationInsightsService,
     @Inject(applicationState) private appState: Observable<ApplicationState>) { }
 
   ngOnInit(): void {
     this.themeService.initializeTheme();
+    this.telemetry.init();
   }
 
   get showPostLoginTransition$(): Observable<boolean> {

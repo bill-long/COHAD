@@ -5,6 +5,7 @@ import { map } from 'rxjs/operators';
 import { ApiUser } from 'src/app/models';
 import { Login, Action, dispatcher, applicationState, ApplicationState } from 'src/app/state';
 import { EventDetail, EventsService } from 'src/app/services/events.service';
+import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
 
 @Component({
@@ -28,6 +29,7 @@ export class EventDetailComponent implements OnInit {
   constructor(
     private readonly route: ActivatedRoute,
     private readonly eventsService: EventsService,
+    private readonly telemetry: ApplicationInsightsService,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>) { }
 
@@ -75,6 +77,7 @@ export class EventDetailComponent implements OnInit {
         this.eventItem = updated;
         this.saving = false;
         this.success = 'Signup saved.';
+        this.telemetry.trackEvent('EventSignupSubmitted', { eventSlug: this.eventItem.publicSlug });
       },
       error: (err) => {
         this.saving = false;
