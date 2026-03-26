@@ -1,5 +1,6 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { Title } from '@angular/platform-browser';
 import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiUser } from 'src/app/models';
@@ -28,6 +29,7 @@ export class EventDetailComponent implements OnInit {
 
   constructor(
     private readonly route: ActivatedRoute,
+    private readonly titleService: Title,
     private readonly eventsService: EventsService,
     private readonly telemetry: ApplicationInsightsService,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -38,6 +40,7 @@ export class EventDetailComponent implements OnInit {
       const slug = params.get('slug');
       if (slug == null) {
         this.error = 'Event not found.';
+        this.titleService.setTitle('COHAD | Events');
         return;
       }
       this.loadEvent(slug);
@@ -99,12 +102,14 @@ export class EventDetailComponent implements OnInit {
       next: eventItem => {
         this.eventItem = eventItem;
         this.loading = false;
+        this.titleService.setTitle(eventItem.title ? `COHAD | ${eventItem.title}` : 'COHAD | Events');
         this.applyExistingSignup(eventItem);
       },
       error: () => {
         this.eventItem = null;
         this.loading = false;
         this.error = 'Failed to load event.';
+        this.titleService.setTitle('COHAD | Events');
       }
     });
   }

@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Web.Models;
+using Web.Services;
 using Web.Services.Repositories;
 
 namespace Web;
@@ -66,13 +67,14 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
             var canonical = $"{baseUrl.TrimEnd('/')}/events/{canonicalSegment}";
             var ogTitle = string.IsNullOrWhiteSpace(ev.Title) ? "Event" : ev.Title.Trim();
             var ogDescription = BuildOgDescription(ev.Description ?? string.Empty);
-            var imageUrl = ResolveOgImageUrl(baseUrl, ev);
+            var imageUrl = ResolveOgImageUrl(baseUrl, ev, out var hasOgThumb);
 
             var metaBlock = BuildMetaBlock(
                 HtmlEncoder.Default.Encode(ogTitle),
                 HtmlEncoder.Default.Encode(ogDescription),
                 HtmlEncoder.Default.Encode(canonical),
-                HtmlEncoder.Default.Encode(imageUrl));
+                HtmlEncoder.Default.Encode(imageUrl),
+                hasOgThumb);
 
             html = InsertAfterOpenHead(html, metaBlock);
             html = ReplaceDocumentTitle(html, WebUtility.HtmlEncode(ogTitle) + " · COHAD");
@@ -140,7 +142,7 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
     /// <summary>
     /// Promo image when content type is image/*; otherwise a static app asset that exists in the Angular build.
     /// </summary>
-    private static string ResolveOgImageUrl(string baseUrl, CommunityEvent ev)
+    private static string ResolveOgImageUrl(string baseUrl, CommunityEvent ev, out bool hasOgThumb)
     {
         var root = baseUrl.TrimEnd('/');
         var segment = Uri.EscapeDataString(EventUrlSlug.ResolveUrlSegment(ev));
@@ -148,9 +150,11 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
             !string.IsNullOrWhiteSpace(ev.PromoMediaContentType) &&
             ev.PromoMediaContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
         {
-            return $"{root}/api/events/{segment}/promo";
+            hasOgThumb = true;
+            return $"{root}/api/events/{segment}/promo/og-thumb";
         }
 
+        hasOgThumb = false;
         return $"{root}/assets/trees1.jpg";
     }
 
@@ -171,7 +175,7 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
         return collapsed[..(maxLen - 1)].TrimEnd() + "…";
     }
 
-    private static string BuildMetaBlock(string encodedTitle, string encodedDescription, string encodedCanonical, string encodedImageUrl)
+    private static string BuildMetaBlock(string encodedTitle, string encodedDescription, string encodedCanonical, string encodedImageUrl, bool includeImageDimensions)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"    <meta property=\"og:type\" content=\"website\" />");
@@ -180,6 +184,12 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
         sb.AppendLine($"    <meta property=\"og:description\" content=\"{encodedDescription}\" />");
         sb.AppendLine($"    <meta property=\"og:url\" content=\"{encodedCanonical}\" />");
         sb.AppendLine($"    <meta property=\"og:image\" content=\"{encodedImageUrl}\" />");
+        if (includeImageDimensions)
+        {
+            sb.AppendLine($"    <meta property=\"og:image:width\" content=\"{SkiaSharpOgThumbnailService.TargetWidth}\" />");
+            sb.AppendLine($"    <meta property=\"og:image:height\" content=\"{SkiaSharpOgThumbnailService.TargetHeight}\" />");
+        }
+
         sb.AppendLine($"    <meta name=\"twitter:card\" content=\"summary_large_image\" />");
         sb.AppendLine($"    <meta name=\"twitter:title\" content=\"{encodedTitle}\" />");
         sb.AppendLine($"    <meta name=\"twitter:description\" content=\"{encodedDescription}\" />");
