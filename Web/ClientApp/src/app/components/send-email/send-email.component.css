@@ -6,8 +6,9 @@
 
 .page-title {
     margin: 0 0 1.25rem;
-    font-size: 1.9rem;
-    font-weight: 600;
+    font-size: var(--heading-page);
+    font-weight: var(--heading-page-weight);
+    letter-spacing: var(--heading-page-tracking);
 }
 
 .full-width {

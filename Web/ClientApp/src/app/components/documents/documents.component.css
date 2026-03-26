@@ -14,9 +14,9 @@
 
 .documents-header h1 {
     margin: 0;
-    font-size: 1.9rem;
-    font-weight: 600;
-    letter-spacing: 0.01em;
+    font-size: var(--heading-page);
+    font-weight: var(--heading-page-weight);
+    letter-spacing: var(--heading-page-tracking);
 }
 
 .documents-header p {

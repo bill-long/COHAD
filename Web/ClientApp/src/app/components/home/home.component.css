@@ -92,9 +92,9 @@
 
 .home-welcome-title {
     margin: 0 0 0.75rem;
-    font-size: clamp(1.5rem, 3.5vw, 2rem);
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-size: var(--heading-page);
+    font-weight: var(--heading-page-weight);
+    letter-spacing: var(--heading-page-tracking);
     color: var(--text-primary);
 }
 
@@ -149,8 +149,8 @@
 
 .home-card-title {
     margin: 0 0 0.35rem;
-    font-size: 1.05rem;
-    font-weight: 600;
+    font-size: var(--heading-card);
+    font-weight: var(--heading-card-weight);
     color: var(--text-primary);
 }
 

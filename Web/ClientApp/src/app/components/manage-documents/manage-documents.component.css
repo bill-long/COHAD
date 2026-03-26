@@ -12,9 +12,9 @@
 
 .manage-documents-header h1 {
     margin: 0;
-    font-size: 1.9rem;
-    font-weight: 600;
-    letter-spacing: 0.01em;
+    font-size: var(--heading-page);
+    font-weight: var(--heading-page-weight);
+    letter-spacing: var(--heading-page-tracking);
 }
 
 .manage-documents-header p {
@@ -40,8 +40,8 @@
 
 .list-heading {
     margin: 0 0 0.65rem;
-    font-size: 1.1rem;
-    font-weight: 500;
+    font-size: var(--heading-section);
+    font-weight: var(--heading-section-weight);
 }
 
 .admin-panel {
@@ -57,8 +57,8 @@
 
 .admin-panel h2 {
     margin: 0 0 0.65rem;
-    font-size: 1.1rem;
-    font-weight: 500;
+    font-size: var(--heading-section);
+    font-weight: var(--heading-section-weight);
 }
 
 .admin-upload-row {

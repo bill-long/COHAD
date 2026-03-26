@@ -9,14 +9,15 @@
 
 .page-title {
     margin: 0 0 1rem;
-    font-size: 1.9rem;
-    font-weight: 600;
+    font-size: var(--heading-page);
+    font-weight: var(--heading-page-weight);
+    letter-spacing: var(--heading-page-tracking);
 }
 
 .section-title {
     margin: 0 0 0.75rem;
-    font-size: 1.1rem;
-    font-weight: 500;
+    font-size: var(--heading-section);
+    font-weight: var(--heading-section-weight);
 }
 
 .section-title + p,
