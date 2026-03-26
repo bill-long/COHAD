@@ -40,6 +40,7 @@ export class EventDetailComponent implements OnInit {
       const slug = params.get('slug');
       if (slug == null) {
         this.error = 'Event not found.';
+        this.titleService.setTitle('COHAD | Events');
         return;
       }
       this.loadEvent(slug);
@@ -108,6 +109,7 @@ export class EventDetailComponent implements OnInit {
         this.eventItem = null;
         this.loading = false;
         this.error = 'Failed to load event.';
+        this.titleService.setTitle('COHAD | Events');
       }
     });
   }

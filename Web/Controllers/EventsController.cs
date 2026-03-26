@@ -144,15 +144,16 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            // Serve pre-generated thumbnail if available.
-            if (!string.IsNullOrWhiteSpace(stored.PromoMediaThumbBlobPath))
+            // Serve pre-generated thumbnail if available (either from the document field or the conventional blob path).
+            var thumbBlobPath = !string.IsNullOrWhiteSpace(stored.PromoMediaThumbBlobPath)
+                ? stored.PromoMediaThumbBlobPath
+                : $"events/{stored.Id:D}/og-thumb.jpg";
+
+            var thumbFile = await _documentFileStore.DownloadAsync(thumbBlobPath);
+            if (thumbFile != null)
             {
-                var thumbFile = await _documentFileStore.DownloadAsync(stored.PromoMediaThumbBlobPath);
-                if (thumbFile != null)
-                {
-                    Response.Headers["Cache-Control"] = "public, max-age=86400";
-                    return File(thumbFile.Stream, "image/jpeg");
-                }
+                Response.Headers["Cache-Control"] = "public, max-age=86400";
+                return File(thumbFile.Stream, "image/jpeg");
             }
 
             // Lazy-generate thumbnail for legacy events that predate the thumbnail feature.
@@ -163,12 +164,18 @@ namespace Web.Controllers
             }
 
             byte[] thumbBytes;
-            await using (originalFile.Stream)
+            try
             {
-                thumbBytes = _ogThumbnailService.GenerateThumbnail(originalFile.Stream);
+                await using (originalFile.Stream)
+                {
+                    thumbBytes = _ogThumbnailService.GenerateThumbnail(originalFile.Stream);
+                }
+            }
+            catch (Exception)
+            {
+                return StatusCode(StatusCodes.Status415UnsupportedMediaType);
             }
 
-            var thumbBlobPath = $"events/{stored.Id:D}/og-thumb.jpg";
             await using (var thumbStream = new MemoryStream(thumbBytes))
             {
                 await _documentFileStore.UploadAsync(thumbBlobPath, thumbStream, "image/jpeg");
@@ -186,7 +193,7 @@ namespace Web.Controllers
             }
             catch (CosmosException)
             {
-                // Non-critical: the blob is already uploaded; next request will find it via the blob path convention.
+                // Non-critical: the blob is already uploaded and will be found via the conventional path on next request.
             }
 
             Response.Headers["Cache-Control"] = "public, max-age=86400";
@@ -321,14 +328,22 @@ namespace Web.Controllers
                 communityEvent.PromoMediaContentType = request.PromotionalAsset.ContentType;
                 communityEvent.PromoMediaSizeBytes = request.PromotionalAsset.Length;
 
-                // Generate OG thumbnail for link previews.
-                await using (var thumbSourceStream = request.PromotionalAsset.OpenReadStream())
+                // Generate OG thumbnail for link previews. Non-critical: if this fails the
+                // original promo is still usable and the thumbnail will be lazy-generated on first crawler access.
+                try
                 {
-                    var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
-                    var thumbBlobPath = $"events/{communityEvent.Id:D}/og-thumb.jpg";
-                    await using var thumbStream = new MemoryStream(thumbBytes);
-                    await _documentFileStore.UploadAsync(thumbBlobPath, thumbStream, "image/jpeg");
-                    communityEvent.PromoMediaThumbBlobPath = thumbBlobPath;
+                    await using (var thumbSourceStream = request.PromotionalAsset.OpenReadStream())
+                    {
+                        var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
+                        var thumbBlobPath = $"events/{communityEvent.Id:D}/og-thumb.jpg";
+                        await using var thumbStream = new MemoryStream(thumbBytes);
+                        await _documentFileStore.UploadAsync(thumbBlobPath, thumbStream, "image/jpeg");
+                        communityEvent.PromoMediaThumbBlobPath = thumbBlobPath;
+                    }
+                }
+                catch (Exception)
+                {
+                    // Thumbnail generation failed (e.g. corrupt image); the event save can proceed without it.
                 }
             }
             else if (request.RemovePromoMedia && !string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath))

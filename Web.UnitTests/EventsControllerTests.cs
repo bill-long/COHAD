@@ -415,6 +415,108 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
+    public async Task DownloadPromoThumb_returns_NotFound_when_event_has_no_promo()
+    {
+        var eventId = Guid.NewGuid();
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Mixer",
+            StartUtc = DateTime.UtcNow.AddDays(1),
+            PromoMediaBlobPath = null
+        });
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var result = await c.DownloadPromoThumb(eventId.ToString("D"));
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task DownloadPromoThumb_returns_existing_thumbnail_when_thumb_blob_path_is_set()
+    {
+        var eventId = Guid.NewGuid();
+        var thumbPath = $"events/{eventId:D}/og-thumb.jpg";
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync("test-event")).ReturnsAsync(new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Test",
+            StartUtc = DateTime.UtcNow.AddDays(1),
+            PromoMediaBlobPath = "events/promo.png",
+            PromoMediaContentType = "image/png",
+            PromoMediaThumbBlobPath = thumbPath
+        });
+
+        var mockFileStore = new Mock<IDocumentFileStore>();
+        mockFileStore.Setup(s => s.DownloadAsync(thumbPath)).ReturnsAsync(new DocumentFileResult
+        {
+            Stream = new MemoryStream([1, 2, 3]),
+            ContentType = "image/jpeg"
+        });
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, mockFileStore.Object, Mock.Of<IAuditLogRepository>());
+        var result = await c.DownloadPromoThumb("test-event");
+
+        var fileResult = Assert.IsType<FileStreamResult>(result);
+        Assert.Equal("image/jpeg", fileResult.ContentType);
+    }
+
+    [Fact]
+    public async Task DownloadPromoThumb_lazy_generates_when_thumb_blob_path_is_null()
+    {
+        var eventId = Guid.NewGuid();
+        var thumbPath = $"events/{eventId:D}/og-thumb.jpg";
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync("test-event")).ReturnsAsync(new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Test",
+            StartUtc = DateTime.UtcNow.AddDays(1),
+            PromoMediaBlobPath = "events/promo.png",
+            PromoMediaContentType = "image/png",
+            PromoMediaThumbBlobPath = null
+        });
+
+        // Conventional thumb path not found yet
+        var mockFileStore = new Mock<IDocumentFileStore>();
+        mockFileStore.Setup(s => s.DownloadAsync(thumbPath)).ReturnsAsync((DocumentFileResult)null);
+
+        // Return a small valid PNG for the original (1x1 white pixel)
+        var pngBytes = CreateMinimalPng();
+        mockFileStore.Setup(s => s.DownloadAsync("events/promo.png")).ReturnsAsync(new DocumentFileResult
+        {
+            Stream = new MemoryStream(pngBytes),
+            ContentType = "image/png"
+        });
+
+        mockEvents.Setup(r => r.ReadAsync(eventId)).ReturnsAsync(new CommunityEventReadResult
+        {
+            Event = new CommunityEvent { Id = eventId, Title = "Test" },
+            ETag = "\"e1\""
+        });
+        mockEvents.Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, mockFileStore.Object, Mock.Of<IAuditLogRepository>());
+        var result = await c.DownloadPromoThumb("test-event");
+
+        var fileResult = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("image/jpeg", fileResult.ContentType);
+        mockFileStore.Verify(s => s.UploadAsync(thumbPath, It.IsAny<Stream>(), "image/jpeg"), Times.Once);
+    }
+
+    private static byte[] CreateMinimalPng()
+    {
+        using var bmp = new SkiaSharp.SKBitmap(100, 100);
+        bmp.Erase(SkiaSharp.SKColors.White);
+        using var image = SkiaSharp.SKImage.FromBitmap(bmp);
+        using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    [Fact]
     public async Task GetUpcoming_passes_minStartUtc_six_hours_before_now_to_repository()
     {
         DateTime? capturedMin = null;
