@@ -42,6 +42,16 @@ namespace Web.Services
                 return null;
             }
 
+            // Skip conversion for PNGs with transparency — JPEG doesn't support alpha
+            // and the result would have an unexpected black background.
+            if (info.AlphaType != SKAlphaType.Opaque)
+            {
+                return null;
+            }
+
+            // Remember original size so we can compare after encoding.
+            var originalSize = source.CanSeek ? source.Length : -1;
+
             using var bitmap = SKBitmap.Decode(codec);
             if (bitmap == null)
             {
@@ -51,6 +61,12 @@ namespace Web.Services
             using var image = SKImage.FromBitmap(bitmap);
             using var data = image.Encode(SKEncodedImageFormat.Jpeg, JpegQuality);
             if (data == null)
+            {
+                return null;
+            }
+
+            // Skip conversion when JPEG is not smaller than the original PNG.
+            if (originalSize > 0 && data.Size >= originalSize)
             {
                 return null;
             }

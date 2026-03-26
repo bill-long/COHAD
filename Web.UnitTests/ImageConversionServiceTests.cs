@@ -78,14 +78,38 @@ public sealed class ImageConversionServiceTests
         Assert.Equal(0xD8, result.Data[1]);
     }
 
+    [Fact]
+    public void TryConvertToJpeg_skips_png_with_alpha_transparency()
+    {
+        var pngBytes = CreateTransparentPng(100, 100);
+        using var stream = new MemoryStream(pngBytes);
+
+        var result = _service.TryConvertToJpeg(stream, ".png");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void TryConvertToJpeg_skips_when_jpeg_is_not_smaller()
+    {
+        // A small solid-color PNG compresses very efficiently; JPEG will be larger.
+        var pngBytes = CreatePng(10, 10);
+        using var stream = new MemoryStream(pngBytes);
+
+        var result = _service.TryConvertToJpeg(stream, ".png");
+
+        Assert.Null(result);
+    }
+
     private static byte[] CreateMinimalPng()
     {
-        return CreatePng(10, 10);
+        // Use photo-like PNG so JPEG conversion is actually smaller (passes size check).
+        return CreatePhotoPng(100, 100);
     }
 
     private static byte[] CreatePng(int width, int height)
     {
-        using var bmp = new SKBitmap(width, height);
+        using var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgb888x, SKAlphaType.Opaque));
         bmp.Erase(SKColors.CornflowerBlue);
         using var image = SKImage.FromBitmap(bmp);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -94,7 +118,7 @@ public sealed class ImageConversionServiceTests
 
     private static byte[] CreatePhotoPng(int width, int height)
     {
-        using var bmp = new SKBitmap(width, height);
+        using var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgb888x, SKAlphaType.Opaque));
         var rng = new System.Random(42);
         for (var y = 0; y < height; y++)
         {
@@ -104,6 +128,27 @@ public sealed class ImageConversionServiceTests
                     (byte)rng.Next(256),
                     (byte)rng.Next(256),
                     (byte)rng.Next(256)));
+            }
+        }
+
+        using var image = SKImage.FromBitmap(bmp);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    private static byte[] CreateTransparentPng(int width, int height)
+    {
+        using var bmp = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        var rng = new System.Random(99);
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                bmp.SetPixel(x, y, new SKColor(
+                    (byte)rng.Next(256),
+                    (byte)rng.Next(256),
+                    (byte)rng.Next(256),
+                    (byte)rng.Next(128))); // semi-transparent alpha
             }
         }
 
