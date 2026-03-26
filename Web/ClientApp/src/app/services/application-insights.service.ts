@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { Title } from '@angular/platform-browser';
 import { ApplicationInsights } from '@microsoft/applicationinsights-web';
-import { environment } from '../../environments/environment';
+import { environment } from 'src/environments/environment';
 import { filter } from 'rxjs/operators';
 
 @Injectable({ providedIn: 'root' })
