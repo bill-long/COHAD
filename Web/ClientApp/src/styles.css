@@ -217,6 +217,17 @@ body.dark-theme .chip-slate { background: rgba(74, 68, 62, 0.25); color: #b8b0a6
 .mat-typography .blog-content h2 { font-size: 1.3rem; }
 .mat-typography .blog-content h3 { font-size: 1.1rem; }
 
+/* Blog drop cap */
+.blog-content > p:first-child::first-letter {
+    float: left;
+    font-size: 3.4em;
+    line-height: 0.8;
+    padding-right: 0.08em;
+    margin-top: 0.05em;
+    font-weight: 700;
+    color: var(--primary);
+}
+
 /* Milkdown editor: match blog post rendering */
 .milkdown-editor-container .milkdown {
     min-height: 200px;

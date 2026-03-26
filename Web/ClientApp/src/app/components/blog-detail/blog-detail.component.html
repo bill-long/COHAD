@@ -16,8 +16,6 @@
         </p>
       </mat-card-content>
 
-      <mat-divider *ngIf="p.hasFeaturedImage"></mat-divider>
-
       <mat-card-content *ngIf="p.hasFeaturedImage" class="blog-detail-section">
         <div class="featured-image-wrap">
           <div class="featured-image-frame">
@@ -25,8 +23,6 @@
           </div>
         </div>
       </mat-card-content>
-
-      <mat-divider></mat-divider>
 
       <mat-card-content class="blog-detail-section">
         <div class="blog-content" [innerHTML]="renderedHtml"></div>
