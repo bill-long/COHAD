@@ -267,7 +267,7 @@ body.dark-theme .chip-slate { background: rgba(74, 68, 62, 0.25); color: #b8b0a6
 .milkdown-editor-container:focus-within {
     outline: 2px solid var(--primary-sage);
     outline-offset: -1px;
-    border-radius: 4px;
+    border-radius: 6px;
 }
 
 /* Global focus-visible styling */
