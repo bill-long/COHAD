@@ -16,7 +16,6 @@
       <mat-divider *ngIf="event.hasPromoMedia || hasDescription(event)"></mat-divider>
 
       <mat-card-content *ngIf="event.hasPromoMedia" class="event-detail-section">
-        <h2 class="mat-title-medium event-detail-section-heading">Promotional flyer</h2>
         <div class="promo-wrap">
           <div class="promo-flyer-frame">
             <img [src]="event.promoMediaDownloadUrl" [alt]="event.title" class="promo-image">
@@ -27,7 +26,6 @@
       <mat-divider *ngIf="event.hasPromoMedia && hasDescription(event)"></mat-divider>
 
       <mat-card-content *ngIf="hasDescription(event)" class="event-detail-section">
-        <h2 class="mat-title-medium event-detail-section-heading">About</h2>
         <p class="mat-body-large event-detail-description">{{ event.description }}</p>
       </mat-card-content>
     </mat-card>
