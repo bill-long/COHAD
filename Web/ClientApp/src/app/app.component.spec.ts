@@ -7,6 +7,7 @@ import { DirectoryService } from './services/directory.service';
 import { UserService } from './services/user.service';
 import { HomeService } from './services/home.service';
 import { ThemeService } from './services/theme.service';
+import { ApplicationInsightsService } from './services/application-insights.service';
 import { BehaviorSubject } from 'rxjs';
 import { applicationState, initialStateValue } from './state';
 
@@ -23,6 +24,7 @@ describe('AppComponent', () => {
         { provide: UserService, useValue: {} },
         { provide: HomeService, useValue: {} },
         { provide: ThemeService, useValue: { initializeTheme: () => undefined } },
+        { provide: ApplicationInsightsService, useValue: { init: () => undefined } },
         { provide: applicationState, useValue: new BehaviorSubject(initialStateValue) },
       ],
       schemas: [CUSTOM_ELEMENTS_SCHEMA],

@@ -37,8 +37,19 @@ describe('GlobalErrorHandler', () => {
     expect(telemetrySpy.trackException).toHaveBeenCalled();
     const arg = telemetrySpy.trackException.calls.mostRecent().args[0];
     expect(arg).toBeInstanceOf(Error);
-    expect(arg.message).toBe('string error');
+    expect(arg.message).toBe('"string error"');
     expect(console.error).toHaveBeenCalled();
+  });
+
+  it('should extract message from object errors with a message property', () => {
+    spyOn(console, 'error');
+
+    handler.handleError({ message: 'something went wrong', code: 500 });
+
+    expect(telemetrySpy.trackException).toHaveBeenCalled();
+    const arg = telemetrySpy.trackException.calls.mostRecent().args[0];
+    expect(arg).toBeInstanceOf(Error);
+    expect(arg.message).toBe('something went wrong');
   });
 
   it('should handle null/undefined errors gracefully', () => {
