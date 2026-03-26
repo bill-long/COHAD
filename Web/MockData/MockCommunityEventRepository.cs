@@ -204,6 +204,7 @@ namespace Web.MockData
                 PromoMediaDisplayName = communityEvent.PromoMediaDisplayName,
                 PromoMediaContentType = communityEvent.PromoMediaContentType,
                 PromoMediaSizeBytes = communityEvent.PromoMediaSizeBytes,
+                PromoMediaThumbBlobPath = communityEvent.PromoMediaThumbBlobPath,
                 CreatedByUniqueId = communityEvent.CreatedByUniqueId,
                 ModifiedByUniqueId = communityEvent.ModifiedByUniqueId,
                 CreatedUtc = communityEvent.CreatedUtc,

@@ -483,7 +483,7 @@ public sealed class EventsControllerTests
         var mockFileStore = new Mock<IDocumentFileStore>();
         mockFileStore.Setup(s => s.DownloadAsync(thumbPath)).ReturnsAsync((DocumentFileResult)null);
 
-        // Return a small valid PNG for the original (1x1 white pixel)
+        // Return a small valid PNG for the original (100x100 white square)
         var pngBytes = CreateMinimalPng();
         mockFileStore.Setup(s => s.DownloadAsync("events/promo.png")).ReturnsAsync(new DocumentFileResult
         {
