@@ -12,7 +12,7 @@ export class RoleGuard  {
 
     canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot) {
         const ready$ = this.appState.pipe(
-          filter(s => s.authBootstrapStatus === 'completed'),
+          filter(s => s.authSessionResolved === true && s.authBootstrapStatus !== 'inProgress'),
           take(1),
           map(s => {
             const me = s.apiUser;

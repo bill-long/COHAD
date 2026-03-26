@@ -7,13 +7,20 @@ import { ApiUser } from './models';
 
 function makeApiUser(roles: string[]): ApiUser {
   return {
-    id: 'user-1',
-    objectId: 'obj-1',
+    uniqueId: 'user-1',
+    createdTime: '',
+    modifiedTime: '',
+    creatorId: '',
+    modifierId: '',
+    givenName: 'Test',
+    surname: 'User',
     displayName: 'Test User',
+    identityProvider: 'idp',
     email: 'test@example.com',
+    streetAddress: '',
     roles,
-    homeAssociations: []
-  } as any;
+    ownedHomes: []
+  };
 }
 
 function completedState(apiUser: ApiUser | null): ApplicationState {
@@ -122,6 +129,24 @@ describe('RoleGuard', () => {
     expect(result).toBeFalse();
     expect(router.navigate).toHaveBeenCalledOnceWith(['/']);
   }));
+
+  it('denies immediately when auth resolved unauthenticated (bootstrap idle)', () => {
+    appState$.next({
+      ...initialStateValue,
+      authSessionResolved: true,
+      authBootstrapStatus: 'idle',
+      apiUser: null
+    });
+
+    let result: boolean | undefined;
+    guard.canActivate(
+      { data: { allowedRoles: ['Resident'] } } as any,
+      {} as any
+    ).subscribe(v => (result = v));
+
+    expect(result).toBeFalse();
+    expect(router.navigate).toHaveBeenCalledOnceWith(['/']);
+  });
 
   it('denies activation and redirects to /unauthorized when requireResidentRole is true and user lacks Resident role', () => {
     appState$.next(completedState(makeApiUser(['Administrator'])));
