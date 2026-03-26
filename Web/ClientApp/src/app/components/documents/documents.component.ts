@@ -27,8 +27,8 @@ export class DocumentsComponent implements OnInit {
   }
 
   downloadFile(doc: ResidentDocument): void {
-    this.telemetry.trackEvent('DocumentDownloaded', { documentName: doc.displayName });
     this.documentsService.download(doc.id).subscribe(blob => {
+      this.telemetry.trackEvent('DocumentDownloaded', { documentName: doc.displayName });
       const url = window.URL.createObjectURL(blob);
       const downloadLink = window.document.createElement('a');
       downloadLink.href = url;

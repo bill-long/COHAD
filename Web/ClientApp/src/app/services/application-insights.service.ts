@@ -18,6 +18,11 @@ export class ApplicationInsightsService {
       return;
     }
 
+    // Guard against multiple initializations: only set up the SDK and router tracking once.
+    if (this.appInsights) {
+      return;
+    }
+
     this.appInsights = new ApplicationInsights({
       config: {
         connectionString,
@@ -25,8 +30,9 @@ export class ApplicationInsightsService {
         enableAutoRouteTracking: false,
         disableFetchTracking: false,
         enableCorsCorrelation: true,
-        enableRequestHeaderTracking: true,
-        enableResponseHeaderTracking: true
+        // Do not collect HTTP headers to avoid leaking sensitive data (auth tokens, cookies, PII).
+        enableRequestHeaderTracking: false,
+        enableResponseHeaderTracking: false
       }
     });
 
@@ -43,7 +49,7 @@ export class ApplicationInsightsService {
   }
 
   setAuthenticatedUser(userId: string, accountId?: string): void {
-    this.appInsights?.setAuthenticatedUserContext(userId, accountId, true);
+    this.appInsights?.setAuthenticatedUserContext(userId, accountId);
   }
 
   clearAuthenticatedUser(): void {

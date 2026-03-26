@@ -61,10 +61,14 @@ export class DirectoryComponent {
         return h;
       }
 
-      f = f.toLowerCase();
-      this.telemetry.trackEvent('DirectorySearched');
+      const filterValue = f.toLowerCase();
+      const filteredHomes = h.filter(home => this.isFilterMatch(filterValue, home));
 
-      return h.filter(home => this.isFilterMatch(f, home));
+      if (filterValue.length >= 3) {
+        this.telemetry.trackEvent('DirectorySearched', { resultCount: filteredHomes.length.toString() });
+      }
+
+      return filteredHomes;
     }));
 
     const numberOfItemsToRender = new ReplaySubject<number>(1);

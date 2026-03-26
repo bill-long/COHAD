@@ -64,10 +64,11 @@ describe('ApplicationInsightsService', () => {
 
     it('should track page views on NavigationEnd', () => {
       service.init();
-      const trackSpy = spyOn(service as any, 'appInsights').and.returnValue(undefined);
+      const appInsightsInstance = (service as any).appInsights;
+      const trackPageViewSpy = spyOn(appInsightsInstance, 'trackPageView');
       // Emit a navigation event — the subscription should process it
       routerEvents$.next(new NavigationEnd(1, '/residents/directory', '/residents/directory'));
-      // If we got here without error, the subscription is wired up correctly
+      expect(trackPageViewSpy).toHaveBeenCalled();
     });
 
     it('should expose trackEvent', () => {
