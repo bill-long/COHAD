@@ -7,6 +7,7 @@ import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
 import { IdentityClaims } from '../models';
 import { ApplicationState, dispatcher, Action, applicationState, AuthenticatedUserChanged, AuthSessionResolved, Login, MockLogin, Logout } from '../state';
 import { MockAuthTokenService } from './mock-auth-token.service';
+import { ApplicationInsightsService } from './application-insights.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -32,6 +33,7 @@ export class AuthService {
     private http: HttpClient,
     private mockTokens: MockAuthTokenService,
     private router: Router,
+    private telemetry: ApplicationInsightsService,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Subject<Action>) {
 
@@ -84,12 +86,16 @@ export class AuthService {
         } else if (a instanceof Logout) {
           this.mockTokens.setToken(null);
           this.dispatcher.next(new AuthenticatedUserChanged(null));
+          this.telemetry.clearAuthenticatedUser();
+          this.telemetry.flush();
         }
       } else {
         if (a instanceof Login) {
           this.markPostLoginRedirect(a.redirectTo);
           this.oauthService.initCodeFlow();
         } else if (a instanceof Logout) {
+          this.telemetry.clearAuthenticatedUser();
+          this.telemetry.flush();
           this.oauthService.logOut();
         }
       }
@@ -130,6 +136,7 @@ export class AuthService {
         const claims = this.mockUserClaims[userId] ?? this.mockUserClaims['user-1'];
         const identityClaims: IdentityClaims = { ...claims, idp: 'https://cohad.mock/' };
         this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken: r.accessToken }));
+        this.telemetry.setAuthenticatedUser(identityClaims.sub, identityClaims.emails?.[0]);
         this.redirectAfterLoginIfRequested(r.accessToken);
         this.markAuthSessionResolvedOnce();
       },
@@ -168,9 +175,11 @@ export class AuthService {
     if (accessToken) {
       let identityClaims = this.oauthService.getIdentityClaims() as IdentityClaims;
       this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken }));
+      this.telemetry.setAuthenticatedUser(identityClaims.sub, identityClaims.emails?.[0]);
       this.redirectAfterLoginIfRequested(accessToken);
     } else {
       this.dispatcher.next(new AuthenticatedUserChanged(null));
+      this.telemetry.clearAuthenticatedUser();
     }
     return true;
   }

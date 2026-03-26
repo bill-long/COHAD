@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { DocumentsService, ResidentDocument } from 'src/app/services/documents.service';
+import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import {
   formatFileSize,
   getFileIconName,
@@ -18,13 +19,15 @@ export class DocumentsComponent implements OnInit {
   error = '';
 
   constructor(
-    private readonly documentsService: DocumentsService) { }
+    private readonly documentsService: DocumentsService,
+    private readonly telemetry: ApplicationInsightsService) { }
 
   ngOnInit(): void {
     this.loadDocuments();
   }
 
   downloadFile(doc: ResidentDocument): void {
+    this.telemetry.trackEvent('DocumentDownloaded', { documentName: doc.displayName });
     this.documentsService.download(doc.id).subscribe(blob => {
       const url = window.URL.createObjectURL(blob);
       const downloadLink = window.document.createElement('a');

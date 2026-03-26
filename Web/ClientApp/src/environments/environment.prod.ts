@@ -1,4 +1,5 @@
 export const environment = {
   production: true,
-  useMockAuth: false
+  useMockAuth: false,
+  appInsightsConnectionString: 'InstrumentationKey=76945be1-0057-4d63-a6f4-02a2b4553327;IngestionEndpoint=https://southcentralus-0.in.applicationinsights.azure.com/;LiveEndpoint=https://southcentralus.livediagnostics.monitor.azure.com/;ApplicationId=dde2fafa-33e9-4311-abe4-43ffcd561ab0'
 };

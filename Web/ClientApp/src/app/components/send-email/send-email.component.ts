@@ -4,6 +4,7 @@ import Quill from 'quill';
 import { combineLatest, Observable, zip } from 'rxjs';
 import { map, take } from 'rxjs/operators';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
+import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import { applicationState, ApplicationState } from 'src/app/state';
 
 @Component({
@@ -24,6 +25,7 @@ export class SendEmailComponent {
 
   constructor(
     private httpClient: HttpClient,
+    private telemetry: ApplicationInsightsService,
     @Inject(applicationState) private appState: Observable<ApplicationState>
   ) {
     const Block = Quill.import('blots/block') as any;
@@ -88,6 +90,7 @@ export class SendEmailComponent {
         this.testSucceeded = true;
         this.editEnabled = true;
       } else {
+        this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint });
         this.sendSucceeded = true;
       }
     }, err => {

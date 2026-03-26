@@ -54,3 +54,21 @@ When `ClientApp/dist/cohad-app/index.html` exists (published or local `ng build`
 - Authentication uses Azure AD B2C (`cohadorgb2c.b2clogin.com`). Sign In will redirect externally; this cannot work without a registered redirect URI matching the dev environment.
 - The `.csproj` `PublishRunWebpack` target runs `npm install` + `npm run prodbuild` during `dotnet publish` — avoid publishing in dev; use `dotnet run` instead.
 - Cosmos DB config is via user secrets (`CosmosUri`, `CosmosKey`, `CosmosDatabase`). Set them with `dotnet user-secrets set` in the `Web` project directory.
+
+### Telemetry (Application Insights)
+
+Both the .NET backend and Angular frontend send telemetry to the **same** Application Insights resource, enabling correlated end-to-end traces (frontend page view → API request → Cosmos DB query).
+
+**Backend:** Configured via `services.AddApplicationInsightsTelemetry()` in `Startup.cs`. Connection string is in `appsettings.json` under `ApplicationInsights:ConnectionString`.
+
+**Frontend:** `ApplicationInsightsService` (`services/application-insights.service.ts`) initializes the `@microsoft/applicationinsights-web` v3.x SDK. The connection string is set per Angular build configuration in the environment files:
+- `environment.prod.ts` — full connection string (telemetry enabled)
+- `environment.ts` (dev) and `environment.mock.ts` — empty string (telemetry **disabled**, complete no-op)
+
+**What is tracked on the frontend:**
+- **Page views** — automatic on every route navigation
+- **Authenticated user context** — Azure AD B2C `sub` claim + email
+- **Client-side exceptions** — all unhandled errors via `GlobalErrorHandler`
+- **Custom events** — `DocumentDownloaded`, `VendorDetailViewed`, `VendorReviewSubmitted`, `EmailSent`, `EventSignupSubmitted`, `DirectorySearched`
+
+**To change the target resource**, update both `appsettings.json` → `ApplicationInsights:ConnectionString` (backend) and `environment.prod.ts` → `appInsightsConnectionString` (frontend).

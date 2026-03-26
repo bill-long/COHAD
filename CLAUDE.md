@@ -75,6 +75,29 @@ dotnet user-secrets set "CosmosDatabase" "..."
 
 The backend starts without these but all API calls fail at runtime.
 
+### Telemetry (Application Insights)
+
+Both the .NET backend and Angular frontend send telemetry to the **same** Application Insights resource. This enables correlated end-to-end traces (frontend page view → API request → Cosmos DB query).
+
+**Backend:** Configured automatically via `services.AddApplicationInsightsTelemetry()` in `Startup.cs`. The connection string is in `appsettings.json` under `ApplicationInsights:ConnectionString`. To override per-environment, use `appsettings.{Environment}.json` or user secrets.
+
+**Frontend:** `ApplicationInsightsService` (in `services/application-insights.service.ts`) initializes the `@microsoft/applicationinsights-web` v3.x SDK on app startup. The connection string is set per Angular build configuration in the environment files:
+- `environment.prod.ts` — full connection string (telemetry enabled)
+- `environment.ts` (dev) — empty string (telemetry **disabled**)
+- `environment.mock.ts` — empty string (telemetry **disabled**)
+
+When `appInsightsConnectionString` is empty, the service becomes a complete no-op: no SDK instance is created and no network requests are made.
+
+**What is tracked on the frontend:**
+- **Page views** — automatic on every Angular route navigation (`NavigationEnd` events)
+- **Authenticated user context** — user's Azure AD B2C `sub` claim and email, set on login and cleared on logout
+- **Client-side exceptions** — all unhandled errors via `GlobalErrorHandler`
+- **Custom events** — `DocumentDownloaded`, `VendorDetailViewed`, `VendorReviewSubmitted`, `EmailSent`, `EventSignupSubmitted`, `DirectorySearched`
+
+**Changing the connection string:** If you need to point to a different Application Insights resource, update both:
+1. `appsettings.json` → `ApplicationInsights:ConnectionString` (backend)
+2. `environment.prod.ts` → `appInsightsConnectionString` (frontend)
+
 ## Gotchas
 
 - `dotnet publish` runs `npm install` + `npm run prodbuild` automatically (via `PublishRunWebpack` target). Use `dotnet run` for development.

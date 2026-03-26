@@ -4,6 +4,7 @@ import { startWith, debounceTime, map, shareReplay, take, delay, withLatestFrom 
 import { UntypedFormControl } from '@angular/forms';
 import { DirectoryHome, DirectoryResident } from '../../models';
 import { applicationState, ApplicationState, Action, dispatcher, LoadDirectory } from 'src/app/state';
+import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 
 @Component({
     selector: 'app-directory',
@@ -24,7 +25,8 @@ export class DirectoryComponent {
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    @Inject(dispatcher) private dispatcher: Subject<Action>) {
+    @Inject(dispatcher) private dispatcher: Subject<Action>,
+    private telemetry: ApplicationInsightsService) {
     const directoryData = this.appState.pipe(delay(5), map(s => s.directory));
 
     this.showSpinner = this.appState.pipe(map(s => s.operationsInProgress > 0));
@@ -60,6 +62,7 @@ export class DirectoryComponent {
       }
 
       f = f.toLowerCase();
+      this.telemetry.trackEvent('DirectorySearched');
 
       return h.filter(home => this.isFilterMatch(f, home));
     }));
