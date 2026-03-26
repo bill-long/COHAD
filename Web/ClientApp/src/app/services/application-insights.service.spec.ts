@@ -3,7 +3,7 @@ import { Router, NavigationEnd } from '@angular/router';
 import { Title } from '@angular/platform-browser';
 import { Subject } from 'rxjs';
 import { ApplicationInsightsService } from './application-insights.service';
-import * as envModule from '../../environments/environment';
+import * as envModule from 'src/environments/environment';
 
 /** Jasmine spy object that stands in for the real ApplicationInsights SDK instance. */
 type SdkSpy = jasmine.SpyObj<{
