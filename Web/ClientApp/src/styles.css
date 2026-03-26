@@ -225,7 +225,7 @@ body.dark-theme .chip-slate { background: rgba(74, 68, 62, 0.25); color: #b8b0a6
     padding-right: 0.08em;
     margin-top: 0.05em;
     font-weight: 700;
-    color: var(--primary);
+    color: var(--primary-sage);
 }
 
 /* Milkdown editor: match blog post rendering */
@@ -264,8 +264,10 @@ body.dark-theme .chip-slate { background: rgba(74, 68, 62, 0.25); color: #b8b0a6
     margin: 1.5rem 0 0.5rem;
 }
 
-.milkdown-editor-container .ProseMirror:focus-within {
-    outline: none;
+.milkdown-editor-container:focus-within {
+    outline: 2px solid var(--primary-sage);
+    outline-offset: -1px;
+    border-radius: 4px;
 }
 
 /* Global focus-visible styling */
