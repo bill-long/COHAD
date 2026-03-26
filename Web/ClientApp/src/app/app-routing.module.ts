@@ -1,5 +1,6 @@
-import { NgModule } from '@angular/core';
-import { Routes, RouterModule } from '@angular/router';
+import { Injectable, NgModule } from '@angular/core';
+import { Routes, RouterModule, TitleStrategy, RouterStateSnapshot } from '@angular/router';
+import { Title } from '@angular/platform-browser';
 import { HomeComponent } from './components/home/home.component';
 import { AboutComponent } from './components/about/about.component';
 import { NewsComponent } from './components/news/news.component';
@@ -33,64 +34,77 @@ import { BlogComponent } from './components/blog/blog.component';
 import { BlogDetailComponent } from './components/blog-detail/blog-detail.component';
 import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
 
+@Injectable({ providedIn: 'root' })
+export class CohadTitleStrategy extends TitleStrategy {
+  constructor(private readonly title: Title) { super(); }
+
+  override updateTitle(routerState: RouterStateSnapshot): void {
+    const pageTitle = this.buildTitle(routerState);
+    this.title.setTitle(pageTitle ? `COHAD | ${pageTitle}` : 'COHAD');
+  }
+}
+
 const routes: Routes = [
-  { path: '', component: HomeComponent },
-  { path: 'privacy', component: PrivacyComponent },
-  { path: 'about', component: AboutComponent },
+  { path: '', component: HomeComponent, title: 'Home' },
+  { path: 'privacy', component: PrivacyComponent, title: 'Privacy Policy' },
+  { path: 'about', component: AboutComponent, title: 'About' },
   { path: 'directory', redirectTo: 'residents/directory', pathMatch: 'full' },
   { path: 'map', redirectTo: 'residents/map', pathMatch: 'full' },
   { path: 'documents', redirectTo: 'residents/documents', pathMatch: 'full' },
   { path: 'myinfo', redirectTo: 'residents/myinfo', pathMatch: 'full' },
   { path: 'mydues', redirectTo: 'residents/dues', pathMatch: 'full' },
-  { path: 'news', component: BlogComponent },
-  { path: 'news/:slug', component: BlogDetailComponent },
-  { path: 'events', component: EventsComponent },
-  { path: 'events/:slug', component: EventDetailComponent },
+  { path: 'news', component: BlogComponent, title: 'News' },
+  { path: 'news/:slug', component: BlogDetailComponent, title: 'News' },
+  { path: 'events', component: EventsComponent, title: 'Events' },
+  { path: 'events/:slug', component: EventDetailComponent, title: 'Events' },
   {
     path: 'residents',
     component: ResidentsComponent,
     canActivate: [AuthGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'myinfo' },
-      { path: 'directory', component: DirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
-      { path: 'map', component: MapComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
-      { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
-      { path: 'dues', component: DuesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] } },
-      { path: 'myinfo', component: MyinfoComponent },
-      { path: 'vendors', component: VendorsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
-      { path: 'vendors/:id', component: VendorDetailComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } },
-      { path: 'youth-services', component: YouthServicesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] } }
+      { path: 'directory', component: DirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Directory' },
+      { path: 'map', component: MapComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Map' },
+      { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Documents' },
+      { path: 'dues', component: DuesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] }, title: 'Dues' },
+      { path: 'myinfo', component: MyinfoComponent, title: 'My Info' },
+      { path: 'vendors', component: VendorsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Vendor List' },
+      { path: 'vendors/:id', component: VendorDetailComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Vendor Details' },
+      { path: 'youth-services', component: YouthServicesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Youth Services' }
     ]
   },
-  { path: 'rendered-print-directory', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
-  { path: 'rendered-print-map', component: RenderedPrintableMapComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
+  { path: 'rendered-print-directory', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, title: 'Print Directory' },
+  { path: 'rendered-print-map', component: RenderedPrintableMapComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, title: 'Print Map' },
   {
     path: 'manage', component: ManageComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, children: [
-      { path: 'users', component: ManageUsersComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles } },
-      { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageHomesRoles } },
-      { path: 'send-email', component: SendEmailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles } },
-      { path: 'print', component: ManagePrintComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles } },
-      { path: 'documents', component: ManageDocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles } },
+      { path: 'users', component: ManageUsersComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles }, title: 'Manage Users' },
+      { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageHomesRoles }, title: 'Manage Homes' },
+      { path: 'send-email', component: SendEmailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles }, title: 'Send Email' },
+      { path: 'print', component: ManagePrintComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, title: 'Print' },
+      { path: 'documents', component: ManageDocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles }, title: 'Manage Documents' },
       {
         path: 'events',
         component: ManageEventsComponent,
         canActivate: [RoleGuard],
-        data: { allowedRoles: rolePermissions.manageEventsRoles, requireResidentRole: true }
+        data: { allowedRoles: rolePermissions.manageEventsRoles, requireResidentRole: true },
+        title: 'Manage Events'
       },
       {
         path: 'blog',
         component: ManageBlogComponent,
         canActivate: [RoleGuard],
-        data: { allowedRoles: rolePermissions.manageBlogRoles, requireResidentRole: true }
+        data: { allowedRoles: rolePermissions.manageBlogRoles, requireResidentRole: true },
+        title: 'Manage Blog'
       },
-      { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageAuditLogRoles } }
+      { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageAuditLogRoles }, title: 'Audit Log' }
     ]
   },
-  { path: 'unauthorized', component: UnauthorizedComponent }
+  { path: 'unauthorized', component: UnauthorizedComponent, title: 'Unauthorized' }
 ];
 
 @NgModule({
   imports: [RouterModule.forRoot(routes, { scrollPositionRestoration: 'enabled' })],
-  exports: [RouterModule]
+  exports: [RouterModule],
+  providers: [{ provide: TitleStrategy, useClass: CohadTitleStrategy }]
 })
 export class AppRoutingModule { }
