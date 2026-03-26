@@ -367,6 +367,10 @@ namespace Web.Controllers
                 {
                     await _documentFileStore.DeleteAsync(communityEvent.PromoMediaThumbBlobPath);
                 }
+                else
+                {
+                    await _documentFileStore.DeleteAsync($"events/{communityEvent.Id:D}/og-thumb.jpg");
+                }
 
                 communityEvent.PromoMediaBlobPath = null;
                 communityEvent.PromoMediaDisplayName = null;
@@ -456,6 +460,10 @@ namespace Web.Controllers
             if (!string.IsNullOrWhiteSpace(stored.PromoMediaThumbBlobPath))
             {
                 await _documentFileStore.DeleteAsync(stored.PromoMediaThumbBlobPath);
+            }
+            else
+            {
+                await _documentFileStore.DeleteAsync($"events/{stored.Id:D}/og-thumb.jpg");
             }
 
             await _communityEventRepository.DeleteAsync(id);
