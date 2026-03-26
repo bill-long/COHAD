@@ -16,7 +16,7 @@ namespace Web.PresentationModels
         /// <summary>All pending flags on this vendor. Non-null (even if empty) for admins; null for residents.</summary>
         public List<VendorFlagPresentation> PendingFlags { get; set; }
 
-        /// <summary>The current resident's most recent flag on this vendor (any status), or null if none. Always null for admins.</summary>
+        /// <summary>The current user's most recent flag on this vendor (any status), or null if none.</summary>
         public VendorFlagPresentation MyFlag { get; set; }
 
         public static VendorDetail FromStorageModel(Vendor vendor, List<VendorReview> reviews, List<VendorFlag> flags, string currentUserUniqueId, bool isAdmin)
@@ -32,6 +32,18 @@ namespace Web.PresentationModels
             List<VendorFlagPresentation> pendingFlags = null;
             VendorFlagPresentation myFlag = null;
 
+            // Look up the current user's own flag regardless of role so admins
+            // can also report issues (they just happen to notify themselves).
+            var ownFlag = safeFlags
+                .Where(f => !string.IsNullOrWhiteSpace(currentUserUniqueId) &&
+                            string.Equals(f.AuthorUniqueId, currentUserUniqueId, System.StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(f => f.CreatedUtc)
+                .FirstOrDefault();
+            if (ownFlag != null)
+            {
+                myFlag = VendorFlagPresentation.FromStorageModel(ownFlag, includeAuthor: isAdmin);
+            }
+
             if (isAdmin)
             {
                 pendingFlags = safeFlags
@@ -39,18 +51,6 @@ namespace Web.PresentationModels
                     .OrderBy(f => f.CreatedUtc)
                     .Select(f => VendorFlagPresentation.FromStorageModel(f, includeAuthor: true))
                     .ToList();
-            }
-            else
-            {
-                var ownFlag = safeFlags
-                    .Where(f => !string.IsNullOrWhiteSpace(currentUserUniqueId) &&
-                                string.Equals(f.AuthorUniqueId, currentUserUniqueId, System.StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(f => f.CreatedUtc)
-                    .FirstOrDefault();
-                if (ownFlag != null)
-                {
-                    myFlag = VendorFlagPresentation.FromStorageModel(ownFlag, includeAuthor: false);
-                }
             }
 
             return new VendorDetail
