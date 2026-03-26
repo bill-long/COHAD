@@ -525,4 +525,72 @@ public sealed class BlogControllerTests
         Assert.IsType<OkResult>(result);
         Assert.Contains(inlinePath, deleted);
     }
+
+    [Fact]
+    public async Task UpsertManage_png_featured_image_is_converted_to_jpeg()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            GivenName = "Test",
+            Surname = "User"
+        });
+
+        var mockPosts = new Mock<IBlogPostRepository>();
+        mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost>());
+        mockPosts.Setup(r => r.UpsertAsync(It.IsAny<BlogPost>())).ReturnsAsync((BlogPost p) => p);
+
+        string uploadedBlobPath = null;
+        string uploadedContentType = null;
+        var mockFiles = new Mock<IDocumentFileStore>();
+        mockFiles.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .Callback<string, Stream, string>((path, _, ct) =>
+            {
+                uploadedBlobPath = path;
+                uploadedContentType = ct;
+            })
+            .Returns(Task.CompletedTask);
+
+        var convertedBytes = new byte[] { 0xFF, 0xD8, 1, 2, 3 };
+        var mockConversion = new Mock<IImageConversionService>();
+        mockConversion.Setup(s => s.TryConvertToJpeg(It.IsAny<Stream>(), ".png"))
+            .Returns(new ImageConversionResult
+            {
+                Data = convertedBytes,
+                Extension = ".jpg",
+                ContentType = "image/jpeg"
+            });
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, mockPosts.Object, Mock.Of<IBlogCommentRepository>(),
+            mockFiles.Object, mockAudit.Object, mockConversion.Object);
+
+        var imgBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // PNG magic bytes
+        IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "FeaturedImage", "photo.png")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "image/png"
+        };
+
+        var request = new BlogPostUpsertRequest
+        {
+            Title = "Test post",
+            Content = "Body text",
+            FeaturedImage = formFile
+        };
+
+        var result = await c.UpsertManage(request);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var detail = Assert.IsType<BlogPostDetail>(ok.Value);
+        Assert.EndsWith(".jpg", uploadedBlobPath);
+        Assert.Equal("image/jpeg", uploadedContentType);
+        Assert.Equal("image/jpeg", detail.FeaturedImageContentType);
+        Assert.EndsWith(".jpg", detail.FeaturedImageDisplayName);
+    }
 }

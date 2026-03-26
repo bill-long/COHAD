@@ -370,7 +370,11 @@ namespace Web.Controllers
                 // original promo is still usable and the thumbnail will be lazy-generated on first crawler access.
                 try
                 {
-                    await using (var thumbSourceStream = request.PromotionalAsset.OpenReadStream())
+                    // Use the converted JPEG bytes when available to avoid re-decoding the original PNG.
+                    Stream thumbSourceStream = converted != null
+                        ? new MemoryStream(converted.Data)
+                        : request.PromotionalAsset.OpenReadStream();
+                    await using (thumbSourceStream)
                     {
                         var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
                         await using var thumbStream = new MemoryStream(thumbBytes);
@@ -694,7 +698,7 @@ namespace Web.Controllers
                 ".jpg" or ".jpeg" => "image/jpeg",
                 ".gif" => "image/gif",
                 ".webp" => "image/webp",
-                _ => "application/octet-stream"
+                _ => throw new System.ArgumentOutOfRangeException(nameof(extension), extension, "Extension must be allowed by AllowedMediaExtensions.")
             };
         }
 
