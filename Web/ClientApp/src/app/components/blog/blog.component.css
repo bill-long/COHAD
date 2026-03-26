@@ -14,8 +14,9 @@
 
 .blog-header h1 {
     margin: 0;
-    font-size: 1.9rem;
-    font-weight: 600;
+    font-size: var(--heading-page);
+    font-weight: var(--heading-page-weight);
+    letter-spacing: var(--heading-page-tracking);
 }
 
 .blog-header p {
@@ -99,7 +100,8 @@
 
 .blog-card-body h2 {
     margin: 0;
-    font-size: 1.15rem;
+    font-size: var(--heading-card);
+    font-weight: var(--heading-card-weight);
 }
 
 .blog-card-meta {

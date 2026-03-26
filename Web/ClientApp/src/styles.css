@@ -35,6 +35,15 @@
     --mdc-outlined-text-field-container-shape: 10px;
     --mdc-dialog-container-shape: 18px;
     --mat-menu-container-shape: 12px;
+
+    /* Typography scale */
+    --heading-page: clamp(1.65rem, 3.5vw, 1.9rem);
+    --heading-page-weight: 600;
+    --heading-page-tracking: -0.01em;
+    --heading-section: clamp(1.05rem, 2.2vw, 1.15rem);
+    --heading-section-weight: 500;
+    --heading-card: 1.05rem;
+    --heading-card-weight: 600;
 }
 
 body.dark-theme {

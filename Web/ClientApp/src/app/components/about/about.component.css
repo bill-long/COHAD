@@ -18,10 +18,9 @@
 
 .about-section-title {
     margin: 0;
-    font-size: clamp(1.25rem, 2.5vw, 1.5rem);
-    font-weight: 600;
-    line-height: 1.3;
-    color: var(--text-primary);
+    font-size: var(--heading-page);
+    font-weight: var(--heading-page-weight);
+    letter-spacing: var(--heading-page-tracking);
 }
 
 .about-section-body p {
@@ -106,8 +105,8 @@
 
 .about-committee-name {
     margin: 0 0 0.35rem;
-    font-size: 1.05rem;
-    font-weight: 600;
+    font-size: var(--heading-card);
+    font-weight: var(--heading-card-weight);
     color: var(--text-primary);
 }
 

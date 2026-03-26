@@ -10,6 +10,9 @@
 
 .pageTitle {
     margin: 0;
+    font-size: var(--heading-page);
+    font-weight: var(--heading-page-weight);
+    letter-spacing: var(--heading-page-tracking);
 }
 
 .subtitle {

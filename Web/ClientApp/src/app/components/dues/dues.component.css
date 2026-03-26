@@ -9,10 +9,15 @@
 
 .dues-title {
   margin: 0 0 0.75rem;
+  font-size: var(--heading-page);
+  font-weight: var(--heading-page-weight);
+  letter-spacing: var(--heading-page-tracking);
 }
 
 .dues-section-title {
   margin: 0 0 1rem;
+  font-size: var(--heading-section);
+  font-weight: var(--heading-section-weight);
 }
 
 .payment-description {
