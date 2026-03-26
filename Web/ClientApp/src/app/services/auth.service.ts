@@ -165,9 +165,13 @@ export class AuthService {
       return false;
     }
 
-    let identityClaims = this.oauthService.getIdentityClaims() as IdentityClaims;
-    this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken }));
-    this.redirectAfterLoginIfRequested(accessToken);
+    if (accessToken) {
+      let identityClaims = this.oauthService.getIdentityClaims() as IdentityClaims;
+      this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken }));
+      this.redirectAfterLoginIfRequested(accessToken);
+    } else {
+      this.dispatcher.next(new AuthenticatedUserChanged(null));
+    }
     return true;
   }
 
