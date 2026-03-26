@@ -47,6 +47,7 @@ namespace Web.Controllers
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly IOgThumbnailService _ogThumbnailService;
+        private readonly IImageConversionService _imageConversion;
         private readonly DocumentStorageOptions _storageOptions;
 
         public EventsController(
@@ -55,6 +56,7 @@ namespace Web.Controllers
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
             IOgThumbnailService ogThumbnailService,
+            IImageConversionService imageConversion,
             IOptions<DocumentStorageOptions> storageOptions)
         {
             _userRepository = userRepository;
@@ -62,6 +64,7 @@ namespace Web.Controllers
             _documentFileStore = documentFileStore;
             _auditLogRepository = auditLogRepository;
             _ogThumbnailService = ogThumbnailService;
+            _imageConversion = imageConversion;
             _storageOptions = storageOptions.Value;
         }
 
@@ -311,12 +314,30 @@ namespace Web.Controllers
                     return BadRequest("Uploaded file name is invalid.");
                 }
 
-                var finalDisplayName = $"{safeBaseName}{extension.ToLowerInvariant()}";
-                var blobPath = $"events/{communityEvent.Id:D}/{finalDisplayName}";
-
+                ImageConversionResult converted;
                 await using (var stream = request.PromotionalAsset.OpenReadStream())
                 {
-                    await _documentFileStore.UploadAsync(blobPath, stream, request.PromotionalAsset.ContentType);
+                    converted = _imageConversion.TryConvertToJpeg(stream, extension);
+                }
+
+                if (converted != null)
+                {
+                    extension = converted.Extension;
+                }
+
+                var finalDisplayName = $"{safeBaseName}{extension.ToLowerInvariant()}";
+                var blobPath = $"events/{communityEvent.Id:D}/{finalDisplayName}";
+                var trustedContentType = converted?.ContentType ?? TrustedContentTypeFromExtension(extension);
+
+                if (converted != null)
+                {
+                    await using var ms = new MemoryStream(converted.Data);
+                    await _documentFileStore.UploadAsync(blobPath, ms, trustedContentType);
+                }
+                else
+                {
+                    await using var stream = request.PromotionalAsset.OpenReadStream();
+                    await _documentFileStore.UploadAsync(blobPath, stream, trustedContentType);
                 }
 
                 if (!string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath) &&
@@ -327,8 +348,8 @@ namespace Web.Controllers
 
                 communityEvent.PromoMediaBlobPath = blobPath;
                 communityEvent.PromoMediaDisplayName = finalDisplayName;
-                communityEvent.PromoMediaContentType = request.PromotionalAsset.ContentType;
-                communityEvent.PromoMediaSizeBytes = request.PromotionalAsset.Length;
+                communityEvent.PromoMediaContentType = trustedContentType;
+                communityEvent.PromoMediaSizeBytes = converted?.Data.Length ?? request.PromotionalAsset.Length;
 
                 // Remove any stale thumbnail before generating a new one so a failure
                 // doesn't leave an old preview that no longer matches the current promo.
@@ -663,6 +684,18 @@ namespace Web.Controllers
                 .Select(n => n.Trim())
                 .Take(30)
                 .ToList();
+        }
+
+        private static string TrustedContentTypeFromExtension(string extension)
+        {
+            return extension.ToLowerInvariant() switch
+            {
+                ".png" => "image/png",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                _ => "application/octet-stream"
+            };
         }
 
         private static string SanitizeFileName(string value)

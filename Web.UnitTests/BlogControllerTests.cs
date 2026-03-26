@@ -30,6 +30,7 @@ public sealed class BlogControllerTests
         IBlogCommentRepository comments,
         IDocumentFileStore fileStore,
         IAuditLogRepository auditLog,
+        IImageConversionService? imageConversion = null,
         DocumentStorageOptions? storageOptions = null,
         string nameId = "u1",
         string idp = "google.com")
@@ -42,6 +43,7 @@ public sealed class BlogControllerTests
             comments,
             fileStore,
             auditLog,
+            imageConversion ?? Mock.Of<IImageConversionService>(),
             Options.Create(storageOptions));
 
         c.ControllerContext = new ControllerContext
@@ -71,6 +73,7 @@ public sealed class BlogControllerTests
             comments ?? Mock.Of<IBlogCommentRepository>(),
             files ?? Mock.Of<IDocumentFileStore>(),
             Mock.Of<IAuditLogRepository>(),
+            Mock.Of<IImageConversionService>(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
