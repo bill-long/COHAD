@@ -328,6 +328,21 @@ namespace Web.Controllers
                 communityEvent.PromoMediaContentType = request.PromotionalAsset.ContentType;
                 communityEvent.PromoMediaSizeBytes = request.PromotionalAsset.Length;
 
+                // Remove any stale thumbnail before generating a new one so a failure
+                // doesn't leave an old preview that no longer matches the current promo.
+                var thumbBlobPath = $"events/{communityEvent.Id:D}/og-thumb.jpg";
+                if (!string.IsNullOrWhiteSpace(communityEvent.PromoMediaThumbBlobPath))
+                {
+                    await _documentFileStore.DeleteAsync(communityEvent.PromoMediaThumbBlobPath);
+                }
+                else
+                {
+                    // Best-effort delete in case a thumb exists at the conventional path from lazy-gen.
+                    await _documentFileStore.DeleteAsync(thumbBlobPath);
+                }
+
+                communityEvent.PromoMediaThumbBlobPath = null;
+
                 // Generate OG thumbnail for link previews. Non-critical: if this fails the
                 // original promo is still usable and the thumbnail will be lazy-generated on first crawler access.
                 try
@@ -335,7 +350,6 @@ namespace Web.Controllers
                     await using (var thumbSourceStream = request.PromotionalAsset.OpenReadStream())
                     {
                         var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
-                        var thumbBlobPath = $"events/{communityEvent.Id:D}/og-thumb.jpg";
                         await using var thumbStream = new MemoryStream(thumbBytes);
                         await _documentFileStore.UploadAsync(thumbBlobPath, thumbStream, "image/jpeg");
                         communityEvent.PromoMediaThumbBlobPath = thumbBlobPath;
