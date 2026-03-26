@@ -62,18 +62,39 @@
 }
 
 @media (max-width: 599.98px) {
-    .home-hero-teaser-inner {
-        flex-direction: column;
-        align-items: stretch;
+    .home-hero-teaser {
+        padding: 0.6rem 0.75rem 0.85rem;
+        background: linear-gradient(
+            to bottom,
+            rgba(28, 26, 23, 0.92) 0%,
+            rgba(28, 26, 23, 0.55) 50%,
+            transparent 90%
+        );
     }
 
-    .home-hero-teaser-text {
-        text-align: center;
+    .home-hero-teaser-inner {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .home-hero-teaser-label {
+        font-size: 0.6rem;
+        margin-bottom: 0.1rem;
+    }
+
+    .home-hero-teaser-title {
+        font-size: 0.95rem;
+        margin-bottom: 0.1rem;
+    }
+
+    .home-hero-teaser-time {
+        font-size: 0.75rem;
     }
 
     .home-hero-teaser-btn {
-        align-self: stretch;
-        text-align: center;
+        flex: 0 0 auto;
+        align-self: center;
     }
 }
 
@@ -82,6 +103,7 @@
     width: min(960px, 100%);
     margin: 0 auto;
     padding: 0 1.25rem 3rem;
+    box-sizing: border-box;
 }
 
 /* Welcome section */
