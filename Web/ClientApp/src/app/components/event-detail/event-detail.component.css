@@ -51,8 +51,6 @@
 }
 
 .promo-flyer-frame {
-    aspect-ratio: 8.5 / 11;
-    max-height: min(85vh, 960px);
     width: 100%;
     background: var(--surface-section);
     border-radius: 14px;
@@ -64,8 +62,8 @@
 }
 
 .promo-image {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: min(85vh, 960px);
     object-fit: contain;
 }
 

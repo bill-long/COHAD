@@ -105,9 +105,6 @@
 }
 
 .event-row-flyer-frame {
-    aspect-ratio: 8.5 / 11;
-    max-height: min(40vh, 360px);
-    width: 100%;
     max-width: 280px;
     background: var(--surface-section);
     border-radius: 8px;
@@ -119,8 +116,8 @@
 }
 
 .event-row-flyer-img {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: min(40vh, 360px);
     object-fit: contain;
 }
 

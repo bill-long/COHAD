@@ -48,16 +48,17 @@
         <h3>{{ eventItem.title }}</h3>
         <span class="event-row-time">{{ eventItem.startUtc | date:'medium' }}</span>
       </div>
-      <p class="event-row-description">{{ eventItem.description }}</p>
-      <div class="event-row-meta">
-        <span>{{ eventItem.allowSignups ? 'Signups enabled' : 'No signups' }}</span>
-        <span *ngIf="eventItem.hasPromoMedia">{{ eventItem.promoMediaDisplayName }}</span>
-      </div>
 
       <div class="event-row-flyer" *ngIf="eventItem.hasPromoMedia">
         <div class="event-row-flyer-frame">
           <img [src]="eventItem.promoMediaDownloadUrl" [alt]="eventItem.title" class="event-row-flyer-img">
         </div>
+      </div>
+
+      <p class="event-row-description">{{ eventItem.description }}</p>
+      <div class="event-row-meta">
+        <span>{{ eventItem.allowSignups ? 'Signups enabled' : 'No signups' }}</span>
+        <span *ngIf="eventItem.hasPromoMedia">{{ eventItem.promoMediaDisplayName }}</span>
       </div>
     </div>
 
