@@ -24,5 +24,8 @@ export class GlobalErrorHandler implements ErrorHandler {
 
     this.telemetry.trackException(err);
     console.error(err);
+    if (error !== err) {
+      console.error('Original error value:', error);
+    }
   }
 }

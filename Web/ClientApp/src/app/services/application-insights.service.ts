@@ -45,6 +45,12 @@ export class ApplicationInsightsService {
       this.pendingUserContext = null;
     }
 
+    // Track the initial page view (the router subscription only captures future navigations).
+    this.appInsights.trackPageView({
+      name: this.titleService.getTitle(),
+      uri: this.router.url
+    });
+
     this.router.events.pipe(
       filter((event): event is NavigationEnd => event instanceof NavigationEnd)
     ).subscribe(event => {
