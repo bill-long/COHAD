@@ -8,6 +8,7 @@ import { filter } from 'rxjs/operators';
 @Injectable({ providedIn: 'root' })
 export class ApplicationInsightsService {
   private appInsights: ApplicationInsights | null = null;
+  private pendingUserContext: { userId: string; accountId?: string } | null = null;
 
   constructor(private router: Router, private titleService: Title) {}
 
@@ -38,6 +39,12 @@ export class ApplicationInsightsService {
 
     this.appInsights.loadAppInsights();
 
+    // Apply any user context that was set before init() ran (e.g. from AuthService constructor).
+    if (this.pendingUserContext) {
+      this.appInsights.setAuthenticatedUserContext(this.pendingUserContext.userId, this.pendingUserContext.accountId);
+      this.pendingUserContext = null;
+    }
+
     this.router.events.pipe(
       filter((event): event is NavigationEnd => event instanceof NavigationEnd)
     ).subscribe(event => {
@@ -49,10 +56,15 @@ export class ApplicationInsightsService {
   }
 
   setAuthenticatedUser(userId: string, accountId?: string): void {
-    this.appInsights?.setAuthenticatedUserContext(userId, accountId);
+    if (this.appInsights) {
+      this.appInsights.setAuthenticatedUserContext(userId, accountId);
+    } else {
+      this.pendingUserContext = { userId, accountId };
+    }
   }
 
   clearAuthenticatedUser(): void {
+    this.pendingUserContext = null;
     this.appInsights?.clearAuthenticatedUserContext();
   }
 

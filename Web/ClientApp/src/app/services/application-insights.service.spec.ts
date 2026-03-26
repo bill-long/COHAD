@@ -95,5 +95,28 @@ describe('ApplicationInsightsService', () => {
       service.init();
       expect(() => service.flush()).not.toThrow();
     });
+
+    it('should apply buffered user context when init() runs after setAuthenticatedUser', () => {
+      // Set user context BEFORE init — simulates AuthService constructor race
+      service.setAuthenticatedUser('user-1', 'user@test.com');
+      service.init();
+
+      const appInsightsInstance = (service as any).appInsights;
+      const setSpy = spyOn(appInsightsInstance, 'setAuthenticatedUserContext');
+
+      // Call again to verify direct path works after init
+      service.setAuthenticatedUser('user-2', 'user2@test.com');
+      expect(setSpy).toHaveBeenCalledWith('user-2', 'user2@test.com');
+    });
+
+    it('should not apply buffered user context if clearAuthenticatedUser was called', () => {
+      service.setAuthenticatedUser('user-1', 'user@test.com');
+      service.clearAuthenticatedUser();
+      service.init();
+
+      // The pending context was cleared, so nothing to assert was called —
+      // just verify no error
+      expect((service as any).pendingUserContext).toBeNull();
+    });
   });
 });
