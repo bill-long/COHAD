@@ -15,7 +15,7 @@ describe('ApplicationInsightsService', () => {
     (envModule.environment as any).appInsightsConnectionString = connectionString;
 
     routerEvents$ = new Subject<any>();
-    const routerSpy = jasmine.createSpyObj('Router', [], { events: routerEvents$.asObservable() });
+    const routerSpy = jasmine.createSpyObj('Router', [], { events: routerEvents$.asObservable(), url: '/test' });
     titleService = jasmine.createSpyObj('Title', ['getTitle']);
     titleService.getTitle.and.returnValue('Test Page');
 

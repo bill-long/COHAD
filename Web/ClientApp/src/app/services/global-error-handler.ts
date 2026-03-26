@@ -15,7 +15,8 @@ export class GlobalErrorHandler implements ErrorHandler {
       (err as any).originalError = error;
     } else {
       try {
-        err = new Error(JSON.stringify(error));
+        const serialized = JSON.stringify(error);
+        err = new Error(serialized !== undefined ? serialized : String(error));
       } catch {
         err = new Error(String(error));
       }
