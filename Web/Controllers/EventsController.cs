@@ -112,6 +112,7 @@ namespace Web.Controllers
         }
 
         [HttpGet("{segment}/promo")]
+        [HttpHead("{segment}/promo")]
         [AllowAnonymous]
         public async Task<IActionResult> DownloadPromoMedia(string segment)
         {
@@ -135,6 +136,7 @@ namespace Web.Controllers
         }
 
         [HttpGet("{segment}/promo/og-thumb")]
+        [HttpHead("{segment}/promo/og-thumb")]
         [AllowAnonymous]
         public async Task<IActionResult> DownloadPromoThumb(string segment)
         {
