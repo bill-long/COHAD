@@ -35,6 +35,7 @@ public sealed class EventsControllerTests
             events,
             fileStore,
             auditLog,
+            new SkiaSharpOgThumbnailService(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
 
         c.ControllerContext = new ControllerContext

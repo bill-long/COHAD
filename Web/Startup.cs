@@ -156,6 +156,7 @@ namespace Web
             });
 
             services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();
+            services.AddSingleton<IOgThumbnailService, SkiaSharpOgThumbnailService>();
 
             // Repository / persistence
             if (useMockData)

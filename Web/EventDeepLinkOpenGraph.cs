@@ -148,7 +148,7 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
             !string.IsNullOrWhiteSpace(ev.PromoMediaContentType) &&
             ev.PromoMediaContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
         {
-            return $"{root}/api/events/{segment}/promo";
+            return $"{root}/api/events/{segment}/promo/og-thumb";
         }
 
         return $"{root}/assets/trees1.jpg";
@@ -180,6 +180,8 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
         sb.AppendLine($"    <meta property=\"og:description\" content=\"{encodedDescription}\" />");
         sb.AppendLine($"    <meta property=\"og:url\" content=\"{encodedCanonical}\" />");
         sb.AppendLine($"    <meta property=\"og:image\" content=\"{encodedImageUrl}\" />");
+        sb.AppendLine($"    <meta property=\"og:image:width\" content=\"1200\" />");
+        sb.AppendLine($"    <meta property=\"og:image:height\" content=\"630\" />");
         sb.AppendLine($"    <meta name=\"twitter:card\" content=\"summary_large_image\" />");
         sb.AppendLine($"    <meta name=\"twitter:title\" content=\"{encodedTitle}\" />");
         sb.AppendLine($"    <meta name=\"twitter:description\" content=\"{encodedDescription}\" />");

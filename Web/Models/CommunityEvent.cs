@@ -28,6 +28,11 @@ namespace Web.Models
 
         public long? PromoMediaSizeBytes { get; set; }
 
+        /// <summary>
+        /// Blob path for the OG thumbnail (1200x630 JPEG). Null for legacy events until first crawler access.
+        /// </summary>
+        public string PromoMediaThumbBlobPath { get; set; }
+
         public string CreatedByUniqueId { get; set; }
 
         public string ModifiedByUniqueId { get; set; }

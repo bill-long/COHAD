@@ -46,6 +46,7 @@ namespace Web.Controllers
         private readonly ICommunityEventRepository _communityEventRepository;
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IAuditLogRepository _auditLogRepository;
+        private readonly IOgThumbnailService _ogThumbnailService;
         private readonly DocumentStorageOptions _storageOptions;
 
         public EventsController(
@@ -53,12 +54,14 @@ namespace Web.Controllers
             ICommunityEventRepository communityEventRepository,
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
+            IOgThumbnailService ogThumbnailService,
             IOptions<DocumentStorageOptions> storageOptions)
         {
             _userRepository = userRepository;
             _communityEventRepository = communityEventRepository;
             _documentFileStore = documentFileStore;
             _auditLogRepository = auditLogRepository;
+            _ogThumbnailService = ogThumbnailService;
             _storageOptions = storageOptions.Value;
         }
 
@@ -129,6 +132,65 @@ namespace Web.Controllers
                 : file.ContentType;
             // Omit fileDownloadName so the response is served inline for browser display (e.g. img src) rather than as a download attachment.
             return File(file.Stream, contentType);
+        }
+
+        [HttpGet("{segment}/promo/og-thumb")]
+        [AllowAnonymous]
+        public async Task<IActionResult> DownloadPromoThumb(string segment)
+        {
+            var stored = await _communityEventRepository.GetByRouteSegmentAsync(segment);
+            if (stored == null || string.IsNullOrWhiteSpace(stored.PromoMediaBlobPath))
+            {
+                return NotFound();
+            }
+
+            // Serve pre-generated thumbnail if available.
+            if (!string.IsNullOrWhiteSpace(stored.PromoMediaThumbBlobPath))
+            {
+                var thumbFile = await _documentFileStore.DownloadAsync(stored.PromoMediaThumbBlobPath);
+                if (thumbFile != null)
+                {
+                    Response.Headers["Cache-Control"] = "public, max-age=86400";
+                    return File(thumbFile.Stream, "image/jpeg");
+                }
+            }
+
+            // Lazy-generate thumbnail for legacy events that predate the thumbnail feature.
+            var originalFile = await _documentFileStore.DownloadAsync(stored.PromoMediaBlobPath);
+            if (originalFile == null)
+            {
+                return NotFound();
+            }
+
+            byte[] thumbBytes;
+            await using (originalFile.Stream)
+            {
+                thumbBytes = _ogThumbnailService.GenerateThumbnail(originalFile.Stream);
+            }
+
+            var thumbBlobPath = $"events/{stored.Id:D}/og-thumb.jpg";
+            await using (var thumbStream = new MemoryStream(thumbBytes))
+            {
+                await _documentFileStore.UploadAsync(thumbBlobPath, thumbStream, "image/jpeg");
+            }
+
+            // Best-effort persist the blob path on the event document; ignore concurrency failures.
+            try
+            {
+                var read = await _communityEventRepository.ReadAsync(stored.Id);
+                if (read != null && string.IsNullOrWhiteSpace(read.Event.PromoMediaThumbBlobPath))
+                {
+                    read.Event.PromoMediaThumbBlobPath = thumbBlobPath;
+                    await _communityEventRepository.ReplaceAsync(read.Event, read.ETag);
+                }
+            }
+            catch (CosmosException)
+            {
+                // Non-critical: the blob is already uploaded; next request will find it via the blob path convention.
+            }
+
+            Response.Headers["Cache-Control"] = "public, max-age=86400";
+            return File(thumbBytes, "image/jpeg");
         }
 
         [HttpGet("manage")]
@@ -258,14 +320,30 @@ namespace Web.Controllers
                 communityEvent.PromoMediaDisplayName = finalDisplayName;
                 communityEvent.PromoMediaContentType = request.PromotionalAsset.ContentType;
                 communityEvent.PromoMediaSizeBytes = request.PromotionalAsset.Length;
+
+                // Generate OG thumbnail for link previews.
+                await using (var thumbSourceStream = request.PromotionalAsset.OpenReadStream())
+                {
+                    var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
+                    var thumbBlobPath = $"events/{communityEvent.Id:D}/og-thumb.jpg";
+                    await using var thumbStream = new MemoryStream(thumbBytes);
+                    await _documentFileStore.UploadAsync(thumbBlobPath, thumbStream, "image/jpeg");
+                    communityEvent.PromoMediaThumbBlobPath = thumbBlobPath;
+                }
             }
             else if (request.RemovePromoMedia && !string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath))
             {
                 await _documentFileStore.DeleteAsync(communityEvent.PromoMediaBlobPath);
+                if (!string.IsNullOrWhiteSpace(communityEvent.PromoMediaThumbBlobPath))
+                {
+                    await _documentFileStore.DeleteAsync(communityEvent.PromoMediaThumbBlobPath);
+                }
+
                 communityEvent.PromoMediaBlobPath = null;
                 communityEvent.PromoMediaDisplayName = null;
                 communityEvent.PromoMediaContentType = null;
                 communityEvent.PromoMediaSizeBytes = null;
+                communityEvent.PromoMediaThumbBlobPath = null;
             }
 
             communityEvent.Title = request.Title.Trim();
@@ -344,6 +422,11 @@ namespace Web.Controllers
             if (!string.IsNullOrWhiteSpace(stored.PromoMediaBlobPath))
             {
                 await _documentFileStore.DeleteAsync(stored.PromoMediaBlobPath);
+            }
+
+            if (!string.IsNullOrWhiteSpace(stored.PromoMediaThumbBlobPath))
+            {
+                await _documentFileStore.DeleteAsync(stored.PromoMediaThumbBlobPath);
             }
 
             await _communityEventRepository.DeleteAsync(id);
