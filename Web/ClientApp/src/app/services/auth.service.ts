@@ -136,7 +136,7 @@ export class AuthService {
         const claims = this.mockUserClaims[userId] ?? this.mockUserClaims['user-1'];
         const identityClaims: IdentityClaims = { ...claims, idp: 'https://cohad.mock/' };
         this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken: r.accessToken }));
-        this.telemetry.setAuthenticatedUser(identityClaims.sub, identityClaims.emails?.[0]);
+        this.telemetry.setAuthenticatedUser(identityClaims.sub);
         this.redirectAfterLoginIfRequested(r.accessToken);
         this.markAuthSessionResolvedOnce();
       },
@@ -175,7 +175,7 @@ export class AuthService {
     if (accessToken) {
       let identityClaims = this.oauthService.getIdentityClaims() as IdentityClaims;
       this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken }));
-      this.telemetry.setAuthenticatedUser(identityClaims.sub, identityClaims.emails?.[0]);
+      this.telemetry.setAuthenticatedUser(identityClaims.sub);
       this.redirectAfterLoginIfRequested(accessToken);
     } else {
       this.dispatcher.next(new AuthenticatedUserChanged(null));
