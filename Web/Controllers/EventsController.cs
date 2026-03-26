@@ -171,7 +171,7 @@ namespace Web.Controllers
                     thumbBytes = _ogThumbnailService.GenerateThumbnail(originalFile.Stream);
                 }
             }
-            catch (Exception)
+            catch (InvalidOperationException)
             {
                 return StatusCode(StatusCodes.Status415UnsupportedMediaType);
             }

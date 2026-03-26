@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Web.Models;
+using Web.Services;
 using Web.Services.Repositories;
 
 namespace Web;
@@ -185,8 +186,8 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
         sb.AppendLine($"    <meta property=\"og:image\" content=\"{encodedImageUrl}\" />");
         if (includeImageDimensions)
         {
-            sb.AppendLine($"    <meta property=\"og:image:width\" content=\"1200\" />");
-            sb.AppendLine($"    <meta property=\"og:image:height\" content=\"630\" />");
+            sb.AppendLine($"    <meta property=\"og:image:width\" content=\"{SkiaSharpOgThumbnailService.TargetWidth}\" />");
+            sb.AppendLine($"    <meta property=\"og:image:height\" content=\"{SkiaSharpOgThumbnailService.TargetHeight}\" />");
         }
 
         sb.AppendLine($"    <meta name=\"twitter:card\" content=\"summary_large_image\" />");
