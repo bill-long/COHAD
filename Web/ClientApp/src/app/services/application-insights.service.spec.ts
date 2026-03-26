@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router, NavigationEnd } from '@angular/router';
 import { Title } from '@angular/platform-browser';
 import { Subject } from 'rxjs';
+import { ApplicationInsights } from '@microsoft/applicationinsights-web';
 import { ApplicationInsightsService } from './application-insights.service';
 import * as envModule from '../../environments/environment';
 
@@ -99,14 +100,15 @@ describe('ApplicationInsightsService', () => {
     it('should apply buffered user context when init() runs after setAuthenticatedUser', () => {
       // Set user context BEFORE init — simulates AuthService constructor race
       service.setAuthenticatedUser('user-1', 'user@test.com');
+
+      // Spy on the SDK prototype so we can observe calls made during init()
+      const ctxSpy = spyOn(ApplicationInsights.prototype, 'setAuthenticatedUserContext');
+
       service.init();
 
-      const appInsightsInstance = (service as any).appInsights;
-      const setSpy = spyOn(appInsightsInstance, 'setAuthenticatedUserContext');
-
-      // Call again to verify direct path works after init
-      service.setAuthenticatedUser('user-2', 'user2@test.com');
-      expect(setSpy).toHaveBeenCalledWith('user-2', 'user2@test.com');
+      // The buffered context should have been applied during init()
+      expect(ctxSpy).toHaveBeenCalledWith('user-1', 'user@test.com');
+      expect((service as any).pendingUserContext).toBeNull();
     });
 
     it('should not apply buffered user context if clearAuthenticatedUser was called', () => {
