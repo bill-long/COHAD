@@ -57,7 +57,7 @@ When `ClientApp/dist/cohad-app/index.html` exists (published or local `ng build`
 
 ### Telemetry (Application Insights)
 
-Both the .NET backend and Angular frontend send telemetry to the **same** Application Insights resource, enabling correlated end-to-end traces (frontend page view → API request → Cosmos DB query).
+Both the .NET backend and Angular frontend send telemetry to the **same** Application Insights resource, enabling correlated end-to-end traces (frontend page view → API request → Cosmos DB query). CORS correlation headers are enabled for API calls but excluded for `*.b2clogin.com` to avoid breaking auth flows.
 
 **Backend:** Configured via `services.AddApplicationInsightsTelemetry()` in `Startup.cs`. Connection string is in `appsettings.json` under `ApplicationInsights:ConnectionString`.
 
@@ -67,7 +67,7 @@ Both the .NET backend and Angular frontend send telemetry to the **same** Applic
 
 **What is tracked on the frontend:**
 - **Page views** — automatic on every route navigation
-- **Authenticated user context** — Azure AD B2C `sub` claim + email
+- **Authenticated user context** — Azure AD B2C `sub` claim (opaque identifier, no PII)
 - **Client-side exceptions** — all unhandled errors via `GlobalErrorHandler`
 - **Custom events** — `DocumentDownloaded`, `VendorDetailViewed`, `VendorReviewSubmitted`, `EmailSent`, `EventSignupSubmitted`, `DirectorySearched`
 

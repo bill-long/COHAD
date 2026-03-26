@@ -20,7 +20,8 @@ export class ApplicationInsightsService {
         // Disable built-in SPA route tracking — we handle it manually via Angular Router events.
         enableAutoRouteTracking: false,
         disableFetchTracking: false,
-        enableCorsCorrelation: false,
+        enableCorsCorrelation: true,
+        correlationHeaderExcludedDomains: ['*.b2clogin.com'],
         // Do not collect HTTP headers to avoid leaking sensitive data (auth tokens, cookies, PII).
         enableRequestHeaderTracking: false,
         enableResponseHeaderTracking: false

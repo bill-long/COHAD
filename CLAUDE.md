@@ -77,7 +77,7 @@ The backend starts without these but all API calls fail at runtime.
 
 ### Telemetry (Application Insights)
 
-Both the .NET backend and Angular frontend send telemetry to the **same** Application Insights resource. This enables correlated end-to-end traces (frontend page view → API request → Cosmos DB query).
+Both the .NET backend and Angular frontend send telemetry to the **same** Application Insights resource. This enables correlated end-to-end traces (frontend page view → API request → Cosmos DB query). CORS correlation headers are enabled for API calls but excluded for `*.b2clogin.com` to avoid breaking auth flows.
 
 **Backend:** Configured automatically via `services.AddApplicationInsightsTelemetry()` in `Startup.cs`. The connection string is in `appsettings.json` under `ApplicationInsights:ConnectionString`. To override per-environment, use `appsettings.{Environment}.json` or user secrets.
 
@@ -90,7 +90,7 @@ When `appInsightsConnectionString` is empty, the service becomes a complete no-o
 
 **What is tracked on the frontend:**
 - **Page views** — automatic on every Angular route navigation (`NavigationEnd` events)
-- **Authenticated user context** — user's Azure AD B2C `sub` claim and email, set on login and cleared on logout
+- **Authenticated user context** — user's Azure AD B2C `sub` claim (opaque identifier, no PII), set on login and cleared on logout
 - **Client-side exceptions** — all unhandled errors via `GlobalErrorHandler`
 - **Custom events** — `DocumentDownloaded`, `VendorDetailViewed`, `VendorReviewSubmitted`, `EmailSent`, `EventSignupSubmitted`, `DirectorySearched`
 
