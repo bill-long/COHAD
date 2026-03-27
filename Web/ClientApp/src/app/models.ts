@@ -128,6 +128,19 @@ export interface EmailInfo {
     isTestEmail: boolean;
 }
 
+
+/** Returned by GET/POST api/payment. Omits raw PayPal payloads and internal payer linkage. */
+export interface PaymentSummary {
+    id: string;
+    payerEmail: string | null;
+    amount: string;
+    date: string | null;
+    paymentType: number;
+    payPalTransactionId?: string;
+    homeId?: string;
+}
+
+/** Request body when recording a payment; server stores details but responses use PaymentSummary. */
 export interface Payment {
     id: string;
     payerUniqueId: string;

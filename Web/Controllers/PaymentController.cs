@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Web.Models;
+using Web.PresentationModels;
 using Web.Services;
 using Web.Services.Repositories;
 
@@ -35,7 +36,9 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            return Ok(await _paymentRepository.GetPaymentsForResidentAsync(user));
+            var payments = await _paymentRepository.GetPaymentsForResidentAsync(user);
+            var payload = payments.Select(PaymentSummary.FromStorageModel).ToList();
+            return Ok(payload);
         }
 
         [HttpPost]
@@ -78,13 +81,14 @@ namespace Web.Controllers
                             return Conflict();
                         }
 
-                        return Ok(existing);
+                        return Ok(PaymentSummary.FromStorageModel(existing));
                     }
 
                     if (UserEmailHelpers.EmailMatchesUser(existing.PayerEmail, user))
                     {
                         existing.PayerUniqueId = uniqueId;
-                        return Ok(await _paymentRepository.ReplaceAsync(existing));
+                        var replaced = await _paymentRepository.ReplaceAsync(existing);
+                        return Ok(PaymentSummary.FromStorageModel(replaced));
                     }
 
                     return Conflict();
@@ -114,7 +118,8 @@ namespace Web.Controllers
             payment.Id = Guid.NewGuid();
             payment.PayerUniqueId = user.UniqueId;
 
-            return Ok(await _paymentRepository.AddAsync(payment));
+            var added = await _paymentRepository.AddAsync(payment);
+            return Ok(PaymentSummary.FromStorageModel(added));
         }
     }
 }
