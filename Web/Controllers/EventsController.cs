@@ -47,6 +47,7 @@ namespace Web.Controllers
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly IOgThumbnailService _ogThumbnailService;
+        private readonly IImageUploadHelper _imageUploadHelper;
         private readonly DocumentStorageOptions _storageOptions;
 
         public EventsController(
@@ -55,6 +56,7 @@ namespace Web.Controllers
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
             IOgThumbnailService ogThumbnailService,
+            IImageUploadHelper imageUploadHelper,
             IOptions<DocumentStorageOptions> storageOptions)
         {
             _userRepository = userRepository;
@@ -62,6 +64,7 @@ namespace Web.Controllers
             _documentFileStore = documentFileStore;
             _auditLogRepository = auditLogRepository;
             _ogThumbnailService = ogThumbnailService;
+            _imageUploadHelper = imageUploadHelper;
             _storageOptions = storageOptions.Value;
         }
 
@@ -311,24 +314,19 @@ namespace Web.Controllers
                     return BadRequest("Uploaded file name is invalid.");
                 }
 
-                var finalDisplayName = $"{safeBaseName}{extension.ToLowerInvariant()}";
-                var blobPath = $"events/{communityEvent.Id:D}/{finalDisplayName}";
-
-                await using (var stream = request.PromotionalAsset.OpenReadStream())
-                {
-                    await _documentFileStore.UploadAsync(blobPath, stream, request.PromotionalAsset.ContentType);
-                }
+                var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
+                    request.PromotionalAsset, extension, $"events/{communityEvent.Id:D}", safeBaseName);
 
                 if (!string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath) &&
-                    !string.Equals(communityEvent.PromoMediaBlobPath, blobPath, StringComparison.OrdinalIgnoreCase))
+                    !string.Equals(communityEvent.PromoMediaBlobPath, uploadResult.BlobPath, StringComparison.OrdinalIgnoreCase))
                 {
                     await _documentFileStore.DeleteAsync(communityEvent.PromoMediaBlobPath);
                 }
 
-                communityEvent.PromoMediaBlobPath = blobPath;
-                communityEvent.PromoMediaDisplayName = finalDisplayName;
-                communityEvent.PromoMediaContentType = request.PromotionalAsset.ContentType;
-                communityEvent.PromoMediaSizeBytes = request.PromotionalAsset.Length;
+                communityEvent.PromoMediaBlobPath = uploadResult.BlobPath;
+                communityEvent.PromoMediaDisplayName = uploadResult.FinalDisplayName;
+                communityEvent.PromoMediaContentType = uploadResult.ContentType;
+                communityEvent.PromoMediaSizeBytes = uploadResult.SizeBytes;
 
                 // Remove any stale thumbnail before generating a new one so a failure
                 // doesn't leave an old preview that no longer matches the current promo.
@@ -349,7 +347,11 @@ namespace Web.Controllers
                 // original promo is still usable and the thumbnail will be lazy-generated on first crawler access.
                 try
                 {
-                    await using (var thumbSourceStream = request.PromotionalAsset.OpenReadStream())
+                    // Use the converted JPEG bytes when available to avoid re-decoding the original PNG.
+                    Stream thumbSourceStream = uploadResult.ConvertedData != null
+                        ? new MemoryStream(uploadResult.ConvertedData)
+                        : request.PromotionalAsset.OpenReadStream();
+                    await using (thumbSourceStream)
                     {
                         var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
                         await using var thumbStream = new MemoryStream(thumbBytes);

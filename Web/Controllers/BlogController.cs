@@ -36,6 +36,7 @@ namespace Web.Controllers
         private readonly IBlogCommentRepository _blogCommentRepository;
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IAuditLogRepository _auditLogRepository;
+        private readonly IImageUploadHelper _imageUploadHelper;
         private readonly DocumentStorageOptions _storageOptions;
 
         public BlogController(
@@ -44,6 +45,7 @@ namespace Web.Controllers
             IBlogCommentRepository blogCommentRepository,
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
+            IImageUploadHelper imageUploadHelper,
             IOptions<DocumentStorageOptions> storageOptions)
         {
             _userRepository = userRepository;
@@ -51,6 +53,7 @@ namespace Web.Controllers
             _blogCommentRepository = blogCommentRepository;
             _documentFileStore = documentFileStore;
             _auditLogRepository = auditLogRepository;
+            _imageUploadHelper = imageUploadHelper;
             _storageOptions = storageOptions.Value;
         }
 
@@ -203,29 +206,23 @@ namespace Web.Controllers
                     return BadRequest("Uploaded file name is invalid.");
                 }
 
-                var finalDisplayName = $"{safeBaseName}{extension.ToLowerInvariant()}";
-                var blobPath = $"blog/{post.Id:D}/{finalDisplayName}";
-
                 if (!ClientImageContentTypeAcceptable(request.FeaturedImage.ContentType))
                 {
                     return BadRequest("Featured image upload must use an image/* Content-Type or omit Content-Type.");
                 }
 
-                var trustedContentType = TrustedImageContentTypeFromExtension(extension);
-                await using (var stream = request.FeaturedImage.OpenReadStream())
-                {
-                    await _documentFileStore.UploadAsync(blobPath, stream, trustedContentType);
-                }
+                var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
+                    request.FeaturedImage, extension, $"blog/{post.Id:D}", safeBaseName);
 
-                uploadedFeaturedImageBlobPath = blobPath;
+                uploadedFeaturedImageBlobPath = uploadResult.BlobPath;
                 shouldDeletePreviousFeaturedImageOnSuccess =
                     !string.IsNullOrWhiteSpace(previousFeaturedImageBlobPath) &&
-                    !string.Equals(previousFeaturedImageBlobPath, blobPath, StringComparison.OrdinalIgnoreCase);
+                    !string.Equals(previousFeaturedImageBlobPath, uploadResult.BlobPath, StringComparison.OrdinalIgnoreCase);
 
-                post.FeaturedImageBlobPath = blobPath;
-                post.FeaturedImageDisplayName = finalDisplayName;
-                post.FeaturedImageContentType = trustedContentType;
-                post.FeaturedImageSizeBytes = request.FeaturedImage.Length;
+                post.FeaturedImageBlobPath = uploadResult.BlobPath;
+                post.FeaturedImageDisplayName = uploadResult.FinalDisplayName;
+                post.FeaturedImageContentType = uploadResult.ContentType;
+                post.FeaturedImageSizeBytes = uploadResult.SizeBytes;
             }
             else if (request.RemoveFeaturedImage && !string.IsNullOrWhiteSpace(post.FeaturedImageBlobPath))
             {
@@ -340,23 +337,16 @@ namespace Web.Controllers
                 return BadRequest("File name is invalid.");
             }
 
-            var finalName = $"{safeBaseName}{extension.ToLowerInvariant()}";
-            var inlineFolder = $"{Guid.NewGuid():D}";
-            var inlinePath = $"{inlineFolder}/{finalName}";
-            var blobPath = $"blog/images/{inlinePath}";
-
             if (!ClientImageContentTypeAcceptable(file.ContentType))
             {
                 return BadRequest("Image upload must use an image/* Content-Type or omit Content-Type.");
             }
 
-            var trustedContentType = TrustedImageContentTypeFromExtension(extension);
-            await using (var stream = file.OpenReadStream())
-            {
-                await _documentFileStore.UploadAsync(blobPath, stream, trustedContentType);
-            }
+            var inlineFolder = $"{Guid.NewGuid():D}";
+            var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
+                file, extension, $"blog/images/{inlineFolder}", safeBaseName);
 
-            var encodedFinalName = Uri.EscapeDataString(finalName);
+            var encodedFinalName = Uri.EscapeDataString(uploadResult.FinalDisplayName);
             return Ok(new { url = $"/api/blog/images/{inlineFolder}/{encodedFinalName}" });
         }
 
@@ -621,19 +611,6 @@ namespace Web.Controllers
             }
 
             return collapsed.Trim('-', '_', '.');
-        }
-
-        /// <summary>Trusted image/* MIME for blob metadata from the already-validated file extension.</summary>
-        private static string TrustedImageContentTypeFromExtension(string extension)
-        {
-            return extension.ToLowerInvariant() switch
-            {
-                ".png" => "image/png",
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".gif" => "image/gif",
-                ".webp" => "image/webp",
-                _ => throw new ArgumentOutOfRangeException(nameof(extension), extension, "Extension must be allowed by AllowedImageExtensions.")
-            };
         }
 
         /// <summary>Reject obviously spoofed types; empty is allowed so we rely on extension + trusted MIME.</summary>

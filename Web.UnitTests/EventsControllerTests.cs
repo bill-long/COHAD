@@ -27,6 +27,7 @@ public sealed class EventsControllerTests
         ICommunityEventRepository events,
         IDocumentFileStore fileStore,
         IAuditLogRepository auditLog,
+        IImageUploadHelper? imageUploadHelper = null,
         string nameId = "u1",
         string idp = "google.com")
     {
@@ -36,6 +37,7 @@ public sealed class EventsControllerTests
             fileStore,
             auditLog,
             new SkiaSharpOgThumbnailService(),
+            imageUploadHelper ?? DefaultImageUploadHelper(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
 
         c.ControllerContext = new ControllerContext
@@ -53,6 +55,16 @@ public sealed class EventsControllerTests
     }
 
     private static string UniqueId(string nameId, string idp = "google.com") => $"{idp}{nameId}";
+
+    private static IImageUploadHelper DefaultImageUploadHelper()
+    {
+        var mock = new Mock<IImageUploadHelper>();
+        mock.Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((IFormFile f, string ext, string prefix, string baseName) =>
+                new ImageUploadResult($"{prefix}/{baseName}{ext.ToLowerInvariant()}", $"{baseName}{ext.ToLowerInvariant()}",
+                    ImageContentTypes.FromExtension(ext), f.Length));
+        return mock.Object;
+    }
 
     [Fact]
     public async Task GetManage_returns_Forbid_when_user_is_only_resident()
@@ -608,5 +620,60 @@ public sealed class EventsControllerTests
         var card = Assert.IsType<CommunityEventCard>(ok.Value);
         Assert.Equal(earliestId, card.Id);
         Assert.Equal("First", card.Title);
+    }
+
+    [Fact]
+    public async Task UpsertManage_png_promo_media_is_converted_to_jpeg()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            GivenName = "Test",
+            Surname = "User"
+        });
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<CommunityEvent>());
+        mockEvents.Setup(r => r.UpsertAsync(It.IsAny<CommunityEvent>())).ReturnsAsync((CommunityEvent e) => e);
+
+        var mockFiles = new Mock<IDocumentFileStore>();
+        mockFiles.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        var mockUploadHelper = new Mock<IImageUploadHelper>();
+        mockUploadHelper
+            .Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), ".png", It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((IFormFile _, string _, string prefix, string baseName) =>
+                new ImageUploadResult($"{prefix}/{baseName}.jpg", $"{baseName}.jpg", "image/jpeg", 5));
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, mockFiles.Object, mockAudit.Object, mockUploadHelper.Object);
+
+        var imgBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 };
+        IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "PromotionalAsset", "flyer.png")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "image/png"
+        };
+
+        var request = new EventUpsertRequest
+        {
+            Title = "Test Event",
+            Description = "Description",
+            StartUtc = DateTime.UtcNow.AddDays(7),
+            PromotionalAsset = formFile
+        };
+
+        var result = await c.UpsertManage(request);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var detail = Assert.IsType<CommunityEventDetail>(ok.Value);
+        Assert.Equal("image/jpeg", detail.PromoMediaContentType);
+        Assert.EndsWith(".jpg", detail.PromoMediaDisplayName);
     }
 }
