@@ -137,7 +137,10 @@ export class BlogDetailComponent implements OnInit {
         if (post.publicSlug && post.publicSlug !== slug) {
           this.currentSlug = post.publicSlug;
           const snapshot = this.route.snapshot;
-          const query = snapshot.queryParamMap.keys.map(k => `${k}=${snapshot.queryParamMap.get(k)}`).join('&');
+          const params = new URLSearchParams();
+          snapshot.queryParamMap.keys.forEach(k =>
+            (snapshot.queryParamMap.getAll(k) ?? []).forEach(v => params.append(k, v ?? '')));
+          const query = params.toString();
           const fragment = snapshot.fragment;
           let newUrl = '/news/' + post.publicSlug;
           if (query) { newUrl += '?' + query; }

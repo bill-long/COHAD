@@ -108,7 +108,10 @@ export class EventDetailComponent implements OnInit {
         this.applyExistingSignup(eventItem);
         if (eventItem.publicSlug && eventItem.publicSlug !== segment) {
           const snapshot = this.route.snapshot;
-          const query = snapshot.queryParamMap.keys.map(k => `${k}=${snapshot.queryParamMap.get(k)}`).join('&');
+          const params = new URLSearchParams();
+          snapshot.queryParamMap.keys.forEach(k =>
+            (snapshot.queryParamMap.getAll(k) ?? []).forEach(v => params.append(k, v ?? '')));
+          const query = params.toString();
           const fragment = snapshot.fragment;
           let newUrl = '/events/' + eventItem.publicSlug;
           if (query) { newUrl += '?' + query; }
