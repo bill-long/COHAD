@@ -40,9 +40,12 @@ namespace Web.Services
             string blobPathPrefix,
             string safeBaseName)
         {
-            ImageConversionResult converted;
-            await using (var stream = file.OpenReadStream())
+            ImageConversionResult? converted = null;
+
+            // Only attempt conversion for extensions that TryConvertToJpeg supports.
+            if (string.Equals(extension, ".png", System.StringComparison.OrdinalIgnoreCase))
             {
+                await using var stream = file.OpenReadStream();
                 converted = _imageConversion.TryConvertToJpeg(stream, extension);
             }
 
