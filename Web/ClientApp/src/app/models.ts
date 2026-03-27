@@ -136,10 +136,10 @@ export interface PaymentSummary {
     amount: string;
     date: string | null;
     paymentType: number;
-    /** Present as JSON null when unset (ASP.NET default serialization). */
-    payPalTransactionId?: string | null;
-    /** Present as JSON null when unset (ASP.NET default serialization). */
-    homeId?: string | null;
+    /** Always present in API JSON; null when unset (default ASP.NET serialization). */
+    payPalTransactionId: string | null;
+    /** Always present in API JSON; null when unset (default ASP.NET serialization). */
+    homeId: string | null;
 }
 
 /** Request body when recording a payment; server stores details but responses use PaymentSummary. */
