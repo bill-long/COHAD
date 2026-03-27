@@ -8,7 +8,8 @@ namespace Web.Services
         string BlobPath,
         string FinalDisplayName,
         string ContentType,
-        long SizeBytes);
+        long SizeBytes,
+        byte[] ConvertedData = null);
 
     public interface IImageUploadHelper
     {
@@ -70,7 +71,7 @@ namespace Web.Services
             }
 
             return new ImageUploadResult(blobPath, finalDisplayName, trustedContentType,
-                converted?.Data.Length ?? file.Length);
+                converted?.Data.Length ?? file.Length, converted?.Data);
         }
     }
 }

@@ -347,7 +347,11 @@ namespace Web.Controllers
                 // original promo is still usable and the thumbnail will be lazy-generated on first crawler access.
                 try
                 {
-                    await using (var thumbSourceStream = request.PromotionalAsset.OpenReadStream())
+                    // Use the converted JPEG bytes when available to avoid re-decoding the original PNG.
+                    Stream thumbSourceStream = uploadResult.ConvertedData != null
+                        ? new MemoryStream(uploadResult.ConvertedData)
+                        : request.PromotionalAsset.OpenReadStream();
+                    await using (thumbSourceStream)
                     {
                         var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
                         await using var thumbStream = new MemoryStream(thumbBytes);
