@@ -543,8 +543,8 @@ public sealed class BlogControllerTests
         mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost>());
         mockPosts.Setup(r => r.UpsertAsync(It.IsAny<BlogPost>())).ReturnsAsync((BlogPost p) => p);
 
-        string uploadedBlobPath = null;
-        string uploadedContentType = null;
+        string? uploadedBlobPath = null;
+        string? uploadedContentType = null;
         var mockFiles = new Mock<IDocumentFileStore>();
         mockFiles.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
             .Callback<string, Stream, string>((path, _, ct) =>
@@ -588,7 +588,8 @@ public sealed class BlogControllerTests
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var detail = Assert.IsType<BlogPostDetail>(ok.Value);
-        Assert.EndsWith(".jpg", uploadedBlobPath);
+        Assert.NotNull(uploadedBlobPath);
+        Assert.EndsWith(".jpg", uploadedBlobPath!);
         Assert.Equal("image/jpeg", uploadedContentType);
         Assert.Equal("image/jpeg", detail.FeaturedImageContentType);
         Assert.EndsWith(".jpg", detail.FeaturedImageDisplayName);
