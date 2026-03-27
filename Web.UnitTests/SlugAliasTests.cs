@@ -189,7 +189,7 @@ public sealed class SlugAliasTests
             events,
             Mock.Of<IDocumentFileStore>(),
             Mock.Of<IAuditLogRepository>(),
-            new SkiaSharpOgThumbnailService(),
+            Mock.Of<IOgThumbnailService>(),
             DefaultImageUploadHelper(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
 

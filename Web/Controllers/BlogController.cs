@@ -253,14 +253,16 @@ namespace Web.Controllers
                 post.Title,
                 allPosts).ToLowerInvariant();
 
+            var normalizedOldSlug = oldSlug?.Trim().ToLowerInvariant();
+
             if (!isCreate &&
-                !string.IsNullOrWhiteSpace(oldSlug) &&
-                !string.Equals(oldSlug, post.PublicSlug, StringComparison.OrdinalIgnoreCase))
+                !string.IsNullOrWhiteSpace(normalizedOldSlug) &&
+                !string.Equals(normalizedOldSlug, post.PublicSlug, StringComparison.OrdinalIgnoreCase))
             {
                 post.PreviousSlugs ??= new List<string>();
-                if (!post.PreviousSlugs.Contains(oldSlug, StringComparer.OrdinalIgnoreCase))
+                if (!post.PreviousSlugs.Contains(normalizedOldSlug, StringComparer.OrdinalIgnoreCase))
                 {
-                    post.PreviousSlugs.Add(oldSlug.ToLowerInvariant());
+                    post.PreviousSlugs.Add(normalizedOldSlug);
                 }
             }
 

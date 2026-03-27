@@ -399,14 +399,16 @@ namespace Web.Controllers
                 communityEvent.Title,
                 allEvents).ToLowerInvariant();
 
+            var normalizedOldSlug = oldSlug?.Trim().ToLowerInvariant();
+
             if (!isCreate &&
-                !string.IsNullOrWhiteSpace(oldSlug) &&
-                !string.Equals(oldSlug, communityEvent.PublicSlug, StringComparison.OrdinalIgnoreCase))
+                !string.IsNullOrWhiteSpace(normalizedOldSlug) &&
+                !string.Equals(normalizedOldSlug, communityEvent.PublicSlug, StringComparison.OrdinalIgnoreCase))
             {
                 communityEvent.PreviousSlugs ??= new List<string>();
-                if (!communityEvent.PreviousSlugs.Contains(oldSlug, StringComparer.OrdinalIgnoreCase))
+                if (!communityEvent.PreviousSlugs.Contains(normalizedOldSlug, StringComparer.OrdinalIgnoreCase))
                 {
-                    communityEvent.PreviousSlugs.Add(oldSlug.ToLowerInvariant());
+                    communityEvent.PreviousSlugs.Add(normalizedOldSlug);
                 }
             }
 
