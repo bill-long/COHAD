@@ -40,6 +40,13 @@ namespace Web.Models
         /// </summary>
         public DateTime? NoRolesSinceUtc { get; set; }
 
+        /// <summary>
+        /// Whether this user satisfies Resident-level access. True when the user has the Resident role
+        /// or the Administrator role (which implies Resident access per the role hierarchy).
+        /// </summary>
+        public bool HasResidentAccess =>
+            Roles != null && (Roles.Contains(Role.Resident) || Roles.Contains(Role.Administrator));
+
         public enum Role
         {
             Resident,

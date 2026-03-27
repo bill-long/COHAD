@@ -217,8 +217,7 @@ namespace Web.Controllers
 
         private static bool HasResidentReadAccess(User user)
         {
-            return user.Roles != null &&
-                   (user.Roles.Contains(Models.User.Role.Resident) || user.Roles.Contains(Models.User.Role.Administrator));
+            return user.HasResidentAccess;
         }
 
         private static string SanitizeFileName(string value)

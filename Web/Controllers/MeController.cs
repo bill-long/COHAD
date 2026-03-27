@@ -49,12 +49,12 @@ namespace Web.Controllers
                 user.LastLoggedIn = DateTime.UtcNow;
                 FireAndForget(() => _userRepository.UpsertAsync(user));
 
-                // Includes are not supported, and we don't want this to be an owned type, so we're manually handling these references
-                // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
-                // See also https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
                 var ownedHomes = new List<Home>();
-                if (user.OwnedHomeIds != null && user.OwnedHomeIds.Count > 0)
+                if (user.HasResidentAccess && user.OwnedHomeIds != null && user.OwnedHomeIds.Count > 0)
                 {
+                    // Includes are not supported, and we don't want this to be an owned type, so we're manually handling these references
+                    // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
+                    // See also https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
                     ownedHomes = await _homeRepository.GetByIdsAsync(user.OwnedHomeIds);
                     var allUsers = await _userRepository.GetAllAsync();
                     PopulateAssociatedUsers(ownedHomes, allUsers);
