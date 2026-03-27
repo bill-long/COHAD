@@ -109,7 +109,7 @@ namespace Web.Services.Repositories
 
             var normalizedSlug = segment.Trim().ToLowerInvariant();
 
-            var slugQuery = new CosmosQueryDefinition("SELECT * FROM c WHERE LOWER(c.PublicSlug) = @slug")
+            var slugQuery = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PublicSlug = @slug")
                 .WithParameter("@slug", normalizedSlug);
             var slugIterator = _eventsContainer.GetItemQueryIterator<JObject>(slugQuery);
             while (slugIterator.HasMoreResults)

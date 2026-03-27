@@ -1,5 +1,6 @@
 import { Component, ElementRef, Inject, OnInit, SecurityContext, ViewChild } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
+import { Location } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -35,7 +36,7 @@ export class BlogDetailComponent implements OnInit {
 
   constructor(
     private readonly route: ActivatedRoute,
-    private readonly router: Router,
+    private readonly location: Location,
     private readonly blogService: BlogService,
     private readonly sanitizer: DomSanitizer,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -135,7 +136,8 @@ export class BlogDetailComponent implements OnInit {
         this.postLoaded = true;
         if (post.publicSlug && post.publicSlug !== slug) {
           this.currentSlug = post.publicSlug;
-          this.router.navigate(['/news', post.publicSlug], { replaceUrl: true, fragment: this.route.snapshot.fragment ?? undefined });
+          const fragment = this.route.snapshot.fragment;
+          this.location.replaceState('/news/' + post.publicSlug + (fragment ? '#' + fragment : ''));
         }
         this.loadComments(this.currentSlug);
       },

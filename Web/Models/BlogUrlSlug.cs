@@ -92,7 +92,12 @@ namespace Web.Models
                 {
                     foreach (var prev in p.PreviousSlugs)
                     {
-                        taken.Add(prev);
+                        if (string.IsNullOrWhiteSpace(prev))
+                        {
+                            continue;
+                        }
+
+                        taken.Add(prev.Trim().ToLowerInvariant());
                     }
                 }
             }

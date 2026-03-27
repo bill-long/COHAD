@@ -55,8 +55,9 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
             !string.Equals(segment, ev.PublicSlug, StringComparison.OrdinalIgnoreCase))
         {
             var canonicalPath = $"/events/{Uri.EscapeDataString(ev.PublicSlug)}";
+            var queryString = context.Request.QueryString.HasValue ? context.Request.QueryString.Value : string.Empty;
             context.Response.StatusCode = StatusCodes.Status301MovedPermanently;
-            context.Response.Headers["Location"] = canonicalPath;
+            context.Response.Headers["Location"] = canonicalPath + queryString;
             return;
         }
 
