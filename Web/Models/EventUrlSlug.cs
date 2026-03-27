@@ -93,6 +93,14 @@ namespace Web.Models
                 {
                     taken.Add(BuildBaseSlug(e.StartUtc, e.Title));
                 }
+
+                if (e.PreviousSlugs != null)
+                {
+                    foreach (var prev in e.PreviousSlugs)
+                    {
+                        taken.Add(prev);
+                    }
+                }
             }
 
             if (!taken.Contains(baseSlug))

@@ -94,7 +94,7 @@ ORDER BY c.PublishUtc DESC")
         {
             var query = new CosmosQueryDefinition(@"
 SELECT
-  c.id, c.PublicSlug, c.Title, c.PublishUtc
+  c.id, c.PublicSlug, c.PreviousSlugs, c.Title, c.PublishUtc
 FROM c");
             var iterator = _container.GetItemQueryIterator<JObject>(query);
             var results = new List<BlogPost>();
@@ -127,18 +127,27 @@ FROM c");
                 return null;
             }
 
-            if (Guid.TryParse(segment, out var guid))
-            {
-                return await GetByIdAsync(guid);
-            }
-
             var normalizedSlug = segment.Trim().ToLowerInvariant();
+
             var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PublicSlug = @slug")
                 .WithParameter("@slug", normalizedSlug);
             var iterator = _container.GetItemQueryIterator<BlogPost>(query);
             while (iterator.HasMoreResults)
             {
                 var response = await iterator.ReadNextAsync();
+                var doc = response.FirstOrDefault();
+                if (doc != null)
+                {
+                    return doc;
+                }
+            }
+
+            var aliasQuery = new CosmosQueryDefinition("SELECT * FROM c WHERE ARRAY_CONTAINS(c.PreviousSlugs, @slug)")
+                .WithParameter("@slug", normalizedSlug);
+            var aliasIterator = _container.GetItemQueryIterator<BlogPost>(aliasQuery);
+            while (aliasIterator.HasMoreResults)
+            {
+                var response = await aliasIterator.ReadNextAsync();
                 var doc = response.FirstOrDefault();
                 if (doc != null)
                 {
@@ -229,6 +238,7 @@ FROM c");
             {
                 Id = Guid.TryParse(idStr, out var gid) ? gid : Guid.Empty,
                 PublicSlug = doc.Value<string>("PublicSlug"),
+                PreviousSlugs = doc["PreviousSlugs"]?.ToObject<List<string>>() ?? new List<string>(),
                 Title = doc.Value<string>("Title"),
                 PublishUtc = doc["PublishUtc"]?.ToObject<DateTime>() ?? default,
                 Content = null

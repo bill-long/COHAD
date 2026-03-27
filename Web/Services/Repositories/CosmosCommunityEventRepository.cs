@@ -25,7 +25,7 @@ namespace Web.Services.Repositories
         Task<CommunityEvent> GetByIdAsync(Guid id);
 
         /// <summary>
-        /// Resolves <paramref name="segment"/> as a GUID (legacy URLs) or public slug.
+        /// Resolves <paramref name="segment"/> as the current <see cref="CommunityEvent.PublicSlug"/> or a previous slug alias.
         /// </summary>
         Task<CommunityEvent> GetByRouteSegmentAsync(string segment);
 
@@ -107,13 +107,10 @@ namespace Web.Services.Repositories
                 return null;
             }
 
-            if (Guid.TryParse(segment, out var guid))
-            {
-                return await GetByIdAsync(guid);
-            }
+            var normalizedSlug = segment.Trim().ToLowerInvariant();
 
-            var slugQuery = new CosmosQueryDefinition("SELECT * FROM c WHERE LOWER(c.PublicSlug) = LOWER(@slug)")
-                .WithParameter("@slug", segment);
+            var slugQuery = new CosmosQueryDefinition("SELECT * FROM c WHERE LOWER(c.PublicSlug) = @slug")
+                .WithParameter("@slug", normalizedSlug);
             var slugIterator = _eventsContainer.GetItemQueryIterator<JObject>(slugQuery);
             while (slugIterator.HasMoreResults)
             {
@@ -125,9 +122,20 @@ namespace Web.Services.Repositories
                 }
             }
 
-            var all = await GetAllAsync();
-            return all.FirstOrDefault(e =>
-                string.Equals(EventUrlSlug.ResolveUrlSegment(e), segment, StringComparison.OrdinalIgnoreCase));
+            var aliasQuery = new CosmosQueryDefinition("SELECT * FROM c WHERE ARRAY_CONTAINS(c.PreviousSlugs, @slug)")
+                .WithParameter("@slug", normalizedSlug);
+            var aliasIterator = _eventsContainer.GetItemQueryIterator<JObject>(aliasQuery);
+            while (aliasIterator.HasMoreResults)
+            {
+                var response = await aliasIterator.ReadNextAsync();
+                var doc = response.FirstOrDefault();
+                if (doc != null)
+                {
+                    return CosmosLegacyDocumentMapper.ToCommunityEvent(doc);
+                }
+            }
+
+            return null;
         }
 
         public async Task<CommunityEventReadResult> ReadAsync(Guid id)

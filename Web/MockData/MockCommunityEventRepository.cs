@@ -106,13 +106,12 @@ namespace Web.MockData
                     return Task.FromResult<CommunityEvent>(null);
                 }
 
-                if (Guid.TryParse(segment, out var guid))
-                {
-                    return GetByIdAsync(guid);
-                }
-
                 var match = _events.Values.FirstOrDefault(e =>
                     string.Equals(EventUrlSlug.ResolveUrlSegment(e), segment, StringComparison.OrdinalIgnoreCase));
+
+                match ??= _events.Values.FirstOrDefault(e =>
+                    e.PreviousSlugs?.Any(s => string.Equals(s, segment, StringComparison.OrdinalIgnoreCase)) == true);
+
                 return Task.FromResult(match == null ? null : CloneEvent(match));
             }
         }
@@ -196,6 +195,7 @@ namespace Web.MockData
             {
                 Id = communityEvent.Id,
                 PublicSlug = communityEvent.PublicSlug,
+                PreviousSlugs = communityEvent.PreviousSlugs?.ToList() ?? new List<string>(),
                 Title = communityEvent.Title,
                 Description = communityEvent.Description,
                 StartUtc = communityEvent.StartUtc,

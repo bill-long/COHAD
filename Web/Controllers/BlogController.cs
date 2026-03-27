@@ -246,11 +246,23 @@ namespace Web.Controllers
             post.ModifiedUtc = now;
 
             var allPosts = await _blogPostRepository.GetSlugCandidatesAsync();
+            var oldSlug = post.PublicSlug;
             post.PublicSlug = BlogUrlSlug.EnsureUniquePublicSlug(
                 post.Id,
                 post.PublishUtc,
                 post.Title,
                 allPosts).ToLowerInvariant();
+
+            if (!isCreate &&
+                !string.IsNullOrWhiteSpace(oldSlug) &&
+                !string.Equals(oldSlug, post.PublicSlug, StringComparison.OrdinalIgnoreCase))
+            {
+                post.PreviousSlugs ??= new List<string>();
+                if (!post.PreviousSlugs.Contains(oldSlug, StringComparer.OrdinalIgnoreCase))
+                {
+                    post.PreviousSlugs.Add(oldSlug.ToLowerInvariant());
+                }
+            }
 
             BlogPost saved;
             try

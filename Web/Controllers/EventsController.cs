@@ -392,11 +392,23 @@ namespace Web.Controllers
             communityEvent.Signups ??= new List<EventSignup>();
 
             var allEvents = await _communityEventRepository.GetAllAsync();
+            var oldSlug = communityEvent.PublicSlug;
             communityEvent.PublicSlug = EventUrlSlug.EnsureUniquePublicSlug(
                 communityEvent.Id,
                 communityEvent.StartUtc,
                 communityEvent.Title,
                 allEvents).ToLowerInvariant();
+
+            if (!isCreate &&
+                !string.IsNullOrWhiteSpace(oldSlug) &&
+                !string.Equals(oldSlug, communityEvent.PublicSlug, StringComparison.OrdinalIgnoreCase))
+            {
+                communityEvent.PreviousSlugs ??= new List<string>();
+                if (!communityEvent.PreviousSlugs.Contains(oldSlug, StringComparer.OrdinalIgnoreCase))
+                {
+                    communityEvent.PreviousSlugs.Add(oldSlug.ToLowerInvariant());
+                }
+            }
 
             CommunityEvent saved;
             if (isCreate)
