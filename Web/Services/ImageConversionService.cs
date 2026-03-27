@@ -15,7 +15,7 @@ namespace Web.Services
         private const int JpegQuality = 85;
 
         /// <summary>Max total pixels (width * height) to decode. Prevents decompression bombs.</summary>
-        internal const int MaxPixels = 100_000_000; // ~100 MP, ~400 MB at 32bpp
+        internal const int MaxPixels = 40_000_000; // ~40 MP, ~160 MB at 32bpp
 
         public ImageConversionResult? TryConvertToJpeg(Stream source, string originalExtension)
         {
@@ -27,6 +27,12 @@ namespace Web.Services
             // Check dimensions before full decode to guard against decompression bombs.
             using var codec = SKCodec.Create(source);
             if (codec == null)
+            {
+                return null;
+            }
+
+            // Verify the stream is actually PNG, not just named .png.
+            if (codec.EncodedFormat != SKEncodedImageFormat.Png)
             {
                 return null;
             }

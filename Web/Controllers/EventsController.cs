@@ -327,7 +327,7 @@ namespace Web.Controllers
 
                 var finalDisplayName = $"{safeBaseName}{extension.ToLowerInvariant()}";
                 var blobPath = $"events/{communityEvent.Id:D}/{finalDisplayName}";
-                var trustedContentType = converted?.ContentType ?? TrustedContentTypeFromExtension(extension);
+                var trustedContentType = converted?.ContentType ?? ImageContentTypes.FromExtension(extension);
 
                 if (converted != null)
                 {
@@ -688,18 +688,6 @@ namespace Web.Controllers
                 .Select(n => n.Trim())
                 .Take(30)
                 .ToList();
-        }
-
-        private static string TrustedContentTypeFromExtension(string extension)
-        {
-            return extension.ToLowerInvariant() switch
-            {
-                ".png" => "image/png",
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".gif" => "image/gif",
-                ".webp" => "image/webp",
-                _ => throw new System.ArgumentOutOfRangeException(nameof(extension), extension, "Extension must be allowed by AllowedMediaExtensions.")
-            };
         }
 
         private static string SanitizeFileName(string value)

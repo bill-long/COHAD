@@ -224,7 +224,7 @@ namespace Web.Controllers
 
                 var finalDisplayName = $"{safeBaseName}{extension.ToLowerInvariant()}";
                 var blobPath = $"blog/{post.Id:D}/{finalDisplayName}";
-                var trustedContentType = converted?.ContentType ?? TrustedImageContentTypeFromExtension(extension);
+                var trustedContentType = converted?.ContentType ?? ImageContentTypes.FromExtension(extension);
 
                 if (converted != null)
                 {
@@ -379,7 +379,7 @@ namespace Web.Controllers
             var finalName = $"{safeBaseName}{extension.ToLowerInvariant()}";
             var inlineFolder = $"{Guid.NewGuid():D}";
             var blobPath = $"blog/images/{inlineFolder}/{finalName}";
-            var trustedContentType = converted?.ContentType ?? TrustedImageContentTypeFromExtension(extension);
+            var trustedContentType = converted?.ContentType ?? ImageContentTypes.FromExtension(extension);
 
             if (converted != null)
             {
@@ -657,19 +657,6 @@ namespace Web.Controllers
             }
 
             return collapsed.Trim('-', '_', '.');
-        }
-
-        /// <summary>Trusted image/* MIME for blob metadata from the already-validated file extension.</summary>
-        private static string TrustedImageContentTypeFromExtension(string extension)
-        {
-            return extension.ToLowerInvariant() switch
-            {
-                ".png" => "image/png",
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".gif" => "image/gif",
-                ".webp" => "image/webp",
-                _ => throw new ArgumentOutOfRangeException(nameof(extension), extension, "Extension must be allowed by AllowedImageExtensions.")
-            };
         }
 
         /// <summary>Reject obviously spoofed types; empty is allowed so we rely on extension + trusted MIME.</summary>
