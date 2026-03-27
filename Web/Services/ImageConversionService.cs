@@ -3,16 +3,11 @@ using SkiaSharp;
 
 namespace Web.Services
 {
-    public class ImageConversionResult
-    {
-        public byte[] Data { get; init; }
-        public string Extension { get; init; }
-        public string ContentType { get; init; }
-    }
+    public record ImageConversionResult(byte[] Data, string Extension, string ContentType);
 
     public interface IImageConversionService
     {
-        ImageConversionResult TryConvertToJpeg(Stream source, string originalExtension);
+        ImageConversionResult? TryConvertToJpeg(Stream source, string originalExtension);
     }
 
     public class SkiaSharpImageConversionService : IImageConversionService
@@ -22,7 +17,7 @@ namespace Web.Services
         /// <summary>Max total pixels (width * height) to decode. Prevents decompression bombs.</summary>
         internal const int MaxPixels = 100_000_000; // ~100 MP, ~400 MB at 32bpp
 
-        public ImageConversionResult TryConvertToJpeg(Stream source, string originalExtension)
+        public ImageConversionResult? TryConvertToJpeg(Stream source, string originalExtension)
         {
             if (!string.Equals(originalExtension, ".png", System.StringComparison.OrdinalIgnoreCase))
             {
@@ -71,12 +66,7 @@ namespace Web.Services
                 return null;
             }
 
-            return new ImageConversionResult
-            {
-                Data = data.ToArray(),
-                Extension = ".jpg",
-                ContentType = "image/jpeg"
-            };
+            return new ImageConversionResult(data.ToArray(), ".jpg", "image/jpeg");
         }
     }
 }

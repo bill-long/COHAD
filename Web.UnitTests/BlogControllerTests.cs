@@ -557,12 +557,7 @@ public sealed class BlogControllerTests
         var convertedBytes = new byte[] { 0xFF, 0xD8, 1, 2, 3 };
         var mockConversion = new Mock<IImageConversionService>();
         mockConversion.Setup(s => s.TryConvertToJpeg(It.IsAny<Stream>(), ".png"))
-            .Returns(new ImageConversionResult
-            {
-                Data = convertedBytes,
-                Extension = ".jpg",
-                ContentType = "image/jpeg"
-            });
+            .Returns(new ImageConversionResult(convertedBytes, ".jpg", "image/jpeg"));
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
@@ -593,5 +588,59 @@ public sealed class BlogControllerTests
         Assert.Equal("image/jpeg", uploadedContentType);
         Assert.Equal("image/jpeg", detail.FeaturedImageContentType);
         Assert.EndsWith(".jpg", detail.FeaturedImageDisplayName);
+    }
+
+    [Fact]
+    public async Task UploadImage_png_is_converted_to_jpeg()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            GivenName = "Test",
+            Surname = "User"
+        });
+
+        string? uploadedBlobPath = null;
+        string? uploadedContentType = null;
+        var mockFiles = new Mock<IDocumentFileStore>();
+        mockFiles.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .Callback<string, Stream, string>((path, _, ct) =>
+            {
+                uploadedBlobPath = path;
+                uploadedContentType = ct;
+            })
+            .Returns(Task.CompletedTask);
+
+        var convertedBytes = new byte[] { 0xFF, 0xD8, 1, 2, 3 };
+        var mockConversion = new Mock<IImageConversionService>();
+        mockConversion.Setup(s => s.TryConvertToJpeg(It.IsAny<Stream>(), ".png"))
+            .Returns(new ImageConversionResult(convertedBytes, ".jpg", "image/jpeg"));
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IBlogPostRepository>(), Mock.Of<IBlogCommentRepository>(),
+            mockFiles.Object, Mock.Of<IAuditLogRepository>(), mockConversion.Object);
+
+        var imgBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // PNG magic bytes
+        IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "file", "photo.png")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "image/png"
+        };
+
+        var result = await c.UploadImage(formFile);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(uploadedBlobPath);
+        Assert.EndsWith(".jpg", uploadedBlobPath!);
+        Assert.Equal("image/jpeg", uploadedContentType);
+
+        // Verify the returned URL also uses .jpg
+        var urlProp = ok.Value!.GetType().GetProperty("url");
+        Assert.NotNull(urlProp);
+        var url = urlProp!.GetValue(ok.Value) as string;
+        Assert.NotNull(url);
+        Assert.EndsWith(".jpg", url!);
     }
 }

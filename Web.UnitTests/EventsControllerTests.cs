@@ -644,12 +644,7 @@ public sealed class EventsControllerTests
         var convertedBytes = new byte[] { 0xFF, 0xD8, 1, 2, 3 };
         var mockConversion = new Mock<IImageConversionService>();
         mockConversion.Setup(s => s.TryConvertToJpeg(It.IsAny<Stream>(), ".png"))
-            .Returns(new ImageConversionResult
-            {
-                Data = convertedBytes,
-                Extension = ".jpg",
-                ContentType = "image/jpeg"
-            });
+            .Returns(new ImageConversionResult(convertedBytes, ".jpg", "image/jpeg"));
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
