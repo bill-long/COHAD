@@ -49,11 +49,8 @@ namespace Web.Controllers
                 user.LastLoggedIn = DateTime.UtcNow;
                 FireAndForget(() => _userRepository.UpsertAsync(user));
 
-                var hasResidentRole = user.Roles != null &&
-                    (user.Roles.Contains(Models.User.Role.Resident) || user.Roles.Contains(Models.User.Role.Administrator));
-
                 var ownedHomes = new List<Home>();
-                if (hasResidentRole && user.OwnedHomeIds != null && user.OwnedHomeIds.Count > 0)
+                if (user.HasResidentAccess && user.OwnedHomeIds != null && user.OwnedHomeIds.Count > 0)
                 {
                     // Includes are not supported, and we don't want this to be an owned type, so we're manually handling these references
                     // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB

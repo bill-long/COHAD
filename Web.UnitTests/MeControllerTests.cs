@@ -124,6 +124,7 @@ public sealed class MeControllerTests
         Assert.NotNull(result);
         Assert.Empty(result.OwnedHomes);
         homes.Verify(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()), Times.Never);
+        users.Verify(r => r.GetAllAsync(), Times.Never);
     }
 
     [Fact]
