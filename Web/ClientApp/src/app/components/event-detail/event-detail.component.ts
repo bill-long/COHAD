@@ -28,6 +28,8 @@ export class EventDetailComponent implements OnInit {
   adultNames = '';
   childNames = '';
 
+  private currentSlug = '';
+
   constructor(
     private readonly route: ActivatedRoute,
     private readonly location: Location,
@@ -45,6 +47,7 @@ export class EventDetailComponent implements OnInit {
         this.titleService.setTitle('COHAD | Events');
         return;
       }
+      this.currentSlug = slug;
       this.loadEvent(slug);
     });
   }
@@ -58,8 +61,7 @@ export class EventDetailComponent implements OnInit {
   }
 
   logIn(): void {
-    const slug = this.route.snapshot.paramMap.get('slug');
-    const redirectTo = slug ? `/events/${slug}` : '/events';
+    const redirectTo = this.currentSlug ? `/events/${this.currentSlug}` : '/events';
     this.dispatcher.next(new Login(redirectTo));
   }
 
@@ -107,6 +109,7 @@ export class EventDetailComponent implements OnInit {
         this.titleService.setTitle(eventItem.title ? `COHAD | ${eventItem.title}` : 'COHAD | Events');
         this.applyExistingSignup(eventItem);
         if (eventItem.publicSlug && eventItem.publicSlug !== segment) {
+          this.currentSlug = eventItem.publicSlug;
           const snapshot = this.route.snapshot;
           const params = new URLSearchParams();
           snapshot.queryParamMap.keys.forEach(k =>

@@ -116,11 +116,19 @@ namespace Web.MockData
                     return Task.FromResult<BlogPost>(null);
                 }
 
+                var normalizedSegment = segment.Trim().ToLowerInvariant();
+
                 var match = _posts.Values.FirstOrDefault(p =>
-                    string.Equals(BlogUrlSlug.ResolveUrlSegment(p), segment, StringComparison.OrdinalIgnoreCase));
+                {
+                    var currentSlug = BlogUrlSlug.ResolveUrlSegment(p);
+                    return !string.IsNullOrWhiteSpace(currentSlug) &&
+                           currentSlug.Trim().ToLowerInvariant() == normalizedSegment;
+                });
 
                 match ??= _posts.Values.FirstOrDefault(p =>
-                    p.PreviousSlugs?.Any(s => string.Equals(s, segment, StringComparison.OrdinalIgnoreCase)) == true);
+                    p.PreviousSlugs?.Any(s =>
+                        !string.IsNullOrWhiteSpace(s) &&
+                        s.Trim().ToLowerInvariant() == normalizedSegment) == true);
 
                 return Task.FromResult(match == null ? null : ClonePost(match));
             }
