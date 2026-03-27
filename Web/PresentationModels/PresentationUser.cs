@@ -33,7 +33,7 @@ namespace Web.PresentationModels
                 LastLoggedIn = user.LastLoggedIn,
                 UnassociatedSinceUtc = user.UnassociatedSinceUtc,
                 NoRolesSinceUtc = user.NoRolesSinceUtc,
-                Roles = user.Roles.Select(r => r.ToString()).ToList(),
+                Roles = (user.Roles ?? new List<Models.User.Role>()).Select(r => r.ToString()).ToList(),
                 OwnedHomes = ownedHomes
             };
         }

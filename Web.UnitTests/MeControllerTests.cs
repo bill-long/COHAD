@@ -72,4 +72,130 @@ public sealed class MeControllerTests
         Assert.Same(getTask, completed);
         Assert.NotNull(await getTask);
     }
+
+    [Fact]
+    public async Task Get_user_without_roles_returns_empty_owned_homes()
+    {
+        var uniqueId = "google.comu1";
+        var homeId = Guid.NewGuid();
+
+        var users = new Mock<IUserRepository>();
+        users.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role>(),
+            OwnedHomeIds = new List<Guid> { homeId }
+        });
+        users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+
+        var homes = new Mock<IHomeRepository>();
+        var email = new Mock<IEmailService>();
+        var controller = CreateController(users.Object, homes.Object, email.Object);
+
+        var result = await controller.Get();
+
+        Assert.NotNull(result);
+        Assert.Empty(result.OwnedHomes);
+        homes.Verify(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()), Times.Never);
+        users.Verify(r => r.GetAllAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task Get_user_with_null_roles_returns_empty_owned_homes()
+    {
+        var uniqueId = "google.comu1";
+        var homeId = Guid.NewGuid();
+
+        var users = new Mock<IUserRepository>();
+        users.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = null,
+            OwnedHomeIds = new List<Guid> { homeId }
+        });
+        users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+
+        var homes = new Mock<IHomeRepository>();
+        var email = new Mock<IEmailService>();
+        var controller = CreateController(users.Object, homes.Object, email.Object);
+
+        var result = await controller.Get();
+
+        Assert.NotNull(result);
+        Assert.Empty(result.OwnedHomes);
+        homes.Verify(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Get_resident_user_returns_owned_homes_with_associated_users()
+    {
+        var uniqueId = "google.comu1";
+        var otherUniqueId = "google.comu2";
+        var homeId = Guid.NewGuid();
+
+        var users = new Mock<IUserRepository>();
+        users.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role> { User.Role.Resident },
+            OwnedHomeIds = new List<Guid> { homeId }
+        });
+        users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+        users.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<User>
+        {
+            new User { UniqueId = uniqueId, GivenName = "Test", Surname = "User", Emails = "test@example.com", IdentityProvider = "google.com", OwnedHomeIds = new List<Guid> { homeId } },
+            new User { UniqueId = otherUniqueId, GivenName = "Other", Surname = "Owner", Emails = "other@example.com", IdentityProvider = "google.com", OwnedHomeIds = new List<Guid> { homeId } }
+        });
+
+        var homes = new Mock<IHomeRepository>();
+        homes.Setup(r => r.GetByIdsAsync(It.Is<List<Guid>>(ids => ids.Contains(homeId)))).ReturnsAsync(new List<Home>
+        {
+            new Home { Id = homeId, StreetNumber = 123, StreetName = "Main St" }
+        });
+
+        var email = new Mock<IEmailService>();
+        var controller = CreateController(users.Object, homes.Object, email.Object);
+
+        var result = await controller.Get();
+
+        Assert.NotNull(result);
+        Assert.Single(result.OwnedHomes);
+        Assert.Equal(2, result.OwnedHomes[0].AssociatedUsers.Count);
+    }
+
+    [Fact]
+    public async Task Get_administrator_user_returns_owned_homes_with_associated_users()
+    {
+        var uniqueId = "google.comu1";
+        var homeId = Guid.NewGuid();
+
+        var users = new Mock<IUserRepository>();
+        users.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role> { User.Role.Administrator },
+            OwnedHomeIds = new List<Guid> { homeId }
+        });
+        users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+        users.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<User>
+        {
+            new User { UniqueId = uniqueId, GivenName = "Test", Surname = "User", Emails = "test@example.com", IdentityProvider = "google.com", OwnedHomeIds = new List<Guid> { homeId } }
+        });
+
+        var homes = new Mock<IHomeRepository>();
+        homes.Setup(r => r.GetByIdsAsync(It.Is<List<Guid>>(ids => ids.Contains(homeId)))).ReturnsAsync(new List<Home>
+        {
+            new Home { Id = homeId, StreetNumber = 456, StreetName = "Oak Ave" }
+        });
+
+        var email = new Mock<IEmailService>();
+        var controller = CreateController(users.Object, homes.Object, email.Object);
+
+        var result = await controller.Get();
+
+        Assert.NotNull(result);
+        Assert.Single(result.OwnedHomes);
+        homes.Verify(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()), Times.Once);
+        users.Verify(r => r.GetAllAsync(), Times.Once);
+    }
 }
