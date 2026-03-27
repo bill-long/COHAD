@@ -47,7 +47,7 @@ namespace Web.Controllers
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly IOgThumbnailService _ogThumbnailService;
-        private readonly IImageConversionService _imageConversion;
+        private readonly IImageUploadHelper _imageUploadHelper;
         private readonly DocumentStorageOptions _storageOptions;
 
         public EventsController(
@@ -56,7 +56,7 @@ namespace Web.Controllers
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
             IOgThumbnailService ogThumbnailService,
-            IImageConversionService imageConversion,
+            IImageUploadHelper imageUploadHelper,
             IOptions<DocumentStorageOptions> storageOptions)
         {
             _userRepository = userRepository;
@@ -64,7 +64,7 @@ namespace Web.Controllers
             _documentFileStore = documentFileStore;
             _auditLogRepository = auditLogRepository;
             _ogThumbnailService = ogThumbnailService;
-            _imageConversion = imageConversion;
+            _imageUploadHelper = imageUploadHelper;
             _storageOptions = storageOptions.Value;
         }
 
@@ -314,42 +314,19 @@ namespace Web.Controllers
                     return BadRequest("Uploaded file name is invalid.");
                 }
 
-                ImageConversionResult converted;
-                await using (var stream = request.PromotionalAsset.OpenReadStream())
-                {
-                    converted = _imageConversion.TryConvertToJpeg(stream, extension);
-                }
-
-                if (converted != null)
-                {
-                    extension = converted.Extension;
-                }
-
-                var finalDisplayName = $"{safeBaseName}{extension.ToLowerInvariant()}";
-                var blobPath = $"events/{communityEvent.Id:D}/{finalDisplayName}";
-                var trustedContentType = converted?.ContentType ?? ImageContentTypes.FromExtension(extension);
-
-                if (converted != null)
-                {
-                    await using var ms = new MemoryStream(converted.Data);
-                    await _documentFileStore.UploadAsync(blobPath, ms, trustedContentType);
-                }
-                else
-                {
-                    await using var stream = request.PromotionalAsset.OpenReadStream();
-                    await _documentFileStore.UploadAsync(blobPath, stream, trustedContentType);
-                }
+                var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
+                    request.PromotionalAsset, extension, $"events/{communityEvent.Id:D}", safeBaseName);
 
                 if (!string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath) &&
-                    !string.Equals(communityEvent.PromoMediaBlobPath, blobPath, StringComparison.OrdinalIgnoreCase))
+                    !string.Equals(communityEvent.PromoMediaBlobPath, uploadResult.BlobPath, StringComparison.OrdinalIgnoreCase))
                 {
                     await _documentFileStore.DeleteAsync(communityEvent.PromoMediaBlobPath);
                 }
 
-                communityEvent.PromoMediaBlobPath = blobPath;
-                communityEvent.PromoMediaDisplayName = finalDisplayName;
-                communityEvent.PromoMediaContentType = trustedContentType;
-                communityEvent.PromoMediaSizeBytes = converted?.Data.Length ?? request.PromotionalAsset.Length;
+                communityEvent.PromoMediaBlobPath = uploadResult.BlobPath;
+                communityEvent.PromoMediaDisplayName = uploadResult.FinalDisplayName;
+                communityEvent.PromoMediaContentType = uploadResult.ContentType;
+                communityEvent.PromoMediaSizeBytes = uploadResult.SizeBytes;
 
                 // Remove any stale thumbnail before generating a new one so a failure
                 // doesn't leave an old preview that no longer matches the current promo.
@@ -370,11 +347,7 @@ namespace Web.Controllers
                 // original promo is still usable and the thumbnail will be lazy-generated on first crawler access.
                 try
                 {
-                    // Use the converted JPEG bytes when available to avoid re-decoding the original PNG.
-                    Stream thumbSourceStream = converted != null
-                        ? new MemoryStream(converted.Data)
-                        : request.PromotionalAsset.OpenReadStream();
-                    await using (thumbSourceStream)
+                    await using (var thumbSourceStream = request.PromotionalAsset.OpenReadStream())
                     {
                         var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
                         await using var thumbStream = new MemoryStream(thumbBytes);

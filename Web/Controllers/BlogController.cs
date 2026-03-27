@@ -36,7 +36,7 @@ namespace Web.Controllers
         private readonly IBlogCommentRepository _blogCommentRepository;
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IAuditLogRepository _auditLogRepository;
-        private readonly IImageConversionService _imageConversion;
+        private readonly IImageUploadHelper _imageUploadHelper;
         private readonly DocumentStorageOptions _storageOptions;
 
         public BlogController(
@@ -45,7 +45,7 @@ namespace Web.Controllers
             IBlogCommentRepository blogCommentRepository,
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
-            IImageConversionService imageConversion,
+            IImageUploadHelper imageUploadHelper,
             IOptions<DocumentStorageOptions> storageOptions)
         {
             _userRepository = userRepository;
@@ -53,7 +53,7 @@ namespace Web.Controllers
             _blogCommentRepository = blogCommentRepository;
             _documentFileStore = documentFileStore;
             _auditLogRepository = auditLogRepository;
-            _imageConversion = imageConversion;
+            _imageUploadHelper = imageUploadHelper;
             _storageOptions = storageOptions.Value;
         }
 
@@ -211,41 +211,18 @@ namespace Web.Controllers
                     return BadRequest("Featured image upload must use an image/* Content-Type or omit Content-Type.");
                 }
 
-                ImageConversionResult converted;
-                await using (var stream = request.FeaturedImage.OpenReadStream())
-                {
-                    converted = _imageConversion.TryConvertToJpeg(stream, extension);
-                }
+                var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
+                    request.FeaturedImage, extension, $"blog/{post.Id:D}", safeBaseName);
 
-                if (converted != null)
-                {
-                    extension = converted.Extension;
-                }
-
-                var finalDisplayName = $"{safeBaseName}{extension.ToLowerInvariant()}";
-                var blobPath = $"blog/{post.Id:D}/{finalDisplayName}";
-                var trustedContentType = converted?.ContentType ?? ImageContentTypes.FromExtension(extension);
-
-                if (converted != null)
-                {
-                    await using var ms = new MemoryStream(converted.Data);
-                    await _documentFileStore.UploadAsync(blobPath, ms, trustedContentType);
-                }
-                else
-                {
-                    await using var stream = request.FeaturedImage.OpenReadStream();
-                    await _documentFileStore.UploadAsync(blobPath, stream, trustedContentType);
-                }
-
-                uploadedFeaturedImageBlobPath = blobPath;
+                uploadedFeaturedImageBlobPath = uploadResult.BlobPath;
                 shouldDeletePreviousFeaturedImageOnSuccess =
                     !string.IsNullOrWhiteSpace(previousFeaturedImageBlobPath) &&
-                    !string.Equals(previousFeaturedImageBlobPath, blobPath, StringComparison.OrdinalIgnoreCase);
+                    !string.Equals(previousFeaturedImageBlobPath, uploadResult.BlobPath, StringComparison.OrdinalIgnoreCase);
 
-                post.FeaturedImageBlobPath = blobPath;
-                post.FeaturedImageDisplayName = finalDisplayName;
-                post.FeaturedImageContentType = trustedContentType;
-                post.FeaturedImageSizeBytes = converted?.Data.Length ?? request.FeaturedImage.Length;
+                post.FeaturedImageBlobPath = uploadResult.BlobPath;
+                post.FeaturedImageDisplayName = uploadResult.FinalDisplayName;
+                post.FeaturedImageContentType = uploadResult.ContentType;
+                post.FeaturedImageSizeBytes = uploadResult.SizeBytes;
             }
             else if (request.RemoveFeaturedImage && !string.IsNullOrWhiteSpace(post.FeaturedImageBlobPath))
             {
@@ -365,34 +342,11 @@ namespace Web.Controllers
                 return BadRequest("Image upload must use an image/* Content-Type or omit Content-Type.");
             }
 
-            ImageConversionResult converted;
-            await using (var stream = file.OpenReadStream())
-            {
-                converted = _imageConversion.TryConvertToJpeg(stream, extension);
-            }
-
-            if (converted != null)
-            {
-                extension = converted.Extension;
-            }
-
-            var finalName = $"{safeBaseName}{extension.ToLowerInvariant()}";
             var inlineFolder = $"{Guid.NewGuid():D}";
-            var blobPath = $"blog/images/{inlineFolder}/{finalName}";
-            var trustedContentType = converted?.ContentType ?? ImageContentTypes.FromExtension(extension);
+            var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
+                file, extension, $"blog/images/{inlineFolder}", safeBaseName);
 
-            if (converted != null)
-            {
-                await using var ms = new MemoryStream(converted.Data);
-                await _documentFileStore.UploadAsync(blobPath, ms, trustedContentType);
-            }
-            else
-            {
-                await using var stream = file.OpenReadStream();
-                await _documentFileStore.UploadAsync(blobPath, stream, trustedContentType);
-            }
-
-            var encodedFinalName = Uri.EscapeDataString(finalName);
+            var encodedFinalName = Uri.EscapeDataString(uploadResult.FinalDisplayName);
             return Ok(new { url = $"/api/blog/images/{inlineFolder}/{encodedFinalName}" });
         }
 

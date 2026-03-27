@@ -30,7 +30,7 @@ public sealed class BlogControllerTests
         IBlogCommentRepository comments,
         IDocumentFileStore fileStore,
         IAuditLogRepository auditLog,
-        IImageConversionService? imageConversion = null,
+        IImageUploadHelper? imageUploadHelper = null,
         DocumentStorageOptions? storageOptions = null,
         string nameId = "u1",
         string idp = "google.com")
@@ -43,7 +43,7 @@ public sealed class BlogControllerTests
             comments,
             fileStore,
             auditLog,
-            imageConversion ?? Mock.Of<IImageConversionService>(),
+            imageUploadHelper ?? DefaultImageUploadHelper(),
             Options.Create(storageOptions));
 
         c.ControllerContext = new ControllerContext
@@ -62,6 +62,17 @@ public sealed class BlogControllerTests
 
     private static string UniqueId(string nameId, string idp = "google.com") => $"{idp}{nameId}";
 
+    /// <summary>Returns a default IImageUploadHelper that passes through file extension/size unchanged.</summary>
+    private static IImageUploadHelper DefaultImageUploadHelper()
+    {
+        var mock = new Mock<IImageUploadHelper>();
+        mock.Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((IFormFile f, string ext, string prefix, string baseName) =>
+                new ImageUploadResult($"{prefix}/{baseName}{ext.ToLowerInvariant()}", $"{baseName}{ext.ToLowerInvariant()}",
+                    ImageContentTypes.FromExtension(ext), f.Length));
+        return mock.Object;
+    }
+
     private static BlogController CreateAnonymousController(
         IBlogPostRepository posts,
         IBlogCommentRepository? comments = null,
@@ -73,7 +84,7 @@ public sealed class BlogControllerTests
             comments ?? Mock.Of<IBlogCommentRepository>(),
             files ?? Mock.Of<IDocumentFileStore>(),
             Mock.Of<IAuditLogRepository>(),
-            Mock.Of<IImageConversionService>(),
+            Mock.Of<IImageUploadHelper>(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
@@ -543,27 +554,17 @@ public sealed class BlogControllerTests
         mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost>());
         mockPosts.Setup(r => r.UpsertAsync(It.IsAny<BlogPost>())).ReturnsAsync((BlogPost p) => p);
 
-        string? uploadedBlobPath = null;
-        string? uploadedContentType = null;
-        var mockFiles = new Mock<IDocumentFileStore>();
-        mockFiles.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
-            .Callback<string, Stream, string>((path, _, ct) =>
-            {
-                uploadedBlobPath = path;
-                uploadedContentType = ct;
-            })
-            .Returns(Task.CompletedTask);
-
-        var convertedBytes = new byte[] { 0xFF, 0xD8, 1, 2, 3 };
-        var mockConversion = new Mock<IImageConversionService>();
-        mockConversion.Setup(s => s.TryConvertToJpeg(It.IsAny<Stream>(), ".png"))
-            .Returns(new ImageConversionResult(convertedBytes, ".jpg", "image/jpeg"));
+        var mockUploadHelper = new Mock<IImageUploadHelper>();
+        mockUploadHelper
+            .Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), ".png", It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((IFormFile _, string _, string prefix, string baseName) =>
+                new ImageUploadResult($"{prefix}/{baseName}.jpg", $"{baseName}.jpg", "image/jpeg", 5));
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var c = CreateController(mockUsers.Object, mockPosts.Object, Mock.Of<IBlogCommentRepository>(),
-            mockFiles.Object, mockAudit.Object, mockConversion.Object);
+            Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockUploadHelper.Object);
 
         var imgBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // PNG magic bytes
         IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "FeaturedImage", "photo.png")
@@ -583,9 +584,6 @@ public sealed class BlogControllerTests
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var detail = Assert.IsType<BlogPostDetail>(ok.Value);
-        Assert.NotNull(uploadedBlobPath);
-        Assert.EndsWith(".jpg", uploadedBlobPath!);
-        Assert.Equal("image/jpeg", uploadedContentType);
         Assert.Equal("image/jpeg", detail.FeaturedImageContentType);
         Assert.EndsWith(".jpg", detail.FeaturedImageDisplayName);
     }
@@ -603,24 +601,14 @@ public sealed class BlogControllerTests
             Surname = "User"
         });
 
-        string? uploadedBlobPath = null;
-        string? uploadedContentType = null;
-        var mockFiles = new Mock<IDocumentFileStore>();
-        mockFiles.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
-            .Callback<string, Stream, string>((path, _, ct) =>
-            {
-                uploadedBlobPath = path;
-                uploadedContentType = ct;
-            })
-            .Returns(Task.CompletedTask);
-
-        var convertedBytes = new byte[] { 0xFF, 0xD8, 1, 2, 3 };
-        var mockConversion = new Mock<IImageConversionService>();
-        mockConversion.Setup(s => s.TryConvertToJpeg(It.IsAny<Stream>(), ".png"))
-            .Returns(new ImageConversionResult(convertedBytes, ".jpg", "image/jpeg"));
+        var mockUploadHelper = new Mock<IImageUploadHelper>();
+        mockUploadHelper
+            .Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), ".png", It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((IFormFile _, string _, string prefix, string baseName) =>
+                new ImageUploadResult($"{prefix}/{baseName}.jpg", $"{baseName}.jpg", "image/jpeg", 5));
 
         var c = CreateController(mockUsers.Object, Mock.Of<IBlogPostRepository>(), Mock.Of<IBlogCommentRepository>(),
-            mockFiles.Object, Mock.Of<IAuditLogRepository>(), mockConversion.Object);
+            Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>(), mockUploadHelper.Object);
 
         var imgBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // PNG magic bytes
         IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "file", "photo.png")
@@ -632,11 +620,8 @@ public sealed class BlogControllerTests
         var result = await c.UploadImage(formFile);
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        Assert.NotNull(uploadedBlobPath);
-        Assert.EndsWith(".jpg", uploadedBlobPath!);
-        Assert.Equal("image/jpeg", uploadedContentType);
 
-        // Verify the returned URL also uses .jpg
+        // Verify the returned URL uses .jpg
         var urlProp = ok.Value!.GetType().GetProperty("url");
         Assert.NotNull(urlProp);
         var url = urlProp!.GetValue(ok.Value) as string;

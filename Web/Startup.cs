@@ -158,6 +158,7 @@ namespace Web
             services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();
             services.AddSingleton<IOgThumbnailService, SkiaSharpOgThumbnailService>();
             services.AddSingleton<IImageConversionService, SkiaSharpImageConversionService>();
+            services.AddSingleton<IImageUploadHelper, ImageUploadHelper>();
 
             // Repository / persistence
             if (useMockData)
