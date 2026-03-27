@@ -1,5 +1,6 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { Location } from '@angular/common';
 import { Title } from '@angular/platform-browser';
 import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -27,8 +28,11 @@ export class EventDetailComponent implements OnInit {
   adultNames = '';
   childNames = '';
 
+  private currentSlug = '';
+
   constructor(
     private readonly route: ActivatedRoute,
+    private readonly location: Location,
     private readonly titleService: Title,
     private readonly eventsService: EventsService,
     private readonly telemetry: ApplicationInsightsService,
@@ -43,6 +47,7 @@ export class EventDetailComponent implements OnInit {
         this.titleService.setTitle('COHAD | Events');
         return;
       }
+      this.currentSlug = slug;
       this.loadEvent(slug);
     });
   }
@@ -56,8 +61,7 @@ export class EventDetailComponent implements OnInit {
   }
 
   logIn(): void {
-    const slug = this.route.snapshot.paramMap.get('slug');
-    const redirectTo = slug ? `/events/${slug}` : '/events';
+    const redirectTo = this.currentSlug ? `/events/${this.currentSlug}` : '/events';
     this.dispatcher.next(new Login(redirectTo));
   }
 
@@ -104,6 +108,19 @@ export class EventDetailComponent implements OnInit {
         this.loading = false;
         this.titleService.setTitle(eventItem.title ? `COHAD | ${eventItem.title}` : 'COHAD | Events');
         this.applyExistingSignup(eventItem);
+        if (eventItem.publicSlug && eventItem.publicSlug !== segment) {
+          this.currentSlug = eventItem.publicSlug;
+          const snapshot = this.route.snapshot;
+          const params = new URLSearchParams();
+          snapshot.queryParamMap.keys.forEach(k =>
+            (snapshot.queryParamMap.getAll(k) ?? []).forEach(v => params.append(k, v ?? '')));
+          const query = params.toString();
+          const fragment = snapshot.fragment;
+          let newUrl = '/events/' + eventItem.publicSlug;
+          if (query) { newUrl += '?' + query; }
+          if (fragment) { newUrl += '#' + fragment; }
+          this.location.replaceState(newUrl);
+        }
       },
       error: () => {
         this.eventItem = null;

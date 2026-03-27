@@ -49,6 +49,18 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
             ev = await repo.GetByRouteSegmentAsync(segment);
         }
 
+        // Redirect old slug aliases to the canonical URL so crawlers and bookmarks update.
+        if (ev != null &&
+            !string.IsNullOrWhiteSpace(ev.PublicSlug) &&
+            !string.Equals(segment, ev.PublicSlug, StringComparison.OrdinalIgnoreCase))
+        {
+            var canonicalPath = $"/events/{Uri.EscapeDataString(ev.PublicSlug)}";
+            var queryString = context.Request.QueryString.HasValue ? context.Request.QueryString.Value : string.Empty;
+            context.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+            context.Response.Headers["Location"] = canonicalPath + queryString;
+            return;
+        }
+
         var indexPath = ResolveIndexHtmlPath(env);
         if (string.IsNullOrEmpty(indexPath) || !File.Exists(indexPath))
         {

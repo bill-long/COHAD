@@ -262,6 +262,7 @@ namespace Web.Services.Cosmos
             {
                 Id = ParseLegacyGuid(rawId),
                 PublicSlug = doc.Value<string>("PublicSlug"),
+                PreviousSlugs = doc["PreviousSlugs"]?.ToObject<List<string>>() ?? new List<string>(),
                 Title = doc.Value<string>("Title"),
                 Description = doc.Value<string>("Description"),
                 StartUtc = doc["StartUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
@@ -285,6 +286,7 @@ namespace Web.Services.Cosmos
             {
                 ["id"] = ToCommunityEventId(communityEvent.Id),
                 ["PublicSlug"] = communityEvent.PublicSlug != null ? communityEvent.PublicSlug : JValue.CreateNull(),
+                ["PreviousSlugs"] = JToken.FromObject(communityEvent.PreviousSlugs ?? new List<string>()),
                 ["Title"] = communityEvent.Title,
                 ["Description"] = communityEvent.Description,
                 ["StartUtc"] = JToken.FromObject(communityEvent.StartUtc),

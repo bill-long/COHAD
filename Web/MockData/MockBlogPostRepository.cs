@@ -76,6 +76,7 @@ namespace Web.MockData
                     {
                         Id = p.Id,
                         PublicSlug = p.PublicSlug,
+                        PreviousSlugs = p.PreviousSlugs?.ToList() ?? new List<string>(),
                         Title = p.Title,
                         PublishUtc = p.PublishUtc,
                         Content = null
@@ -115,13 +116,20 @@ namespace Web.MockData
                     return Task.FromResult<BlogPost>(null);
                 }
 
-                if (Guid.TryParse(segment, out var guid))
-                {
-                    return GetByIdAsync(guid);
-                }
+                var normalizedSegment = segment.Trim().ToLowerInvariant();
 
                 var match = _posts.Values.FirstOrDefault(p =>
-                    string.Equals(BlogUrlSlug.ResolveUrlSegment(p), segment, StringComparison.OrdinalIgnoreCase));
+                {
+                    var currentSlug = BlogUrlSlug.ResolveUrlSegment(p);
+                    return !string.IsNullOrWhiteSpace(currentSlug) &&
+                           currentSlug.Trim().ToLowerInvariant() == normalizedSegment;
+                });
+
+                match ??= _posts.Values.FirstOrDefault(p =>
+                    p.PreviousSlugs?.Any(s =>
+                        !string.IsNullOrWhiteSpace(s) &&
+                        s.Trim().ToLowerInvariant() == normalizedSegment) == true);
+
                 return Task.FromResult(match == null ? null : ClonePost(match));
             }
         }
@@ -205,6 +213,7 @@ namespace Web.MockData
             {
                 Id = post.Id,
                 PublicSlug = post.PublicSlug,
+                PreviousSlugs = post.PreviousSlugs?.ToList() ?? new List<string>(),
                 Title = post.Title,
                 Content = post.Content,
                 Excerpt = post.Excerpt,

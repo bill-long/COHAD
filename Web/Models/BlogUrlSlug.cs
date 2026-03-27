@@ -87,6 +87,19 @@ namespace Web.Models
                 {
                     taken.Add(BuildBaseSlug(p.PublishUtc, p.Title));
                 }
+
+                if (p.PreviousSlugs != null)
+                {
+                    foreach (var prev in p.PreviousSlugs)
+                    {
+                        if (string.IsNullOrWhiteSpace(prev))
+                        {
+                            continue;
+                        }
+
+                        taken.Add(prev.Trim().ToLowerInvariant());
+                    }
+                }
             }
 
             if (!taken.Contains(baseSlug))

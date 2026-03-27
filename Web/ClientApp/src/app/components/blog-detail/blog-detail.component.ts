@@ -1,5 +1,6 @@
 import { Component, ElementRef, Inject, OnInit, SecurityContext, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { Location } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -35,6 +36,7 @@ export class BlogDetailComponent implements OnInit {
 
   constructor(
     private readonly route: ActivatedRoute,
+    private readonly location: Location,
     private readonly blogService: BlogService,
     private readonly sanitizer: DomSanitizer,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -132,7 +134,20 @@ export class BlogDetailComponent implements OnInit {
         this.renderedHtml = this.renderMarkdown(post.content ?? '');
         this.loading = false;
         this.postLoaded = true;
-        this.loadComments(slug);
+        if (post.publicSlug && post.publicSlug !== slug) {
+          this.currentSlug = post.publicSlug;
+          const snapshot = this.route.snapshot;
+          const params = new URLSearchParams();
+          snapshot.queryParamMap.keys.forEach(k =>
+            (snapshot.queryParamMap.getAll(k) ?? []).forEach(v => params.append(k, v ?? '')));
+          const query = params.toString();
+          const fragment = snapshot.fragment;
+          let newUrl = '/news/' + post.publicSlug;
+          if (query) { newUrl += '?' + query; }
+          if (fragment) { newUrl += '#' + fragment; }
+          this.location.replaceState(newUrl);
+        }
+        this.loadComments(this.currentSlug);
       },
       error: () => {
         this.post = null;

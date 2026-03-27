@@ -12,6 +12,11 @@ namespace Web.Models
         /// </summary>
         public string PublicSlug { get; set; }
 
+        /// <summary>
+        /// Previous slug values that should still resolve to this event (populated when a title or date change causes the slug to change).
+        /// </summary>
+        public List<string> PreviousSlugs { get; set; } = new List<string>();
+
         public string Title { get; set; }
 
         public string Description { get; set; }
