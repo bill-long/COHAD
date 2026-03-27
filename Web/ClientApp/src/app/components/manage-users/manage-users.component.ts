@@ -72,6 +72,10 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
         return this.getDaysUntilPurge(user) ?? Number.MAX_SAFE_INTEGER;
       }
 
+      if (sortHeaderId === 'roles') {
+        return this.getRoleSortOrder(user);
+      }
+
       const value = (user as unknown as Record<string, unknown>)[sortHeaderId];
       return typeof value === 'string' || typeof value === 'number' ? value : '';
     };
@@ -105,6 +109,19 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
 
     document.addEventListener('mousemove', this.onResizeMouseMove);
     document.addEventListener('mouseup', this.onResizeMouseUp);
+  }
+
+  private getRoleSortOrder(user: ApiUser): number {
+    if (!user.roles || user.roles.length === 0) {
+      return 3;
+    }
+    if (user.roles.includes('Administrator')) {
+      return 0;
+    }
+    if (user.roles.some(r => r !== 'Resident')) {
+      return 1;
+    }
+    return 2;
   }
 
   getDaysUntilPurge(user: ApiUser): number | null {
