@@ -107,7 +107,13 @@ export class EventDetailComponent implements OnInit {
         this.titleService.setTitle(eventItem.title ? `COHAD | ${eventItem.title}` : 'COHAD | Events');
         this.applyExistingSignup(eventItem);
         if (eventItem.publicSlug && eventItem.publicSlug !== segment) {
-          this.location.replaceState('/events/' + eventItem.publicSlug);
+          const snapshot = this.route.snapshot;
+          const query = snapshot.queryParamMap.keys.map(k => `${k}=${snapshot.queryParamMap.get(k)}`).join('&');
+          const fragment = snapshot.fragment;
+          let newUrl = '/events/' + eventItem.publicSlug;
+          if (query) { newUrl += '?' + query; }
+          if (fragment) { newUrl += '#' + fragment; }
+          this.location.replaceState(newUrl);
         }
       },
       error: () => {

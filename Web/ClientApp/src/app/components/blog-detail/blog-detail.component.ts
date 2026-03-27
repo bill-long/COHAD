@@ -136,8 +136,13 @@ export class BlogDetailComponent implements OnInit {
         this.postLoaded = true;
         if (post.publicSlug && post.publicSlug !== slug) {
           this.currentSlug = post.publicSlug;
-          const fragment = this.route.snapshot.fragment;
-          this.location.replaceState('/news/' + post.publicSlug + (fragment ? '#' + fragment : ''));
+          const snapshot = this.route.snapshot;
+          const query = snapshot.queryParamMap.keys.map(k => `${k}=${snapshot.queryParamMap.get(k)}`).join('&');
+          const fragment = snapshot.fragment;
+          let newUrl = '/news/' + post.publicSlug;
+          if (query) { newUrl += '?' + query; }
+          if (fragment) { newUrl += '#' + fragment; }
+          this.location.replaceState(newUrl);
         }
         this.loadComments(this.currentSlug);
       },
