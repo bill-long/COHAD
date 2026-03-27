@@ -65,8 +65,7 @@ public sealed class PaymentControllerTests
         var result = await c.Get();
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var payload = Assert.IsAssignableFrom<IEnumerable<PaymentSummary>>(ok.Value);
-        var list = payload.ToList();
+        var list = Assert.IsType<List<PaymentSummary>>(ok.Value);
         Assert.Single(list);
         Assert.Equal(expected[0].Id, list[0].Id);
         Assert.Equal(expected[0].Amount, list[0].Amount);
