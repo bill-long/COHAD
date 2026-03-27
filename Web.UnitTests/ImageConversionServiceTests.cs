@@ -19,7 +19,7 @@ public sealed class ImageConversionServiceTests
         Assert.NotNull(result);
         Assert.Equal(".jpg", result!.Extension);
         Assert.Equal("image/jpeg", result.ContentType);
-        Assert.True(result.Data.Length > 0);
+        Assert.True(result.Data.Length >= 2);
 
         // Verify the output is valid JPEG (starts with FF D8)
         Assert.Equal(0xFF, result.Data[0]);
@@ -72,7 +72,7 @@ public sealed class ImageConversionServiceTests
         var result = _service.TryConvertToJpeg(stream, ".png");
 
         Assert.NotNull(result);
-        Assert.True(result!.Data.Length > 0);
+        Assert.True(result!.Data.Length >= 2);
         // Verify output is valid JPEG
         Assert.Equal(0xFF, result.Data[0]);
         Assert.Equal(0xD8, result.Data[1]);
