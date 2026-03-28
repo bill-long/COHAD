@@ -45,6 +45,63 @@ namespace Web.MockData
                 }
             };
 
+            var garageSaleId = Guid.Parse("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d");
+            _events[garageSaleId] = new CommunityEvent
+            {
+                Id = garageSaleId,
+                PublicSlug = $"{now.Year}-community-garage-sale",
+                Title = "Community Garage Sale",
+                Description = "Set up in your driveway and sell your stuff! Sign up so we know which households are participating.",
+                StartUtc = now.Date.AddDays(10).AddHours(8),
+                AllowSignups = true,
+                SignupMode = EventSignupMode.HouseholdOnly,
+                CreatedByUniqueId = MockDataConstants.AdminUniqueId,
+                ModifiedByUniqueId = MockDataConstants.AdminUniqueId,
+                CreatedUtc = now.AddDays(-1),
+                ModifiedUtc = now.AddDays(-1),
+                Signups = new List<EventSignup>
+                {
+                    new EventSignup
+                    {
+                        UserUniqueId = MockDataConstants.AdminUniqueId,
+                        UserDisplayName = "Mock Resident",
+                        UserEmail = "mock@cohad.local",
+                        Adults = 0,
+                        Children = 0,
+                        SignedUpUtc = now.AddHours(-6)
+                    }
+                }
+            };
+
+            var eggHuntId = Guid.Parse("b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e");
+            _events[eggHuntId] = new CommunityEvent
+            {
+                Id = eggHuntId,
+                PublicSlug = $"{now.Year}-easter-egg-hunt",
+                Title = "Easter Egg Hunt",
+                Description = "Bring the kids for a neighborhood egg hunt at the clubhouse! Sign up with the number of children attending.",
+                StartUtc = now.Date.AddDays(20).AddHours(10),
+                AllowSignups = true,
+                SignupMode = EventSignupMode.ChildrenOnly,
+                CreatedByUniqueId = MockDataConstants.AdminUniqueId,
+                ModifiedByUniqueId = MockDataConstants.AdminUniqueId,
+                CreatedUtc = now.AddDays(-1),
+                ModifiedUtc = now.AddDays(-1),
+                Signups = new List<EventSignup>
+                {
+                    new EventSignup
+                    {
+                        UserUniqueId = MockDataConstants.SecondaryUserUniqueId,
+                        UserDisplayName = "Taylor Resident",
+                        UserEmail = "taylor@cohad.local",
+                        Adults = 0,
+                        Children = 3,
+                        ChildNames = new List<string> { "Emma", "Liam", "Sophia" },
+                        SignedUpUtc = now.AddHours(-3)
+                    }
+                }
+            };
+
             var boardId = Guid.Parse("f9ec5d08-cf7e-4e77-9583-57f0a56f380b");
             _events[boardId] = new CommunityEvent
             {
@@ -208,6 +265,7 @@ namespace Web.MockData
                 Description = communityEvent.Description,
                 StartUtc = communityEvent.StartUtc,
                 AllowSignups = communityEvent.AllowSignups,
+                SignupMode = communityEvent.SignupMode,
                 PromoMediaBlobPath = communityEvent.PromoMediaBlobPath,
                 PromoMediaDisplayName = communityEvent.PromoMediaDisplayName,
                 PromoMediaContentType = communityEvent.PromoMediaContentType,

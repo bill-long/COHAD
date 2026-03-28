@@ -133,9 +133,10 @@ export class EventDetailComponent implements OnInit {
 
   private applyExistingSignup(eventItem: EventDetail): void {
     const signup = eventItem.mySignup;
+    const mode = eventItem.signupMode ?? 'AdultsAndChildren';
     if (signup == null) {
-      this.adults = 1;
-      this.children = 0;
+      this.adults = mode === 'ChildrenOnly' || mode === 'HouseholdOnly' ? 0 : 1;
+      this.children = mode === 'ChildrenOnly' ? 1 : 0;
       this.adultNames = '';
       this.childNames = '';
       return;

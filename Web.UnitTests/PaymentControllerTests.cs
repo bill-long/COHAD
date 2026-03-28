@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Web.Controllers;
 using Web.Models;
+using Web.PresentationModels;
 using Web.Services.Repositories;
 using Xunit;
 
@@ -64,7 +65,10 @@ public sealed class PaymentControllerTests
         var result = await c.Get();
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        Assert.Same(expected, ok.Value);
+        var list = Assert.IsType<List<PaymentSummary>>(ok.Value);
+        Assert.Single(list);
+        Assert.Equal(expected[0].Id, list[0].Id);
+        Assert.Equal(expected[0].Amount, list[0].Amount);
     }
 
     [Fact]
@@ -261,7 +265,9 @@ public sealed class PaymentControllerTests
         var result = await c.Add(new Payment { Amount = "75.50", PayPalTransactionId = txId });
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        Assert.Same(existing, ok.Value);
+        var summary = Assert.IsType<PaymentSummary>(ok.Value);
+        Assert.Equal(existing.Id, summary.Id);
+        Assert.Equal(existing.Amount, summary.Amount);
         mockPayments.Verify(r => r.AddAsync(It.IsAny<Payment>()), Times.Never);
     }
 

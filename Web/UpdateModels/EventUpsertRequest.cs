@@ -1,5 +1,6 @@
 using System;
 using Microsoft.AspNetCore.Http;
+using Web.Models;
 
 namespace Web.UpdateModels
 {
@@ -14,6 +15,8 @@ namespace Web.UpdateModels
         public DateTime? StartUtc { get; set; }
 
         public bool AllowSignups { get; set; }
+
+        public EventSignupMode SignupMode { get; set; }
 
         public bool RemovePromoMedia { get; set; }
 

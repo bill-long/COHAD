@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, Inject, ViewChild } fro
 import { PayPalButtonsComponent } from "@paypal/paypal-js";
 import { loadScript } from "@paypal/paypal-js";
 import { map, Observable, Subject } from "rxjs";
-import { Payment } from "src/app/models";
+import { Payment, PaymentSummary } from "src/app/models";
 import { PaymentService } from "src/app/services/payment.service";
 import { Action, ApplicationState, applicationState, dispatcher } from "src/app/state";
 
@@ -25,7 +25,7 @@ export class DuesComponent {
 
   payOnceButtons: PayPalButtonsComponent | null = null;
   subscribeButtons: PayPalButtonsComponent | null = null;
-  payments: Payment[] = [];
+  payments: PaymentSummary[] = [];
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
