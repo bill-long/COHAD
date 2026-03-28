@@ -171,13 +171,20 @@ public sealed class EventsControllerTests
             Roles = new List<User.Role> { User.Role.Resident }
         });
 
-        var mockEvents = new Mock<ICommunityEventRepository>();
-        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(new CommunityEvent
+        var stored = new CommunityEvent
         {
             Id = eventId,
             Title = "Closed Event",
             StartUtc = DateTime.UtcNow.AddDays(1),
             AllowSignups = false
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents.Setup(r => r.ReadAsync(eventId)).ReturnsAsync(new CommunityEventReadResult
+        {
+            Event = stored,
+            ETag = "\"e1\""
         });
 
         var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
@@ -200,21 +207,27 @@ public sealed class EventsControllerTests
             Roles = new List<User.Role> { User.Role.Resident }
         });
 
-        var mockEvents = new Mock<ICommunityEventRepository>();
-        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(new CommunityEvent
+        var stored = new CommunityEvent
         {
             Id = eventId,
             Title = "Open Event",
             StartUtc = DateTime.UtcNow.AddDays(2),
             AllowSignups = true,
             Signups = new List<EventSignup>()
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents.Setup(r => r.ReadAsync(eventId)).ReturnsAsync(new CommunityEventReadResult
+        {
+            Event = stored,
+            ETag = "\"e1\""
         });
 
         var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
         var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 51, Children = 0 });
 
         Assert.IsType<BadRequestObjectResult>(result);
-        mockEvents.Verify(r => r.ReadAsync(It.IsAny<Guid>()), Times.Never);
     }
 
     [Fact]
@@ -694,8 +707,7 @@ public sealed class EventsControllerTests
             Roles = new List<User.Role> { User.Role.Resident }
         });
 
-        var mockEvents = new Mock<ICommunityEventRepository>();
-        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(new CommunityEvent
+        var stored = new CommunityEvent
         {
             Id = eventId,
             Title = "Egg Hunt",
@@ -703,6 +715,14 @@ public sealed class EventsControllerTests
             AllowSignups = true,
             SignupMode = EventSignupMode.ChildrenOnly,
             Signups = new List<EventSignup>()
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents.Setup(r => r.ReadAsync(eventId)).ReturnsAsync(new CommunityEventReadResult
+        {
+            Event = stored,
+            ETag = "\"e1\""
         });
 
         var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
@@ -783,8 +803,7 @@ public sealed class EventsControllerTests
             Roles = new List<User.Role> { User.Role.Resident }
         });
 
-        var mockEvents = new Mock<ICommunityEventRepository>();
-        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(new CommunityEvent
+        var stored = new CommunityEvent
         {
             Id = eventId,
             Title = "Wine Tasting",
@@ -792,6 +811,14 @@ public sealed class EventsControllerTests
             AllowSignups = true,
             SignupMode = EventSignupMode.AdultsOnly,
             Signups = new List<EventSignup>()
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents.Setup(r => r.ReadAsync(eventId)).ReturnsAsync(new CommunityEventReadResult
+        {
+            Event = stored,
+            ETag = "\"e1\""
         });
 
         var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());

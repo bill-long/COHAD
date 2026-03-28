@@ -525,12 +525,6 @@ namespace Web.Controllers
                 return BadRequest("Signups are not enabled for this event.");
             }
 
-            var validationError = ValidateSignupRequest(request, routeEvent.SignupMode);
-            if (validationError != null)
-            {
-                return BadRequest(validationError);
-            }
-
             const int maxAttempts = 10;
             CommunityEvent saved = null;
             var isNewSignup = false;
@@ -546,6 +540,12 @@ namespace Web.Controllers
                 if (!read.Event.AllowSignups)
                 {
                     return BadRequest("Signups are not enabled for this event.");
+                }
+
+                var validationError = ValidateSignupRequest(request, read.Event.SignupMode);
+                if (validationError != null)
+                {
+                    return BadRequest(validationError);
                 }
 
                 isNewSignup = !(read.Event.Signups?.Any(s => s.UserUniqueId == apiUser.UniqueId) ?? false);
