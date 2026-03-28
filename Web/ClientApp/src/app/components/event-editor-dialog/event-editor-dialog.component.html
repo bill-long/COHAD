@@ -50,6 +50,17 @@
     <div class="event-editor-checkbox-row">
       <mat-checkbox [(ngModel)]="allowSignups" color="primary" id="event-editor-allow-signups">Allow signups</mat-checkbox>
     </div>
+    <div class="event-editor-field-row" *ngIf="allowSignups">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="event-editor-mat-field">
+        <mat-label>Signup type</mat-label>
+        <mat-select [(ngModel)]="signupMode" id="event-editor-signup-mode">
+          <mat-option value="AdultsAndChildren">Adults &amp; children</mat-option>
+          <mat-option value="HouseholdOnly">Household only</mat-option>
+          <mat-option value="ChildrenOnly">Children only</mat-option>
+          <mat-option value="AdultsOnly">Adults only</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
   </section>
 
   <section class="event-editor-section event-editor-section-promo">

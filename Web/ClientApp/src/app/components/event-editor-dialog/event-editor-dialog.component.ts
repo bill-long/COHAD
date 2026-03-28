@@ -1,7 +1,7 @@
 import { Component, ElementRef, Inject, ViewChild } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { finalize } from 'rxjs/operators';
-import { EventDetail, EventsService } from 'src/app/services/events.service';
+import { EventDetail, EventSignupMode, EventsService } from 'src/app/services/events.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
 
 export interface EventEditorDialogData {
@@ -28,6 +28,7 @@ export class EventEditorDialogComponent {
   /** `HH:mm` for native time input (local). */
   startTime = '';
   allowSignups = true;
+  signupMode: EventSignupMode = 'AdultsAndChildren';
   removePromoMedia = false;
   selectedFile: File | null = null;
   existingPromoFileName = '';
@@ -49,6 +50,7 @@ export class EventEditorDialogComponent {
       this.startDate = start?.date ?? null;
       this.startTime = start?.time ?? '';
       this.allowSignups = ev.allowSignups;
+      this.signupMode = ev.signupMode ?? 'AdultsAndChildren';
       this.existingPromoFileName = ev.promoMediaDisplayName ?? '';
     } else {
       this.editingEventId = null;
@@ -58,6 +60,7 @@ export class EventEditorDialogComponent {
       this.startDate = null;
       this.startTime = '';
       this.allowSignups = true;
+      this.signupMode = 'AdultsAndChildren';
       this.existingPromoFileName = '';
     }
     this.removePromoMedia = false;
@@ -110,6 +113,7 @@ export class EventEditorDialogComponent {
           description: this.description.trim(),
           startUtc,
           allowSignups: this.allowSignups,
+          signupMode: this.signupMode,
           removePromoMedia: this.removePromoMedia
         },
         this.selectedFile

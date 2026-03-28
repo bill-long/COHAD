@@ -71,11 +71,23 @@
       <div class="signup-summary-head">
         <div class="signup-summary-title">
           <strong>Signups</strong>
-          <span class="signup-totals" *ngIf="eventItem.totalSignups > 0">
-            {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}
-            · {{ eventItem.totalAdults }} adults · {{ eventItem.totalChildren }} children
-          </span>
-          <span class="signup-totals" *ngIf="eventItem.totalSignups === 0 && eventItem.allowSignups">0 households · 0 adults · 0 children</span>
+          <ng-container [ngSwitch]="eventItem.signupMode">
+            <span class="signup-totals" *ngSwitchCase="'HouseholdOnly'">
+              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}
+            </span>
+            <span class="signup-totals" *ngSwitchCase="'ChildrenOnly'">
+              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}
+              · {{ eventItem.totalChildren }} {{ eventItem.totalChildren === 1 ? 'child' : 'children' }}
+            </span>
+            <span class="signup-totals" *ngSwitchCase="'AdultsOnly'">
+              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}
+              · {{ eventItem.totalAdults }} {{ eventItem.totalAdults === 1 ? 'adult' : 'adults' }}
+            </span>
+            <span class="signup-totals" *ngSwitchDefault>
+              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}
+              · {{ eventItem.totalAdults }} adults · {{ eventItem.totalChildren }} children
+            </span>
+          </ng-container>
         </div>
       </div>
       <p class="signup-closed-note" *ngIf="!eventItem.allowSignups && eventItem.totalSignups > 0">
@@ -86,7 +98,12 @@
         <div class="signup-row" *ngFor="let signup of eventItem.signups">
           <div class="signup-row-top">
             <div class="signup-name">{{ signup.userDisplayName || '—' }}</div>
-            <div class="signup-counts">{{ signup.adults }} adults · {{ signup.children }} children</div>
+            <ng-container [ngSwitch]="eventItem.signupMode">
+              <div class="signup-counts" *ngSwitchCase="'HouseholdOnly'">&nbsp;</div>
+              <div class="signup-counts" *ngSwitchCase="'ChildrenOnly'">{{ signup.children }} {{ signup.children === 1 ? 'child' : 'children' }}</div>
+              <div class="signup-counts" *ngSwitchCase="'AdultsOnly'">{{ signup.adults }} {{ signup.adults === 1 ? 'adult' : 'adults' }}</div>
+              <div class="signup-counts" *ngSwitchDefault>{{ signup.adults }} adults · {{ signup.children }} children</div>
+            </ng-container>
           </div>
           <div class="signup-email" *ngIf="signup.userEmail">{{ signup.userEmail }}</div>
           <div class="signup-when" *ngIf="signup.signedUpUtc">Signed up {{ signup.signedUpUtc | date:'medium' }}</div>

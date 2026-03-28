@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using Web.Models;
 
 namespace Web.PresentationModels
@@ -21,6 +22,9 @@ namespace Web.PresentationModels
         public DateTime StartUtc { get; protected set; }
 
         public bool AllowSignups { get; protected set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public EventSignupMode SignupMode { get; protected set; }
 
         public bool HasPromoMedia { get; protected set; }
 
@@ -46,6 +50,7 @@ namespace Web.PresentationModels
                 Description = communityEvent.Description,
                 StartUtc = communityEvent.StartUtc,
                 AllowSignups = communityEvent.AllowSignups,
+                SignupMode = communityEvent.SignupMode,
                 HasPromoMedia = !string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath),
                 PromoMediaContentType = communityEvent.PromoMediaContentType,
                 PromoMediaDownloadUrl = !string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath)

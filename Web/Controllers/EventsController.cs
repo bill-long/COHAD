@@ -387,6 +387,7 @@ namespace Web.Controllers
             communityEvent.Description = (request.Description ?? string.Empty).Trim();
             communityEvent.StartUtc = NormalizeToUtc(request.StartUtc.Value);
             communityEvent.AllowSignups = request.AllowSignups;
+            communityEvent.SignupMode = request.SignupMode;
             communityEvent.ModifiedByUniqueId = apiUser.UniqueId;
             communityEvent.ModifiedUtc = now;
             communityEvent.Signups ??= new List<EventSignup>();
@@ -524,15 +525,10 @@ namespace Web.Controllers
                 return BadRequest("Signups are not enabled for this event.");
             }
 
-            if (request == null || request.Adults < 0 || request.Children < 0 || request.Adults + request.Children <= 0)
+            var validationError = ValidateSignupRequest(request, routeEvent.SignupMode);
+            if (validationError != null)
             {
-                return BadRequest("Please provide at least one attendee.");
-            }
-
-            if (request.Adults > MaxSignupAdultsPerHousehold || request.Children > MaxSignupChildrenPerHousehold)
-            {
-                return BadRequest(
-                    $"Please enter no more than {MaxSignupAdultsPerHousehold} adults and {MaxSignupChildrenPerHousehold} children per household.");
+                return BadRequest(validationError);
             }
 
             const int maxAttempts = 10;
@@ -580,7 +576,13 @@ namespace Web.Controllers
                     "Unable to save your signup due to concurrent updates. Please try again.");
             }
 
-            var countDetail = $" ({request.Adults} adults, {request.Children} children)";
+            var countDetail = saved.SignupMode switch
+            {
+                EventSignupMode.HouseholdOnly => string.Empty,
+                EventSignupMode.ChildrenOnly => $" ({request.Children} children)",
+                EventSignupMode.AdultsOnly => $" ({request.Adults} adults)",
+                _ => $" ({request.Adults} adults, {request.Children} children)"
+            };
             var actionPrefix = isNewSignup ? "Signed up for event." : "Updated event signup.";
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
@@ -611,14 +613,90 @@ namespace Web.Controllers
 
             existingSignup.UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim();
             existingSignup.UserEmail = apiUser.Emails;
-            existingSignup.Adults = request.Adults;
-            existingSignup.Children = request.Children;
-            existingSignup.AdultNames = NormalizeNames(request.AdultNames);
-            existingSignup.ChildNames = NormalizeNames(request.ChildNames);
+
+            switch (stored.SignupMode)
+            {
+                case EventSignupMode.HouseholdOnly:
+                    existingSignup.Adults = 0;
+                    existingSignup.Children = 0;
+                    existingSignup.AdultNames = new List<string>();
+                    existingSignup.ChildNames = new List<string>();
+                    break;
+                case EventSignupMode.ChildrenOnly:
+                    existingSignup.Adults = 0;
+                    existingSignup.Children = request.Children;
+                    existingSignup.AdultNames = new List<string>();
+                    existingSignup.ChildNames = NormalizeNames(request.ChildNames);
+                    break;
+                case EventSignupMode.AdultsOnly:
+                    existingSignup.Adults = request.Adults;
+                    existingSignup.Children = 0;
+                    existingSignup.AdultNames = NormalizeNames(request.AdultNames);
+                    existingSignup.ChildNames = new List<string>();
+                    break;
+                default:
+                    existingSignup.Adults = request.Adults;
+                    existingSignup.Children = request.Children;
+                    existingSignup.AdultNames = NormalizeNames(request.AdultNames);
+                    existingSignup.ChildNames = NormalizeNames(request.ChildNames);
+                    break;
+            }
+
             existingSignup.SignedUpUtc = DateTime.UtcNow;
 
             stored.ModifiedByUniqueId = apiUser.UniqueId;
             stored.ModifiedUtc = DateTime.UtcNow;
+        }
+
+        private static string ValidateSignupRequest(EventSignupRequest request, EventSignupMode mode)
+        {
+            if (request == null)
+            {
+                return "Please provide a signup request.";
+            }
+
+            switch (mode)
+            {
+                case EventSignupMode.HouseholdOnly:
+                    // No count validation needed — just the signup itself.
+                    return null;
+                case EventSignupMode.ChildrenOnly:
+                    if (request.Children < 1)
+                    {
+                        return "Please provide at least one child.";
+                    }
+
+                    if (request.Children > MaxSignupChildrenPerHousehold)
+                    {
+                        return $"Please enter no more than {MaxSignupChildrenPerHousehold} children per household.";
+                    }
+
+                    return null;
+                case EventSignupMode.AdultsOnly:
+                    if (request.Adults < 1)
+                    {
+                        return "Please provide at least one adult.";
+                    }
+
+                    if (request.Adults > MaxSignupAdultsPerHousehold)
+                    {
+                        return $"Please enter no more than {MaxSignupAdultsPerHousehold} adults per household.";
+                    }
+
+                    return null;
+                default:
+                    if (request.Adults < 0 || request.Children < 0 || request.Adults + request.Children <= 0)
+                    {
+                        return "Please provide at least one attendee.";
+                    }
+
+                    if (request.Adults > MaxSignupAdultsPerHousehold || request.Children > MaxSignupChildrenPerHousehold)
+                    {
+                        return $"Please enter no more than {MaxSignupAdultsPerHousehold} adults and {MaxSignupChildrenPerHousehold} children per household.";
+                    }
+
+                    return null;
+            }
         }
 
         private async Task<Models.User> GetApiUserAsync()

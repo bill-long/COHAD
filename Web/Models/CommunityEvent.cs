@@ -1,8 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Web.Models
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum EventSignupMode
+    {
+        AdultsAndChildren = 0,
+        HouseholdOnly = 1,
+        ChildrenOnly = 2,
+        AdultsOnly = 3
+    }
+
     public class CommunityEvent
     {
         public Guid Id { get; set; }
@@ -24,6 +34,8 @@ namespace Web.Models
         public DateTime StartUtc { get; set; }
 
         public bool AllowSignups { get; set; }
+
+        public EventSignupMode SignupMode { get; set; }
 
         public string PromoMediaBlobPath { get; set; }
 

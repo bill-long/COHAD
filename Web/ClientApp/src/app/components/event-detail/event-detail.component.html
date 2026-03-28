@@ -36,27 +36,31 @@
 
         <ng-container *ngIf="event.allowSignups">
           <p class="mat-body-medium signup-helper">
-            Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }}
-            · {{ event.totalAdults }} adults · {{ event.totalChildren }} children
+            <ng-container [ngSwitch]="event.signupMode">
+              <ng-container *ngSwitchCase="'HouseholdOnly'">Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }}</ng-container>
+              <ng-container *ngSwitchCase="'ChildrenOnly'">Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }} · {{ event.totalChildren }} {{ event.totalChildren === 1 ? 'child' : 'children' }}</ng-container>
+              <ng-container *ngSwitchCase="'AdultsOnly'">Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }} · {{ event.totalAdults }} {{ event.totalAdults === 1 ? 'adult' : 'adults' }}</ng-container>
+              <ng-container *ngSwitchDefault>Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }} · {{ event.totalAdults }} adults · {{ event.totalChildren }} children</ng-container>
+            </ng-container>
           </p>
 
           <ng-container *ngIf="isSignedIn$ | async; else loginToSignup">
-            <div class="signup-form-fields">
+            <div class="signup-form-fields" *ngIf="event.signupMode !== 'HouseholdOnly'">
               <div class="signup-form-counts">
-                <mat-form-field appearance="outline" class="event-detail-field" subscriptSizing="dynamic">
+                <mat-form-field appearance="outline" class="event-detail-field" subscriptSizing="dynamic" *ngIf="event.signupMode !== 'ChildrenOnly'">
                   <mat-label>Adults</mat-label>
                   <input matInput id="signup-adults" name="signupAdults" type="number" min="0" [(ngModel)]="adults">
                 </mat-form-field>
-                <mat-form-field appearance="outline" class="event-detail-field" subscriptSizing="dynamic">
+                <mat-form-field appearance="outline" class="event-detail-field" subscriptSizing="dynamic" *ngIf="event.signupMode !== 'AdultsOnly'">
                   <mat-label>Children</mat-label>
                   <input matInput id="signup-children" name="signupChildren" type="number" min="0" [(ngModel)]="children">
                 </mat-form-field>
               </div>
-              <mat-form-field appearance="outline" class="event-detail-field event-detail-field--textarea" subscriptSizing="dynamic">
+              <mat-form-field appearance="outline" class="event-detail-field event-detail-field--textarea" subscriptSizing="dynamic" *ngIf="event.signupMode !== 'ChildrenOnly'">
                 <mat-label>Adult names (optional)</mat-label>
                 <textarea matInput id="signup-adult-names" name="signupAdultNames" rows="3" [(ngModel)]="adultNames" placeholder="Comma or newline separated"></textarea>
               </mat-form-field>
-              <mat-form-field appearance="outline" class="event-detail-field event-detail-field--textarea" subscriptSizing="dynamic">
+              <mat-form-field appearance="outline" class="event-detail-field event-detail-field--textarea" subscriptSizing="dynamic" *ngIf="event.signupMode !== 'AdultsOnly'">
                 <mat-label>Child names (optional)</mat-label>
                 <textarea matInput id="signup-child-names" name="signupChildNames" rows="3" [(ngModel)]="childNames" placeholder="Comma or newline separated"></textarea>
               </mat-form-field>

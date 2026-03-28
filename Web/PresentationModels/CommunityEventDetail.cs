@@ -31,6 +31,7 @@ namespace Web.PresentationModels
                 Description = card.Description,
                 StartUtc = card.StartUtc,
                 AllowSignups = card.AllowSignups,
+                SignupMode = card.SignupMode,
                 HasPromoMedia = card.HasPromoMedia,
                 PromoMediaContentType = card.PromoMediaContentType,
                 PromoMediaDownloadUrl = card.PromoMediaDownloadUrl,

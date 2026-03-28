@@ -2,6 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
+export type EventSignupMode = 'AdultsAndChildren' | 'HouseholdOnly' | 'ChildrenOnly' | 'AdultsOnly';
+
 export interface EventSignup {
   userDisplayName: string;
   userEmail: string;
@@ -20,6 +22,7 @@ export interface EventCard {
   description: string | null;
   startUtc: string;
   allowSignups: boolean;
+  signupMode: EventSignupMode;
   hasPromoMedia: boolean;
   promoMediaContentType: string | null;
   promoMediaDownloadUrl: string | null;
@@ -40,6 +43,7 @@ export interface EventUpsertPayload {
   description: string;
   startUtc: string;
   allowSignups: boolean;
+  signupMode: EventSignupMode;
   removePromoMedia: boolean;
 }
 
@@ -91,6 +95,7 @@ export class EventsService {
     formData.append('description', payload.description ?? '');
     formData.append('startUtc', payload.startUtc);
     formData.append('allowSignups', String(payload.allowSignups));
+    formData.append('signupMode', payload.signupMode);
     formData.append('removePromoMedia', String(payload.removePromoMedia));
     if (promotionalAsset != null) {
       formData.append('promotionalAsset', promotionalAsset);
