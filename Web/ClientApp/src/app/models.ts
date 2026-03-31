@@ -107,6 +107,16 @@ export interface EmailAddress {
     sunshineCommitteeEmailOptedIn: boolean;
 }
 
+export interface EmailPreferences {
+    email: string;
+    homeName: string;
+    boardEmailOptedIn: boolean;
+    welcomeEmailOptedIn: boolean;
+    gardenClubEmailOptedIn: boolean;
+    socialCommitteeEmailOptedIn: boolean;
+    sunshineCommitteeEmailOptedIn: boolean;
+}
+
 export interface AuditLogEntry {
     time: string;
     userId: string;

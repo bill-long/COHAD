@@ -24,7 +24,7 @@ Use this when you need a **signed-in** session and working APIs **without** Cosm
 
 1. **Angular** with mock auth: `cd Web/ClientApp && npm run start:mock` (build configuration `mock` sets `environment.useMockAuth`).
 2. **Backend** with in-memory repositories and HS256 dev tokens — you must supply a **signing key** of at least **32 UTF-8 bytes** (required for HS256) via environment variable **`MockJwt__SigningKey`** or `dotnet user-secrets set "MockJwt:SigningKey" "..."` in the `Web` project (never commit real keys; `appsettings.MockData.json` keeps an empty placeholder):
-    `MockJwt__SigningKey='<your-local-secret>' ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://127.0.0.1:5000" dotnet run --project Web/Web.csproj`
+    `MockJwt__SigningKey='<your-local-secret>' UnsubscribeToken__SigningKey='<your-local-secret>' ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://127.0.0.1:5000" dotnet run --project Web/Web.csproj`
 3. Open **http://127.0.0.1:5000** (same proxy pattern as Development: API serves the app and proxies the SPA from port 4200).
 
 The SPA obtains a dev JWT from `GET /api/dev/mock-auth` (only when `ASPNETCORE_ENVIRONMENT=MockData` and only from loopback requests). The token lifetime is short-lived (15 minutes). The signed-in mock user is **mock@cohad.local** with **Resident** and **Administrator** roles and owns **123 Mock Lane**. Mock data also seeds a second user, **taylor@cohad.local**, who owns **456 Test Court** so administrators can exercise user/home/role management flows. Data resets when the process restarts.
@@ -54,6 +54,7 @@ When `ClientApp/dist/cohad-app/index.html` exists (published or local `ng build`
 - Authentication uses Azure AD B2C (`cohadorgb2c.b2clogin.com`). Sign In will redirect externally; this cannot work without a registered redirect URI matching the dev environment.
 - The `.csproj` `PublishRunWebpack` target runs `npm install` + `npm run prodbuild` during `dotnet publish` — avoid publishing in dev; use `dotnet run` instead.
 - Cosmos DB config is via user secrets (`CosmosUri`, `CosmosKey`, `CosmosDatabase`). Set them with `dotnet user-secrets set` in the `Web` project directory.
+- **Email unsubscribe config:** `UnsubscribeToken:SigningKey` (≥32 UTF-8 bytes) and `AppBaseUrl` (e.g. `https://www.cohad.org`) enable per-recipient unsubscribe links in committee emails. Without the signing key, emails are sent without unsubscribe headers/footer (graceful degradation). Set via env var (`UnsubscribeToken__SigningKey`) or user secrets. The public `/email-preferences` Angular route and `UnsubscribeController` API endpoints require no authentication.
 
 ### Telemetry (Application Insights)
 

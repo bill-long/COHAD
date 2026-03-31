@@ -1,0 +1,60 @@
+.email-prefs-page {
+  display: flex;
+  justify-content: center;
+  padding: 40px 16px;
+  min-height: 60vh;
+}
+
+.email-prefs-card {
+  max-width: 520px;
+  width: 100%;
+
+  h1 {
+    margin: 0 0 8px;
+    font-size: 24px;
+  }
+
+  .subtitle {
+    color: rgba(0, 0, 0, 0.6);
+    margin-bottom: 24px;
+  }
+}
+
+.categories {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.category-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  .category-desc {
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.45);
+    padding-left: 32px;
+  }
+}
+
+.actions {
+  margin-bottom: 16px;
+}
+
+.error-message,
+.success-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.error-message {
+  color: #d32f2f;
+}
+
+.success-message {
+  color: #2e7d32;
+}

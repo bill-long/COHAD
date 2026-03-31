@@ -1,0 +1,43 @@
+<div class="email-prefs-page">
+  <div class="email-prefs-card">
+    <h1>Email Preferences</h1>
+
+    <mat-spinner *ngIf="loading" diameter="40"></mat-spinner>
+
+    <div *ngIf="errorMessage && !loading" class="error-message">
+      <mat-icon>error_outline</mat-icon>
+      <span>{{ errorMessage }}</span>
+    </div>
+
+    <div *ngIf="prefs && !loading">
+      <p class="subtitle">
+        Manage email subscriptions for <strong>{{ prefs.email }}</strong>
+        at <strong>{{ prefs.homeName }}</strong>.
+      </p>
+
+      <div class="categories">
+        <div *ngFor="let cat of categories" class="category-row">
+          <mat-checkbox
+            [(ngModel)]="prefs[cat.key]"
+            [matTooltip]="cat.tooltip"
+          >
+            {{ cat.label }}
+          </mat-checkbox>
+          <span class="category-desc">{{ cat.tooltip }}</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button mat-raised-button color="primary" (click)="save()" [disabled]="saving">
+          <span *ngIf="!saving">Save Preferences</span>
+          <span *ngIf="saving">Saving…</span>
+        </button>
+      </div>
+
+      <div *ngIf="successMessage" class="success-message">
+        <mat-icon>check_circle</mat-icon>
+        <span>{{ successMessage }}</span>
+      </div>
+    </div>
+  </div>
+</div>

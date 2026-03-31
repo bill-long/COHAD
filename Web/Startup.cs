@@ -66,6 +66,7 @@ namespace Web
 
             var useMockData = Environment.IsEnvironment("MockData");
             services.Configure<DocumentStorageOptions>(Configuration.GetSection("DocumentStorage"));
+            services.Configure<UnsubscribeTokenOptions>(Configuration.GetSection("UnsubscribeToken"));
             // Keep multipart request cap aligned with DocumentStorage:MaxUploadBytes (DocumentController enforces the same limit).
             services.Configure<FormOptions>(options =>
             {
@@ -159,6 +160,19 @@ namespace Web
             services.AddSingleton<IOgThumbnailService, SkiaSharpOgThumbnailService>();
             services.AddSingleton<IImageConversionService, SkiaSharpImageConversionService>();
             services.AddSingleton<IImageUploadHelper, ImageUploadHelper>();
+
+            // Unsubscribe token service — only registered when a signing key is configured.
+            // Without a key, the UnsubscribeController still works (returns 400 for all tokens)
+            // and EmailService sends emails without unsubscribe headers/footer.
+            var unsubKey = Configuration.GetSection("UnsubscribeToken")["SigningKey"];
+            if (!string.IsNullOrEmpty(unsubKey) && Encoding.UTF8.GetByteCount(unsubKey) >= 32)
+            {
+                services.AddSingleton<IUnsubscribeTokenService, UnsubscribeTokenService>();
+            }
+            else
+            {
+                services.AddSingleton<IUnsubscribeTokenService, NullUnsubscribeTokenService>();
+            }
 
             // Repository / persistence
             if (useMockData)
