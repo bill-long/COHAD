@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json.Linq;
 using Web.Models;
 using Web.Services.Cosmos;
@@ -87,7 +89,22 @@ namespace Web.Services.Repositories
                 doc = CosmosLegacyDocumentMapper.ToHomeDocument(home);
             }
 
-            await _homesContainer.UpsertItemAsync(doc, CosmosPartitionKey.None);
+            var requestOptions = new ItemRequestOptions();
+            if (!string.IsNullOrEmpty(home.ETag))
+            {
+                requestOptions.IfMatchEtag = home.ETag;
+            }
+
+            try
+            {
+                await _homesContainer.UpsertItemAsync(doc, CosmosPartitionKey.None, requestOptions);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+            {
+                throw new ConcurrencyConflictException(
+                    $"Home {home.Id} was modified by another request. Retry the operation.", ex);
+            }
+
             return home;
         }
 

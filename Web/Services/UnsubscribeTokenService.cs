@@ -8,6 +8,9 @@ namespace Web.Services
 {
     public class UnsubscribeTokenService : IUnsubscribeTokenService
     {
+        /// <summary>Maximum token age. Tokens older than this are rejected.</summary>
+        internal static readonly TimeSpan MaxTokenAge = TimeSpan.FromDays(365);
+
         private readonly byte[] _keyBytes;
 
         public UnsubscribeTokenService(IOptions<UnsubscribeTokenOptions> options)
@@ -69,11 +72,15 @@ namespace Web.Services
             if (!long.TryParse(parts[2], out var unixSeconds))
                 return null;
 
+            var issued = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
+            if (DateTimeOffset.UtcNow - issued > MaxTokenAge)
+                return null;
+
             return new UnsubscribeTokenPayload
             {
                 HomeId = homeId,
                 Email = parts[1],
-                Issued = DateTimeOffset.FromUnixTimeSeconds(unixSeconds)
+                Issued = issued
             };
         }
 

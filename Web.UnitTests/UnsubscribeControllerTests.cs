@@ -307,5 +307,65 @@ namespace Web.UnitTests
             Assert.False(home.Residents[0].EmailAddresses[0].BoardEmailOptedIn);
             Assert.False(home.EmailAddress.BoardEmailOptedIn);
         }
+
+        // --- Concurrency retry ---
+
+        [Fact]
+        public async Task OneClickUnsubscribe_RetriesOnConcurrencyConflict()
+        {
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+
+            _tokenService.Setup(s => s.ValidateToken("tok"))
+                .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
+
+            // First call returns a home, but upsert throws concurrency conflict
+            var home1 = CreateTestHome(homeId, email, allOptedIn: true);
+            var home2 = CreateTestHome(homeId, email, allOptedIn: true);
+
+            var getCallCount = 0;
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId))
+                .ReturnsAsync(() => getCallCount++ == 0 ? home1 : home2);
+
+            var upsertCallCount = 0;
+            _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>()))
+                .Returns<Home>(h =>
+                {
+                    if (upsertCallCount++ == 0)
+                        throw new ConcurrencyConflictException("conflict", new Exception());
+                    return Task.FromResult(h);
+                });
+
+            var controller = CreateController();
+            var result = await controller.OneClickUnsubscribe("board", "tok");
+
+            Assert.IsType<OkObjectResult>(result);
+            // Should have been called twice (first attempt + retry)
+            Assert.Equal(2, getCallCount);
+            Assert.Equal(2, upsertCallCount);
+            // The second home object should have the preference flipped
+            Assert.False(home2.Residents[0].EmailAddresses[0].BoardEmailOptedIn);
+        }
+
+        [Fact]
+        public async Task OneClickUnsubscribe_ReturnsConflictAfterMaxRetries()
+        {
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+
+            _tokenService.Setup(s => s.ValidateToken("tok"))
+                .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
+
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId))
+                .ReturnsAsync(() => CreateTestHome(homeId, email, allOptedIn: true));
+
+            _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>()))
+                .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));
+
+            var controller = CreateController();
+            var result = await controller.OneClickUnsubscribe("board", "tok");
+
+            Assert.IsType<ConflictObjectResult>(result);
+        }
     }
 }

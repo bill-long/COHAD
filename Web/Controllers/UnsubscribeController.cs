@@ -16,6 +16,8 @@ namespace Web.Controllers
     [AllowAnonymous]
     public class UnsubscribeController : ControllerBase
     {
+        private const int MaxRetries = 3;
+
         private readonly IUnsubscribeTokenService _tokenService;
         private readonly IHomeRepository _homeRepository;
 
@@ -39,20 +41,13 @@ namespace Web.Controllers
             if (!TryGetCategorySetter(category, out var setter))
                 return BadRequest(new { error = $"Unknown category: {category}" });
 
-            var home = await _homeRepository.GetByIdAsync(payload.HomeId);
-            if (home == null)
-                return NotFound(new { error = "Home not found." });
+            return await WithOptimisticRetry(payload, (home, matchingAddresses) =>
+            {
+                foreach (var addr in matchingAddresses)
+                    setter(addr, false);
 
-            var matchingAddresses = FindMatchingEmailAddresses(home, payload.Email);
-            if (matchingAddresses.Count == 0)
-                return NotFound(new { error = "Email address not found on this home." });
-
-            foreach (var addr in matchingAddresses)
-                setter(addr, false);
-
-            await _homeRepository.UpsertAsync(home);
-
-            return Ok(new { message = $"Successfully unsubscribed from {FormatCategoryName(category)} emails." });
+                return Ok(new { message = $"Successfully unsubscribed from {FormatCategoryName(category)} emails." });
+            });
         }
 
         /// <summary>
@@ -98,26 +93,57 @@ namespace Web.Controllers
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing token." });
 
-            var home = await _homeRepository.GetByIdAsync(payload.HomeId);
-            if (home == null)
-                return NotFound(new { error = "Home not found." });
-
-            var matchingAddresses = FindMatchingEmailAddresses(home, payload.Email);
-            if (matchingAddresses.Count == 0)
-                return NotFound(new { error = "Email address not found on this home." });
-
-            foreach (var addr in matchingAddresses)
+            return await WithOptimisticRetry(payload, (home, matchingAddresses) =>
             {
-                addr.BoardEmailOptedIn = dto.BoardEmailOptedIn;
-                addr.WelcomeEmailOptedIn = dto.WelcomeEmailOptedIn;
-                addr.GardenClubEmailOptedIn = dto.GardenClubEmailOptedIn;
-                addr.SocialCommitteeEmailOptedIn = dto.SocialCommitteeEmailOptedIn;
-                addr.SunshineCommitteeEmailOptedIn = dto.SunshineCommitteeEmailOptedIn;
+                foreach (var addr in matchingAddresses)
+                {
+                    addr.BoardEmailOptedIn = dto.BoardEmailOptedIn;
+                    addr.WelcomeEmailOptedIn = dto.WelcomeEmailOptedIn;
+                    addr.GardenClubEmailOptedIn = dto.GardenClubEmailOptedIn;
+                    addr.SocialCommitteeEmailOptedIn = dto.SocialCommitteeEmailOptedIn;
+                    addr.SunshineCommitteeEmailOptedIn = dto.SunshineCommitteeEmailOptedIn;
+                }
+
+                return Ok(new { message = "Preferences updated." });
+            });
+        }
+
+        /// <summary>
+        /// Executes a read-modify-write on the home with optimistic concurrency retry.
+        /// The action receives the freshly-loaded home and matching email addresses,
+        /// applies modifications in place, and returns the IActionResult. If a
+        /// concurrency conflict occurs, the entire cycle is retried.
+        /// </summary>
+        private async Task<IActionResult> WithOptimisticRetry(
+            UnsubscribeTokenPayload payload,
+            Func<Home, List<EmailAddress>, IActionResult> modifyAndRespond)
+        {
+            for (int attempt = 0; attempt < MaxRetries; attempt++)
+            {
+                var home = await _homeRepository.GetByIdAsync(payload.HomeId);
+                if (home == null)
+                    return NotFound(new { error = "Home not found." });
+
+                var matchingAddresses = FindMatchingEmailAddresses(home, payload.Email);
+                if (matchingAddresses.Count == 0)
+                    return NotFound(new { error = "Email address not found on this home." });
+
+                var result = modifyAndRespond(home, matchingAddresses);
+
+                try
+                {
+                    await _homeRepository.UpsertAsync(home);
+                    return result;
+                }
+                catch (ConcurrencyConflictException)
+                {
+                    if (attempt >= MaxRetries - 1)
+                        return Conflict(new { error = "Unable to save preferences due to concurrent updates. Please try again." });
+                    // Otherwise retry with fresh data
+                }
             }
 
-            await _homeRepository.UpsertAsync(home);
-
-            return Ok(new { message = "Preferences updated." });
+            return Conflict(new { error = "Unable to save preferences due to concurrent updates. Please try again." });
         }
 
         private static List<EmailAddress> FindMatchingEmailAddresses(Home home, string email)

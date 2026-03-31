@@ -122,7 +122,8 @@ namespace Web.Services.Cosmos
                 StreetName = doc.Value<string>("StreetName"),
                 PhoneNumber = DeserializeFlexible<PhoneNumber>(doc["PhoneNumber"]),
                 EmailAddress = DeserializeFlexible<EmailAddress>(doc["EmailAddress"]),
-                Residents = DeserializeFlexible<List<Resident>>(doc["Residents"]) ?? new List<Resident>()
+                Residents = DeserializeFlexible<List<Resident>>(doc["Residents"]) ?? new List<Resident>(),
+                ETag = doc.Value<string>("_etag")
             };
         }
 

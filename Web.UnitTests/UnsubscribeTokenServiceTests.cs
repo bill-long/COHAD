@@ -160,5 +160,49 @@ namespace Web.UnitTests
             Assert.DoesNotContain("/", token);
             Assert.DoesNotContain("=", token);
         }
+
+        [Fact]
+        public void ValidateToken_RejectsExpiredToken()
+        {
+            // Manually craft a token with a timestamp older than MaxTokenAge
+            var service = CreateService();
+            var homeId = Guid.NewGuid();
+            var email = "test@example.com";
+            var expiredUnixSeconds = DateTimeOffset.UtcNow
+                .Subtract(UnsubscribeTokenService.MaxTokenAge)
+                .AddDays(-1) // one day past expiry
+                .ToUnixTimeSeconds();
+
+            // Use reflection or craft the token manually
+            var payload = $"{homeId:D}|{email}|{expiredUnixSeconds}";
+            var payloadBytes = System.Text.Encoding.UTF8.GetBytes(payload);
+
+            // Compute HMAC with the test key
+            using var hmac = new System.Security.Cryptography.HMACSHA256(
+                System.Text.Encoding.UTF8.GetBytes(TestKey));
+            var signature = hmac.ComputeHash(payloadBytes);
+
+            var token = Base64UrlEncode(payloadBytes) + "." + Base64UrlEncode(signature);
+
+            Assert.Null(service.ValidateToken(token));
+        }
+
+        [Fact]
+        public void ValidateToken_AcceptsRecentToken()
+        {
+            var service = CreateService();
+            var token = service.GenerateToken(Guid.NewGuid(), "test@example.com");
+
+            // A just-generated token should be valid
+            Assert.NotNull(service.ValidateToken(token));
+        }
+
+        private static string Base64UrlEncode(byte[] data)
+        {
+            return Convert.ToBase64String(data)
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+        }
     }
 }
