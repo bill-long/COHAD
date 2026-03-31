@@ -91,9 +91,12 @@ namespace Web.Services
             {
                 var apiUser = await _userRepository.GetByUniqueIdAsync(
                     Models.User.GetUniqueIdFromClaims(user.Claims));
+                var testHomeId = apiUser.OwnedHomeIds?.Count > 0
+                    ? apiUser.OwnedHomeIds[0]
+                    : Guid.Empty;
                 recipientList = new List<EmailRecipient>
                 {
-                    new EmailRecipient { Email = apiUser.Emails, HomeId = Guid.Empty }
+                    new EmailRecipient { Email = apiUser.Emails, HomeId = testHomeId }
                 };
                 subject = $"Test: {subject}";
             }
