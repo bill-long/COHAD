@@ -19,7 +19,7 @@ namespace Web.Services
         public UnsubscribeTokenService(IOptions<UnsubscribeTokenOptions> options)
         {
             var key = options.Value.SigningKey;
-            if (string.IsNullOrEmpty(key) || Encoding.UTF8.GetByteCount(key) < 32)
+            if (string.IsNullOrWhiteSpace(key) || Encoding.UTF8.GetByteCount(key) < 32)
                 throw new InvalidOperationException(
                     "UnsubscribeToken:SigningKey must be at least 32 UTF-8 bytes.");
 

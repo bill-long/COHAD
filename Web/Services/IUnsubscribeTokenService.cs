@@ -5,13 +5,14 @@ namespace Web.Services
     public interface IUnsubscribeTokenService
     {
         /// <summary>
-        /// Generates an HMAC-signed token encoding the home ID and email address.
+        /// Generates an opaque, AES-GCM-encrypted token for the given home and email.
+        /// The token is a base64url string containing nonce + ciphertext + authentication tag.
         /// </summary>
         string GenerateToken(Guid homeId, string email);
 
         /// <summary>
-        /// Validates a token and extracts the home ID and email address.
-        /// Returns null if the token is invalid or tampered with.
+        /// Decrypts and validates a token, extracting the home ID and email address.
+        /// Returns null if the token is invalid, tampered with, or expired.
         /// </summary>
         UnsubscribeTokenPayload ValidateToken(string token);
     }

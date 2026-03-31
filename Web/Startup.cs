@@ -165,7 +165,7 @@ namespace Web
             // Without a key, the UnsubscribeController still works (returns 400 for all tokens)
             // and EmailService sends emails without unsubscribe headers/footer.
             var unsubKey = Configuration.GetSection("UnsubscribeToken")["SigningKey"];
-            if (!string.IsNullOrEmpty(unsubKey) && Encoding.UTF8.GetByteCount(unsubKey) >= 32)
+            if (!string.IsNullOrWhiteSpace(unsubKey) && Encoding.UTF8.GetByteCount(unsubKey) >= 32)
             {
                 services.AddSingleton<IUnsubscribeTokenService, UnsubscribeTokenService>();
             }
