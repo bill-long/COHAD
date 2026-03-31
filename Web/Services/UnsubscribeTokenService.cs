@@ -11,7 +11,10 @@ namespace Web.Services
         /// <summary>Maximum token age. Tokens older than this are rejected.</summary>
         internal static readonly TimeSpan MaxTokenAge = TimeSpan.FromDays(365);
 
-        private readonly byte[] _keyBytes;
+        private const int NonceSize = 12;  // AES-GCM standard nonce
+        private const int TagSize = 16;    // AES-GCM auth tag
+
+        private readonly byte[] _encryptionKey;
 
         public UnsubscribeTokenService(IOptions<UnsubscribeTokenOptions> options)
         {
@@ -20,21 +23,40 @@ namespace Web.Services
                 throw new InvalidOperationException(
                     "UnsubscribeToken:SigningKey must be at least 32 UTF-8 bytes.");
 
-            _keyBytes = Encoding.UTF8.GetBytes(key);
+            // Derive a fixed 256-bit encryption key from the configurable signing key
+            _encryptionKey = SHA256.HashData(Encoding.UTF8.GetBytes(key));
         }
 
         public string GenerateToken(Guid homeId, string email)
         {
+            return GenerateToken(homeId, email, DateTimeOffset.UtcNow);
+        }
+
+        internal string GenerateToken(Guid homeId, string email, DateTimeOffset issued)
+        {
             if (string.IsNullOrWhiteSpace(email))
                 throw new ArgumentException("Email must not be empty.", nameof(email));
 
-            var unixSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var unixSeconds = issued.ToUnixTimeSeconds();
             var payload = $"{homeId:D}|{email}|{unixSeconds}";
-            var payloadBytes = Encoding.UTF8.GetBytes(payload);
+            var plaintext = Encoding.UTF8.GetBytes(payload);
 
-            var signature = ComputeHmac(payloadBytes);
+            var nonce = new byte[NonceSize];
+            RandomNumberGenerator.Fill(nonce);
 
-            return $"{Base64UrlEncode(payloadBytes)}.{Base64UrlEncode(signature)}";
+            var ciphertext = new byte[plaintext.Length];
+            var tag = new byte[TagSize];
+
+            using var aes = new AesGcm(_encryptionKey, TagSize);
+            aes.Encrypt(nonce, plaintext, ciphertext, tag);
+
+            // Token = base64url(nonce + ciphertext + tag)
+            var combined = new byte[NonceSize + ciphertext.Length + TagSize];
+            nonce.CopyTo(combined, 0);
+            ciphertext.CopyTo(combined, NonceSize);
+            tag.CopyTo(combined, NonceSize + ciphertext.Length);
+
+            return Base64UrlEncode(combined);
         }
 
         public UnsubscribeTokenPayload ValidateToken(string token)
@@ -42,30 +64,39 @@ namespace Web.Services
             if (string.IsNullOrWhiteSpace(token))
                 return null;
 
-            var dotIndex = token.IndexOf('.');
-            if (dotIndex < 1 || dotIndex >= token.Length - 1)
-                return null;
-
-            byte[] payloadBytes, signatureBytes;
+            byte[] combined;
             try
             {
-                payloadBytes = Base64UrlDecode(token.AsSpan(0, dotIndex));
-                signatureBytes = Base64UrlDecode(token.AsSpan(dotIndex + 1));
+                combined = Base64UrlDecode(token.AsSpan());
             }
             catch
             {
                 return null;
             }
 
-            var expectedSignature = ComputeHmac(payloadBytes);
-            if (!CryptographicOperations.FixedTimeEquals(signatureBytes, expectedSignature))
+            if (combined.Length < NonceSize + TagSize + 1)
                 return null;
 
-            var payload = Encoding.UTF8.GetString(payloadBytes);
+            var nonce = combined.AsSpan(0, NonceSize);
+            var ciphertextLength = combined.Length - NonceSize - TagSize;
+            var ciphertext = combined.AsSpan(NonceSize, ciphertextLength);
+            var tag = combined.AsSpan(NonceSize + ciphertextLength, TagSize);
+
+            var plaintext = new byte[ciphertextLength];
+            try
+            {
+                using var aes = new AesGcm(_encryptionKey, TagSize);
+                aes.Decrypt(nonce, ciphertext, tag, plaintext);
+            }
+            catch (CryptographicException)
+            {
+                return null;
+            }
+
+            var payload = Encoding.UTF8.GetString(plaintext);
 
             // Parse as {guid}|{email}|{unixSeconds}. Use first/last '|' positions
-            // so that '|' characters within the email local-part don't break parsing
-            // (GUIDs and unix timestamps never contain '|').
+            // so that '|' characters within the email local-part don't break parsing.
             var firstPipe = payload.IndexOf('|');
             var lastPipe = payload.LastIndexOf('|');
             if (firstPipe < 0 || lastPipe <= firstPipe)
@@ -92,12 +123,6 @@ namespace Web.Services
                 Email = emailPart,
                 Issued = issued
             };
-        }
-
-        private byte[] ComputeHmac(byte[] data)
-        {
-            using var hmac = new HMACSHA256(_keyBytes);
-            return hmac.ComputeHash(data);
         }
 
         private static string Base64UrlEncode(byte[] data)

@@ -122,7 +122,7 @@ namespace Web.Services
                 var debugToken = (debugRecipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
                     ? _tokenService.GenerateToken(debugRecipient.HomeId, debugRecipient.Email)
                     : null;
-                var debugFooter = BuildUnsubscribeFooter(category, categoryDisplayName, debugToken);
+                var debugFooter = BuildUnsubscribeFooter(categoryDisplayName, debugToken);
                 var debugMessage = new MimeMessage();
                 debugMessage.From.Add(new MailboxAddress(fromDisplay, fromEmail));
                 debugMessage.Subject = $"[DEBUG {recipientList.Count} recipients] {subject}";
@@ -148,7 +148,7 @@ namespace Web.Services
                         ? _tokenService.GenerateToken(recipient.HomeId, recipient.Email)
                         : null;
 
-                    var footer = BuildUnsubscribeFooter(category, categoryDisplayName, token);
+                    var footer = BuildUnsubscribeFooter(categoryDisplayName, token);
                     var htmlWithFooter = imageData.ProcessedHtml + footer;
 
                     var message = new MimeMessage();
@@ -286,7 +286,7 @@ namespace Web.Services
             return seen.Values.ToList();
         }
 
-        private string BuildUnsubscribeFooter(string category, string categoryDisplayName, string token)
+        private string BuildUnsubscribeFooter(string categoryDisplayName, string token)
         {
             if (string.IsNullOrEmpty(_appBaseUrl) || string.IsNullOrEmpty(token))
                 return "";

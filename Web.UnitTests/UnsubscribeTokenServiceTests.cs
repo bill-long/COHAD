@@ -24,11 +24,14 @@ namespace Web.UnitTests
         }
 
         [Fact]
-        public void GenerateToken_ContainsDotSeparator()
+        public void GenerateToken_TokenIsOpaque()
         {
             var service = CreateService();
             var token = service.GenerateToken(Guid.NewGuid(), "test@example.com");
-            Assert.Contains('.', token);
+            // Token should not contain the email in plaintext (it's encrypted)
+            Assert.DoesNotContain("test@example.com", token);
+            // No dot separator (single base64url blob, not payload.signature)
+            Assert.DoesNotContain(".", token);
         }
 
         [Fact]
@@ -67,30 +70,14 @@ namespace Web.UnitTests
         }
 
         [Fact]
-        public void ValidateToken_RejectsTamperedPayload()
+        public void ValidateToken_RejectsTamperedToken()
         {
             var service = CreateService();
             var token = service.GenerateToken(Guid.NewGuid(), "test@example.com");
 
-            // Flip a character in the payload portion (before the dot)
-            var dotIndex = token.IndexOf('.');
+            // Flip a character — AES-GCM authentication will fail
             var chars = token.ToCharArray();
             chars[0] = chars[0] == 'A' ? 'B' : 'A';
-            var tampered = new string(chars);
-
-            Assert.Null(service.ValidateToken(tampered));
-        }
-
-        [Fact]
-        public void ValidateToken_RejectsTamperedSignature()
-        {
-            var service = CreateService();
-            var token = service.GenerateToken(Guid.NewGuid(), "test@example.com");
-
-            var dotIndex = token.IndexOf('.');
-            var chars = token.ToCharArray();
-            var sigIdx = dotIndex + 1;
-            chars[sigIdx] = chars[sigIdx] == 'A' ? 'B' : 'A';
             var tampered = new string(chars);
 
             Assert.Null(service.ValidateToken(tampered));
@@ -157,12 +144,19 @@ namespace Web.UnitTests
         }
 
         [Fact]
-        public void GenerateToken_ProducesDifferentTokensForDifferentInputs()
+        public void GenerateToken_ProducesDifferentTokensForSameInputs()
         {
             var service = CreateService();
-            var token1 = service.GenerateToken(Guid.NewGuid(), "a@example.com");
-            var token2 = service.GenerateToken(Guid.NewGuid(), "b@example.com");
+            var homeId = Guid.NewGuid();
+            // Same inputs produce different tokens due to random nonce
+            var token1 = service.GenerateToken(homeId, "a@example.com");
+            var token2 = service.GenerateToken(homeId, "a@example.com");
             Assert.NotEqual(token1, token2);
+            // But both validate to the same data
+            var p1 = service.ValidateToken(token1);
+            var p2 = service.ValidateToken(token2);
+            Assert.Equal(p1.HomeId, p2.HomeId);
+            Assert.Equal(p1.Email, p2.Email);
         }
 
         [Fact]
@@ -179,26 +173,12 @@ namespace Web.UnitTests
         [Fact]
         public void ValidateToken_RejectsExpiredToken()
         {
-            // Manually craft a token with a timestamp older than MaxTokenAge
             var service = CreateService();
-            var homeId = Guid.NewGuid();
-            var email = "test@example.com";
-            var expiredUnixSeconds = DateTimeOffset.UtcNow
+            var expired = DateTimeOffset.UtcNow
                 .Subtract(UnsubscribeTokenService.MaxTokenAge)
-                .AddDays(-1) // one day past expiry
-                .ToUnixTimeSeconds();
+                .AddDays(-1);
 
-            // Use reflection or craft the token manually
-            var payload = $"{homeId:D}|{email}|{expiredUnixSeconds}";
-            var payloadBytes = System.Text.Encoding.UTF8.GetBytes(payload);
-
-            // Compute HMAC with the test key
-            using var hmac = new System.Security.Cryptography.HMACSHA256(
-                System.Text.Encoding.UTF8.GetBytes(TestKey));
-            var signature = hmac.ComputeHash(payloadBytes);
-
-            var token = Base64UrlEncode(payloadBytes) + "." + Base64UrlEncode(signature);
-
+            var token = service.GenerateToken(Guid.NewGuid(), "test@example.com", expired);
             Assert.Null(service.ValidateToken(token));
         }
 
@@ -207,8 +187,6 @@ namespace Web.UnitTests
         {
             var service = CreateService();
             var token = service.GenerateToken(Guid.NewGuid(), "test@example.com");
-
-            // A just-generated token should be valid
             Assert.NotNull(service.ValidateToken(token));
         }
 
@@ -216,29 +194,10 @@ namespace Web.UnitTests
         public void ValidateToken_RejectsFutureTimestamp()
         {
             var service = CreateService();
-            var homeId = Guid.NewGuid();
-            var email = "test@example.com";
-            // 10 minutes in the future (beyond the 5-minute clock-skew allowance)
-            var futureUnixSeconds = DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds();
+            var future = DateTimeOffset.UtcNow.AddMinutes(10);
 
-            var payload = $"{homeId:D}|{email}|{futureUnixSeconds}";
-            var payloadBytes = System.Text.Encoding.UTF8.GetBytes(payload);
-
-            using var hmac = new System.Security.Cryptography.HMACSHA256(
-                System.Text.Encoding.UTF8.GetBytes(TestKey));
-            var signature = hmac.ComputeHash(payloadBytes);
-
-            var token = Base64UrlEncode(payloadBytes) + "." + Base64UrlEncode(signature);
-
+            var token = service.GenerateToken(Guid.NewGuid(), "test@example.com", future);
             Assert.Null(service.ValidateToken(token));
-        }
-
-        private static string Base64UrlEncode(byte[] data)
-        {
-            return Convert.ToBase64String(data)
-                .TrimEnd('=')
-                .Replace('+', '-')
-                .Replace('/', '_');
         }
     }
 }

@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { Location } from '@angular/common';
 import { EmailPreferencesService } from '../../services/email-preferences.service';
 import { EmailPreferences } from '../../models';
 
@@ -27,6 +28,7 @@ export class EmailPreferencesComponent implements OnInit {
 
   constructor(
     private route: ActivatedRoute,
+    private location: Location,
     private prefsService: EmailPreferencesService
   ) { }
 
@@ -37,6 +39,10 @@ export class EmailPreferencesComponent implements OnInit {
       this.errorMessage = 'No token provided. Please use the link from your email.';
       return;
     }
+
+    // Remove the token from the browser address bar to reduce leakage risk
+    // (browser history, referrer headers, copy/paste). Keep it in memory for API calls.
+    this.location.replaceState('/email-preferences');
 
     this.prefsService.getPreferences(this.token).subscribe({
       next: (data) => {
