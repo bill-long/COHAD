@@ -370,7 +370,7 @@ namespace Web.Services
         /// </summary>
         private MimeEntity ConvertImageFormat(string htmlBody)
         {
-            var extracted = ExtractInlineImages(htmlBody);
+            var extracted = ExtractInlineImages(htmlBody ?? string.Empty);
             return BuildBodyWithImages(extracted.ProcessedHtml, extracted.Images);
         }
 
