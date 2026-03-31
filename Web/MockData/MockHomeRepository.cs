@@ -176,7 +176,9 @@ namespace Web.MockData
 
                 _homes[home.Id] = CloneHome(home);
                 _versions[home.Id] = (_versions.TryGetValue(home.Id, out var v) ? v : 0) + 1;
-                return Task.FromResult(CloneHome(_homes[home.Id]));
+                var clone = CloneHome(_homes[home.Id]);
+                clone.ETag = _versions[home.Id].ToString();
+                return Task.FromResult(clone);
             }
         }
 

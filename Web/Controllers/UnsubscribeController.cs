@@ -32,8 +32,15 @@ namespace Web.Controllers
         /// "List-Unsubscribe=One-Click" to the URL from the List-Unsubscribe header.
         /// </summary>
         [HttpPost("unsubscribe/{category}")]
-        public async Task<IActionResult> OneClickUnsubscribe(string category, [FromQuery] string token)
+        [Consumes("application/x-www-form-urlencoded")]
+        public async Task<IActionResult> OneClickUnsubscribe(
+            string category,
+            [FromQuery] string token,
+            [FromForm(Name = "List-Unsubscribe")] string listUnsubscribe)
         {
+            if (!string.Equals(listUnsubscribe, "One-Click", StringComparison.Ordinal))
+                return BadRequest(new { error = "Invalid or missing List-Unsubscribe confirmation." });
+
             var payload = _tokenService.ValidateToken(token);
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing token." });
@@ -92,6 +99,9 @@ namespace Web.Controllers
             var payload = _tokenService.ValidateToken(token);
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing token." });
+
+            if (dto == null)
+                return BadRequest(new { error = "Request body is required." });
 
             return await WithOptimisticRetry(payload, (home, matchingAddresses) =>
             {

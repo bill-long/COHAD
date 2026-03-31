@@ -97,7 +97,8 @@ namespace Web.Services.Repositories
 
             try
             {
-                await _homesContainer.UpsertItemAsync(doc, CosmosPartitionKey.None, requestOptions);
+                var response = await _homesContainer.UpsertItemAsync(doc, CosmosPartitionKey.None, requestOptions);
+                home.ETag = response.Headers.ETag;
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
             {

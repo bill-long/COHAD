@@ -10,7 +10,7 @@ namespace Web.MockData
     public sealed class NoOpEmailService : IEmailService
     {
         public Task SendEmail(string fromEmail, string fromDisplay, Web.UpdateModels.EmailInfo emailInfo,
-            Func<EmailAddress, bool> recipientFilter, string bccDisplayName,
+            Func<EmailAddress, bool> recipientFilter,
             string category, ClaimsPrincipal user)
         {
             return Task.CompletedTask;

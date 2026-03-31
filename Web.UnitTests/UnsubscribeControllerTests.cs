@@ -68,7 +68,16 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken("bad")).Returns((UnsubscribeTokenPayload?)null);
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "bad");
+            var result = await controller.OneClickUnsubscribe("board", "bad", "One-Click");
+
+            Assert.IsType<BadRequestObjectResult>(result);
+        }
+
+        [Fact]
+        public async Task OneClickUnsubscribe_MissingFormBody_Returns400()
+        {
+            var controller = CreateController();
+            var result = await controller.OneClickUnsubscribe("board", "tok", null!);
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -81,7 +90,7 @@ namespace Web.UnitTests
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = "j@x.com" });
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("unknown", "tok");
+            var result = await controller.OneClickUnsubscribe("unknown", "tok", "One-Click");
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -95,7 +104,7 @@ namespace Web.UnitTests
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync((Home?)null);
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok");
+            var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
 
             Assert.IsType<NotFoundObjectResult>(result);
         }
@@ -118,7 +127,7 @@ namespace Web.UnitTests
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe(category, "tok");
+            var result = await controller.OneClickUnsubscribe(category, "tok", "One-Click");
 
             Assert.IsType<OkObjectResult>(result);
             _homeRepository.Verify(r => r.UpsertAsync(home), Times.Once);
@@ -145,7 +154,7 @@ namespace Web.UnitTests
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok");
+            var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
 
             Assert.IsType<NotFoundObjectResult>(result);
         }
@@ -162,7 +171,7 @@ namespace Web.UnitTests
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok");
+            var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
 
             Assert.IsType<OkObjectResult>(result);
             Assert.False(home.Residents[0].EmailAddresses[0].BoardEmailOptedIn);
@@ -215,6 +224,18 @@ namespace Web.UnitTests
 
             var controller = CreateController();
             var result = await controller.UpdatePreferences("bad", new EmailPreferencesDto());
+
+            Assert.IsType<BadRequestObjectResult>(result);
+        }
+
+        [Fact]
+        public async Task UpdatePreferences_NullBody_Returns400()
+        {
+            _tokenService.Setup(s => s.ValidateToken("tok"))
+                .Returns(new UnsubscribeTokenPayload { HomeId = Guid.NewGuid(), Email = "x@x.com" });
+
+            var controller = CreateController();
+            var result = await controller.UpdatePreferences("tok", null!);
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -337,7 +358,7 @@ namespace Web.UnitTests
                 });
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok");
+            var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
 
             Assert.IsType<OkObjectResult>(result);
             // Should have been called twice (first attempt + retry)
@@ -363,7 +384,7 @@ namespace Web.UnitTests
                 .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok");
+            var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
 
             Assert.IsType<ConflictObjectResult>(result);
         }

@@ -25,7 +25,7 @@ namespace Web.Services
         /// </summary>
         /// <param name="category">Unsubscribe category key (e.g. "board", "welcome").</param>
         Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo,
-            Func<EmailAddress, bool> recipientFilter, string bccDisplayName,
+            Func<EmailAddress, bool> recipientFilter,
             string category, ClaimsPrincipal user);
 
         /// <summary>
@@ -63,12 +63,12 @@ namespace Web.Services
         }
 
         public async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo,
-            Func<EmailAddress, bool> recipientFilter, string bccDisplayName,
+            Func<EmailAddress, bool> recipientFilter,
             string category, ClaimsPrincipal user)
         {
             var recipients = await GetAllEmailsMatchingFilter(recipientFilter);
             await SendPerRecipientEmails(fromEmail, fromDisplay, emailInfo, recipients,
-                bccDisplayName, category, user);
+                category, user);
         }
 
         public async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo,
@@ -82,7 +82,7 @@ namespace Web.Services
         /// </summary>
         private async Task SendPerRecipientEmails(string fromEmail, string fromDisplay,
             EmailInfo emailInfo, List<EmailRecipient> recipients,
-            string bccDisplayName, string category, ClaimsPrincipal user)
+            string category, ClaimsPrincipal user)
         {
             var subject = emailInfo.Subject;
             List<EmailRecipient> recipientList = recipients;
@@ -106,17 +106,44 @@ namespace Web.Services
             var categoryDisplayName = Controllers.UnsubscribeController.CategoryDisplayNames
                 .TryGetValue(category ?? "", out var name) ? name : category;
 
-            var memoryStream = new MemoryStream();
-            var logger = new ProtocolLogger(memoryStream);
+            var protocolLog = new MemoryStream();
+            var logger = new ProtocolLogger(protocolLog);
             try
             {
                 using var smtpClient = new SmtpClient(logger);
-                smtpClient.Connect(_options.SmtpHost, 587,
+                await smtpClient.ConnectAsync(_options.SmtpHost, 587,
                     MailKit.Security.SecureSocketOptions.StartTls);
-                smtpClient.Authenticate(_options.SmtpUser, _options.SmtpPassword);
+                await smtpClient.AuthenticateAsync(_options.SmtpUser, _options.SmtpPassword);
 
+#if DEBUG
+                // In DEBUG, send a single representative message to test addresses
+                // instead of one per recipient, to avoid spamming debug inboxes.
+                var debugRecipient = recipientList[0];
+                var debugToken = (debugRecipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
+                    ? _tokenService.GenerateToken(debugRecipient.HomeId, debugRecipient.Email)
+                    : null;
+                var debugFooter = BuildUnsubscribeFooter(category, categoryDisplayName, debugToken);
+                var debugMessage = new MimeMessage();
+                debugMessage.From.Add(new MailboxAddress(fromDisplay, fromEmail));
+                debugMessage.Subject = $"[DEBUG {recipientList.Count} recipients] {subject}";
+                debugMessage.ReplyTo.Add(new MailboxAddress(fromDisplay, fromEmail));
+                debugMessage.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
+                debugMessage.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
+                debugMessage.To.Add(new GroupAddress("Private Recipients"));
+                debugMessage.Body = BuildBodyWithImages(imageData.ProcessedHtml + debugFooter, imageData.Images);
+                if (debugToken != null && !string.IsNullOrEmpty(_appBaseUrl))
+                {
+                    var unsubUrl = $"{_appBaseUrl}/api/email/unsubscribe/{category}?token={Uri.EscapeDataString(debugToken)}";
+                    debugMessage.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
+                    debugMessage.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+                }
+                await smtpClient.SendAsync(debugMessage);
+#else
                 foreach (var recipient in recipientList)
                 {
+                    // Reset protocol log between messages to bound memory usage
+                    protocolLog.SetLength(0);
+
                     var token = (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
                         ? _tokenService.GenerateToken(recipient.HomeId, recipient.Email)
                         : null;
@@ -128,19 +155,10 @@ namespace Web.Services
                     message.From.Add(new MailboxAddress(fromDisplay, fromEmail));
                     message.Subject = subject;
                     message.ReplyTo.Add(new MailboxAddress(fromDisplay, fromEmail));
-
-#if DEBUG
-                    message.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
-                    message.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
-                    message.To.Add(new GroupAddress("Private Recipients"));
-#else
                     message.To.Add(new MailboxAddress("", recipient.Email));
-#endif
 
-                    // Build body with shared images
                     message.Body = BuildBodyWithImages(htmlWithFooter, imageData.Images);
 
-                    // Add List-Unsubscribe headers (RFC 8058) if we have a token
                     if (token != null && !string.IsNullOrEmpty(_appBaseUrl))
                     {
                         var unsubUrl = $"{_appBaseUrl}/api/email/unsubscribe/{category}?token={Uri.EscapeDataString(token)}";
@@ -148,14 +166,15 @@ namespace Web.Services
                         message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                     }
 
-                    smtpClient.Send(message);
+                    await smtpClient.SendAsync(message);
                 }
+#endif
 
-                smtpClient.Disconnect(true);
+                await smtpClient.DisconnectAsync(true);
             }
             catch (Exception ex)
             {
-                SendErrorReport(memoryStream, ex);
+                SendErrorReport(protocolLog, ex);
                 throw;
             }
         }
