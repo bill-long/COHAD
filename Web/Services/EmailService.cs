@@ -101,9 +101,9 @@ namespace Web.Services
             if (recipientList.Count == 0)
                 return;
 
-            // Extract images once (shared across all per-recipient messages)
-            var imageData = ExtractInlineImages(emailInfo.HtmlBody);
-            var categoryDisplayName = Controllers.UnsubscribeController.CategoryDisplayNames
+            var htmlBody = emailInfo.HtmlBody ?? string.Empty;
+            var imageData = ExtractInlineImages(htmlBody);
+            var categoryDisplayName = EmailSubscriptionCategories.DisplayNames
                 .TryGetValue(category ?? "", out var name) ? name : category;
 
             var protocolLog = new MemoryStream();

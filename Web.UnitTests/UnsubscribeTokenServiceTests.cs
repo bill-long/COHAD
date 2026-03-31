@@ -197,6 +197,27 @@ namespace Web.UnitTests
             Assert.NotNull(service.ValidateToken(token));
         }
 
+        [Fact]
+        public void ValidateToken_RejectsFutureTimestamp()
+        {
+            var service = CreateService();
+            var homeId = Guid.NewGuid();
+            var email = "test@example.com";
+            // 10 minutes in the future (beyond the 5-minute clock-skew allowance)
+            var futureUnixSeconds = DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds();
+
+            var payload = $"{homeId:D}|{email}|{futureUnixSeconds}";
+            var payloadBytes = System.Text.Encoding.UTF8.GetBytes(payload);
+
+            using var hmac = new System.Security.Cryptography.HMACSHA256(
+                System.Text.Encoding.UTF8.GetBytes(TestKey));
+            var signature = hmac.ComputeHash(payloadBytes);
+
+            var token = Base64UrlEncode(payloadBytes) + "." + Base64UrlEncode(signature);
+
+            Assert.Null(service.ValidateToken(token));
+        }
+
         private static string Base64UrlEncode(byte[] data)
         {
             return Convert.ToBase64String(data)

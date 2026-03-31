@@ -73,7 +73,8 @@ namespace Web.Services
                 return null;
 
             var issued = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
-            if (DateTimeOffset.UtcNow - issued > MaxTokenAge)
+            var age = DateTimeOffset.UtcNow - issued;
+            if (age < TimeSpan.FromMinutes(-5) || age > MaxTokenAge)
                 return null;
 
             return new UnsubscribeTokenPayload

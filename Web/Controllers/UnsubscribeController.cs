@@ -45,7 +45,7 @@ namespace Web.Controllers
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing token." });
 
-            if (!TryGetCategorySetter(category, out var setter))
+            if (!EmailSubscriptionCategories.TryGetCategorySetter(category, out var setter))
                 return BadRequest(new { error = $"Unknown category: {category}" });
 
             return await WithOptimisticRetry(payload, (home, matchingAddresses) =>
@@ -53,7 +53,7 @@ namespace Web.Controllers
                 foreach (var addr in matchingAddresses)
                     setter(addr, false);
 
-                return Ok(new { message = $"Successfully unsubscribed from {FormatCategoryName(category)} emails." });
+                return Ok(new { message = $"Successfully unsubscribed from {EmailSubscriptionCategories.DisplayNames.GetValueOrDefault(category, category)} emails." });
             });
         }
 
@@ -186,45 +186,6 @@ namespace Web.Controllers
             }
 
             return matches;
-        }
-
-        internal static readonly Dictionary<string, string> CategoryDisplayNames = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["board"] = "Board",
-            ["welcome"] = "Welcome Committee",
-            ["garden"] = "Garden Club",
-            ["social"] = "Social Committee",
-            ["sunshine"] = "Sunshine Committee"
-        };
-
-        private static string FormatCategoryName(string category)
-        {
-            return CategoryDisplayNames.TryGetValue(category, out var name) ? name : category;
-        }
-
-        private static bool TryGetCategorySetter(string category, out Action<EmailAddress, bool> setter)
-        {
-            switch (category?.ToLowerInvariant())
-            {
-                case "board":
-                    setter = (a, v) => a.BoardEmailOptedIn = v;
-                    return true;
-                case "welcome":
-                    setter = (a, v) => a.WelcomeEmailOptedIn = v;
-                    return true;
-                case "garden":
-                    setter = (a, v) => a.GardenClubEmailOptedIn = v;
-                    return true;
-                case "social":
-                    setter = (a, v) => a.SocialCommitteeEmailOptedIn = v;
-                    return true;
-                case "sunshine":
-                    setter = (a, v) => a.SunshineCommitteeEmailOptedIn = v;
-                    return true;
-                default:
-                    setter = null;
-                    return false;
-            }
         }
     }
 }
