@@ -92,9 +92,10 @@ namespace Web.Controllers
 
         /// <summary>
         /// Saves updated email preferences for the token's home + email.
+        /// Only fields present in the request body are updated; omitted fields are left unchanged.
         /// </summary>
         [HttpPut("preferences")]
-        public async Task<IActionResult> UpdatePreferences([FromQuery] string token, [FromBody] EmailPreferencesDto dto)
+        public async Task<IActionResult> UpdatePreferences([FromQuery] string token, [FromBody] UpdateEmailPreferencesDto dto)
         {
             var payload = _tokenService.ValidateToken(token);
             if (payload == null)
@@ -107,11 +108,16 @@ namespace Web.Controllers
             {
                 foreach (var addr in matchingAddresses)
                 {
-                    addr.BoardEmailOptedIn = dto.BoardEmailOptedIn;
-                    addr.WelcomeEmailOptedIn = dto.WelcomeEmailOptedIn;
-                    addr.GardenClubEmailOptedIn = dto.GardenClubEmailOptedIn;
-                    addr.SocialCommitteeEmailOptedIn = dto.SocialCommitteeEmailOptedIn;
-                    addr.SunshineCommitteeEmailOptedIn = dto.SunshineCommitteeEmailOptedIn;
+                    if (dto.BoardEmailOptedIn.HasValue)
+                        addr.BoardEmailOptedIn = dto.BoardEmailOptedIn.Value;
+                    if (dto.WelcomeEmailOptedIn.HasValue)
+                        addr.WelcomeEmailOptedIn = dto.WelcomeEmailOptedIn.Value;
+                    if (dto.GardenClubEmailOptedIn.HasValue)
+                        addr.GardenClubEmailOptedIn = dto.GardenClubEmailOptedIn.Value;
+                    if (dto.SocialCommitteeEmailOptedIn.HasValue)
+                        addr.SocialCommitteeEmailOptedIn = dto.SocialCommitteeEmailOptedIn.Value;
+                    if (dto.SunshineCommitteeEmailOptedIn.HasValue)
+                        addr.SunshineCommitteeEmailOptedIn = dto.SunshineCommitteeEmailOptedIn.Value;
                 }
 
                 return Ok(new { message = "Preferences updated." });

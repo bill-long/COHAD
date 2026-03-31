@@ -106,5 +106,5 @@ When `appInsightsConnectionString` is empty, the service becomes a complete no-o
 - `Web.UnitTests` uses `InternalsVisibleTo` to access internal types — keep internal where appropriate.
 - `ng lint` is not configured and will error. Use `ng build` for TypeScript type-checking.
 - `MockJwt__SigningKey` must be ≥32 UTF-8 bytes for HS256. `appsettings.MockData.json` intentionally leaves it empty; supply via env var or `dotnet user-secrets`.
-- `UnsubscribeToken__SigningKey` must be ≥32 UTF-8 bytes for HMAC-SHA256. Without it, emails are sent without unsubscribe headers/footer (graceful degradation). Supply via env var or `dotnet user-secrets set "UnsubscribeToken:SigningKey" "..."` in the `Web` project.
+- `UnsubscribeToken__SigningKey` must be ≥32 UTF-8 bytes; it is used to derive an AES-GCM encryption key (via SHA-256) for unsubscribe tokens. Without it, emails are sent without unsubscribe headers/footer (graceful degradation). Supply via env var or `dotnet user-secrets set "UnsubscribeToken:SigningKey" "..."` in the `Web` project.
 - `AppBaseUrl` must be set (e.g. `https://www.cohad.org`) for unsubscribe links in emails. Without it, no footer or headers are added.

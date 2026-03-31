@@ -10,7 +10,7 @@ namespace Web.Services
     /// </summary>
     public static class EmailSubscriptionCategories
     {
-        public static readonly Dictionary<string, string> DisplayNames = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, string> DisplayNamesMap = new(StringComparer.OrdinalIgnoreCase)
         {
             ["board"] = "Board",
             ["welcome"] = "Welcome Committee",
@@ -18,6 +18,8 @@ namespace Web.Services
             ["social"] = "Social Committee",
             ["sunshine"] = "Sunshine Committee"
         };
+
+        public static readonly IReadOnlyDictionary<string, string> DisplayNames = DisplayNamesMap;
 
         public static bool TryGetCategorySetter(string category, out Action<EmailAddress, bool> setter)
         {

@@ -223,7 +223,7 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken("bad")).Returns((UnsubscribeTokenPayload?)null);
 
             var controller = CreateController();
-            var result = await controller.UpdatePreferences("bad", new EmailPreferencesDto());
+            var result = await controller.UpdatePreferences("bad", new UpdateEmailPreferencesDto());
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -235,7 +235,7 @@ namespace Web.UnitTests
                 .Returns(new UnsubscribeTokenPayload { HomeId = Guid.NewGuid(), Email = "x@x.com" });
 
             var controller = CreateController();
-            var result = await controller.UpdatePreferences("tok", null!);
+            var result = await controller.UpdatePreferences("tok", (UpdateEmailPreferencesDto)null!);
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -253,7 +253,7 @@ namespace Web.UnitTests
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
 
             var controller = CreateController();
-            var dto = new EmailPreferencesDto
+            var dto = new UpdateEmailPreferencesDto
             {
                 BoardEmailOptedIn = false,
                 WelcomeEmailOptedIn = true,
@@ -321,7 +321,7 @@ namespace Web.UnitTests
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
 
             var controller = CreateController();
-            var dto = new EmailPreferencesDto { BoardEmailOptedIn = false };
+            var dto = new UpdateEmailPreferencesDto { BoardEmailOptedIn = false };
             await controller.UpdatePreferences("tok", dto);
 
             // Both the resident and home-level email should be updated
