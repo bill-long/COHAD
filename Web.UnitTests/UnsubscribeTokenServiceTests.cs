@@ -142,6 +142,21 @@ namespace Web.UnitTests
         }
 
         [Fact]
+        public void ValidateToken_HandlesEmailContainingPipeCharacter()
+        {
+            var service = CreateService();
+            var email = "user|pipe@example.com";
+            var homeId = Guid.NewGuid();
+
+            var token = service.GenerateToken(homeId, email);
+            var payload = service.ValidateToken(token);
+
+            Assert.NotNull(payload);
+            Assert.Equal(email, payload.Email);
+            Assert.Equal(homeId, payload.HomeId);
+        }
+
+        [Fact]
         public void GenerateToken_ProducesDifferentTokensForDifferentInputs()
         {
             var service = CreateService();

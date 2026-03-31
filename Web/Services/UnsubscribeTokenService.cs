@@ -62,14 +62,23 @@ namespace Web.Services
                 return null;
 
             var payload = Encoding.UTF8.GetString(payloadBytes);
-            var parts = payload.Split('|');
-            if (parts.Length != 3)
+
+            // Parse as {guid}|{email}|{unixSeconds}. Use first/last '|' positions
+            // so that '|' characters within the email local-part don't break parsing
+            // (GUIDs and unix timestamps never contain '|').
+            var firstPipe = payload.IndexOf('|');
+            var lastPipe = payload.LastIndexOf('|');
+            if (firstPipe < 0 || lastPipe <= firstPipe)
                 return null;
 
-            if (!Guid.TryParse(parts[0], out var homeId))
+            var guidPart = payload[..firstPipe];
+            var emailPart = payload[(firstPipe + 1)..lastPipe];
+            var timestampPart = payload[(lastPipe + 1)..];
+
+            if (!Guid.TryParse(guidPart, out var homeId))
                 return null;
 
-            if (!long.TryParse(parts[2], out var unixSeconds))
+            if (!long.TryParse(timestampPart, out var unixSeconds))
                 return null;
 
             var issued = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
@@ -80,7 +89,7 @@ namespace Web.Services
             return new UnsubscribeTokenPayload
             {
                 HomeId = homeId,
-                Email = parts[1],
+                Email = emailPart,
                 Issued = issued
             };
         }
