@@ -438,6 +438,7 @@ namespace Web.Services
                 recipient.Error = null;
 
                 RecalculateCounts(job);
+                ct.ThrowIfCancellationRequested();
                 if (!await TryPersistJobAsync(repo, job))
                 {
                     stoppedEarly = true;
