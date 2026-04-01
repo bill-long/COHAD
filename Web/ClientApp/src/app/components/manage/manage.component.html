@@ -9,6 +9,9 @@
         <a mat-tab-link *ngIf="manageEmailVisible$ | async"
            routerLink="send-email" routerLinkActive #rla3="routerLinkActive"
            [active]="rla3.isActive">Send Email</a>
+        <a mat-tab-link *ngIf="manageEmailVisible$ | async"
+           routerLink="email-jobs" routerLinkActive #rla3b="routerLinkActive"
+           [active]="rla3b.isActive">Email Jobs</a>
         <a mat-tab-link *ngIf="printDirectoryVisible$ | async"
            routerLink="print" routerLinkActive #rla4="routerLinkActive"
            [active]="rla4.isActive">Print Directory</a>

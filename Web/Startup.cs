@@ -154,9 +154,16 @@ namespace Web
                 options.AddPolicy("Board", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Board)));
                 options.AddPolicy("SocialCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.SocialCommittee)));
                 options.AddPolicy("SunshineCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.SunshineCommittee)));
+
+                // Any role that can send committee emails — used for email job management endpoints and the SignalR hub.
+                options.AddPolicy("EmailSender", policy => policy.Requirements.Add(
+                    new AnyRoleAuthorizationRequirement(
+                        User.Role.Administrator, User.Role.Board, User.Role.WelcomeCommittee,
+                        User.Role.GardenClub, User.Role.SocialCommittee, User.Role.SunshineCommittee)));
             });
 
             services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();
+            services.AddScoped<IAuthorizationHandler, AnyRoleAuthorizationHandler>();
             services.AddSingleton<IOgThumbnailService, SkiaSharpOgThumbnailService>();
             services.AddSingleton<IImageConversionService, SkiaSharpImageConversionService>();
             services.AddSingleton<IImageUploadHelper, ImageUploadHelper>();
@@ -194,6 +201,7 @@ namespace Web
                 services.AddSingleton<IYouthServiceListingRepository, MockYouthServiceListingRepository>();
                 services.AddSingleton<IDocumentFileStore, MockDocumentFileStore>();
                 services.AddScoped<IEmailService, NoOpEmailService>();
+                services.AddSingleton<IEmailJobRepository, MockEmailJobRepository>();
             }
             else
             {
@@ -234,7 +242,14 @@ namespace Web
                 services.AddSingleton<IDocumentFileStore, AzureBlobDocumentFileStore>();
 
                 services.AddScoped<IEmailService, EmailService>();
+                services.AddScoped<IEmailJobRepository>(sp =>
+                    new CosmosEmailJobRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "EmailJobs")));
             }
+
+            // Email job queue and background processor (shared across environments)
+            services.AddSingleton<EmailJobQueue>();
+            services.AddSingleton<EmailJobProcessor>();
+            services.AddHostedService(sp => sp.GetRequiredService<EmailJobProcessor>());
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -298,6 +313,7 @@ namespace Web
                 endpoints.MapEventDeepLinkOpenGraph(env);
                 endpoints.MapBlogDeepLinkOpenGraph(env);
                 endpoints.MapHub<VendorFlagNotificationsHub>("/hubs/vendor-flags");
+                endpoints.MapHub<EmailJobHub>("/hubs/email-jobs");
                 endpoints.MapControllerRoute(
                     name: "default",
                     pattern: "{controller}/{action=Index}/{id?}");

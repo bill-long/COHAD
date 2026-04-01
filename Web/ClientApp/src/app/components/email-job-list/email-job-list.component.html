@@ -1,0 +1,56 @@
+<div class="email-job-list-page">
+    <mat-card>
+        <mat-card-content>
+            <h2 class="page-title">Email Jobs</h2>
+
+            <div *ngIf="loading" class="loading-state">
+                <mat-spinner diameter="32"></mat-spinner>
+                <span>Loading jobs…</span>
+            </div>
+
+            <div *ngIf="errorText != null" class="cohad-inline-alert cohad-inline-alert--error">
+                {{ errorText }}
+            </div>
+
+            <div *ngIf="!loading && jobs.length === 0 && errorText == null" class="empty-state">
+                No email jobs found.
+            </div>
+
+            <table *ngIf="!loading && jobs.length > 0" class="jobs-table">
+                <thead>
+                    <tr>
+                        <th class="col-status">Status</th>
+                        <th class="col-from">From</th>
+                        <th class="col-subject">Subject</th>
+                        <th class="col-progress">Progress</th>
+                        <th class="col-date">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let job of jobs" class="job-row"
+                        (click)="viewJob(job)"
+                        role="button"
+                        tabindex="0"
+                        (keydown.enter)="viewJob(job)"
+                        (keydown.space)="$event.preventDefault(); $event.stopPropagation(); viewJob(job)">
+                        <td>
+                            <span class="status-badge" [ngClass]="statusClass(job.status)">
+                                {{ statusLabel(job.status) }}
+                            </span>
+                        </td>
+                        <td class="cell-truncate">{{ job.fromDisplay }}</td>
+                        <td class="cell-truncate">{{ job.subject }}</td>
+                        <td>
+                            <span class="progress-text">
+                                <span class="sent-count">{{ job.sentCount }}</span>
+                                <span *ngIf="job.failedCount > 0" class="failed-count"> / {{ job.failedCount }} failed</span>
+                                <span class="total-count"> of {{ job.totalRecipients }}</span>
+                            </span>
+                        </td>
+                        <td class="cell-date">{{ job.createdUtc | date:'short' }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </mat-card-content>
+    </mat-card>
+</div>

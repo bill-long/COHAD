@@ -17,6 +17,7 @@ namespace Web.Services.Cosmos
         internal static string ToAuditLogDocumentId(Guid auditLogId) => $"AuditLog|{auditLogId:D}";
         internal static string ToResidentDocumentId(Guid documentId) => $"ResidentDocument|{documentId:D}";
         internal static string ToCommunityEventId(Guid eventId) => $"CommunityEvent|{eventId:D}";
+        internal static string ToEmailJobDocumentId(Guid jobId) => $"EmailJob|{jobId:D}";
 
         internal static Guid ParseLegacyGuid(string raw)
         {
@@ -305,6 +306,97 @@ namespace Web.Services.Cosmos
                 ["ModifiedUtc"] = JToken.FromObject(communityEvent.ModifiedUtc),
                 ["Signups"] = JsonConvert.SerializeObject(communityEvent.Signups ?? new List<EventSignup>())
             };
+        }
+
+        internal static EmailJob ToEmailJob(JObject doc)
+        {
+            var rawId = doc.Value<string>("id");
+            return new EmailJob
+            {
+                Id = ParseLegacyGuid(rawId),
+                Status = Enum.TryParse<EmailJobStatus>(doc.Value<string>("Status"), out var status)
+                    ? status
+                    : EmailJobStatus.Queued,
+                Category = doc.Value<string>("Category"),
+                FromEmail = doc.Value<string>("FromEmail"),
+                FromDisplay = doc.Value<string>("FromDisplay"),
+                Subject = doc.Value<string>("Subject"),
+                ContentBlobPath = doc.Value<string>("ContentBlobPath"),
+                CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
+                StartedUtc = doc["StartedUtc"]?.ToObject<DateTime?>(),
+                CompletedUtc = doc["CompletedUtc"]?.ToObject<DateTime?>(),
+                CreatedByUserId = doc.Value<string>("CreatedByUserId"),
+                CreatedByDisplayName = doc.Value<string>("CreatedByDisplayName"),
+                TotalRecipients = doc.Value<int?>("TotalRecipients") ?? 0,
+                SentCount = doc.Value<int?>("SentCount") ?? 0,
+                FailedCount = doc.Value<int?>("FailedCount") ?? 0,
+                LastError = doc.Value<string>("LastError"),
+                Recipients = ToEmailJobRecipients(doc["Recipients"])
+            };
+        }
+
+        internal static JObject ToEmailJobDocument(EmailJob job)
+        {
+            var recipientsArray = new JArray();
+            foreach (var r in job.Recipients ?? new List<EmailJobRecipient>())
+            {
+                recipientsArray.Add(new JObject
+                {
+                    ["Email"] = r.Email,
+                    ["HomeId"] = r.HomeId.ToString("D"),
+                    ["Status"] = r.Status.ToString(),
+                    ["Error"] = r.Error != null ? r.Error : JValue.CreateNull(),
+                    ["SentUtc"] = r.SentUtc != null ? JToken.FromObject(r.SentUtc) : JValue.CreateNull()
+                });
+            }
+
+            return new JObject
+            {
+                ["id"] = ToEmailJobDocumentId(job.Id),
+                ["Status"] = job.Status.ToString(),
+                ["Category"] = job.Category,
+                ["FromEmail"] = job.FromEmail,
+                ["FromDisplay"] = job.FromDisplay,
+                ["Subject"] = job.Subject,
+                ["ContentBlobPath"] = job.ContentBlobPath,
+                ["CreatedUtc"] = JToken.FromObject(job.CreatedUtc),
+                ["StartedUtc"] = job.StartedUtc != null ? JToken.FromObject(job.StartedUtc) : JValue.CreateNull(),
+                ["CompletedUtc"] = job.CompletedUtc != null ? JToken.FromObject(job.CompletedUtc) : JValue.CreateNull(),
+                ["CreatedByUserId"] = job.CreatedByUserId,
+                ["CreatedByDisplayName"] = job.CreatedByDisplayName,
+                ["TotalRecipients"] = job.TotalRecipients,
+                ["SentCount"] = job.SentCount,
+                ["FailedCount"] = job.FailedCount,
+                ["LastError"] = job.LastError != null ? job.LastError : JValue.CreateNull(),
+                ["Recipients"] = recipientsArray
+            };
+        }
+
+        private static List<EmailJobRecipient> ToEmailJobRecipients(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+            {
+                return new List<EmailJobRecipient>();
+            }
+
+            if (token is JArray array)
+            {
+                return array
+                    .OfType<JObject>()
+                    .Select(r => new EmailJobRecipient
+                    {
+                        Email = r.Value<string>("Email"),
+                        HomeId = Guid.TryParse(r.Value<string>("HomeId"), out var hid) ? hid : Guid.Empty,
+                        Status = Enum.TryParse<EmailJobRecipientStatus>(r.Value<string>("Status"), out var rs)
+                            ? rs
+                            : EmailJobRecipientStatus.Pending,
+                        Error = r.Value<string>("Error"),
+                        SentUtc = r["SentUtc"]?.ToObject<DateTime?>()
+                    })
+                    .ToList();
+            }
+
+            return new List<EmailJobRecipient>();
         }
     }
 }

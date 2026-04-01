@@ -139,6 +139,55 @@ export interface EmailInfo {
 }
 
 
+// Email job queue types
+
+export type EmailJobStatus = 'Queued' | 'InProgress' | 'Completed' | 'PartiallyCompleted' | 'Failed' | 'Cancelled';
+export type EmailJobRecipientStatus = 'Pending' | 'Sent' | 'Failed';
+
+export interface EmailJobSummary {
+  id: string;
+  status: EmailJobStatus;
+  category: string;
+  fromDisplay: string;
+  subject: string;
+  createdUtc: string;
+  startedUtc: string | null;
+  completedUtc: string | null;
+  createdByDisplayName: string;
+  totalRecipients: number;
+  sentCount: number;
+  failedCount: number;
+  lastError: string | null;
+}
+
+export interface EmailJobDetail extends EmailJobSummary {
+  recipients: EmailJobRecipientDetail[];
+}
+
+export interface EmailJobRecipientDetail {
+  email: string;
+  status: EmailJobRecipientStatus;
+  error: string | null;
+  sentUtc: string | null;
+}
+
+export interface EmailJobProgress {
+  jobId: string;
+  status: EmailJobStatus;
+  sentCount: number;
+  failedCount: number;
+  totalRecipients: number;
+}
+
+export interface EmailJobCompleted {
+  jobId: string;
+  status: EmailJobStatus;
+  sentCount: number;
+  failedCount: number;
+  totalRecipients: number;
+  lastError: string | null;
+}
+
 /** Returned by GET/POST api/payment. Omits raw PayPal payloads and internal payer linkage. */
 export interface PaymentSummary {
     id: string;
