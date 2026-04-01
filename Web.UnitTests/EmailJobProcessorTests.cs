@@ -192,6 +192,75 @@ public sealed class EmailJobProcessorTests
     }
 
     [Fact]
+    public async Task MockMode_AttemptCap_SkipsCappedRecipients_TerminalStatusReflectsFailures()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Cap test",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            MaxRecipientAttempts = 2,
+            TotalRecipients = 3,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "capped@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Pending,
+                    AttemptCount = 2
+                },
+                new EmailJobRecipient
+                {
+                    Email = "was-smtp-fail@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Failed,
+                    AttemptCount = 2,
+                    Error = "SMTP rejected"
+                },
+                new EmailJobRecipient
+                {
+                    Email = "ok@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Pending,
+                    AttemptCount = 0
+                }
+            }
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        _fileStore.Setup(f => f.DownloadAsync(job.ContentBlobPath))
+            .ReturnsAsync(new DocumentFileResult
+            {
+                Stream = new MemoryStream("<p>Cap</p>"u8.ToArray()),
+                ContentType = "text/html"
+            });
+
+        var processor = CreateProcessor(configOverrides: new Dictionary<string, string?>
+        {
+            ["EmailJobs:DefaultMaxRecipientAttempts"] = "2"
+        });
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.Equal(EmailJobStatus.PartiallyCompleted, job.Status);
+        Assert.Equal(1, job.SentCount);
+        Assert.Equal(2, job.FailedCount);
+        Assert.Equal(EmailJobRecipientStatus.Failed, job.Recipients[0].Status);
+        Assert.Contains("Max attempts reached", job.Recipients[0].Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SMTP rejected", job.Recipients[1].Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Additional info:", job.Recipients[1].Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(EmailJobRecipientStatus.Sent, job.Recipients[2].Status);
+    }
+
+    [Fact]
     public async Task MockMode_RespectsCancel()
     {
         var jobId = Guid.NewGuid();
