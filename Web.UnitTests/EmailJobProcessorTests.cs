@@ -384,6 +384,7 @@ public sealed class EmailJobProcessorTests
         Assert.NotNull(stalled.CompletedUtc);
         Assert.Contains("stalled", stalled.LastError, StringComparison.OrdinalIgnoreCase);
         _fileStore.Verify(f => f.DownloadAsync(It.IsAny<string>()), Times.Never);
+        _jobRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
     }
 
     // ───────────────────────────────────────────────────

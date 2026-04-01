@@ -341,6 +341,19 @@ namespace Web.Services
             var categoryDisplayName = EmailSubscriptionCategories.DisplayNames
                 .TryGetValue(job.Category ?? "", out var name) ? name : job.Category;
 
+            void MarkCappedRecipientsAsFailed()
+            {
+                foreach (var r in job.Recipients ?? new())
+                {
+                    if ((r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
+                        r.AttemptCount >= job.MaxRecipientAttempts)
+                    {
+                        r.Status = EmailJobRecipientStatus.Failed;
+                        r.Error = $"Max attempts reached ({job.MaxRecipientAttempts}).";
+                    }
+                }
+            }
+
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
                     (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
@@ -504,6 +517,8 @@ namespace Web.Services
                 return;
             }
 
+            MarkCappedRecipientsAsFailed();
+
             // Derive final counts from recipient statuses (authoritative source of truth)
             RecalculateCounts(job);
 
@@ -534,6 +549,19 @@ namespace Web.Services
         /// </summary>
         private async Task ProcessJobMockAsync(EmailJob job, IEmailJobRepository repo, CancellationToken ct)
         {
+            void MarkCappedRecipientsAsFailed()
+            {
+                foreach (var r in job.Recipients ?? new())
+                {
+                    if ((r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
+                        r.AttemptCount >= job.MaxRecipientAttempts)
+                    {
+                        r.Status = EmailJobRecipientStatus.Failed;
+                        r.Error = $"Max attempts reached ({job.MaxRecipientAttempts}).";
+                    }
+                }
+            }
+
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
                     (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
@@ -577,8 +605,15 @@ namespace Web.Services
                 return;
             }
 
+            MarkCappedRecipientsAsFailed();
+
             RecalculateCounts(job);
-            job.Status = EmailJobStatus.Completed;
+            if (job.FailedCount == 0)
+                job.Status = EmailJobStatus.Completed;
+            else if (job.SentCount == 0)
+                job.Status = EmailJobStatus.Failed;
+            else
+                job.Status = EmailJobStatus.PartiallyCompleted;
             job.CompletedUtc = DateTime.UtcNow;
             if (!await TryPersistJobAsync(repo, job))
             {
