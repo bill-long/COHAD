@@ -230,18 +230,56 @@ namespace Web.Services
                         var lastProgress = job.LastProgressUtc ?? job.StartedUtc ?? job.CreatedUtc;
                         if (DateTime.UtcNow - lastProgress >= TimeSpan.FromMinutes(thresholdMinutes))
                         {
-                            job.Status = EmailJobStatus.Failed;
+                            var recipients = job.Recipients ?? new List<EmailJobRecipient>();
+                            RecalculateCounts(job);
+                            if (recipients.Count > 0 &&
+                                recipients.All(r => r.Status == EmailJobRecipientStatus.Sent))
+                            {
+                                job.Status = EmailJobStatus.Completed;
+                            }
+                            else if (job.SentCount > 0)
+                            {
+                                job.Status = EmailJobStatus.PartiallyCompleted;
+                            }
+                            else
+                            {
+                                job.Status = EmailJobStatus.Failed;
+                            }
+
                             job.LastError =
-                                $"Job stalled (no progress since {lastProgress:u}). Failing to prevent repeated retries.";
+                                $"Job stalled (no progress since {lastProgress:u}). Stopping to prevent repeated retries.";
                             job.CompletedUtc = DateTime.UtcNow;
+
                             if (await TryPersistJobAsync(repo, job))
                             {
                                 await NotifyCompletedAsync(job);
+                                _logger.LogWarning(
+                                    "Email job {JobId} stalled since {LastProgressUtc} — marked {Status} and will not resume",
+                                    job.Id, lastProgress, job.Status);
+                                continue;
+                            }
+
+                            var latest = await repo.GetByIdAsync(job.Id);
+                            if (latest == null || latest.Status == EmailJobStatus.Cancelled)
+                            {
+                                _logger.LogInformation(
+                                    "Stall watchdog: job {JobId} missing or cancelled after failed persist — skipping",
+                                    job.Id);
+                                continue;
+                            }
+
+                            if (latest.Status != EmailJobStatus.InProgress)
+                            {
+                                _logger.LogInformation(
+                                    "Stall watchdog: job {JobId} is no longer InProgress ({Status}) after failed persist — skipping",
+                                    job.Id, latest.Status);
+                                continue;
                             }
 
                             _logger.LogWarning(
-                                "Email job {JobId} stalled since {LastProgressUtc} — marked failed and will not resume",
+                                "Email job {JobId} stalled since {LastProgressUtc} — failed to persist terminal status; enqueueing for normal processing",
                                 job.Id, lastProgress);
+                            await _queue.EnqueueAsync(job.Id, ct);
                             continue;
                         }
                     }

@@ -502,6 +502,68 @@ public sealed class EmailJobProcessorTests
     }
 
     [Fact]
+    public async Task Resume_StalledInProgressJob_WithPartialSends_MarksPartiallyCompleted()
+    {
+        var jobId = Guid.NewGuid();
+        var stalled = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.InProgress,
+            Category = "board",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            CreatedUtc = DateTime.UtcNow.AddHours(-2),
+            StartedUtc = DateTime.UtcNow.AddHours(-2),
+            LastProgressUtc = DateTime.UtcNow.AddMinutes(-10),
+            TotalRecipients = 2,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "done@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Sent,
+                    SentUtc = DateTime.UtcNow.AddMinutes(-30)
+                },
+                new EmailJobRecipient
+                {
+                    Email = "pending@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Pending
+                }
+            }
+        };
+
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob> { stalled });
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var processor = CreateProcessor(configOverrides: new Dictionary<string, string?>
+        {
+            ["EmailJobs:StallAfterMinutes"] = "1"
+        });
+
+        using var cts = new CancellationTokenSource();
+        await processor.StartAsync(cts.Token);
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+            if (stalled.Status == EmailJobStatus.PartiallyCompleted)
+                break;
+        }
+
+        cts.Cancel();
+        try { await processor.StopAsync(CancellationToken.None); }
+        catch (OperationCanceledException) { }
+
+        Assert.Equal(EmailJobStatus.PartiallyCompleted, stalled.Status);
+        Assert.NotNull(stalled.CompletedUtc);
+        Assert.Contains("stalled", stalled.LastError, StringComparison.OrdinalIgnoreCase);
+        _fileStore.Verify(f => f.DownloadAsync(It.IsAny<string>()), Times.Never);
+        _jobRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Resume_StalledInProgressJob_MarksFailedAndDoesNotEnqueue()
     {
         var jobId = Guid.NewGuid();
