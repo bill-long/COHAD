@@ -89,7 +89,8 @@ export class SendEmailComponent implements OnDestroy {
 
   get jobProgressPercent(): number {
     if (!this.activeJob || this.activeJob.totalRecipients === 0) return 0;
-    return Math.round((this.activeJob.sentCount / this.activeJob.totalRecipients) * 100);
+    const processed = this.activeJob.sentCount + this.activeJob.failedCount;
+    return Math.round((processed / this.activeJob.totalRecipients) * 100);
   }
 
   jobStatusLabel(status: EmailJobStatus): string {

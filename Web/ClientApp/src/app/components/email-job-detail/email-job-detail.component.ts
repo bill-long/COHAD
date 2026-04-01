@@ -56,7 +56,10 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
           };
           // Reload full detail to get updated recipient statuses
           this.emailJobService.getJob(this.jobId).subscribe({
-            next: detail => { this.job = detail; }
+            next: detail => { this.job = detail; },
+            error: err => {
+              this.errorText = (err?.error) || 'Failed to refresh email job details.';
+            }
           });
         }
       })
@@ -85,7 +88,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
 
   get progressPercent(): number {
     if (!this.job || this.job.totalRecipients === 0) return 0;
-    return Math.round((this.job.sentCount / this.job.totalRecipients) * 100);
+    return Math.round(((this.job.sentCount + this.job.failedCount) / this.job.totalRecipients) * 100);
   }
 
   get pendingCount(): number {

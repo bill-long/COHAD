@@ -214,16 +214,30 @@ namespace Web.Controllers
 
             // Store HTML body in blob storage
             job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
-            using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(emailInfo.HtmlBody ?? "")))
+            try
             {
-                await _fileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
+                using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(emailInfo.HtmlBody ?? "")))
+                {
+                    await _fileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
+                }
+
+                // Persist job and enqueue for processing
+                await _emailJobRepository.AddAsync(job);
+                await _emailJobQueue.EnqueueAsync(job.Id);
+
+                await AuditEmail(auditFrom, emailInfo, apiUser);
             }
+            catch
+            {
+                // Clean up orphaned blob if Cosmos persist or enqueue fails
+                if (!string.IsNullOrEmpty(job.ContentBlobPath))
+                {
+                    try { await _fileStore.DeleteAsync(job.ContentBlobPath); }
+                    catch { /* best-effort cleanup */ }
+                }
 
-            // Persist job and enqueue for processing
-            await _emailJobRepository.AddAsync(job);
-            await _emailJobQueue.EnqueueAsync(job.Id);
-
-            await AuditEmail(auditFrom, emailInfo, apiUser);
+                throw;
+            }
 
             return Accepted(EmailJobSummary.FromJob(job));
         }

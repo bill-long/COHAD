@@ -148,7 +148,14 @@ namespace Web.Services
                     return;
                 }
 
-                // Mark as in-progress
+                // Claim the job: only transition to InProgress if still Queued/InProgress.
+                // This prevents duplicate processing if multiple instances resume the same job.
+                if (job.Status != EmailJobStatus.Queued && job.Status != EmailJobStatus.InProgress)
+                {
+                    _logger.LogInformation("Email job {JobId} has status {Status} — skipping", jobId, job.Status);
+                    return;
+                }
+
                 job.Status = EmailJobStatus.InProgress;
                 job.StartedUtc ??= DateTime.UtcNow;
                 await repo.UpdateAsync(job);
