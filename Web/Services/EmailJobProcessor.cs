@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -38,6 +39,9 @@ namespace Web.Services
         private readonly string _appBaseUrl;
         private readonly bool _isMockMode;
         private readonly bool _logSmtpProtocolOnFailure;
+        private readonly bool _emailJobsEnabled;
+        private readonly int _defaultMaxRecipientAttempts;
+        private readonly int _stallAfterMinutes;
 
         // Tracks in-memory cancellation tokens so the cancel API can stop a running job.
         private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeJobs = new();
@@ -54,6 +58,27 @@ namespace Web.Services
             var recipients = job.Recipients ?? new();
             job.SentCount = recipients.Count(r => r.Status == EmailJobRecipientStatus.Sent);
             job.FailedCount = recipients.Count(r => r.Status == EmailJobRecipientStatus.Failed);
+        }
+
+        /// <summary>
+        /// Recipients still Pending/Failed but at or over the attempt cap cannot be sent; mark them Failed
+        /// so terminal status reflects reality. Preserves any existing per-recipient error text.
+        /// </summary>
+        private static void MarkCappedRecipientsAsFailed(EmailJob job)
+        {
+            var capMessage = $"Max attempts reached ({job.MaxRecipientAttempts}).";
+            foreach (var r in job.Recipients ?? new List<EmailJobRecipient>())
+            {
+                if ((r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
+                    r.AttemptCount >= job.MaxRecipientAttempts)
+                {
+                    r.Status = EmailJobRecipientStatus.Failed;
+                    if (string.IsNullOrWhiteSpace(r.Error))
+                        r.Error = capMessage;
+                    else if (!r.Error.Contains(capMessage, StringComparison.OrdinalIgnoreCase))
+                        r.Error = $"{r.Error} Additional info: {capMessage}";
+                }
+            }
         }
 
         /// <summary>
@@ -150,10 +175,19 @@ namespace Web.Services
             _appBaseUrl = (config["AppBaseUrl"] ?? "").TrimEnd('/');
             _isMockMode = env.IsEnvironment("MockData");
             _logSmtpProtocolOnFailure = config.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
+            _emailJobsEnabled = config.GetValue("EmailJobs:Enabled", true);
+            _defaultMaxRecipientAttempts = config.GetValue("EmailJobs:DefaultMaxRecipientAttempts", 3);
+            _stallAfterMinutes = config.GetValue("EmailJobs:StallAfterMinutes", 30);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            if (!_emailJobsEnabled)
+            {
+                _logger.LogInformation("Email job processor disabled via EmailJobs:Enabled=false");
+                return;
+            }
+
             // Resume incomplete jobs from a previous run
             await ResumeIncompleteJobsAsync(stoppingToken);
 
@@ -189,6 +223,67 @@ namespace Web.Services
                 foreach (var job in incompleteJobs)
                 {
                     if (ct.IsCancellationRequested) break;
+
+                    if (job.Status == EmailJobStatus.InProgress)
+                    {
+                        var thresholdMinutes = Math.Clamp(_stallAfterMinutes, 1, 24 * 60);
+                        var lastProgress = job.LastProgressUtc ?? job.StartedUtc ?? job.CreatedUtc;
+                        if (DateTime.UtcNow - lastProgress >= TimeSpan.FromMinutes(thresholdMinutes))
+                        {
+                            var recipients = job.Recipients ?? new List<EmailJobRecipient>();
+                            RecalculateCounts(job);
+                            if (recipients.Count > 0 &&
+                                recipients.All(r => r.Status == EmailJobRecipientStatus.Sent))
+                            {
+                                job.Status = EmailJobStatus.Completed;
+                            }
+                            else if (job.SentCount > 0)
+                            {
+                                job.Status = EmailJobStatus.PartiallyCompleted;
+                            }
+                            else
+                            {
+                                job.Status = EmailJobStatus.Failed;
+                            }
+
+                            job.LastError =
+                                $"Job stalled (no progress since {lastProgress:u}). Stopping to prevent repeated retries.";
+                            job.CompletedUtc = DateTime.UtcNow;
+
+                            if (await TryPersistJobAsync(repo, job))
+                            {
+                                await NotifyCompletedAsync(job);
+                                _logger.LogWarning(
+                                    "Email job {JobId} stalled since {LastProgressUtc} — marked {Status} and will not resume",
+                                    job.Id, lastProgress, job.Status);
+                                continue;
+                            }
+
+                            var latest = await repo.GetByIdAsync(job.Id);
+                            if (latest == null || latest.Status == EmailJobStatus.Cancelled)
+                            {
+                                _logger.LogInformation(
+                                    "Stall watchdog: job {JobId} missing or cancelled after failed persist — skipping",
+                                    job.Id);
+                                continue;
+                            }
+
+                            if (latest.Status != EmailJobStatus.InProgress)
+                            {
+                                _logger.LogInformation(
+                                    "Stall watchdog: job {JobId} is no longer InProgress ({Status}) after failed persist — skipping",
+                                    job.Id, latest.Status);
+                                continue;
+                            }
+
+                            _logger.LogWarning(
+                                "Email job {JobId} stalled since {LastProgressUtc} — failed to persist terminal status; enqueueing for normal processing",
+                                job.Id, lastProgress);
+                            await _queue.EnqueueAsync(job.Id, ct);
+                            continue;
+                        }
+                    }
+
                     _logger.LogInformation("Resuming incomplete email job {JobId} (status={Status}, sent={Sent}/{Total})",
                         job.Id, job.Status, job.SentCount, job.TotalRecipients);
                     await _queue.EnqueueAsync(job.Id, ct);
@@ -234,6 +329,11 @@ namespace Web.Services
                 // If another instance already claimed it, the ETag will mismatch and TryClaimAsync returns false.
                 job.Status = EmailJobStatus.InProgress;
                 job.StartedUtc ??= DateTime.UtcNow;
+                job.LastProgressUtc ??= job.StartedUtc;
+                var effectiveMaxAttempts = job.MaxRecipientAttempts > 0
+                    ? job.MaxRecipientAttempts
+                    : _defaultMaxRecipientAttempts;
+                job.MaxRecipientAttempts = Math.Clamp(effectiveMaxAttempts, 1, 25);
                 if (!await repo.TryClaimAsync(job))
                 {
                     _logger.LogInformation("Email job {JobId} was already claimed by another instance — skipping", jobId);
@@ -302,7 +402,9 @@ namespace Web.Services
                 .TryGetValue(job.Category ?? "", out var name) ? name : job.Category;
 
             var pendingRecipients = (job.Recipients ?? new())
-                .Where(r => r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
+                .Where(r =>
+                    (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
+                    r.AttemptCount < job.MaxRecipientAttempts)
                 .ToList();
 
             using var protocolLog = new MemoryStream();
@@ -310,9 +412,13 @@ namespace Web.Services
             SmtpClient smtpClient = null;
             var stoppedEarly = false;
 
-            try
+            // No eligible recipients (e.g. all remaining are attempt-capped): finalize without SMTP so a
+            // connection failure cannot prevent MarkCappedRecipientsAsFailed / terminal status.
+            if (pendingRecipients.Count > 0)
             {
-                smtpClient = await ConnectSmtpAsync(logger, ct);
+                try
+                {
+                    smtpClient = await ConnectSmtpAsync(logger, ct);
 
 #if DEBUG
                 // In DEBUG, send a single representative message instead of the full batch
@@ -346,6 +452,7 @@ namespace Web.Services
                         r.SentUtc = DateTime.UtcNow;
                         r.Error = null;
                     }
+                    job.LastProgressUtc = DateTime.UtcNow;
                     RecalculateCounts(job);
                     if (!await TryPersistJobAsync(repo, job))
                         stoppedEarly = true;
@@ -354,6 +461,16 @@ namespace Web.Services
                 foreach (var recipient in pendingRecipients)
                 {
                     ct.ThrowIfCancellationRequested();
+
+                    var attemptStartedUtc = DateTime.UtcNow;
+                    recipient.AttemptCount++;
+                    recipient.LastAttemptUtc = attemptStartedUtc;
+                    job.LastProgressUtc = attemptStartedUtc;
+                    if (!await TryPersistJobAsync(repo, job))
+                    {
+                        stoppedEarly = true;
+                        break;
+                    }
 
                     // Reset protocol log between messages to bound memory
                     protocolLog.SetLength(0);
@@ -395,6 +512,7 @@ namespace Web.Services
                         recipient.Status = EmailJobRecipientStatus.Sent;
                         recipient.SentUtc = DateTime.UtcNow;
                         recipient.Error = null;
+                        job.LastProgressUtc = DateTime.UtcNow;
                     }
                     catch (OperationCanceledException)
                     {
@@ -415,6 +533,7 @@ namespace Web.Services
                         }
                         recipient.Status = EmailJobRecipientStatus.Failed;
                         recipient.Error = ex.Message;
+                        job.LastProgressUtc = DateTime.UtcNow;
                     }
 
                     RecalculateCounts(job);
@@ -430,18 +549,19 @@ namespace Web.Services
                     await NotifyProgressAsync(job);
                 }
 #endif
-            }
-            finally
-            {
-                if (smtpClient != null)
+                }
+                finally
                 {
-                    try
+                    if (smtpClient != null)
                     {
-                        if (smtpClient.IsConnected)
-                            await smtpClient.DisconnectAsync(true, CancellationToken.None);
+                        try
+                        {
+                            if (smtpClient.IsConnected)
+                                await smtpClient.DisconnectAsync(true, CancellationToken.None);
+                        }
+                        catch { /* best-effort disconnect */ }
+                        smtpClient.Dispose();
                     }
-                    catch { /* best-effort disconnect */ }
-                    smtpClient.Dispose();
                 }
             }
 
@@ -452,6 +572,8 @@ namespace Web.Services
                     await NotifyCompletedAsync(latest);
                 return;
             }
+
+            MarkCappedRecipientsAsFailed(job);
 
             // Derive final counts from recipient statuses (authoritative source of truth)
             RecalculateCounts(job);
@@ -484,18 +606,31 @@ namespace Web.Services
         private async Task ProcessJobMockAsync(EmailJob job, IEmailJobRepository repo, CancellationToken ct)
         {
             var pendingRecipients = (job.Recipients ?? new())
-                .Where(r => r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
+                .Where(r =>
+                    (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
+                    r.AttemptCount < job.MaxRecipientAttempts)
                 .ToList();
 
             var stoppedEarly = false;
             foreach (var recipient in pendingRecipients)
             {
                 ct.ThrowIfCancellationRequested();
+                var attemptStartedUtc = DateTime.UtcNow;
+                recipient.AttemptCount++;
+                recipient.LastAttemptUtc = attemptStartedUtc;
+                job.LastProgressUtc = attemptStartedUtc;
+                if (!await TryPersistJobAsync(repo, job))
+                {
+                    stoppedEarly = true;
+                    break;
+                }
+
                 await Task.Delay(50, ct); // Simulate send latency
 
                 recipient.Status = EmailJobRecipientStatus.Sent;
                 recipient.SentUtc = DateTime.UtcNow;
                 recipient.Error = null;
+                job.LastProgressUtc = DateTime.UtcNow;
 
                 RecalculateCounts(job);
                 ct.ThrowIfCancellationRequested();
@@ -516,8 +651,15 @@ namespace Web.Services
                 return;
             }
 
+            MarkCappedRecipientsAsFailed(job);
+
             RecalculateCounts(job);
-            job.Status = EmailJobStatus.Completed;
+            if (job.FailedCount == 0)
+                job.Status = EmailJobStatus.Completed;
+            else if (job.SentCount == 0)
+                job.Status = EmailJobStatus.Failed;
+            else
+                job.Status = EmailJobStatus.PartiallyCompleted;
             job.CompletedUtc = DateTime.UtcNow;
             if (!await TryPersistJobAsync(repo, job))
             {

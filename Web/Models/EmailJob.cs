@@ -53,9 +53,20 @@ namespace Web.Models
 
         public DateTime? CompletedUtc { get; set; }
 
+        /// <summary>
+        /// Updated when progress is made sending recipients. Used to detect stalled jobs.
+        /// </summary>
+        public DateTime? LastProgressUtc { get; set; }
+
         public string CreatedByUserId { get; set; }
 
         public string CreatedByDisplayName { get; set; }
+
+        /// <summary>
+        /// Max number of send attempts per recipient for this job.
+        /// Stored on the job for auditability and stable behavior across restarts.
+        /// </summary>
+        public int MaxRecipientAttempts { get; set; }
 
         public int TotalRecipients { get; set; }
 
@@ -85,6 +96,10 @@ namespace Web.Models
         public Guid HomeId { get; set; }
 
         public EmailJobRecipientStatus Status { get; set; }
+
+        public int AttemptCount { get; set; }
+
+        public DateTime? LastAttemptUtc { get; set; }
 
         public string Error { get; set; }
 

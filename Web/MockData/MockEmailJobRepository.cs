@@ -123,8 +123,10 @@ namespace Web.MockData
                 CreatedUtc = job.CreatedUtc,
                 StartedUtc = job.StartedUtc,
                 CompletedUtc = job.CompletedUtc,
+                LastProgressUtc = job.LastProgressUtc,
                 CreatedByUserId = job.CreatedByUserId,
                 CreatedByDisplayName = job.CreatedByDisplayName,
+                MaxRecipientAttempts = job.MaxRecipientAttempts,
                 TotalRecipients = job.TotalRecipients,
                 SentCount = job.SentCount,
                 FailedCount = job.FailedCount,
@@ -135,6 +137,8 @@ namespace Web.MockData
                     Email = r.Email,
                     HomeId = r.HomeId,
                     Status = r.Status,
+                    AttemptCount = r.AttemptCount,
+                    LastAttemptUtc = r.LastAttemptUtc,
                     Error = r.Error,
                     SentUtc = r.SentUtc
                 }).ToList() ?? new List<EmailJobRecipient>()
