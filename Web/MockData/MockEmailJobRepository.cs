@@ -99,9 +99,10 @@ namespace Web.MockData
         {
             lock (_jobs)
             {
+                var effectiveLimit = Math.Clamp(limit, 1, 100);
                 var list = _jobs.Values
                     .OrderByDescending(j => j.CreatedUtc)
-                    .Take(limit)
+                    .Take(effectiveLimit)
                     .Select(CloneJob)
                     .ToList();
                 return Task.FromResult(list);

@@ -135,6 +135,7 @@ namespace Web.Controllers
             job.Status = EmailJobStatus.Queued;
             job.LastError = null;
             job.CompletedUtc = null;
+            job.StartedUtc = null;
             try
             {
                 await _emailJobRepository.UpdateAsync(job);

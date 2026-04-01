@@ -52,27 +52,30 @@ namespace Web.Services
 
         /// <summary>
         /// Persists job state with optimistic concurrency (If-Match / ETag).
-        /// On conflict, refreshes the ETag and retries the replace once.
-        /// Returns false when the server copy is cancelled — caller should stop and use server state.
+        /// On conflict, refreshes the ETag and retries up to <paramref name="maxAttempts"/> times.
+        /// Returns false when the server copy is cancelled, missing, or contention persists.
         /// </summary>
-        private static async Task<bool> TryPersistJobAsync(IEmailJobRepository repo, EmailJob job)
+        private static async Task<bool> TryPersistJobAsync(IEmailJobRepository repo, EmailJob job, int maxAttempts = 3)
         {
-            try
+            for (var attempt = 0; attempt < maxAttempts; attempt++)
             {
-                await repo.UpdateAsync(job);
-                return true;
+                try
+                {
+                    await repo.UpdateAsync(job);
+                    return true;
+                }
+                catch (EmailJobConcurrencyException)
+                {
+                    var latest = await repo.GetByIdAsync(job.Id);
+                    if (latest == null)
+                        return false;
+                    if (latest.Status == EmailJobStatus.Cancelled)
+                        return false;
+                    job.ETag = latest.ETag;
+                }
             }
-            catch (EmailJobConcurrencyException)
-            {
-                var latest = await repo.GetByIdAsync(job.Id);
-                if (latest == null)
-                    return false;
-                if (latest.Status == EmailJobStatus.Cancelled)
-                    return false;
-                job.ETag = latest.ETag;
-                await repo.UpdateAsync(job);
-                return true;
-            }
+
+            return false;
         }
 
         public EmailJobProcessor(
