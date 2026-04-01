@@ -194,6 +194,7 @@ namespace Web
                 services.AddSingleton<IYouthServiceListingRepository, MockYouthServiceListingRepository>();
                 services.AddSingleton<IDocumentFileStore, MockDocumentFileStore>();
                 services.AddScoped<IEmailService, NoOpEmailService>();
+                services.AddSingleton<IEmailJobRepository, MockEmailJobRepository>();
             }
             else
             {
@@ -234,7 +235,14 @@ namespace Web
                 services.AddSingleton<IDocumentFileStore, AzureBlobDocumentFileStore>();
 
                 services.AddScoped<IEmailService, EmailService>();
+                services.AddScoped<IEmailJobRepository>(sp =>
+                    new CosmosEmailJobRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "EmailJobs")));
             }
+
+            // Email job queue and background processor (shared across environments)
+            services.AddSingleton<EmailJobQueue>();
+            services.AddSingleton<EmailJobProcessor>();
+            services.AddHostedService(sp => sp.GetRequiredService<EmailJobProcessor>());
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -298,6 +306,7 @@ namespace Web
                 endpoints.MapEventDeepLinkOpenGraph(env);
                 endpoints.MapBlogDeepLinkOpenGraph(env);
                 endpoints.MapHub<VendorFlagNotificationsHub>("/hubs/vendor-flags");
+                endpoints.MapHub<EmailJobHub>("/hubs/email-jobs");
                 endpoints.MapControllerRoute(
                     name: "default",
                     pattern: "{controller}/{action=Index}/{id?}");

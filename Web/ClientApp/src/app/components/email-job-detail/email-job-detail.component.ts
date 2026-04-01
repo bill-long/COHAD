@@ -1,0 +1,172 @@
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { Subscription } from 'rxjs';
+import { EmailJobDetail, EmailJobStatus, EmailJobRecipientStatus } from 'src/app/models';
+import { EmailJobService } from 'src/app/services/email-job.service';
+import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
+
+@Component({
+    selector: 'app-email-job-detail',
+    templateUrl: './email-job-detail.component.html',
+    styleUrls: ['./email-job-detail.component.css'],
+    standalone: false
+})
+export class EmailJobDetailComponent implements OnInit, OnDestroy {
+  job: EmailJobDetail | null = null;
+  loading = true;
+  errorText: string | null = null;
+  actionInProgress = false;
+
+  private jobId!: string;
+  private subscriptions: Subscription[] = [];
+
+  constructor(
+    private route: ActivatedRoute,
+    private router: Router,
+    private emailJobService: EmailJobService,
+    private emailJobNotifications: EmailJobNotificationsService
+  ) { }
+
+  ngOnInit(): void {
+    this.jobId = this.route.snapshot.paramMap.get('id')!;
+    this.loadJob();
+    this.emailJobNotifications.connect();
+
+    this.subscriptions.push(
+      this.emailJobNotifications.progress$.subscribe(event => {
+        if (this.job && event.jobId === this.job.id) {
+          this.job = {
+            ...this.job,
+            status: event.status,
+            sentCount: event.sentCount,
+            failedCount: event.failedCount,
+            totalRecipients: event.totalRecipients
+          };
+        }
+      }),
+      this.emailJobNotifications.completed$.subscribe(event => {
+        if (this.job && event.jobId === this.job.id) {
+          this.job = {
+            ...this.job,
+            status: event.status,
+            sentCount: event.sentCount,
+            failedCount: event.failedCount,
+            totalRecipients: event.totalRecipients,
+            lastError: event.lastError
+          };
+          // Reload full detail to get updated recipient statuses
+          this.emailJobService.getJob(this.jobId).subscribe({
+            next: detail => { this.job = detail; }
+          });
+        }
+      })
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(s => s.unsubscribe());
+    this.emailJobNotifications.disconnect();
+  }
+
+  loadJob(): void {
+    this.loading = true;
+    this.errorText = null;
+    this.emailJobService.getJob(this.jobId).subscribe({
+      next: job => {
+        this.job = job;
+        this.loading = false;
+      },
+      error: err => {
+        this.errorText = err.error || 'Failed to load email job.';
+        this.loading = false;
+      }
+    });
+  }
+
+  get progressPercent(): number {
+    if (!this.job || this.job.totalRecipients === 0) return 0;
+    return Math.round((this.job.sentCount / this.job.totalRecipients) * 100);
+  }
+
+  get pendingCount(): number {
+    if (!this.job) return 0;
+    return this.job.totalRecipients - this.job.sentCount - this.job.failedCount;
+  }
+
+  get canRetry(): boolean {
+    if (!this.job) return false;
+    return ['Failed', 'PartiallyCompleted', 'Cancelled'].includes(this.job.status);
+  }
+
+  get canCancel(): boolean {
+    if (!this.job) return false;
+    return ['Queued', 'InProgress'].includes(this.job.status);
+  }
+
+  retryJob(): void {
+    if (!this.job || this.actionInProgress) return;
+    this.actionInProgress = true;
+    this.emailJobService.retryJob(this.job.id).subscribe({
+      next: updated => {
+        if (this.job) {
+          this.job = { ...this.job, ...updated };
+        }
+        this.actionInProgress = false;
+      },
+      error: err => {
+        this.errorText = err.error || 'Failed to retry job.';
+        this.actionInProgress = false;
+      }
+    });
+  }
+
+  cancelJob(): void {
+    if (!this.job || this.actionInProgress) return;
+    this.actionInProgress = true;
+    this.emailJobService.cancelJob(this.job.id).subscribe({
+      next: updated => {
+        if (this.job) {
+          this.job = { ...this.job, ...updated };
+        }
+        this.actionInProgress = false;
+      },
+      error: err => {
+        this.errorText = err.error || 'Failed to cancel job.';
+        this.actionInProgress = false;
+      }
+    });
+  }
+
+  goBack(): void {
+    this.router.navigate(['/manage/email-jobs']);
+  }
+
+  statusLabel(status: EmailJobStatus): string {
+    switch (status) {
+      case 'InProgress': return 'In Progress';
+      case 'PartiallyCompleted': return 'Partial';
+      default: return status;
+    }
+  }
+
+  statusClass(status: EmailJobStatus): string {
+    switch (status) {
+      case 'Queued': return 'status-queued';
+      case 'InProgress': return 'status-in-progress';
+      case 'Completed': return 'status-completed';
+      case 'PartiallyCompleted': return 'status-partial';
+      case 'Failed': return 'status-failed';
+      case 'Cancelled': return 'status-cancelled';
+      default: return '';
+    }
+  }
+
+  recipientStatusClass(status: EmailJobRecipientStatus): string {
+    switch (status) {
+      case 'Sent': return 'status-completed';
+      case 'Failed': return 'status-failed';
+      case 'Pending': return 'status-queued';
+      default: return '';
+    }
+  }
+}

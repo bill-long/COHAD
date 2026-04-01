@@ -38,9 +38,49 @@
             <div *ngIf="testSucceeded" class="cohad-inline-alert cohad-inline-alert--success">
                 Test email was sent!
             </div>
-            <div *ngIf="sendSucceeded" class="cohad-inline-alert cohad-inline-alert--success">
+
+            <!-- Job queued (non-test) -->
+            <ng-container *ngIf="sendSucceeded && activeJob">
+                <div class="cohad-inline-alert cohad-inline-alert--success">
+                    Email queued — {{ activeJob.totalRecipients }} recipients
+                </div>
+
+                <div class="job-progress-section">
+                    <div class="job-progress-header">
+                        <span class="job-status-label">{{ jobStatusLabel(activeJob.status) }}</span>
+                        <span class="job-progress-text">{{ activeJob.sentCount }} of {{ activeJob.totalRecipients }} sent</span>
+                    </div>
+                    <div class="job-progress-bar-container">
+                        <div class="job-progress-bar-fill" [style.width.%]="jobProgressPercent"></div>
+                    </div>
+                    <div class="job-progress-counts">
+                        <span *ngIf="activeJob.sentCount > 0" class="count-sent">✓ {{ activeJob.sentCount }} sent</span>
+                        <span *ngIf="activeJob.failedCount > 0" class="count-failed">✗ {{ activeJob.failedCount }} failed</span>
+                    </div>
+
+                    <div *ngIf="jobCompleted" class="job-final-status">
+                        <span *ngIf="activeJob.status === 'Completed'" class="cohad-inline-alert cohad-inline-alert--success">
+                            All emails sent successfully.
+                        </span>
+                        <span *ngIf="activeJob.status === 'PartiallyCompleted'" class="cohad-inline-alert cohad-inline-alert--warning">
+                            Completed with {{ activeJob.failedCount }} failures.
+                        </span>
+                        <span *ngIf="activeJob.status === 'Failed'" class="cohad-inline-alert cohad-inline-alert--error">
+                            Email sending failed. {{ activeJob.lastError }}
+                        </span>
+                    </div>
+
+                    <a class="job-detail-link" [routerLink]="['/manage/email-jobs', activeJob.id]">
+                        View job details →
+                    </a>
+                </div>
+            </ng-container>
+
+            <!-- Synchronous send success (fallback / legacy) -->
+            <div *ngIf="sendSucceeded && !activeJob" class="cohad-inline-alert cohad-inline-alert--success">
                 Email was sent!
             </div>
+
             <div *ngIf="errorText != null" class="cohad-inline-alert cohad-inline-alert--error">
                 <div>Error occurred. Detailed error information:</div>
                 <pre class="error-detail">{{errorText}}</pre>
