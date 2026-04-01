@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using MailKit;
@@ -35,9 +37,13 @@ namespace Web.Services
         private readonly SmtpOptions _smtpOptions;
         private readonly string _appBaseUrl;
         private readonly bool _isMockMode;
+        private readonly bool _logSmtpProtocolOnFailure;
 
         // Tracks in-memory cancellation tokens so the cancel API can stop a running job.
         private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeJobs = new();
+
+        private const int MaxSmtpTranscriptCharsToLog = 32 * 1024;
+        private static readonly Regex Base64LikeRedaction = new(@"[A-Za-z0-9+/=]{40,}", RegexOptions.Compiled);
 
         /// <summary>
         /// Derives SentCount and FailedCount from the actual recipient statuses,
@@ -78,6 +84,49 @@ namespace Web.Services
             return false;
         }
 
+        private static string FormatSmtpTranscriptForLogs(MemoryStream protocolLog)
+        {
+            if (protocolLog == null || protocolLog.Length == 0)
+                return "";
+
+            var raw = Encoding.UTF8.GetString(protocolLog.ToArray());
+
+            var sb = new StringBuilder(raw.Length);
+            using var reader = new StringReader(raw);
+            string line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                var trimmed = line.TrimStart();
+                var lower = trimmed.ToLowerInvariant();
+
+                if (lower.StartsWith("auth "))
+                {
+                    sb.AppendLine("[REDACTED AUTH]");
+                    continue;
+                }
+
+                if (lower.Contains("xoauth2"))
+                {
+                    sb.AppendLine("[REDACTED XOAUTH2]");
+                    continue;
+                }
+
+                if (lower.Contains("password") || lower.Contains("passwd") || lower.Contains("token"))
+                {
+                    sb.AppendLine("[REDACTED SENSITIVE]");
+                    continue;
+                }
+
+                sb.AppendLine(Base64LikeRedaction.Replace(line, "[REDACTED]"));
+            }
+
+            var formatted = sb.ToString();
+            if (formatted.Length <= MaxSmtpTranscriptCharsToLog)
+                return formatted;
+
+            return formatted.Substring(formatted.Length - MaxSmtpTranscriptCharsToLog);
+        }
+
         public EmailJobProcessor(
             EmailJobQueue queue,
             IServiceScopeFactory scopeFactory,
@@ -100,6 +149,7 @@ namespace Web.Services
             };
             _appBaseUrl = (config["AppBaseUrl"] ?? "").TrimEnd('/');
             _isMockMode = env.IsEnvironment("MockData");
+            _logSmtpProtocolOnFailure = config.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -352,7 +402,17 @@ namespace Web.Services
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to send email to {Email} in job {JobId}", recipient.Email, job.Id);
+                        if (_logSmtpProtocolOnFailure)
+                        {
+                            var transcript = FormatSmtpTranscriptForLogs(protocolLog);
+                            _logger.LogWarning(ex,
+                                "Failed to send email to {Email} in job {JobId}. SMTP transcript (redacted, truncated): {SmtpTranscript}",
+                                recipient.Email, job.Id, transcript);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(ex, "Failed to send email to {Email} in job {JobId}", recipient.Email, job.Id);
+                        }
                         recipient.Status = EmailJobRecipientStatus.Failed;
                         recipient.Error = ex.Message;
                     }
