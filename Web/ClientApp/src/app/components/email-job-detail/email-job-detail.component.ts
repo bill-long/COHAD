@@ -4,6 +4,7 @@ import { Subscription } from 'rxjs';
 import { EmailJobDetail, EmailJobStatus, EmailJobRecipientStatus } from 'src/app/models';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
+import { httpErrorMessage } from 'src/app/utils/http-error-message';
 
 @Component({
     selector: 'app-email-job-detail',
@@ -64,7 +65,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
           this.emailJobService.getJob(this.jobId).subscribe({
             next: detail => { this.job = detail; },
             error: err => {
-              this.errorText = (err?.error) || 'Failed to refresh email job details.';
+              this.errorText = httpErrorMessage(err, 'Failed to refresh email job details.');
             }
           });
         }
@@ -86,7 +87,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
         this.loading = false;
       },
       error: err => {
-        this.errorText = err.error || 'Failed to load email job.';
+        this.errorText = httpErrorMessage(err, 'Failed to load email job.');
         this.loading = false;
       }
     });
@@ -143,7 +144,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
         this.actionInProgress = false;
       },
       error: err => {
-        this.errorText = err.error || 'Failed to retry job.';
+        this.errorText = httpErrorMessage(err, 'Failed to retry job.');
         this.actionInProgress = false;
       }
     });
@@ -160,7 +161,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
         this.actionInProgress = false;
       },
       error: err => {
-        this.errorText = err.error || 'Failed to cancel job.';
+        this.errorText = httpErrorMessage(err, 'Failed to cancel job.');
         this.actionInProgress = false;
       }
     });

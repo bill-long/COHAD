@@ -8,6 +8,7 @@ import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { applicationState, ApplicationState } from 'src/app/state';
+import { httpErrorMessage } from 'src/app/utils/http-error-message';
 
 @Component({
     selector: 'app-send-email',
@@ -138,7 +139,7 @@ export class SendEmailComponent implements OnDestroy {
         }
       },
       error: err => {
-        this.errorText = err.error;
+        this.errorText = httpErrorMessage(err, 'Failed to send email.');
         this.editEnabled = true;
       }
     });

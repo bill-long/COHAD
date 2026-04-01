@@ -4,6 +4,7 @@ import { Subscription } from 'rxjs';
 import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
+import { httpErrorMessage } from 'src/app/utils/http-error-message';
 
 @Component({
     selector: 'app-email-job-list',
@@ -63,7 +64,7 @@ export class EmailJobListComponent implements OnInit, OnDestroy {
         this.loading = false;
       },
       error: err => {
-        this.errorText = err.error || 'Failed to load email jobs.';
+        this.errorText = httpErrorMessage(err, 'Failed to load email jobs.');
         this.loading = false;
       }
     });
