@@ -22,7 +22,10 @@ export function httpErrorMessage(err: unknown, fallback: string): string {
       : fallback;
   }
   if (body != null && typeof body === 'object' && !Array.isArray(body)) {
-    const o = body as { message?: unknown; title?: unknown };
+    const o = body as { error?: unknown; message?: unknown; title?: unknown };
+    if (typeof o.error === 'string' && o.error.trim().length > 0) {
+      return o.error;
+    }
     if (typeof o.message === 'string' && o.message.trim().length > 0) {
       return o.message;
     }

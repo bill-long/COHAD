@@ -1,11 +1,14 @@
-import { HttpClient } from '@angular/common/http';
-import { Component, Inject } from '@angular/core';
+import { HttpClient, HttpResponse } from '@angular/common/http';
+import { Component, Inject, OnDestroy } from '@angular/core';
 import Quill from 'quill';
-import { combineLatest, Observable, zip } from 'rxjs';
+import { Observable, Subscription, zip } from 'rxjs';
 import { map, take } from 'rxjs/operators';
+import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
+import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { applicationState, ApplicationState } from 'src/app/state';
+import { httpErrorMessage } from 'src/app/utils/http-error-message';
 
 @Component({
     selector: 'app-send-email',
@@ -13,7 +16,7 @@ import { applicationState, ApplicationState } from 'src/app/state';
     styleUrls: ['./send-email.component.css'],
     standalone: false
 })
-export class SendEmailComponent {
+export class SendEmailComponent implements OnDestroy {
 
   senderEndpoint!: string;
   subject!: string;
@@ -23,9 +26,16 @@ export class SendEmailComponent {
   sendSucceeded = false;
   errorText!: string | null;
 
+  // Email job queue state
+  activeJob: EmailJobSummary | null = null;
+  jobCompleted = false;
+
+  private jobSubscriptions: Subscription[] = [];
+
   constructor(
     private httpClient: HttpClient,
     private telemetry: ApplicationInsightsService,
+    private emailJobNotifications: EmailJobNotificationsService,
     @Inject(applicationState) private appState: Observable<ApplicationState>
   ) {
     const Block = Quill.import('blots/block') as any;
@@ -48,6 +58,10 @@ export class SendEmailComponent {
         this.senderEndpoint = "from-sunshine";
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    this.teardownJobSubscriptions();
   }
 
   get canSendFromBoard(): Observable<boolean> {
@@ -74,6 +88,20 @@ export class SendEmailComponent {
     return this.appState.pipe(map(s => s.apiUser?.email || ''));
   }
 
+  get jobProgressPercent(): number {
+    if (!this.activeJob || this.activeJob.totalRecipients === 0) return 0;
+    const processed = this.activeJob.sentCount + this.activeJob.failedCount;
+    return Math.round((processed / this.activeJob.totalRecipients) * 100);
+  }
+
+  jobStatusLabel(status: EmailJobStatus): string {
+    switch (status) {
+      case 'InProgress': return 'In Progress';
+      case 'PartiallyCompleted': return 'Partially Completed';
+      default: return status;
+    }
+  }
+
   sendEmail(isTest: boolean) {
     this.editEnabled = false;
     if (isTest) {
@@ -84,18 +112,36 @@ export class SendEmailComponent {
       subject: this.subject,
       htmlBody: this.htmlBody,
       isTestEmail: isTest
-    }).subscribe(r => {
-      this.errorText = null;
-      if (isTest) {
-        this.testSucceeded = true;
+    }, { observe: 'response' }).subscribe({
+      next: (resp: HttpResponse<Object>) => {
+        this.errorText = null;
+        if (isTest) {
+          // Test email: synchronous 200 OK
+          this.testSucceeded = true;
+          this.editEnabled = true;
+        } else if (resp.status === 202) {
+          // Non-test: 202 Accepted with EmailJobSummary
+          const jobSummary = resp.body as EmailJobSummary;
+          this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint, jobId: jobSummary.id });
+          this.activeJob = jobSummary;
+          this.jobCompleted = false;
+          this.sendSucceeded = true;
+          this.subscribeToJobUpdates(jobSummary.id);
+        } else if (resp.status === 200 && resp.body && (resp.body as any).message) {
+          // 200 OK with a message means no matching recipients
+          this.errorText = (resp.body as any).message;
+          this.editEnabled = true;
+        } else {
+          // Fallback for unexpected success responses
+          this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint });
+          this.sendSucceeded = true;
+          this.editEnabled = true;
+        }
+      },
+      error: err => {
+        this.errorText = httpErrorMessage(err, 'Failed to send email.');
         this.editEnabled = true;
-      } else {
-        this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint });
-        this.sendSucceeded = true;
       }
-    }, err => {
-      this.errorText = err.error;
-      this.editEnabled = true;
     });
   }
 
@@ -105,6 +151,47 @@ export class SendEmailComponent {
     this.editEnabled = true;
     this.sendSucceeded = false;
     this.testSucceeded = false;
+    this.activeJob = null;
+    this.jobCompleted = false;
+    this.teardownJobSubscriptions();
+  }
+
+  private subscribeToJobUpdates(jobId: string): void {
+    this.teardownJobSubscriptions();
+    this.emailJobNotifications.connect();
+
+    this.jobSubscriptions.push(
+      this.emailJobNotifications.progress$.subscribe(event => {
+        if (event.jobId === jobId && this.activeJob) {
+          this.activeJob = {
+            ...this.activeJob,
+            status: event.status,
+            sentCount: event.sentCount,
+            failedCount: event.failedCount,
+            totalRecipients: event.totalRecipients
+          };
+        }
+      }),
+      this.emailJobNotifications.completed$.subscribe(event => {
+        if (event.jobId === jobId && this.activeJob) {
+          this.activeJob = {
+            ...this.activeJob,
+            status: event.status,
+            sentCount: event.sentCount,
+            failedCount: event.failedCount,
+            totalRecipients: event.totalRecipients,
+            lastError: event.lastError
+          };
+          this.jobCompleted = true;
+        }
+      })
+    );
+  }
+
+  private teardownJobSubscriptions(): void {
+    this.jobSubscriptions.forEach(s => s.unsubscribe());
+    this.jobSubscriptions = [];
+    this.emailJobNotifications.disconnect();
   }
 
 }

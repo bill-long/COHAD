@@ -34,6 +34,8 @@ import { BlogComponent } from './components/blog/blog.component';
 import { BlogDetailComponent } from './components/blog-detail/blog-detail.component';
 import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
 import { EmailPreferencesComponent } from './components/email-preferences/email-preferences.component';
+import { EmailJobListComponent } from './components/email-job-list/email-job-list.component';
+import { EmailJobDetailComponent } from './components/email-job-detail/email-job-detail.component';
 
 @Injectable({ providedIn: 'root' })
 export class CohadTitleStrategy extends TitleStrategy {
@@ -81,6 +83,8 @@ const routes: Routes = [
       { path: 'users', component: ManageUsersComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles }, title: 'Manage Users' },
       { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageHomesRoles }, title: 'Manage Homes' },
       { path: 'send-email', component: SendEmailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles }, title: 'Send Email' },
+      { path: 'email-jobs', component: EmailJobListComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles }, title: 'Email Jobs' },
+      { path: 'email-jobs/:id', component: EmailJobDetailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles }, title: 'Email Job' },
       { path: 'print', component: ManagePrintComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, title: 'Print' },
       { path: 'documents', component: ManageDocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles }, title: 'Manage Documents' },
       {

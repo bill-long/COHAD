@@ -85,6 +85,8 @@ import { ManageBlogComponent } from './components/manage-blog/manage-blog.compon
 import { BlogEditorDialogComponent } from './components/blog-editor-dialog/blog-editor-dialog.component';
 import { MilkdownEditorComponent } from './components/milkdown-editor/milkdown-editor.component';
 import { EmailPreferencesComponent } from './components/email-preferences/email-preferences.component';
+import { EmailJobListComponent } from './components/email-job-list/email-job-list.component';
+import { EmailJobDetailComponent } from './components/email-job-detail/email-job-detail.component';
 import { GlobalErrorHandler } from './services/global-error-handler';
 
 @NgModule({ declarations: [
@@ -131,7 +133,9 @@ import { GlobalErrorHandler } from './services/global-error-handler';
         ManageBlogComponent,
         BlogEditorDialogComponent,
         MilkdownEditorComponent,
-        EmailPreferencesComponent
+        EmailPreferencesComponent,
+        EmailJobListComponent,
+        EmailJobDetailComponent
     ],
     bootstrap: [AppComponent], imports: [BrowserModule,
         AppRoutingModule,
