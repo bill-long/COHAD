@@ -1,7 +1,7 @@
 import { HttpClient, HttpResponse } from '@angular/common/http';
 import { Component, Inject, OnDestroy } from '@angular/core';
 import Quill from 'quill';
-import { combineLatest, Observable, Subscription, zip } from 'rxjs';
+import { Observable, Subscription, zip } from 'rxjs';
 import { map, take } from 'rxjs/operators';
 import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
