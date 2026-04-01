@@ -420,15 +420,15 @@ namespace Web.Services
                 {
                     ct.ThrowIfCancellationRequested();
 
+                    var attemptStartedUtc = DateTime.UtcNow;
                     recipient.AttemptCount++;
-                    recipient.LastAttemptUtc = DateTime.UtcNow;
+                    recipient.LastAttemptUtc = attemptStartedUtc;
+                    job.LastProgressUtc = attemptStartedUtc;
                     if (!await TryPersistJobAsync(repo, job))
                     {
                         stoppedEarly = true;
                         break;
                     }
-
-                    job.LastProgressUtc = DateTime.UtcNow;
 
                     // Reset protocol log between messages to bound memory
                     protocolLog.SetLength(0);
@@ -572,15 +572,15 @@ namespace Web.Services
             foreach (var recipient in pendingRecipients)
             {
                 ct.ThrowIfCancellationRequested();
+                var attemptStartedUtc = DateTime.UtcNow;
                 recipient.AttemptCount++;
-                recipient.LastAttemptUtc = DateTime.UtcNow;
+                recipient.LastAttemptUtc = attemptStartedUtc;
+                job.LastProgressUtc = attemptStartedUtc;
                 if (!await TryPersistJobAsync(repo, job))
                 {
                     stoppedEarly = true;
                     break;
                 }
-
-                job.LastProgressUtc = DateTime.UtcNow;
 
                 await Task.Delay(50, ct); // Simulate send latency
 
