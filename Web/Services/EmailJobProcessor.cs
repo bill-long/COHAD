@@ -75,7 +75,7 @@ namespace Web.Services
                     r.Status = EmailJobRecipientStatus.Failed;
                     if (string.IsNullOrWhiteSpace(r.Error))
                         r.Error = capMessage;
-                    else
+                    else if (!r.Error.Contains(capMessage, StringComparison.OrdinalIgnoreCase))
                         r.Error = $"{r.Error} Additional info: {capMessage}";
                 }
             }
@@ -292,10 +292,10 @@ namespace Web.Services
                 job.Status = EmailJobStatus.InProgress;
                 job.StartedUtc ??= DateTime.UtcNow;
                 job.LastProgressUtc ??= job.StartedUtc;
-                if (job.MaxRecipientAttempts <= 0)
-                {
-                    job.MaxRecipientAttempts = Math.Clamp(_defaultMaxRecipientAttempts, 1, 25);
-                }
+                var effectiveMaxAttempts = job.MaxRecipientAttempts > 0
+                    ? job.MaxRecipientAttempts
+                    : _defaultMaxRecipientAttempts;
+                job.MaxRecipientAttempts = Math.Clamp(effectiveMaxAttempts, 1, 25);
                 if (!await repo.TryClaimAsync(job))
                 {
                     _logger.LogInformation("Email job {JobId} was already claimed by another instance — skipping", jobId);

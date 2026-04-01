@@ -261,6 +261,101 @@ public sealed class EmailJobProcessorTests
     }
 
     [Fact]
+    public async Task MockMode_CapSuffixIsNotAppendedTwiceWhenRecipientAlreadyHasCapError()
+    {
+        var jobId = Guid.NewGuid();
+        var capFragment = "Additional info: Max attempts reached (2).";
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Idempotent cap error",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            MaxRecipientAttempts = 2,
+            TotalRecipients = 2,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "already-capped@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Failed,
+                    AttemptCount = 2,
+                    Error = $"SMTP error {capFragment}"
+                },
+                new EmailJobRecipient
+                {
+                    Email = "ok@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Pending,
+                    AttemptCount = 0
+                }
+            }
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        _fileStore.Setup(f => f.DownloadAsync(job.ContentBlobPath))
+            .ReturnsAsync(new DocumentFileResult
+            {
+                Stream = new MemoryStream("<p>X</p>"u8.ToArray()),
+                ContentType = "text/html"
+            });
+
+        var processor = CreateProcessor();
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.Equal(EmailJobStatus.PartiallyCompleted, job.Status);
+        Assert.StartsWith("SMTP error", job.Recipients[0].Error, StringComparison.Ordinal);
+        Assert.Equal(job.Recipients[0].Error.IndexOf(capFragment, StringComparison.Ordinal),
+            job.Recipients[0].Error.LastIndexOf(capFragment, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task MockMode_ClampsExcessiveMaxRecipientAttemptsOnClaim()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Clamp test",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            MaxRecipientAttempts = 999,
+            TotalRecipients = 1,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient { Email = "one@test.com", HomeId = Guid.NewGuid(), Status = EmailJobRecipientStatus.Pending }
+            }
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        _fileStore.Setup(f => f.DownloadAsync(job.ContentBlobPath))
+            .ReturnsAsync(new DocumentFileResult
+            {
+                Stream = new MemoryStream("<p>Clamp</p>"u8.ToArray()),
+                ContentType = "text/html"
+            });
+
+        var processor = CreateProcessor();
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.Equal(25, job.MaxRecipientAttempts);
+        Assert.Equal(EmailJobStatus.Completed, job.Status);
+    }
+
+    [Fact]
     public async Task MockMode_RespectsCancel()
     {
         var jobId = Guid.NewGuid();
