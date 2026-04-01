@@ -412,9 +412,13 @@ namespace Web.Services
             SmtpClient smtpClient = null;
             var stoppedEarly = false;
 
-            try
+            // No eligible recipients (e.g. all remaining are attempt-capped): finalize without SMTP so a
+            // connection failure cannot prevent MarkCappedRecipientsAsFailed / terminal status.
+            if (pendingRecipients.Count > 0)
             {
-                smtpClient = await ConnectSmtpAsync(logger, ct);
+                try
+                {
+                    smtpClient = await ConnectSmtpAsync(logger, ct);
 
 #if DEBUG
                 // In DEBUG, send a single representative message instead of the full batch
@@ -545,18 +549,19 @@ namespace Web.Services
                     await NotifyProgressAsync(job);
                 }
 #endif
-            }
-            finally
-            {
-                if (smtpClient != null)
+                }
+                finally
                 {
-                    try
+                    if (smtpClient != null)
                     {
-                        if (smtpClient.IsConnected)
-                            await smtpClient.DisconnectAsync(true, CancellationToken.None);
+                        try
+                        {
+                            if (smtpClient.IsConnected)
+                                await smtpClient.DisconnectAsync(true, CancellationToken.None);
+                        }
+                        catch { /* best-effort disconnect */ }
+                        smtpClient.Dispose();
                     }
-                    catch { /* best-effort disconnect */ }
-                    smtpClient.Dispose();
                 }
             }
 
