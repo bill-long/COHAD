@@ -10,6 +10,10 @@
     color: var(--primary-sage);
     cursor: pointer;
     font-size: 0.9rem;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
 }
 
 .back-link:hover {

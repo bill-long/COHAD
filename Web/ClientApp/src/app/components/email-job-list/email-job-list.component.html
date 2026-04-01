@@ -32,7 +32,7 @@
                         role="button"
                         tabindex="0"
                         (keydown.enter)="viewJob(job)"
-                        (keydown.space)="viewJob(job)">
+                        (keydown.space)="$event.preventDefault(); $event.stopPropagation(); viewJob(job)">
                         <td>
                             <span class="status-badge" [ngClass]="statusClass(job.status)">
                                 {{ statusLabel(job.status) }}

@@ -110,11 +110,6 @@ namespace Web.MockData
 
         private static EmailJob CloneJob(EmailJob job)
         {
-            if (job == null)
-            {
-                return null;
-            }
-
             return new EmailJob
             {
                 Id = job.Id,

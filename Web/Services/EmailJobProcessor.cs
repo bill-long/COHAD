@@ -291,6 +291,7 @@ namespace Web.Services
                     {
                         r.Status = EmailJobRecipientStatus.Sent;
                         r.SentUtc = DateTime.UtcNow;
+                        r.Error = null;
                     }
                     RecalculateCounts(job);
                     if (!await TryPersistJobAsync(repo, job))
@@ -354,6 +355,8 @@ namespace Web.Services
                     }
 
                     RecalculateCounts(job);
+                    // Check cancellation before persisting to avoid overwriting a Cancelled status
+                    ct.ThrowIfCancellationRequested();
                     // Persist progress after every recipient for maximum recovery granularity
                     if (!await TryPersistJobAsync(repo, job))
                     {
@@ -429,6 +432,7 @@ namespace Web.Services
 
                 recipient.Status = EmailJobRecipientStatus.Sent;
                 recipient.SentUtc = DateTime.UtcNow;
+                recipient.Error = null;
 
                 RecalculateCounts(job);
                 if (!await TryPersistJobAsync(repo, job))

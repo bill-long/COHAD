@@ -230,6 +230,7 @@ namespace Web.Controllers
 
             // Store HTML body in blob storage
             job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
+            var jobPersisted = false;
             try
             {
                 using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(emailInfo.HtmlBody ?? "")))
@@ -238,10 +239,13 @@ namespace Web.Controllers
                 }
 
                 await _emailJobRepository.AddAsync(job);
+                jobPersisted = true;
             }
             catch
             {
-                if (!string.IsNullOrEmpty(job.ContentBlobPath))
+                // Only delete the blob when the job was NOT persisted; otherwise the
+                // processor still needs it and deleting would cause "content not found".
+                if (!jobPersisted && !string.IsNullOrEmpty(job.ContentBlobPath))
                 {
                     try { await _fileStore.DeleteAsync(job.ContentBlobPath); }
                     catch { /* best-effort cleanup */ }
