@@ -33,6 +33,7 @@ import { YouthServicesComponent } from './components/youth-services/youth-servic
 import { BlogComponent } from './components/blog/blog.component';
 import { BlogDetailComponent } from './components/blog-detail/blog-detail.component';
 import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
+import { EmailPreferencesComponent } from './components/email-preferences/email-preferences.component';
 
 @Injectable({ providedIn: 'root' })
 export class CohadTitleStrategy extends TitleStrategy {
@@ -99,6 +100,7 @@ const routes: Routes = [
       { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageAuditLogRoles }, title: 'Audit Log' }
     ]
   },
+  { path: 'email-preferences', component: EmailPreferencesComponent, title: 'Email Preferences' },
   { path: 'unauthorized', component: UnauthorizedComponent, title: 'Unauthorized' }
 ];
 

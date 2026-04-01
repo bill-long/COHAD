@@ -42,7 +42,7 @@ The backend proxies SPA requests to `http://127.0.0.1:4200`. Use `--host 127.0.0
 cd Web/ClientApp && npm run start:mock
 
 # Terminal 2
-MockJwt__SigningKey='<32+ UTF-8 byte secret>' ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://127.0.0.1:5000" dotnet run --project Web/Web.csproj
+MockJwt__SigningKey='<32+ UTF-8 byte secret>' UnsubscribeToken__SigningKey='<32+ UTF-8 byte secret>' ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://127.0.0.1:5000" dotnet run --project Web/Web.csproj
 ```
 
 Or use `scripts/run-mock-data.sh`. Open http://127.0.0.1:5000. The mock user is `mock@cohad.local` with Resident + Administrator roles owning 123 Mock Lane; `taylor@cohad.local` owns 456 Test Court. Data resets on restart.
@@ -56,12 +56,13 @@ Or use `scripts/run-mock-data.sh`. Open http://127.0.0.1:5000. The mock user is 
 - **Role hierarchy:** Every Administrator is also assigned the Resident role. This is enforced at assignment time in `UserController.UpdateUserAssociations`. Controllers using `[Authorize(Policy = "Resident")]` therefore implicitly permit Administrators — do not add a redundant "Resident OR Administrator" check.
 - **Startup:** `Startup.cs` wires auth, DI, and SPA proxy. `MockData` environment is selected solely by `ASPNETCORE_ENVIRONMENT=MockData` — there is no separate feature flag.
 - **Open Graph:** `EventsController` serves `/events/{segment}` server-side (when `dist/cohad-app/index.html` exists) to inject OG meta tags for link previews.
+- **Email unsubscribe:** Committee emails include per-recipient `List-Unsubscribe` / `List-Unsubscribe-Post` headers (RFC 8058) and an HTML footer with a link to the preference page. Tokens are AES-GCM encrypted using a 256-bit key derived from `UnsubscribeToken:SigningKey`, yielding an opaque base64url string (nonce + ciphertext + authentication tag). Callers must treat tokens as opaque. The public `UnsubscribeController` (`[AllowAnonymous]`) handles one-click unsubscribe and preference CRUD. Config: `UnsubscribeToken:SigningKey` (≥32 UTF-8 bytes) and `AppBaseUrl` (e.g. `https://www.cohad.org`). Without a signing key, emails are sent without unsubscribe headers/footer.
 
 ### Frontend (`Web/ClientApp/`)
 
 - **SPA served from backend:** In production, the backend serves the Angular dist. In development, it proxies to the ng serve port.
 - **Auth:** `angular-oauth2-oidc` in production; `mock-auth.interceptor` + `mock-auth-token.service` inject dev tokens in mock mode (controlled by `environment.useMockAuth`).
-- **Routing:** Lazy-loaded routes with `auth.guard` (requires login) and `role.guard` (requires specific roles). Public pages: home, about, news, events. Authenticated area: directory, map, vendors, youth-services, dues, myinfo, documents. Admin area: manage-users, manage-homes, manage-documents, manage-events, audit-log, send-email.
+- **Routing:** Lazy-loaded routes with `auth.guard` (requires login) and `role.guard` (requires specific roles). Public pages: home, about, news, events, email-preferences. Authenticated area: directory, map, vendors, youth-services, dues, myinfo, documents. Admin area: manage-users, manage-homes, manage-documents, manage-events, audit-log, send-email.
 - **Environment configs:** `environment.ts` (dev), `environment.prod.ts`, `environment.mock.ts`.
 
 ### Cosmos DB config
@@ -105,3 +106,5 @@ When `appInsightsConnectionString` is empty, the service becomes a complete no-o
 - `Web.UnitTests` uses `InternalsVisibleTo` to access internal types — keep internal where appropriate.
 - `ng lint` is not configured and will error. Use `ng build` for TypeScript type-checking.
 - `MockJwt__SigningKey` must be ≥32 UTF-8 bytes for HS256. `appsettings.MockData.json` intentionally leaves it empty; supply via env var or `dotnet user-secrets`.
+- `UnsubscribeToken__SigningKey` must be ≥32 UTF-8 bytes; it is used to derive an AES-GCM encryption key (via SHA-256) for unsubscribe tokens. Without it, emails are sent without unsubscribe headers/footer (graceful degradation). Supply via env var or `dotnet user-secrets set "UnsubscribeToken:SigningKey" "..."` in the `Web` project.
+- `AppBaseUrl` must be set (e.g. `https://www.cohad.org`) for unsubscribe links in emails. Without it, no footer or headers are added.

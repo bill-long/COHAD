@@ -10,6 +10,7 @@ namespace Web.MockData
     public sealed class MockHomeRepository : IHomeRepository
     {
         private readonly Dictionary<Guid, Home> _homes = new();
+        private readonly Dictionary<Guid, int> _versions = new();
 
         public MockHomeRepository()
         {
@@ -64,6 +65,7 @@ namespace Web.MockData
                 AssociatedUsers = new List<HomeAssociatedUser>()
             };
             _homes[primaryHome.Id] = CloneHome(primaryHome);
+            _versions[primaryHome.Id] = 1;
 
             var secondaryHome = new Home
             {
@@ -116,6 +118,7 @@ namespace Web.MockData
                 AssociatedUsers = new List<HomeAssociatedUser>()
             };
             _homes[secondaryHome.Id] = CloneHome(secondaryHome);
+            _versions[secondaryHome.Id] = 1;
         }
 
         public Task<List<Home>> GetAllAsync()
@@ -130,7 +133,12 @@ namespace Web.MockData
         {
             lock (_homes)
             {
-                return Task.FromResult(_homes.TryGetValue(id, out var h) ? CloneHome(h) : null);
+                if (!_homes.TryGetValue(id, out var h))
+                    return Task.FromResult<Home>(null);
+
+                var clone = CloneHome(h);
+                clone.ETag = _versions.TryGetValue(id, out var v) ? v.ToString() : null;
+                return Task.FromResult(clone);
             }
         }
 
@@ -155,8 +163,22 @@ namespace Web.MockData
         {
             lock (_homes)
             {
+                // Optimistic concurrency: if ETag is provided, check it matches current version
+                if (!string.IsNullOrEmpty(home.ETag) && _versions.TryGetValue(home.Id, out var currentVersion))
+                {
+                    if (home.ETag != currentVersion.ToString())
+                    {
+                        throw new ConcurrencyConflictException(
+                            $"Home {home.Id} was modified by another request. Retry the operation.",
+                            new InvalidOperationException("ETag mismatch"));
+                    }
+                }
+
                 _homes[home.Id] = CloneHome(home);
-                return Task.FromResult(CloneHome(_homes[home.Id]));
+                _versions[home.Id] = (_versions.TryGetValue(home.Id, out var v) ? v : 0) + 1;
+                var clone = CloneHome(_homes[home.Id]);
+                clone.ETag = _versions[home.Id].ToString();
+                return Task.FromResult(clone);
             }
         }
 

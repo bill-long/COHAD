@@ -31,5 +31,11 @@ namespace Web.Models
         public List<Resident> Residents { get; set; }
 
         public List<HomeAssociatedUser> AssociatedUsers { get; set; }
+
+        /// <summary>
+        /// Cosmos DB ETag for optimistic concurrency. Populated on read, checked on write.
+        /// Null when not loaded from Cosmos (new documents or mock data without versioning).
+        /// </summary>
+        public string ETag { get; set; }
     }
 }

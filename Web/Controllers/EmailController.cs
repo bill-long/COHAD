@@ -31,7 +31,7 @@ namespace Web.Controllers
         {
             await AuditEmail("Board", emailInfo);
 
-            await _emailService.SendEmail("board@cohad.org", "COHAD Board", emailInfo, e => e != null && e.BoardEmailOptedIn, "Canyon Oaks Residents", User);
+            await _emailService.SendEmail("board@cohad.org", "COHAD Board", emailInfo, e => e != null && e.BoardEmailOptedIn, "board", User);
 
             return Ok();
         }
@@ -42,7 +42,7 @@ namespace Web.Controllers
         {
             await AuditEmail("Welcome Committee", emailInfo);
 
-            await _emailService.SendEmail("welcome@cohad.org", "COHAD Welcome Committee", emailInfo, e => e != null && e.WelcomeEmailOptedIn, "Canyon Oaks Residents", User);
+            await _emailService.SendEmail("welcome@cohad.org", "COHAD Welcome Committee", emailInfo, e => e != null && e.WelcomeEmailOptedIn, "welcome", User);
 
             return Ok();
         }
@@ -53,7 +53,7 @@ namespace Web.Controllers
         {
             await AuditEmail("Garden Club", emailInfo);
 
-            await _emailService.SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo, e => e != null && e.GardenClubEmailOptedIn, "Canyon Oaks Residents", User);
+            await _emailService.SendEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo, e => e != null && e.GardenClubEmailOptedIn, "garden", User);
 
             return Ok();
         }
@@ -64,7 +64,7 @@ namespace Web.Controllers
         {
             await AuditEmail("Social Committee", emailInfo);
 
-            await _emailService.SendEmail("social@cohad.org", "COHAD Social Committee", emailInfo, e => e != null && e.SocialCommitteeEmailOptedIn, "Canyon Oaks Residents", User);
+            await _emailService.SendEmail("social@cohad.org", "COHAD Social Committee", emailInfo, e => e != null && e.SocialCommitteeEmailOptedIn, "social", User);
 
             return Ok();
         }
@@ -75,7 +75,7 @@ namespace Web.Controllers
         {
             await AuditEmail("Sunshine Committee", emailInfo);
 
-            await _emailService.SendEmail("sunshine@cohad.org", "COHAD Sunshine Committee", emailInfo, e => e != null && e.SunshineCommitteeEmailOptedIn, "Canyon Oaks Residents", User);
+            await _emailService.SendEmail("sunshine@cohad.org", "COHAD Sunshine Committee", emailInfo, e => e != null && e.SunshineCommitteeEmailOptedIn, "sunshine", User);
 
             return Ok();
         }
