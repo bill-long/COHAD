@@ -255,6 +255,8 @@ namespace Web.Controllers
                 throw;
             }
 
+            await AuditEmail(auditFrom, emailInfo, apiUser);
+
             try
             {
                 await _emailJobQueue.EnqueueAsync(job.Id);
@@ -272,8 +274,6 @@ namespace Web.Controllers
 
                 throw;
             }
-
-            await AuditEmail(auditFrom, emailInfo, apiUser);
 
             return Accepted(EmailJobSummary.FromJob(job));
         }
