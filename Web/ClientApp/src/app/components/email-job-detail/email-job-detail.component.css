@@ -93,9 +93,31 @@
 /* Actions */
 .actions {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 10px;
     margin-bottom: 1.5rem;
+}
+
+.job-actions-hint {
+    margin: 0;
+    padding: 0.65rem 0.85rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    background: var(--surface-subtle);
+    border: 1px solid var(--border-faint);
+}
+
+.job-actions-hint--stale {
+    color: #7a4a1e;
+    background: #fef3e0;
+    border-color: color-mix(in srgb, #e65100 22%, transparent);
+}
+
+.action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 /* Section titles */

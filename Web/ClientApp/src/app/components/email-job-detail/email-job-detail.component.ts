@@ -17,6 +17,12 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
   errorText: string | null = null;
   actionInProgress = false;
 
+  /** Queued for this long without starting counts as stale (client-side nudge only). */
+  private readonly staleQueuedThresholdMs = 12 * 60 * 1000;
+
+  readonly cancelJobTooltip =
+    'Stops processing and marks the job cancelled. You can run it again afterward.';
+
   private jobId!: string;
   private subscriptions: Subscription[] = [];
 
@@ -104,6 +110,26 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
   get canCancel(): boolean {
     if (!this.job) return false;
     return ['Queued', 'InProgress'].includes(this.job.status);
+  }
+
+  get retryButtonLabel(): string {
+    if (!this.job) return 'Retry';
+    if (this.job.status === 'Cancelled') return 'Run again';
+    return 'Retry failed recipients';
+  }
+
+  /** Shown above actions while the job may still be running or waiting to start. */
+  get showStuckRecoveryHint(): boolean {
+    if (!this.job) return false;
+    return this.job.status === 'Queued' || this.job.status === 'InProgress';
+  }
+
+  /** Queued a long time with no start time — stronger copy in the hint. */
+  get isStaleQueuedJob(): boolean {
+    if (!this.job || this.job.status !== 'Queued') return false;
+    if (this.job.startedUtc) return false;
+    const created = new Date(this.job.createdUtc).getTime();
+    return Date.now() - created > this.staleQueuedThresholdMs;
   }
 
   retryJob(): void {

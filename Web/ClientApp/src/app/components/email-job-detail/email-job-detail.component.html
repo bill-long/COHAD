@@ -67,12 +67,30 @@
 
                 <!-- Actions -->
                 <div class="actions" *ngIf="canRetry || canCancel">
-                    <button *ngIf="canRetry" mat-flat-button color="primary" (click)="retryJob()" [disabled]="actionInProgress">
-                        Retry Failed
-                    </button>
-                    <button *ngIf="canCancel" mat-flat-button color="warn" (click)="cancelJob()" [disabled]="actionInProgress">
-                        Cancel Job
-                    </button>
+                    <p *ngIf="showStuckRecoveryHint"
+                       class="job-actions-hint"
+                       [class.job-actions-hint--stale]="isStaleQueuedJob"
+                       role="note">
+                        <ng-container *ngIf="!isStaleQueuedJob">
+                            If this job does not start or stops making progress, use <strong>Cancel job</strong>, then choose <strong>Run again</strong>.
+                        </ng-container>
+                        <ng-container *ngIf="isStaleQueuedJob">
+                            This job has been queued for a while without starting. Use <strong>Cancel job</strong>, then <strong>Run again</strong> to put it back on the send queue.
+                        </ng-container>
+                    </p>
+                    <div class="action-buttons">
+                        <button *ngIf="canRetry" mat-flat-button color="primary"
+                                (click)="retryJob()" [disabled]="actionInProgress"
+                                matTooltip="Puts the job back in the send queue."
+                                [matTooltipDisabled]="job.status !== 'Cancelled'">
+                            {{ retryButtonLabel }}
+                        </button>
+                        <button *ngIf="canCancel" mat-flat-button color="warn"
+                                (click)="cancelJob()" [disabled]="actionInProgress"
+                                [matTooltip]="cancelJobTooltip">
+                            Cancel job
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Recipients -->
