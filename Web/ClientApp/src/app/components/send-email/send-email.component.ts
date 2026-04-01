@@ -126,10 +126,15 @@ export class SendEmailComponent implements OnDestroy {
           this.jobCompleted = false;
           this.sendSucceeded = true;
           this.subscribeToJobUpdates(jobSummary.id);
+        } else if (resp.status === 200 && resp.body && (resp.body as any).message) {
+          // 200 OK with a message means no matching recipients
+          this.errorText = (resp.body as any).message;
+          this.editEnabled = true;
         } else {
-          // Fallback for synchronous success (shouldn't happen for non-test, but handle gracefully)
+          // Fallback for unexpected success responses
           this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint });
           this.sendSucceeded = true;
+          this.editEnabled = true;
         }
       },
       error: err => {

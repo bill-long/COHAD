@@ -27,7 +27,12 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr *ngFor="let job of jobs" class="job-row" (click)="viewJob(job)">
+                    <tr *ngFor="let job of jobs" class="job-row"
+                        (click)="viewJob(job)"
+                        role="button"
+                        tabindex="0"
+                        (keydown.enter)="viewJob(job)"
+                        (keydown.space)="viewJob(job)">
                         <td>
                             <span class="status-badge" [ngClass]="statusClass(job.status)">
                                 {{ statusLabel(job.status) }}

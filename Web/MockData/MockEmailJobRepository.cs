@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Web.Models;
 using Web.Services.Repositories;
@@ -11,18 +12,22 @@ namespace Web.MockData
     public sealed class MockEmailJobRepository : IEmailJobRepository
     {
         private readonly Dictionary<Guid, EmailJob> _jobs = new();
+        private int _versionCounter;
 
         public Task AddAsync(EmailJob job)
         {
             lock (_jobs)
             {
-                _jobs[job.Id] = CloneJob(job);
+                var clone = CloneJob(job);
+                clone.ETag = Interlocked.Increment(ref _versionCounter).ToString();
+                _jobs[job.Id] = clone;
+                job.ETag = clone.ETag;
             }
 
             return Task.CompletedTask;
         }
 
-        public Task<EmailJob> GetByIdAsync(Guid jobId)
+        public Task<EmailJob?> GetByIdAsync(Guid jobId)
         {
             lock (_jobs)
             {
@@ -34,10 +39,31 @@ namespace Web.MockData
         {
             lock (_jobs)
             {
-                _jobs[job.Id] = CloneJob(job);
+                var clone = CloneJob(job);
+                clone.ETag = Interlocked.Increment(ref _versionCounter).ToString();
+                _jobs[job.Id] = clone;
+                job.ETag = clone.ETag;
             }
 
             return Task.CompletedTask;
+        }
+
+        public Task<bool> TryClaimAsync(EmailJob job)
+        {
+            lock (_jobs)
+            {
+                if (!_jobs.TryGetValue(job.Id, out var stored))
+                    return Task.FromResult(false);
+
+                if (!string.IsNullOrEmpty(job.ETag) && stored.ETag != job.ETag)
+                    return Task.FromResult(false);
+
+                var clone = CloneJob(job);
+                clone.ETag = Interlocked.Increment(ref _versionCounter).ToString();
+                _jobs[job.Id] = clone;
+                job.ETag = clone.ETag;
+                return Task.FromResult(true);
+            }
         }
 
         public Task<List<EmailJob>> GetIncompleteJobsAsync()
@@ -91,6 +117,7 @@ namespace Web.MockData
                 SentCount = job.SentCount,
                 FailedCount = job.FailedCount,
                 LastError = job.LastError,
+                ETag = job.ETag,
                 Recipients = job.Recipients?.Select(r => new EmailJobRecipient
                 {
                     Email = r.Email,

@@ -182,6 +182,8 @@ namespace Web.Controllers
         {
             var apiUser = await _userRepository.GetByUniqueIdAsync(
                 Models.User.GetUniqueIdFromClaims(User.Claims));
+            if (apiUser == null)
+                return Unauthorized(new { error = "User not found." });
 
             // Test emails still use the synchronous path (single recipient, immediate feedback)
             if (emailInfo.IsTestEmail)

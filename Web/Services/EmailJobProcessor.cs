@@ -39,8 +39,6 @@ namespace Web.Services
         // Tracks in-memory cancellation tokens so the cancel API can stop a running job.
         private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeJobs = new();
 
-        private const int MaxSmtpReconnectAttempts = 3;
-
         /// <summary>
         /// Derives SentCount and FailedCount from the actual recipient statuses,
         /// avoiding drift during retries of previously-failed recipients.
@@ -148,17 +146,21 @@ namespace Web.Services
                     return;
                 }
 
-                // Claim the job: only transition to InProgress if still Queued/InProgress.
-                // This prevents duplicate processing if multiple instances resume the same job.
                 if (job.Status != EmailJobStatus.Queued && job.Status != EmailJobStatus.InProgress)
                 {
                     _logger.LogInformation("Email job {JobId} has status {Status} — skipping", jobId, job.Status);
                     return;
                 }
 
+                // Atomically claim the job using ETag-based optimistic concurrency.
+                // If another instance already claimed it, the ETag will mismatch and TryClaimAsync returns false.
                 job.Status = EmailJobStatus.InProgress;
                 job.StartedUtc ??= DateTime.UtcNow;
-                await repo.UpdateAsync(job);
+                if (!await repo.TryClaimAsync(job))
+                {
+                    _logger.LogInformation("Email job {JobId} was already claimed by another instance — skipping", jobId);
+                    return;
+                }
 
                 // Load HTML content from blob storage
                 string htmlBody;

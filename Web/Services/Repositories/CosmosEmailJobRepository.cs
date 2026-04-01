@@ -29,13 +29,15 @@ namespace Web.Services.Repositories
             await _emailJobContainer.CreateItemAsync(doc, CosmosPartitionKey.None);
         }
 
-        public async Task<EmailJob> GetByIdAsync(Guid jobId)
+        public async Task<EmailJob?> GetByIdAsync(Guid jobId)
         {
             var documentId = CosmosLegacyDocumentMapper.ToEmailJobDocumentId(jobId);
             try
             {
                 var response = await _emailJobContainer.ReadItemAsync<JObject>(documentId, CosmosPartitionKey.None);
-                return CosmosLegacyDocumentMapper.ToEmailJob(response.Resource);
+                var job = CosmosLegacyDocumentMapper.ToEmailJob(response.Resource);
+                job.ETag = response.Headers.ETag;
+                return job;
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
             {
@@ -47,7 +49,30 @@ namespace Web.Services.Repositories
         {
             var doc = CosmosLegacyDocumentMapper.ToEmailJobDocument(job);
             var documentId = doc.Value<string>("id");
-            await _emailJobContainer.ReplaceItemAsync(doc, documentId, CosmosPartitionKey.None);
+            var response = await _emailJobContainer.ReplaceItemAsync(doc, documentId, CosmosPartitionKey.None);
+            job.ETag = response.Headers.ETag;
+        }
+
+        public async Task<bool> TryClaimAsync(EmailJob job)
+        {
+            var doc = CosmosLegacyDocumentMapper.ToEmailJobDocument(job);
+            var documentId = doc.Value<string>("id");
+            var requestOptions = new ItemRequestOptions();
+            if (!string.IsNullOrEmpty(job.ETag))
+            {
+                requestOptions.IfMatchEtag = job.ETag;
+            }
+
+            try
+            {
+                var response = await _emailJobContainer.ReplaceItemAsync(doc, documentId, CosmosPartitionKey.None, requestOptions);
+                job.ETag = response.Headers.ETag;
+                return true;
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+            {
+                return false;
+            }
         }
 
         public async Task<List<EmailJob>> GetIncompleteJobsAsync()

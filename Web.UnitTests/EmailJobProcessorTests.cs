@@ -26,6 +26,12 @@ public sealed class EmailJobProcessorTests
     private readonly Mock<IClientProxy> _clientProxy = new();
     private readonly EmailJobQueue _queue = new();
 
+    public EmailJobProcessorTests()
+    {
+        // Default: TryClaimAsync succeeds (single-instance tests)
+        _jobRepo.Setup(r => r.TryClaimAsync(It.IsAny<EmailJob>())).ReturnsAsync(true);
+    }
+
     private EmailJobProcessor CreateProcessor(string environment = "MockData")
     {
         var scopeFactory = new Mock<IServiceScopeFactory>();

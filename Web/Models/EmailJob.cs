@@ -69,6 +69,13 @@ namespace Web.Models
         public string LastError { get; set; }
 
         public List<EmailJobRecipient> Recipients { get; set; } = new();
+
+        /// <summary>
+        /// Cosmos DB ETag for optimistic concurrency. Not serialized to/from the document body;
+        /// populated from the Cosmos response headers.
+        /// </summary>
+        [JsonIgnore]
+        public string ETag { get; set; }
     }
 
     public class EmailJobRecipient
