@@ -140,7 +140,7 @@ export class AuditLogComponent implements OnInit, OnDestroy {
 
           const incoming = response?.items ?? [];
           if (incoming.length > 0) {
-            this.entries.push(...incoming);
+            this.entries = [...this.entries, ...incoming];
           }
 
           this.continuationToken = response?.continuationToken ?? null;
