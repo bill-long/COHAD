@@ -32,7 +32,7 @@ public sealed class EmailJobProcessorTests
         _jobRepo.Setup(r => r.TryClaimAsync(It.IsAny<EmailJob>())).ReturnsAsync(true);
     }
 
-    private EmailJobProcessor CreateProcessor(string environment = "MockData")
+    private EmailJobProcessor CreateProcessor(string environment = "MockData", Dictionary<string, string?>? configOverrides = null)
     {
         var scopeFactory = new Mock<IServiceScopeFactory>();
         var scope = new Mock<IServiceScope>();
@@ -50,14 +50,24 @@ public sealed class EmailJobProcessorTests
         var env = new Mock<IWebHostEnvironment>();
         env.Setup(e => e.EnvironmentName).Returns(environment);
 
+        var defaults = new Dictionary<string, string?>
+        {
+            ["SmtpHost"] = "localhost",
+            ["SmtpUser"] = "user",
+            ["SmtpPassword"] = "pass",
+            ["AppBaseUrl"] = "https://test.cohad.org",
+            ["EmailJobs:Enabled"] = "true",
+            ["EmailJobs:DefaultMaxRecipientAttempts"] = "3",
+            ["EmailJobs:StallAfterMinutes"] = "30"
+        };
+        if (configOverrides != null)
+        {
+            foreach (var kv in configOverrides)
+                defaults[kv.Key] = kv.Value;
+        }
+
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["SmtpHost"] = "localhost",
-                ["SmtpUser"] = "user",
-                ["SmtpPassword"] = "pass",
-                ["AppBaseUrl"] = "https://test.cohad.org"
-            })
+            .AddInMemoryCollection(defaults)
             .Build();
 
         return new EmailJobProcessor(
@@ -261,6 +271,7 @@ public sealed class EmailJobProcessorTests
             ContentBlobPath = $"email-jobs/{jobId:D}.html",
             TotalRecipients = 2,
             SentCount = 1,
+            LastProgressUtc = DateTime.UtcNow,
             Recipients = new List<EmailJobRecipient>
             {
                 new EmailJobRecipient { Email = "done@test.com", Status = EmailJobRecipientStatus.Sent, SentUtc = DateTime.UtcNow },
@@ -300,6 +311,79 @@ public sealed class EmailJobProcessorTests
         Assert.Equal(EmailJobStatus.Completed, incompleteJob.Status);
         Assert.Equal(2, incompleteJob.SentCount);
         Assert.Equal(EmailJobRecipientStatus.Sent, incompleteJob.Recipients[1].Status);
+    }
+
+    [Fact]
+    public async Task DisabledProcessor_DoesNotResumeOrProcess()
+    {
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>
+        {
+            new EmailJob { Id = Guid.NewGuid(), Status = EmailJobStatus.Queued }
+        });
+
+        var processor = CreateProcessor(configOverrides: new Dictionary<string, string?>
+        {
+            ["EmailJobs:Enabled"] = "false"
+        });
+
+        using var cts = new CancellationTokenSource();
+        await processor.StartAsync(cts.Token);
+
+        // Give the background service a moment to run/return
+        await Task.Delay(100);
+
+        _jobRepo.Verify(r => r.GetIncompleteJobsAsync(), Times.Never);
+        _jobRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Resume_StalledInProgressJob_MarksFailedAndDoesNotEnqueue()
+    {
+        var jobId = Guid.NewGuid();
+        var stalled = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.InProgress,
+            Category = "board",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            CreatedUtc = DateTime.UtcNow.AddHours(-2),
+            StartedUtc = DateTime.UtcNow.AddHours(-2),
+            LastProgressUtc = DateTime.UtcNow.AddMinutes(-10),
+            TotalRecipients = 1,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient { Email = "pending@test.com", HomeId = Guid.NewGuid(), Status = EmailJobRecipientStatus.Pending }
+            }
+        };
+
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob> { stalled });
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var processor = CreateProcessor(configOverrides: new Dictionary<string, string?>
+        {
+            ["EmailJobs:StallAfterMinutes"] = "1"
+        });
+
+        using var cts = new CancellationTokenSource();
+        await processor.StartAsync(cts.Token);
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+            if (stalled.Status == EmailJobStatus.Failed)
+                break;
+        }
+
+        cts.Cancel();
+        try { await processor.StopAsync(CancellationToken.None); }
+        catch (OperationCanceledException) { }
+
+        Assert.Equal(EmailJobStatus.Failed, stalled.Status);
+        Assert.NotNull(stalled.CompletedUtc);
+        Assert.Contains("stalled", stalled.LastError, StringComparison.OrdinalIgnoreCase);
+        _fileStore.Verify(f => f.DownloadAsync(It.IsAny<string>()), Times.Never);
     }
 
     // ───────────────────────────────────────────────────

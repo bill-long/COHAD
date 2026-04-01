@@ -325,8 +325,10 @@ namespace Web.Services.Cosmos
                 CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
                 StartedUtc = doc["StartedUtc"]?.ToObject<DateTime?>(),
                 CompletedUtc = doc["CompletedUtc"]?.ToObject<DateTime?>(),
+                LastProgressUtc = doc["LastProgressUtc"]?.ToObject<DateTime?>(),
                 CreatedByUserId = doc.Value<string>("CreatedByUserId"),
                 CreatedByDisplayName = doc.Value<string>("CreatedByDisplayName"),
+                MaxRecipientAttempts = doc.Value<int?>("MaxRecipientAttempts") ?? 0,
                 TotalRecipients = doc.Value<int?>("TotalRecipients") ?? 0,
                 SentCount = doc.Value<int?>("SentCount") ?? 0,
                 FailedCount = doc.Value<int?>("FailedCount") ?? 0,
@@ -345,6 +347,8 @@ namespace Web.Services.Cosmos
                     ["Email"] = r.Email,
                     ["HomeId"] = r.HomeId.ToString("D"),
                     ["Status"] = r.Status.ToString(),
+                    ["AttemptCount"] = r.AttemptCount,
+                    ["LastAttemptUtc"] = r.LastAttemptUtc != null ? JToken.FromObject(r.LastAttemptUtc) : JValue.CreateNull(),
                     ["Error"] = r.Error != null ? r.Error : JValue.CreateNull(),
                     ["SentUtc"] = r.SentUtc != null ? JToken.FromObject(r.SentUtc) : JValue.CreateNull()
                 });
@@ -362,8 +366,10 @@ namespace Web.Services.Cosmos
                 ["CreatedUtc"] = JToken.FromObject(job.CreatedUtc),
                 ["StartedUtc"] = job.StartedUtc != null ? JToken.FromObject(job.StartedUtc) : JValue.CreateNull(),
                 ["CompletedUtc"] = job.CompletedUtc != null ? JToken.FromObject(job.CompletedUtc) : JValue.CreateNull(),
+                ["LastProgressUtc"] = job.LastProgressUtc != null ? JToken.FromObject(job.LastProgressUtc) : JValue.CreateNull(),
                 ["CreatedByUserId"] = job.CreatedByUserId,
                 ["CreatedByDisplayName"] = job.CreatedByDisplayName,
+                ["MaxRecipientAttempts"] = job.MaxRecipientAttempts,
                 ["TotalRecipients"] = job.TotalRecipients,
                 ["SentCount"] = job.SentCount,
                 ["FailedCount"] = job.FailedCount,
@@ -390,6 +396,8 @@ namespace Web.Services.Cosmos
                         Status = Enum.TryParse<EmailJobRecipientStatus>(r.Value<string>("Status"), out var rs)
                             ? rs
                             : EmailJobRecipientStatus.Pending,
+                        AttemptCount = r.Value<int?>("AttemptCount") ?? 0,
+                        LastAttemptUtc = r["LastAttemptUtc"]?.ToObject<DateTime?>(),
                         Error = r.Value<string>("Error"),
                         SentUtc = r["SentUtc"]?.ToObject<DateTime?>()
                     })
