@@ -70,9 +70,9 @@ namespace Web.Services.Repositories
 
         public async Task<List<EmailJob>> GetRecentJobsAsync(int limit)
         {
+            var clampedLimit = Math.Clamp(limit, 1, 100);
             var query = new CosmosQueryDefinition(
-                "SELECT TOP @limit * FROM c ORDER BY c.CreatedUtc DESC")
-                .WithParameter("@limit", limit);
+                $"SELECT TOP {clampedLimit} * FROM c ORDER BY c.CreatedUtc DESC");
 
             var iterator = _emailJobContainer.GetItemQueryIterator<JObject>(query);
             var results = new List<EmailJob>();

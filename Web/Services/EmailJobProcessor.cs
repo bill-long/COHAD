@@ -41,6 +41,17 @@ namespace Web.Services
 
         private const int MaxSmtpReconnectAttempts = 3;
 
+        /// <summary>
+        /// Derives SentCount and FailedCount from the actual recipient statuses,
+        /// avoiding drift during retries of previously-failed recipients.
+        /// </summary>
+        private static void RecalculateCounts(EmailJob job)
+        {
+            var recipients = job.Recipients ?? new();
+            job.SentCount = recipients.Count(r => r.Status == EmailJobRecipientStatus.Sent);
+            job.FailedCount = recipients.Count(r => r.Status == EmailJobRecipientStatus.Failed);
+        }
+
         public EmailJobProcessor(
             EmailJobQueue queue,
             IServiceScopeFactory scopeFactory,
@@ -238,8 +249,8 @@ namespace Web.Services
                     {
                         r.Status = EmailJobRecipientStatus.Sent;
                         r.SentUtc = DateTime.UtcNow;
-                        job.SentCount++;
                     }
+                    RecalculateCounts(job);
                     await repo.UpdateAsync(job);
                 }
 #else
@@ -286,7 +297,7 @@ namespace Web.Services
 
                         recipient.Status = EmailJobRecipientStatus.Sent;
                         recipient.SentUtc = DateTime.UtcNow;
-                        job.SentCount++;
+                        recipient.Error = null;
                     }
                     catch (OperationCanceledException)
                     {
@@ -297,9 +308,9 @@ namespace Web.Services
                         _logger.LogWarning(ex, "Failed to send email to {Email} in job {JobId}", recipient.Email, job.Id);
                         recipient.Status = EmailJobRecipientStatus.Failed;
                         recipient.Error = ex.Message;
-                        job.FailedCount++;
                     }
 
+                    RecalculateCounts(job);
                     // Persist progress after every recipient for maximum recovery granularity
                     await repo.UpdateAsync(job);
                     await NotifyProgressAsync(job);
@@ -320,7 +331,9 @@ namespace Web.Services
                 }
             }
 
-            // Determine final status
+            // Derive final counts from recipient statuses (authoritative source of truth)
+            RecalculateCounts(job);
+
             if (job.FailedCount == 0)
                 job.Status = EmailJobStatus.Completed;
             else if (job.SentCount == 0)
@@ -352,12 +365,13 @@ namespace Web.Services
 
                 recipient.Status = EmailJobRecipientStatus.Sent;
                 recipient.SentUtc = DateTime.UtcNow;
-                job.SentCount++;
 
+                RecalculateCounts(job);
                 await repo.UpdateAsync(job);
                 await NotifyProgressAsync(job);
             }
 
+            RecalculateCounts(job);
             job.Status = EmailJobStatus.Completed;
             job.CompletedUtc = DateTime.UtcNow;
             await repo.UpdateAsync(job);

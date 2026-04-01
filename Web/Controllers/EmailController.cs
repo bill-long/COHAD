@@ -86,7 +86,7 @@ namespace Web.Controllers
         // ──────────────────────────────────────────────
 
         [HttpGet("jobs")]
-        [Authorize(Policy = "Resident")]
+        [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> GetRecentJobs([FromQuery] int limit = 50)
         {
             var jobs = await _emailJobRepository.GetRecentJobsAsync(Math.Clamp(limit, 1, 100));
@@ -94,7 +94,7 @@ namespace Web.Controllers
         }
 
         [HttpGet("jobs/{id:guid}")]
-        [Authorize(Policy = "Resident")]
+        [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> GetJob(Guid id)
         {
             var job = await _emailJobRepository.GetByIdAsync(id);
@@ -105,7 +105,7 @@ namespace Web.Controllers
         }
 
         [HttpPost("jobs/{id:guid}/retry")]
-        [Authorize(Policy = "Resident")]
+        [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> RetryJob(Guid id)
         {
             // Don't allow retry while the processor is actively working on this job
@@ -142,7 +142,7 @@ namespace Web.Controllers
         }
 
         [HttpPost("jobs/{id:guid}/cancel")]
-        [Authorize(Policy = "Resident")]
+        [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> CancelJob(Guid id)
         {
             var job = await _emailJobRepository.GetByIdAsync(id);
@@ -153,27 +153,23 @@ namespace Web.Controllers
                 return BadRequest(new { error = $"Cannot cancel a job with status '{job.Status}'." });
 
             // Signal the processor to stop (if running in-memory)
-            var wasCancelled = _emailJobProcessor.RequestCancellation(id);
+            _emailJobProcessor.RequestCancellation(id);
 
-            if (!wasCancelled)
+            // Re-read to get the authoritative state — the processor may have already
+            // completed or updated the job between our initial read and now.
+            var current = await _emailJobRepository.GetByIdAsync(id);
+            if (current == null)
+                return NotFound();
+
+            // Only persist Cancelled if the job is still in an active state
+            if (current.Status == EmailJobStatus.Queued || current.Status == EmailJobStatus.InProgress)
             {
-                // The job may have completed between our status check and the cancel attempt.
-                // Re-read to get the current state.
-                var current = await _emailJobRepository.GetByIdAsync(id);
-                if (current != null && (current.Status == EmailJobStatus.Completed ||
-                                        current.Status == EmailJobStatus.PartiallyCompleted ||
-                                        current.Status == EmailJobStatus.Failed))
-                {
-                    return Ok(EmailJobSummary.FromJob(current));
-                }
+                current.Status = EmailJobStatus.Cancelled;
+                current.CompletedUtc = DateTime.UtcNow;
+                await _emailJobRepository.UpdateAsync(current);
             }
 
-            // Persist the cancelled status (processor will also stop via its CancellationToken)
-            job.Status = EmailJobStatus.Cancelled;
-            job.CompletedUtc = DateTime.UtcNow;
-            await _emailJobRepository.UpdateAsync(job);
-
-            return Ok(EmailJobSummary.FromJob(job));
+            return Ok(EmailJobSummary.FromJob(current));
         }
 
         // ──────────────────────────────────────────────

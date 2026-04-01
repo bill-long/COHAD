@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace Web.Hubs
 {
-    [Authorize(Policy = "Resident")]
+    [Authorize(Policy = "EmailSender")]
     public class EmailJobHub : Hub
     {
         public const string EmailSendersGroupName = "EmailSenders";
