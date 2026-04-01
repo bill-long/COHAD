@@ -477,6 +477,27 @@ public sealed class EmailControllerJobTests
         Assert.IsType<NotFoundResult>(result);
     }
 
+    [Fact]
+    public async Task RetryJob_UpdateConcurrency_ReturnsConflict()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Recipients = new List<EmailJobRecipient>(),
+            TotalRecipients = 0
+        };
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
+            .ThrowsAsync(new EmailJobConcurrencyException());
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<ConflictObjectResult>(result);
+    }
+
     // ───────────────────────────────────────────────────
     // Cancel tests
     // ───────────────────────────────────────────────────
@@ -522,6 +543,40 @@ public sealed class EmailControllerJobTests
 
         var ok = Assert.IsType<OkObjectResult>(result);
         Assert.Equal(EmailJobStatus.Cancelled, job.Status);
+    }
+
+    [Fact]
+    public async Task CancelJob_UpdateConcurrency_RefetchesAndReturnsOk()
+    {
+        var jobId = Guid.NewGuid();
+        var queued = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            CreatedUtc = DateTime.UtcNow,
+            Recipients = new List<EmailJobRecipient>()
+        };
+        var completedElsewhere = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Completed,
+            CreatedUtc = queued.CreatedUtc,
+            CompletedUtc = DateTime.UtcNow,
+            Recipients = new List<EmailJobRecipient>()
+        };
+        _jobRepo.SetupSequence(r => r.GetByIdAsync(jobId))
+            .ReturnsAsync(queued)
+            .ReturnsAsync(queued)
+            .ReturnsAsync(completedElsewhere);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
+            .ThrowsAsync(new EmailJobConcurrencyException());
+
+        var controller = CreateController();
+        var result = await controller.CancelJob(jobId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var summary = Assert.IsType<EmailJobSummary>(ok.Value);
+        Assert.Equal(EmailJobStatus.Completed, summary.Status);
     }
 
     [Theory]

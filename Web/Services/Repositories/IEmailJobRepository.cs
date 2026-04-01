@@ -12,6 +12,11 @@ namespace Web.Services.Repositories
 
         Task<EmailJob?> GetByIdAsync(Guid jobId);
 
+        /// <summary>
+        /// Removes the job document. Used for compensating cleanup; ignores missing documents.
+        /// </summary>
+        Task DeleteAsync(Guid jobId);
+
         Task UpdateAsync(EmailJob job);
 
         /// <summary>

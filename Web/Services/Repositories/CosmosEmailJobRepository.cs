@@ -45,12 +45,36 @@ namespace Web.Services.Repositories
             }
         }
 
+        public async Task DeleteAsync(Guid jobId)
+        {
+            var documentId = CosmosLegacyDocumentMapper.ToEmailJobDocumentId(jobId);
+            try
+            {
+                await _emailJobContainer.DeleteItemAsync<JObject>(documentId, CosmosPartitionKey.None);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                // Idempotent cleanup
+            }
+        }
+
         public async Task UpdateAsync(EmailJob job)
         {
             var doc = CosmosLegacyDocumentMapper.ToEmailJobDocument(job);
             var documentId = doc.Value<string>("id");
-            var response = await _emailJobContainer.ReplaceItemAsync(doc, documentId, CosmosPartitionKey.None);
-            job.ETag = response.Headers.ETag;
+            var requestOptions = new ItemRequestOptions();
+            if (!string.IsNullOrEmpty(job.ETag))
+                requestOptions.IfMatchEtag = job.ETag;
+
+            try
+            {
+                var response = await _emailJobContainer.ReplaceItemAsync(doc, documentId, CosmosPartitionKey.None, requestOptions);
+                job.ETag = response.Headers.ETag;
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+            {
+                throw new EmailJobConcurrencyException();
+            }
         }
 
         public async Task<bool> TryClaimAsync(EmailJob job)

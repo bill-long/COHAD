@@ -50,6 +50,31 @@ namespace Web.Services
             job.FailedCount = recipients.Count(r => r.Status == EmailJobRecipientStatus.Failed);
         }
 
+        /// <summary>
+        /// Persists job state with optimistic concurrency (If-Match / ETag).
+        /// On conflict, refreshes the ETag and retries the replace once.
+        /// Returns false when the server copy is cancelled — caller should stop and use server state.
+        /// </summary>
+        private static async Task<bool> TryPersistJobAsync(IEmailJobRepository repo, EmailJob job)
+        {
+            try
+            {
+                await repo.UpdateAsync(job);
+                return true;
+            }
+            catch (EmailJobConcurrencyException)
+            {
+                var latest = await repo.GetByIdAsync(job.Id);
+                if (latest == null)
+                    return false;
+                if (latest.Status == EmailJobStatus.Cancelled)
+                    return false;
+                job.ETag = latest.ETag;
+                await repo.UpdateAsync(job);
+                return true;
+            }
+        }
+
         public EmailJobProcessor(
             EmailJobQueue queue,
             IServiceScopeFactory scopeFactory,
@@ -170,7 +195,14 @@ namespace Web.Services
                     job.Status = EmailJobStatus.Failed;
                     job.LastError = "Email content not found in storage.";
                     job.CompletedUtc = DateTime.UtcNow;
-                    await repo.UpdateAsync(job);
+                    if (!await TryPersistJobAsync(repo, job))
+                    {
+                        var latest = await repo.GetByIdAsync(jobId);
+                        if (latest != null)
+                            await NotifyCompletedAsync(latest);
+                        return;
+                    }
+
                     await NotifyCompletedAsync(job);
                     _logger.LogError("Email job {JobId} failed: content blob not found at {Path}", jobId, job.ContentBlobPath);
                     return;
@@ -223,6 +255,7 @@ namespace Web.Services
             using var protocolLog = new MemoryStream();
             var logger = new ProtocolLogger(protocolLog);
             SmtpClient smtpClient = null;
+            var stoppedEarly = false;
 
             try
             {
@@ -260,7 +293,8 @@ namespace Web.Services
                         r.SentUtc = DateTime.UtcNow;
                     }
                     RecalculateCounts(job);
-                    await repo.UpdateAsync(job);
+                    if (!await TryPersistJobAsync(repo, job))
+                        stoppedEarly = true;
                 }
 #else
                 foreach (var recipient in pendingRecipients)
@@ -321,7 +355,12 @@ namespace Web.Services
 
                     RecalculateCounts(job);
                     // Persist progress after every recipient for maximum recovery granularity
-                    await repo.UpdateAsync(job);
+                    if (!await TryPersistJobAsync(repo, job))
+                    {
+                        stoppedEarly = true;
+                        break;
+                    }
+
                     await NotifyProgressAsync(job);
                 }
 #endif
@@ -340,6 +379,14 @@ namespace Web.Services
                 }
             }
 
+            if (stoppedEarly)
+            {
+                var latest = await repo.GetByIdAsync(job.Id);
+                if (latest != null)
+                    await NotifyCompletedAsync(latest);
+                return;
+            }
+
             // Derive final counts from recipient statuses (authoritative source of truth)
             RecalculateCounts(job);
 
@@ -351,7 +398,14 @@ namespace Web.Services
                 job.Status = EmailJobStatus.PartiallyCompleted;
 
             job.CompletedUtc = DateTime.UtcNow;
-            await repo.UpdateAsync(job);
+            if (!await TryPersistJobAsync(repo, job))
+            {
+                var latest = await repo.GetByIdAsync(job.Id);
+                if (latest != null)
+                    await NotifyCompletedAsync(latest);
+                return;
+            }
+
             await NotifyCompletedAsync(job);
 
             _logger.LogInformation("Email job {JobId} finished: status={Status}, sent={Sent}, failed={Failed}",
@@ -367,6 +421,7 @@ namespace Web.Services
                 .Where(r => r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
                 .ToList();
 
+            var stoppedEarly = false;
             foreach (var recipient in pendingRecipients)
             {
                 ct.ThrowIfCancellationRequested();
@@ -376,14 +431,34 @@ namespace Web.Services
                 recipient.SentUtc = DateTime.UtcNow;
 
                 RecalculateCounts(job);
-                await repo.UpdateAsync(job);
+                if (!await TryPersistJobAsync(repo, job))
+                {
+                    stoppedEarly = true;
+                    break;
+                }
+
                 await NotifyProgressAsync(job);
+            }
+
+            if (stoppedEarly)
+            {
+                var latest = await repo.GetByIdAsync(job.Id);
+                if (latest != null)
+                    await NotifyCompletedAsync(latest);
+                return;
             }
 
             RecalculateCounts(job);
             job.Status = EmailJobStatus.Completed;
             job.CompletedUtc = DateTime.UtcNow;
-            await repo.UpdateAsync(job);
+            if (!await TryPersistJobAsync(repo, job))
+            {
+                var latest = await repo.GetByIdAsync(job.Id);
+                if (latest != null)
+                    await NotifyCompletedAsync(latest);
+                return;
+            }
+
             await NotifyCompletedAsync(job);
 
             _logger.LogInformation("Email job {JobId} completed in mock mode ({Count} recipients)", job.Id, job.SentCount);
@@ -467,11 +542,20 @@ namespace Web.Services
                 var job = await repo.GetByIdAsync(jobId);
                 if (job != null && job.Status != EmailJobStatus.Cancelled)
                 {
-                    job.Status = EmailJobStatus.Failed;
-                    job.LastError = error;
-                    job.CompletedUtc = DateTime.UtcNow;
-                    await repo.UpdateAsync(job);
-                    await NotifyCompletedAsync(job);
+                    try
+                    {
+                        job.Status = EmailJobStatus.Failed;
+                        job.LastError = error;
+                        job.CompletedUtc = DateTime.UtcNow;
+                        await repo.UpdateAsync(job);
+                        await NotifyCompletedAsync(job);
+                    }
+                    catch (EmailJobConcurrencyException)
+                    {
+                        var latest = await repo.GetByIdAsync(jobId);
+                        if (latest != null)
+                            await NotifyCompletedAsync(latest);
+                    }
                 }
             }
             catch (Exception ex)

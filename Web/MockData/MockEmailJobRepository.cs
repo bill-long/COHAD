@@ -35,10 +35,26 @@ namespace Web.MockData
             }
         }
 
+        public Task DeleteAsync(Guid jobId)
+        {
+            lock (_jobs)
+            {
+                _jobs.Remove(jobId);
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task UpdateAsync(EmailJob job)
         {
             lock (_jobs)
             {
+                if (!_jobs.TryGetValue(job.Id, out var stored))
+                    throw new InvalidOperationException($"Email job {job.Id} does not exist.");
+
+                if (!string.IsNullOrEmpty(job.ETag) && stored.ETag != job.ETag)
+                    throw new EmailJobConcurrencyException();
+
                 var clone = CloneJob(job);
                 clone.ETag = Interlocked.Increment(ref _versionCounter).ToString();
                 _jobs[job.Id] = clone;

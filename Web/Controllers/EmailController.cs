@@ -135,8 +135,15 @@ namespace Web.Controllers
             job.Status = EmailJobStatus.Queued;
             job.LastError = null;
             job.CompletedUtc = null;
-            await _emailJobRepository.UpdateAsync(job);
-            await _emailJobQueue.EnqueueAsync(job.Id);
+            try
+            {
+                await _emailJobRepository.UpdateAsync(job);
+                await _emailJobQueue.EnqueueAsync(job.Id);
+            }
+            catch (EmailJobConcurrencyException)
+            {
+                return Conflict(new { error = "The job was changed by another process. Refresh the page and try again." });
+            }
 
             return Ok(EmailJobSummary.FromJob(job));
         }
@@ -166,7 +173,14 @@ namespace Web.Controllers
             {
                 current.Status = EmailJobStatus.Cancelled;
                 current.CompletedUtc = DateTime.UtcNow;
-                await _emailJobRepository.UpdateAsync(current);
+                try
+                {
+                    await _emailJobRepository.UpdateAsync(current);
+                }
+                catch (EmailJobConcurrencyException)
+                {
+                    current = await _emailJobRepository.GetByIdAsync(id) ?? current;
+                }
             }
 
             return Ok(EmailJobSummary.FromJob(current));
@@ -223,15 +237,10 @@ namespace Web.Controllers
                     await _fileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
                 }
 
-                // Persist job and enqueue for processing
                 await _emailJobRepository.AddAsync(job);
-                await _emailJobQueue.EnqueueAsync(job.Id);
-
-                await AuditEmail(auditFrom, emailInfo, apiUser);
             }
             catch
             {
-                // Clean up orphaned blob if Cosmos persist or enqueue fails
                 if (!string.IsNullOrEmpty(job.ContentBlobPath))
                 {
                     try { await _fileStore.DeleteAsync(job.ContentBlobPath); }
@@ -240,6 +249,26 @@ namespace Web.Controllers
 
                 throw;
             }
+
+            try
+            {
+                await _emailJobQueue.EnqueueAsync(job.Id);
+            }
+            catch
+            {
+                // Compensate: avoid orphaned Cosmos row pointing at blob if enqueue fails
+                try { await _emailJobRepository.DeleteAsync(job.Id); }
+                catch { /* best-effort cleanup */ }
+                if (!string.IsNullOrEmpty(job.ContentBlobPath))
+                {
+                    try { await _fileStore.DeleteAsync(job.ContentBlobPath); }
+                    catch { /* best-effort cleanup */ }
+                }
+
+                throw;
+            }
+
+            await AuditEmail(auditFrom, emailInfo, apiUser);
 
             return Accepted(EmailJobSummary.FromJob(job));
         }
