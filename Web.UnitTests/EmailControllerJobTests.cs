@@ -39,6 +39,10 @@ public sealed class EmailControllerJobTests
 
     public EmailControllerJobTests()
     {
+        // Default cleanup query returns empty so tests exercise the non-exception path.
+        _jobRepo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<EmailJob>());
+
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {

@@ -47,6 +47,7 @@ public sealed class EmailJobCleanupService
             {
                 attemptedJobs++;
 
+                var blobDeletedOrAbsent = true;
                 if (!string.IsNullOrWhiteSpace(job.ContentBlobPath))
                 {
                     attemptedBlobs++;
@@ -57,10 +58,18 @@ public sealed class EmailJobCleanupService
                     }
                     catch (Exception ex)
                     {
+                        blobDeletedOrAbsent = false;
                         _logger.LogWarning(ex,
                             "Email job retention: failed to delete blob {BlobPath} for job {JobId}",
                             job.ContentBlobPath, job.Id);
                     }
+                }
+
+                if (!blobDeletedOrAbsent)
+                {
+                    // Do not delete the job row if the blob couldn't be removed; otherwise we'd orphan the blob
+                    // and lose the path needed to retry deletion on a later cleanup pass.
+                    continue;
                 }
 
                 try
