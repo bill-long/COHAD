@@ -41,11 +41,11 @@ The backend proxies SPA requests to `http://127.0.0.1:4200`. Use `--host 127.0.0
 # Terminal 1
 cd Web/ClientApp && npm run start:mock
 
-# Terminal 2
-MockJwt__SigningKey='<32+ UTF-8 byte secret>' UnsubscribeToken__SigningKey='<32+ UTF-8 byte secret>' ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://127.0.0.1:5000" dotnet run --project Web/Web.csproj
+# Terminal 2 (from repo root — generates signing keys and runs the API)
+./scripts/run-mock-data.sh api
 ```
 
-Or use `scripts/run-mock-data.sh`. Open http://127.0.0.1:5000. The mock user is `mock@cohad.local` with Resident + Administrator roles owning 123 Mock Lane; `taylor@cohad.local` owns 456 Test Court. Data resets on restart.
+Or run `./scripts/run-mock-data.sh` with no args and paste the printed one-liner. Open http://127.0.0.1:5000. The mock user is `mock@cohad.local` with Resident + Administrator + Board roles owning 123 Mock Lane; `taylor@cohad.local` owns 456 Test Court. Data resets on restart.
 
 ## Architecture
 

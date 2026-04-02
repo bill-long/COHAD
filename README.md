@@ -27,7 +27,7 @@ For day-to-day AI/editor hints, see [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](A
 | [`Web.UnitTests/`](Web.UnitTests/) | Fast unit tests (no Cosmos by default). |
 | [`Web.IntegrationTests/`](Web.IntegrationTests/) | Cosmos-dependent tests (skipped unless `RUN_COSMOS_INTEGRATION_TESTS=1`). |
 | [`Functions/UserPurgeFunction/`](Functions/UserPurgeFunction/) | Azure Function for scheduled user purge; has its own [README](Functions/UserPurgeFunction/README.md). |
-| [`scripts/run-mock-data.sh`](scripts/run-mock-data.sh) | Prints commands for MockData + optional email mock env vars. |
+| [`scripts/run-mock-data.sh`](scripts/run-mock-data.sh) | Prints MockData commands; run `./scripts/run-mock-data.sh api` to generate signing keys and start the API. |
 
 ---
 
@@ -89,17 +89,17 @@ npm run start:mock
 
 **Terminal 2 — API**
 
-You **must** supply signing keys of at least **32 UTF-8 bytes** for mock JWT and (recommended) unsubscribe token derivation:
+From the **repository root**, either:
 
-```bash
-MockJwt__SigningKey='<your-local-secret-32-chars-minimum>' \
-UnsubscribeToken__SigningKey='<your-local-secret-32-chars-minimum>' \
-ASPNETCORE_ENVIRONMENT=MockData \
-ASPNETCORE_URLS="http://127.0.0.1:5000" \
-dotnet run --project Web/Web.csproj
-```
+- **One command** (generates fresh **OpenSSL** secrets and starts the API):
 
-Or run [`scripts/run-mock-data.sh`](scripts/run-mock-data.sh) and copy the suggested commands.
+  ```bash
+  ./scripts/run-mock-data.sh api
+  ```
+
+- **Or** copy the one-liner printed by `./scripts/run-mock-data.sh` (same behavior: `openssl rand -hex 32` for each key, then `dotnet run`).
+
+Signing keys must be at least **32 UTF-8 bytes**; the script uses **64 hex characters** per key, which satisfies that.
 
 Open **http://127.0.0.1:5000**. The SPA obtains a short-lived token from **`GET /api/dev/mock-auth`** (loopback only).
 
