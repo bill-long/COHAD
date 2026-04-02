@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -27,6 +28,7 @@ namespace Web.Controllers
         private readonly EmailJobProcessor _emailJobProcessor;
         private readonly IEmailService _emailService;
         private readonly EmailJobCleanupService _emailJobCleanup;
+        private readonly ILogger<EmailController> _logger;
 
         public EmailController(
             IUserRepository userRepository,
@@ -37,7 +39,8 @@ namespace Web.Controllers
             EmailJobQueue emailJobQueue,
             EmailJobProcessor emailJobProcessor,
             IEmailService emailService,
-            EmailJobCleanupService emailJobCleanup)
+            EmailJobCleanupService emailJobCleanup,
+            ILogger<EmailController> logger)
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
@@ -48,6 +51,7 @@ namespace Web.Controllers
             _emailJobProcessor = emailJobProcessor;
             _emailService = emailService;
             _emailJobCleanup = emailJobCleanup;
+            _logger = logger;
         }
 
         // ──────────────────────────────────────────────
@@ -217,9 +221,10 @@ namespace Web.Controllers
             {
                 await _emailJobCleanup.RunOnceBestEffortAsync();
             }
-            catch
+            catch (Exception ex)
             {
                 // Best-effort only: never block a send because cleanup failed.
+                _logger.LogWarning(ex, "Email job retention cleanup failed during send submission (best-effort).");
             }
 
             // Resolve recipients (snapshot at job creation time)

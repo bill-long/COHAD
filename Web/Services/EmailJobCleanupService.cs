@@ -27,44 +27,61 @@ public sealed class EmailJobCleanupService
 
     public async Task RunOnceBestEffortAsync()
     {
-        var retentionDays = Math.Clamp(_config.GetValue("EmailJobs:RetentionDays", 90), 1, 3650);
-        var batchSize = Math.Clamp(_config.GetValue("EmailJobs:CleanupBatchSize", 25), 1, 250);
-
-        var cutoffUtc = DateTime.UtcNow.AddDays(-retentionDays);
-        var jobs = await _repo.GetTerminalJobsOlderThanAsync(cutoffUtc, batchSize);
-
-        if (jobs.Count == 0)
-            return;
-
-        foreach (var job in jobs)
+        try
         {
-            if (!string.IsNullOrWhiteSpace(job.ContentBlobPath))
+            var retentionDays = Math.Clamp(_config.GetValue("EmailJobs:RetentionDays", 90), 1, 3650);
+            var batchSize = Math.Clamp(_config.GetValue("EmailJobs:CleanupBatchSize", 25), 1, 250);
+
+            var cutoffUtc = DateTime.UtcNow.AddDays(-retentionDays);
+            var jobs = await _repo.GetTerminalJobsOlderThanAsync(cutoffUtc, batchSize);
+
+            if (jobs.Count == 0)
+                return;
+
+            var attemptedJobs = 0;
+            var deletedJobs = 0;
+            var attemptedBlobs = 0;
+            var deletedBlobs = 0;
+
+            foreach (var job in jobs)
             {
+                attemptedJobs++;
+
+                if (!string.IsNullOrWhiteSpace(job.ContentBlobPath))
+                {
+                    attemptedBlobs++;
+                    try
+                    {
+                        await _fileStore.DeleteAsync(job.ContentBlobPath);
+                        deletedBlobs++;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "Email job retention: failed to delete blob {BlobPath} for job {JobId}",
+                            job.ContentBlobPath, job.Id);
+                    }
+                }
+
                 try
                 {
-                    await _fileStore.DeleteAsync(job.ContentBlobPath);
+                    await _repo.DeleteAsync(job.Id);
+                    deletedJobs++;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex,
-                        "Email job retention: failed to delete blob {BlobPath} for job {JobId}",
-                        job.ContentBlobPath, job.Id);
+                    _logger.LogWarning(ex, "Email job retention: failed to delete job {JobId}", job.Id);
                 }
             }
 
-            try
-            {
-                await _repo.DeleteAsync(job.Id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Email job retention: failed to delete job {JobId}", job.Id);
-            }
+            _logger.LogInformation(
+                "Email job retention cleanup attempted {AttemptedJobs} job deletions and deleted {DeletedJobs}; attempted {AttemptedBlobs} blob deletes and deleted {DeletedBlobs} (cutoff {CutoffUtc:u})",
+                attemptedJobs, deletedJobs, attemptedBlobs, deletedBlobs, cutoffUtc);
         }
-
-        _logger.LogInformation(
-            "Email job retention cleanup deleted {Count} jobs older than {RetentionDays} days",
-            jobs.Count, retentionDays);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Email job retention: cleanup run failed unexpectedly.");
+        }
     }
 }
 

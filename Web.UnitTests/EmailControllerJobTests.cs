@@ -110,7 +110,8 @@ public sealed class EmailControllerJobTests
             _queue,
             processor,
             _emailService.Object,
-            _cleanup)
+            _cleanup,
+            NullLogger<EmailController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
