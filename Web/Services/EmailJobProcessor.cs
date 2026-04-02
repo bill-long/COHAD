@@ -645,7 +645,15 @@ namespace Web.Services
                 job.LastError = _mockJobFatalError.Trim();
                 job.CompletedUtc = DateTime.UtcNow;
                 if (await TryPersistJobAsync(repo, job))
+                {
                     await NotifyCompletedAsync(job);
+                }
+                else
+                {
+                    latest = await repo.GetByIdAsync(job.Id);
+                    if (latest != null)
+                        await NotifyCompletedAsync(latest);
+                }
                 _logger.LogWarning("Email job {JobId} failed in mock mode (JobFatalError)", job.Id);
                 return;
             }
