@@ -1,9 +1,10 @@
 import { HttpClient, HttpResponse } from '@angular/common/http';
-import { Component, Inject, OnDestroy } from '@angular/core';
+import { Component, Inject, OnDestroy, ViewChild } from '@angular/core';
 import Quill from 'quill';
 import { Observable, Subscription, zip } from 'rxjs';
 import { map, take } from 'rxjs/operators';
 import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
+import { EmailJobListComponent } from 'src/app/components/email-job-list/email-job-list.component';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
@@ -17,6 +18,8 @@ import { httpErrorMessage } from 'src/app/utils/http-error-message';
     standalone: false
 })
 export class SendEmailComponent implements OnDestroy {
+
+  @ViewChild(EmailJobListComponent) emailJobList?: EmailJobListComponent;
 
   senderEndpoint!: string;
   subject!: string;
@@ -127,6 +130,7 @@ export class SendEmailComponent implements OnDestroy {
           this.jobCompleted = false;
           this.sendSucceeded = true;
           this.subscribeToJobUpdates(jobSummary.id);
+          this.emailJobList?.loadJobs();
         } else if (resp.status === 200 && resp.body && (resp.body as any).message) {
           // 200 OK with a message means no matching recipients
           this.errorText = (resp.body as any).message;
@@ -158,7 +162,6 @@ export class SendEmailComponent implements OnDestroy {
 
   private subscribeToJobUpdates(jobId: string): void {
     this.teardownJobSubscriptions();
-    this.emailJobNotifications.connect();
 
     this.jobSubscriptions.push(
       this.emailJobNotifications.progress$.subscribe(event => {
@@ -191,7 +194,6 @@ export class SendEmailComponent implements OnDestroy {
   private teardownJobSubscriptions(): void {
     this.jobSubscriptions.forEach(s => s.unsubscribe());
     this.jobSubscriptions = [];
-    this.emailJobNotifications.disconnect();
   }
 
 }

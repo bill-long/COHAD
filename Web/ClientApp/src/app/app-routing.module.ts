@@ -83,7 +83,6 @@ const routes: Routes = [
       { path: 'users', component: ManageUsersComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles }, title: 'Manage Users' },
       { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageHomesRoles }, title: 'Manage Homes' },
       { path: 'send-email', component: SendEmailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles }, title: 'Send Email' },
-      { path: 'email-jobs', component: EmailJobListComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles }, title: 'Email Jobs' },
       { path: 'email-jobs/:id', component: EmailJobDetailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles }, title: 'Email Job' },
       { path: 'print', component: ManagePrintComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, title: 'Print' },
       { path: 'documents', component: ManageDocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles }, title: 'Manage Documents' },
