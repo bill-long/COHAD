@@ -629,6 +629,18 @@ namespace Web.Services
         {
             if (!string.IsNullOrWhiteSpace(_mockJobFatalError))
             {
+                ct.ThrowIfCancellationRequested();
+
+                // Avoid overwriting a user-cancelled job (CancelJob persists Cancelled via the repository).
+                // Cancelled is the authoritative terminal state.
+                var latest = await repo.GetByIdAsync(job.Id);
+                if (latest != null && latest.Status == EmailJobStatus.Cancelled)
+                {
+                    await NotifyCompletedAsync(latest);
+                    _logger.LogInformation("Email job {JobId} skipped JobFatalError because it was cancelled", job.Id);
+                    return;
+                }
+
                 job.Status = EmailJobStatus.Failed;
                 job.LastError = _mockJobFatalError.Trim();
                 job.CompletedUtc = DateTime.UtcNow;

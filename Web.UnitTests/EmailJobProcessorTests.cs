@@ -421,17 +421,22 @@ public sealed class EmailJobProcessorTests
             await queue.EnqueueAsync(jobId);
 
             var deadline = DateTime.UtcNow.AddMilliseconds(8000);
+            var reachedTerminal = false;
             while (DateTime.UtcNow < deadline)
             {
                 await Task.Delay(50);
                 if (job.Status is EmailJobStatus.Completed or EmailJobStatus.Failed or EmailJobStatus.PartiallyCompleted)
+                {
+                    reachedTerminal = true;
                     break;
+                }
             }
 
             cts.Cancel();
             try { await processor.StopAsync(CancellationToken.None); }
             catch (OperationCanceledException) { }
 
+            Assert.True(reachedTerminal, "Email job did not reach a terminal status before the deadline.");
             return job.SentCount;
         }
 
