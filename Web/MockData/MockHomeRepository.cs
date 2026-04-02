@@ -31,7 +31,7 @@ namespace Web.MockData
                 {
                     Address = "home@cohad.local",
                     VisibleInDirectory = true,
-                    BoardEmailOptedIn = false,
+                    BoardEmailOptedIn = true,
                     WelcomeEmailOptedIn = false,
                     GardenClubEmailOptedIn = false,
                     SocialCommitteeEmailOptedIn = false,
@@ -52,7 +52,7 @@ namespace Web.MockData
                             {
                                 Address = "mock@cohad.local",
                                 VisibleInDirectory = true,
-                                BoardEmailOptedIn = false,
+                                BoardEmailOptedIn = true,
                                 WelcomeEmailOptedIn = false,
                                 GardenClubEmailOptedIn = false,
                                 SocialCommitteeEmailOptedIn = false,
@@ -84,7 +84,7 @@ namespace Web.MockData
                 {
                     Address = "neighbor@cohad.local",
                     VisibleInDirectory = true,
-                    BoardEmailOptedIn = false,
+                    BoardEmailOptedIn = true,
                     WelcomeEmailOptedIn = false,
                     GardenClubEmailOptedIn = false,
                     SocialCommitteeEmailOptedIn = false,
@@ -105,7 +105,7 @@ namespace Web.MockData
                             {
                                 Address = "taylor@cohad.local",
                                 VisibleInDirectory = true,
-                                BoardEmailOptedIn = false,
+                                BoardEmailOptedIn = true,
                                 WelcomeEmailOptedIn = false,
                                 GardenClubEmailOptedIn = false,
                                 SocialCommitteeEmailOptedIn = false,
