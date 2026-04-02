@@ -34,7 +34,30 @@ public sealed class EmailControllerJobTests
     private readonly Mock<IEmailJobRepository> _jobRepo = new();
     private readonly Mock<IDocumentFileStore> _fileStore = new();
     private readonly Mock<IEmailService> _emailService = new();
+    private readonly EmailJobCleanupService _cleanup;
     private readonly EmailJobQueue _queue = new();
+
+    public EmailControllerJobTests()
+    {
+        // Default cleanup query returns empty so tests exercise the non-exception path.
+        _jobRepo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<EmailJob>());
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["EmailJobs:RetentionDays"] = "30",
+                ["EmailJobs:CleanupBatchSize"] = "25"
+            })
+            .Build();
+
+        // Use a real cleanup service wired to our mocks. The controller treats cleanup as best-effort.
+        _cleanup = new EmailJobCleanupService(
+            _jobRepo.Object,
+            _fileStore.Object,
+            config,
+            NullLogger<EmailJobCleanupService>.Instance);
+    }
 
     private EmailJobProcessor CreateProcessor()
     {
@@ -90,7 +113,9 @@ public sealed class EmailControllerJobTests
             _fileStore.Object,
             _queue,
             processor,
-            _emailService.Object)
+            _emailService.Object,
+            _cleanup,
+            NullLogger<EmailController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
