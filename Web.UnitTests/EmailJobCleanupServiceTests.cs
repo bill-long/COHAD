@@ -48,7 +48,7 @@ public sealed class EmailJobCleanupServiceTests
     }
 
     [Fact]
-    public async Task RunOnceBestEffortAsync_DoesNotThrow_WhenBlobDeleteFails_StillDeletesJobRow()
+    public async Task RunOnceBestEffortAsync_DoesNotThrow_WhenBlobDeleteFails_DoesNotDeleteJobRow()
     {
         var repo = new Mock<IEmailJobRepository>(MockBehavior.Strict);
         var store = new Mock<IDocumentFileStore>(MockBehavior.Strict);
@@ -64,7 +64,6 @@ public sealed class EmailJobCleanupServiceTests
         repo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 25))
             .ReturnsAsync(new List<EmailJob> { oldJob });
         store.Setup(s => s.DeleteAsync(oldJob.ContentBlobPath)).ThrowsAsync(new InvalidOperationException("boom"));
-        repo.Setup(r => r.DeleteAsync(oldJob.Id)).Returns(Task.CompletedTask);
 
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -77,7 +76,9 @@ public sealed class EmailJobCleanupServiceTests
         var svc = new EmailJobCleanupService(repo.Object, store.Object, config, NullLogger<EmailJobCleanupService>.Instance);
         await svc.RunOnceBestEffortAsync();
 
-        repo.Verify(r => r.DeleteAsync(oldJob.Id), Times.Once);
+        repo.Verify(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 25), Times.Once);
+        store.Verify(s => s.DeleteAsync(oldJob.ContentBlobPath), Times.Once);
+        repo.Verify(r => r.DeleteAsync(It.IsAny<Guid>()), Times.Never);
     }
 
     [Fact]
