@@ -158,6 +158,7 @@ public sealed class UserPurgeIntegrationTests
         await repo.UpsertAsync(loaded).ConfigureAwait(false);
         loaded = await repo.GetByUniqueIdAsync(uniqueId).ConfigureAwait(false);
         Assert.NotNull(loaded);
+        loaded.OwnedHomeIds = new List<Guid> { Guid.NewGuid() };
         loaded.Roles = new List<User.Role> { User.Role.Resident };
         await repo.UpsertAsync(loaded).ConfigureAwait(false);
 

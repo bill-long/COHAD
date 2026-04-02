@@ -63,6 +63,7 @@ public sealed class HomeRepositoryIntegrationTests
         existing.Resource["UserUniqueId"] = "legacy-user-ref";
         await container.ReplaceItemAsync(existing.Resource, rawId, pk).ConfigureAwait(false);
 
+        home.ETag = null; // Clear stale ETag; the raw ReplaceItemAsync changed it in Cosmos.
         home.StreetNumber = 201;
         await repo.UpsertAsync(home).ConfigureAwait(false);
 

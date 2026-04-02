@@ -87,7 +87,7 @@ namespace Web.Services.Repositories
                 FeedResponse<JObject> response = await iterator.ReadNextAsync().ConfigureAwait(false);
                 return new AuditLogPage
                 {
-                    Items = response.Select(CosmosLegacyDocumentMapper.ToAuditLog).ToList(),
+                    Items = response.Take(pageSize).Select(CosmosLegacyDocumentMapper.ToAuditLog).ToList(),
                     ContinuationToken = response.ContinuationToken,
                     HasMore = !string.IsNullOrWhiteSpace(response.ContinuationToken)
                 };
