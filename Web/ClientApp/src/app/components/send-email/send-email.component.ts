@@ -1,8 +1,10 @@
+import { DOCUMENT } from '@angular/common';
 import { HttpClient, HttpResponse } from '@angular/common/http';
-import { Component, Inject, OnDestroy, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import Quill from 'quill';
 import { Observable, Subscription, zip } from 'rxjs';
-import { map, take } from 'rxjs/operators';
+import { filter, map, take } from 'rxjs/operators';
 import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
 import { EmailJobListComponent } from 'src/app/components/email-job-list/email-job-list.component';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
@@ -17,9 +19,15 @@ import { httpErrorMessage } from 'src/app/utils/http-error-message';
     styleUrls: ['./send-email.component.css'],
     standalone: false
 })
-export class SendEmailComponent implements OnDestroy {
+export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
 
   @ViewChild(EmailJobListComponent) emailJobList?: EmailJobListComponent;
+
+  /** Set when returning from job detail; list scrolls this row after jobs load. */
+  focusJobId: string | null = null;
+
+  private routeQuerySub?: Subscription;
+  private routerEventsSub?: Subscription;
 
   senderEndpoint!: string;
   subject!: string;
@@ -37,9 +45,12 @@ export class SendEmailComponent implements OnDestroy {
 
   constructor(
     private httpClient: HttpClient,
+    private route: ActivatedRoute,
+    private router: Router,
     private telemetry: ApplicationInsightsService,
     private emailJobNotifications: EmailJobNotificationsService,
-    @Inject(applicationState) private appState: Observable<ApplicationState>
+    @Inject(applicationState) private appState: Observable<ApplicationState>,
+    @Inject(DOCUMENT) private document: Document
   ) {
     const Block = Quill.import('blots/block') as any;
     class MyBlock extends Block {
@@ -63,8 +74,50 @@ export class SendEmailComponent implements OnDestroy {
     });
   }
 
+  ngOnInit(): void {
+    this.routeQuerySub = this.route.queryParamMap
+      .pipe(map(q => q.get('focusJob')?.toLowerCase() ?? null))
+      .subscribe(id => { this.focusJobId = id; });
+  }
+
+  ngAfterViewInit(): void {
+    this.routerEventsSub = this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(() => {
+        if (this.router.parseUrl(this.router.url).fragment !== 'email-jobs') {
+          return;
+        }
+        // Run after RouterScroller (setTimeout + rAF) so this wins over scroll-to-top.
+        this.scheduleScrollJobsSectionAfterNav();
+      });
+  }
+
   ngOnDestroy(): void {
+    this.routeQuerySub?.unsubscribe();
+    this.routerEventsSub?.unsubscribe();
     this.teardownJobSubscriptions();
+  }
+
+  /** Ensures the jobs block is in view when landing with #email-jobs (runs after RouterScroller). */
+  private scheduleScrollJobsSectionAfterNav(): void {
+    const delaysMs = [0, 32, 100, 250, 400];
+    for (const ms of delaysMs) {
+      setTimeout(() => this.scrollJobsSectionIntoViewIfNeeded(), ms);
+    }
+  }
+
+  private scrollJobsSectionIntoViewIfNeeded(): void {
+    const el = this.document.getElementById('email-jobs');
+    if (!el) {
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    // Jobs block already near top of viewport (below sticky nav): skip.
+    if (rect.top <= 100 && rect.top >= -40) {
+      return;
+    }
+    // Instant so we reliably beat any remaining scroll-to-top and avoid fighting smooth row scroll.
+    el.scrollIntoView({ behavior: 'auto', block: 'start' });
   }
 
   get canSendFromBoard(): Observable<boolean> {

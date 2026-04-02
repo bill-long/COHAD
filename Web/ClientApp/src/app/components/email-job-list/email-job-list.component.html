@@ -28,6 +28,7 @@
                 </thead>
                 <tbody>
                     <tr *ngFor="let job of jobs" class="job-row"
+                        [id]="jobRowDomId(job)"
                         (click)="viewJob(job)"
                         role="button"
                         tabindex="0"

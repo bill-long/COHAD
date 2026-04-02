@@ -22,6 +22,11 @@
     padding: 1rem 0;
 }
 
+/* Sticky app toolbar: keep scrolled-to row from sitting under it */
+.jobs-table tbody tr.job-row {
+    scroll-margin-top: 80px;
+}
+
 .jobs-table {
     width: 100%;
     border-collapse: collapse;

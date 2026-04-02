@@ -201,7 +201,9 @@ namespace Web
                 services.AddSingleton<IYouthServiceListingRepository, MockYouthServiceListingRepository>();
                 services.AddSingleton<IDocumentFileStore, MockDocumentFileStore>();
                 services.AddScoped<IEmailService, NoOpEmailService>();
-                services.AddSingleton<IEmailJobRepository, MockEmailJobRepository>();
+                // Seeds sample completed jobs + HTML blobs for Manage → Email testing.
+                services.AddSingleton<IEmailJobRepository>(sp =>
+                    new MockEmailJobRepository(sp.GetRequiredService<IDocumentFileStore>()));
             }
             else
             {

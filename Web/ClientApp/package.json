@@ -8,7 +8,8 @@
     "build": "ng build",
     "prodbuild": "ng build --configuration production",
     "test": "ng test",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "validate:email-jobs-scroll": "node scripts/validate-email-jobs-scroll.mjs"
   },
   "private": true,
   "dependencies": {
@@ -49,6 +50,7 @@
     "karma-coverage": "^2.2.1",
     "karma-jasmine": "^5.1.0",
     "karma-jasmine-html-reporter": "^2.2.0",
+    "puppeteer": "^24.40.0",
     "typescript": "~5.8.3"
   }
 }
