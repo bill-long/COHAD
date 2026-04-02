@@ -34,7 +34,6 @@ import { BlogComponent } from './components/blog/blog.component';
 import { BlogDetailComponent } from './components/blog-detail/blog-detail.component';
 import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
 import { EmailPreferencesComponent } from './components/email-preferences/email-preferences.component';
-import { EmailJobListComponent } from './components/email-job-list/email-job-list.component';
 import { EmailJobDetailComponent } from './components/email-job-detail/email-job-detail.component';
 
 @Injectable({ providedIn: 'root' })
