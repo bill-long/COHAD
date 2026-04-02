@@ -250,6 +250,9 @@ namespace Web
             services.AddSingleton<EmailJobQueue>();
             services.AddSingleton<EmailJobProcessor>();
             services.AddHostedService(sp => sp.GetRequiredService<EmailJobProcessor>());
+
+            // Retention cleanup (invoked on submission; best-effort)
+            services.AddScoped<EmailJobCleanupService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

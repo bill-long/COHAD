@@ -36,5 +36,11 @@ namespace Web.Services.Repositories
         /// Returns the most recent jobs (any status), ordered by CreatedUtc descending.
         /// </summary>
         Task<List<EmailJob>> GetRecentJobsAsync(int limit);
+
+        /// <summary>
+        /// Returns terminal jobs older than the given cutoff (CreatedUtc &lt; cutoffUtc), ordered by CreatedUtc ascending.
+        /// Used for retention cleanup.
+        /// </summary>
+        Task<List<EmailJob>> GetTerminalJobsOlderThanAsync(DateTime cutoffUtc, int limit);
     }
 }

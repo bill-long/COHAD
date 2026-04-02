@@ -109,6 +109,24 @@ namespace Web.MockData
             }
         }
 
+        public Task<List<EmailJob>> GetTerminalJobsOlderThanAsync(DateTime cutoffUtc, int limit)
+        {
+            lock (_jobs)
+            {
+                var effectiveLimit = Math.Clamp(limit, 1, 250);
+                var list = _jobs.Values
+                    .Where(j =>
+                        j.CreatedUtc < cutoffUtc &&
+                        j.Status != EmailJobStatus.Queued &&
+                        j.Status != EmailJobStatus.InProgress)
+                    .OrderBy(j => j.CreatedUtc)
+                    .Take(effectiveLimit)
+                    .Select(CloneJob)
+                    .ToList();
+                return Task.FromResult(list);
+            }
+        }
+
         private static EmailJob CloneJob(EmailJob job)
         {
             return new EmailJob

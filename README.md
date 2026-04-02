@@ -166,6 +166,8 @@ Used by synchronous email paths and by the **SMTP** branch of `EmailJobProcessor
 | `EmailJobs:DefaultMaxRecipientAttempts` | `3` | Per-recipient retry cap. |
 | `EmailJobs:StallAfterMinutes` | `30` | Incomplete jobs with no progress can be marked stalled on restart. |
 | `EmailJobs:LogSmtpProtocolOnFailure` | `false` | Extra SMTP logging on failure. |
+| `EmailJobs:RetentionDays` | `90` | Deletes terminal email jobs older than this age (cleanup runs when a new job is submitted). |
+| `EmailJobs:CleanupBatchSize` | `25` | Max number of old jobs deleted per submission-triggered cleanup pass. |
 
 ### Mock email jobs (MockData only)
 

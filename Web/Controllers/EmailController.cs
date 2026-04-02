@@ -26,6 +26,7 @@ namespace Web.Controllers
         private readonly EmailJobQueue _emailJobQueue;
         private readonly EmailJobProcessor _emailJobProcessor;
         private readonly IEmailService _emailService;
+        private readonly EmailJobCleanupService _emailJobCleanup;
 
         public EmailController(
             IUserRepository userRepository,
@@ -35,7 +36,8 @@ namespace Web.Controllers
             IDocumentFileStore fileStore,
             EmailJobQueue emailJobQueue,
             EmailJobProcessor emailJobProcessor,
-            IEmailService emailService)
+            IEmailService emailService,
+            EmailJobCleanupService emailJobCleanup)
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
@@ -45,6 +47,7 @@ namespace Web.Controllers
             _emailJobQueue = emailJobQueue;
             _emailJobProcessor = emailJobProcessor;
             _emailService = emailService;
+            _emailJobCleanup = emailJobCleanup;
         }
 
         // ──────────────────────────────────────────────
@@ -206,6 +209,17 @@ namespace Web.Controllers
                 await AuditEmail(auditFrom, emailInfo, apiUser);
                 await _emailService.SendEmail(fromEmail, fromDisplay, emailInfo, recipientFilter, category, User);
                 return Ok();
+            }
+
+            // Best-effort retention cleanup (terminal jobs older than configured retention).
+            // This runs on submission because emails are typically sent infrequently.
+            try
+            {
+                await _emailJobCleanup.RunOnceBestEffortAsync();
+            }
+            catch
+            {
+                // Best-effort only: never block a send because cleanup failed.
             }
 
             // Resolve recipients (snapshot at job creation time)

@@ -133,5 +133,32 @@ namespace Web.Services.Repositories
 
             return results;
         }
+
+        public async Task<List<EmailJob>> GetTerminalJobsOlderThanAsync(DateTime cutoffUtc, int limit)
+        {
+            var clampedLimit = Math.Clamp(limit, 1, 250);
+            var cutoffIso = cutoffUtc.ToString("o");
+
+            // Cosmos stores status as strings; use explicit terminal statuses so we never delete active work.
+            var query = new CosmosQueryDefinition(
+                $"SELECT TOP {clampedLimit} * FROM c " +
+                "WHERE c.CreatedUtc < @cutoffUtc AND c.Status IN (@completed, @partial, @failed, @cancelled) " +
+                "ORDER BY c.CreatedUtc ASC")
+                .WithParameter("@cutoffUtc", cutoffIso)
+                .WithParameter("@completed", nameof(EmailJobStatus.Completed))
+                .WithParameter("@partial", nameof(EmailJobStatus.PartiallyCompleted))
+                .WithParameter("@failed", nameof(EmailJobStatus.Failed))
+                .WithParameter("@cancelled", nameof(EmailJobStatus.Cancelled));
+
+            var iterator = _emailJobContainer.GetItemQueryIterator<JObject>(query);
+            var results = new List<EmailJob>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                results.AddRange(response.Select(CosmosLegacyDocumentMapper.ToEmailJob));
+            }
+
+            return results;
+        }
     }
 }
