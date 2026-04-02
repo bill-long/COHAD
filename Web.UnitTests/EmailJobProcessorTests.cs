@@ -58,7 +58,8 @@ public sealed class EmailJobProcessorTests
             ["AppBaseUrl"] = "https://test.cohad.org",
             ["EmailJobs:Enabled"] = "true",
             ["EmailJobs:DefaultMaxRecipientAttempts"] = "3",
-            ["EmailJobs:StallAfterMinutes"] = "30"
+            ["EmailJobs:StallAfterMinutes"] = "30",
+            ["EmailJobs:Mock:DelayMilliseconds"] = "0"
         };
         if (configOverrides != null)
         {
@@ -189,6 +190,260 @@ public sealed class EmailJobProcessorTests
             Assert.Equal(EmailJobRecipientStatus.Sent, r.Status);
             Assert.NotNull(r.SentUtc);
         });
+    }
+
+    [Fact]
+    public async Task MockMode_FailAllRecipients_MarksEveryRecipientFailed()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Fail all",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            TotalRecipients = 2,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient { Email = "a@test.com", HomeId = Guid.NewGuid(), Status = EmailJobRecipientStatus.Pending },
+                new EmailJobRecipient { Email = "b@test.com", HomeId = Guid.NewGuid(), Status = EmailJobRecipientStatus.Pending }
+            }
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        _fileStore.Setup(f => f.DownloadAsync(job.ContentBlobPath))
+            .ReturnsAsync(new DocumentFileResult
+            {
+                Stream = new MemoryStream("<p>x</p>"u8.ToArray()),
+                ContentType = "text/html"
+            });
+
+        var processor = CreateProcessor(configOverrides: new Dictionary<string, string?>
+        {
+            ["EmailJobs:Mock:FailAllRecipients"] = "true"
+        });
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.Equal(EmailJobStatus.Failed, job.Status);
+        Assert.Equal(0, job.SentCount);
+        Assert.Equal(2, job.FailedCount);
+        Assert.All(job.Recipients, r =>
+        {
+            Assert.Equal(EmailJobRecipientStatus.Failed, r.Status);
+            Assert.Contains("Mock send failure", r.Error ?? "", StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public async Task MockMode_RandomFailureProbabilityOne_FailsEachRecipient()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Prob 1",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            TotalRecipients = 3,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient { Email = "a@test.com", HomeId = Guid.NewGuid(), Status = EmailJobRecipientStatus.Pending },
+                new EmailJobRecipient { Email = "b@test.com", HomeId = Guid.NewGuid(), Status = EmailJobRecipientStatus.Pending },
+                new EmailJobRecipient { Email = "c@test.com", HomeId = Guid.NewGuid(), Status = EmailJobRecipientStatus.Pending }
+            }
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        _fileStore.Setup(f => f.DownloadAsync(job.ContentBlobPath))
+            .ReturnsAsync(new DocumentFileResult
+            {
+                Stream = new MemoryStream("<p>x</p>"u8.ToArray()),
+                ContentType = "text/html"
+            });
+
+        var processor = CreateProcessor(configOverrides: new Dictionary<string, string?>
+        {
+            ["EmailJobs:Mock:RandomFailureProbability"] = "1"
+        });
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.Equal(EmailJobStatus.Failed, job.Status);
+        Assert.Equal(0, job.SentCount);
+        Assert.Equal(3, job.FailedCount);
+    }
+
+    [Fact]
+    public async Task MockMode_JobFatalError_MarksJobFailedWithoutProcessingRecipients()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Fatal",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            TotalRecipients = 2,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient { Email = "a@test.com", HomeId = Guid.NewGuid(), Status = EmailJobRecipientStatus.Pending },
+                new EmailJobRecipient { Email = "b@test.com", HomeId = Guid.NewGuid(), Status = EmailJobRecipientStatus.Pending }
+            }
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        _fileStore.Setup(f => f.DownloadAsync(job.ContentBlobPath))
+            .ReturnsAsync(new DocumentFileResult
+            {
+                Stream = new MemoryStream("<p>x</p>"u8.ToArray()),
+                ContentType = "text/html"
+            });
+
+        var processor = CreateProcessor(configOverrides: new Dictionary<string, string?>
+        {
+            ["EmailJobs:Mock:JobFatalError"] = "Simulated fatal job error"
+        });
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.Equal(EmailJobStatus.Failed, job.Status);
+        Assert.Equal("Simulated fatal job error", job.LastError);
+        Assert.Equal(EmailJobRecipientStatus.Pending, job.Recipients![0].Status);
+        Assert.Equal(EmailJobRecipientStatus.Pending, job.Recipients![1].Status);
+    }
+
+    [Fact]
+    public async Task MockMode_FixedRandomSeed_ReproducibleSentCount()
+    {
+        const int recipientCount = 16;
+        const double probability = 0.33;
+        const int seed = 424242;
+
+        async Task<int> RunOnce()
+        {
+            var jobId = Guid.NewGuid();
+            var recipients = Enumerable.Range(0, recipientCount)
+                .Select(i => new EmailJobRecipient
+                {
+                    Email = $"u{i}@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Pending
+                })
+                .ToList();
+
+            var job = new EmailJob
+            {
+                Id = jobId,
+                Status = EmailJobStatus.Queued,
+                Category = "board",
+                FromEmail = "board@cohad.org",
+                FromDisplay = "COHAD Board",
+                Subject = "Seed",
+                ContentBlobPath = $"email-jobs/{jobId:D}.html",
+                TotalRecipients = recipientCount,
+                Recipients = recipients
+            };
+
+            var jobRepo = new Mock<IEmailJobRepository>();
+            jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+            jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+            jobRepo.Setup(r => r.TryClaimAsync(It.IsAny<EmailJob>())).ReturnsAsync(true);
+            jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+            var fileStore = new Mock<IDocumentFileStore>();
+            fileStore.Setup(f => f.DownloadAsync(job.ContentBlobPath))
+                .ReturnsAsync(new DocumentFileResult
+                {
+                    Stream = new MemoryStream("<p>x</p>"u8.ToArray()),
+                    ContentType = "text/html"
+                });
+
+            var scopeFactory = new Mock<IServiceScopeFactory>();
+            var scope = new Mock<IServiceScope>();
+            var serviceProvider = new Mock<IServiceProvider>();
+            serviceProvider.Setup(sp => sp.GetService(typeof(IEmailJobRepository))).Returns(jobRepo.Object);
+            serviceProvider.Setup(sp => sp.GetService(typeof(IDocumentFileStore))).Returns(fileStore.Object);
+            scope.Setup(s => s.ServiceProvider).Returns(serviceProvider.Object);
+            scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
+
+            var hubContext = new Mock<IHubContext<EmailJobHub>>();
+            var mockClients = new Mock<IHubClients>();
+            mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(_clientProxy.Object);
+            hubContext.Setup(h => h.Clients).Returns(mockClients.Object);
+
+            var env = new Mock<IWebHostEnvironment>();
+            env.Setup(e => e.EnvironmentName).Returns("MockData");
+
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["SmtpHost"] = "localhost",
+                    ["SmtpUser"] = "user",
+                    ["SmtpPassword"] = "pass",
+                    ["AppBaseUrl"] = "https://test.cohad.org",
+                    ["EmailJobs:Enabled"] = "true",
+                    ["EmailJobs:DefaultMaxRecipientAttempts"] = "3",
+                    ["EmailJobs:StallAfterMinutes"] = "30",
+                    ["EmailJobs:Mock:DelayMilliseconds"] = "0",
+                    ["EmailJobs:Mock:RandomFailureProbability"] = probability.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["EmailJobs:Mock:RandomFailSeed"] = seed.ToString()
+                })
+                .Build();
+
+            var queue = new EmailJobQueue();
+            var processor = new EmailJobProcessor(
+                queue,
+                scopeFactory.Object,
+                _tokenService.Object,
+                hubContext.Object,
+                config,
+                env.Object,
+                NullLogger<EmailJobProcessor>.Instance);
+
+            using var cts = new CancellationTokenSource();
+            _ = processor.StartAsync(cts.Token);
+            await queue.EnqueueAsync(jobId);
+
+            var deadline = DateTime.UtcNow.AddMilliseconds(8000);
+            var reachedTerminal = false;
+            while (DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(50);
+                if (job.Status is EmailJobStatus.Completed or EmailJobStatus.Failed or EmailJobStatus.PartiallyCompleted)
+                {
+                    reachedTerminal = true;
+                    break;
+                }
+            }
+
+            cts.Cancel();
+            try { await processor.StopAsync(CancellationToken.None); }
+            catch (OperationCanceledException) { }
+
+            Assert.True(reachedTerminal, "Email job did not reach a terminal status before the deadline.");
+            return job.SentCount;
+        }
+
+        var first = await RunOnce();
+        var second = await RunOnce();
+        Assert.Equal(first, second);
+        Assert.True(first >= 0 && first <= recipientCount);
     }
 
     [Fact]

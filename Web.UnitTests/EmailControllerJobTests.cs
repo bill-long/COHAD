@@ -61,7 +61,8 @@ public sealed class EmailControllerJobTests
                 ["SmtpHost"] = "localhost",
                 ["SmtpUser"] = "user",
                 ["SmtpPassword"] = "pass",
-                ["AppBaseUrl"] = "https://test.cohad.org"
+                ["AppBaseUrl"] = "https://test.cohad.org",
+                ["EmailJobs:Mock:DelayMilliseconds"] = "0"
             })
             .Build();
 

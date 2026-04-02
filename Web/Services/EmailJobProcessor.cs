@@ -43,6 +43,20 @@ namespace Web.Services
         private readonly int _defaultMaxRecipientAttempts;
         private readonly int _stallAfterMinutes;
 
+        /// <summary>MockData only: per-recipient delay before marking Sent/Failed.</summary>
+        private readonly int _mockDelayMilliseconds;
+
+        /// <summary>MockData only: probability each recipient fails (0–1), independent rolls.</summary>
+        private readonly double _mockRandomFailureProbability;
+
+        /// <summary>MockData only: when true, every simulated send fails.</summary>
+        private readonly bool _mockFailAllRecipients;
+
+        /// <summary>MockData only: when set, the job fails immediately with this message (no per-recipient processing).</summary>
+        private readonly string _mockJobFatalError;
+
+        private readonly Random _mockRandom;
+
         // Tracks in-memory cancellation tokens so the cancel API can stop a running job.
         private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeJobs = new();
 
@@ -178,6 +192,14 @@ namespace Web.Services
             _emailJobsEnabled = config.GetValue("EmailJobs:Enabled", true);
             _defaultMaxRecipientAttempts = config.GetValue("EmailJobs:DefaultMaxRecipientAttempts", 3);
             _stallAfterMinutes = config.GetValue("EmailJobs:StallAfterMinutes", 30);
+
+            var mockDelayDefault = _isMockMode ? 250 : 50;
+            _mockDelayMilliseconds = Math.Max(0, config.GetValue("EmailJobs:Mock:DelayMilliseconds", mockDelayDefault));
+            _mockRandomFailureProbability = Math.Clamp(config.GetValue("EmailJobs:Mock:RandomFailureProbability", 0.0), 0.0, 1.0);
+            _mockFailAllRecipients = config.GetValue("EmailJobs:Mock:FailAllRecipients", false);
+            _mockJobFatalError = config["EmailJobs:Mock:JobFatalError"] ?? "";
+            var mockSeed = config.GetValue<int?>("EmailJobs:Mock:RandomFailSeed");
+            _mockRandom = mockSeed.HasValue ? new Random(mockSeed.Value) : new Random();
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -605,6 +627,37 @@ namespace Web.Services
         /// </summary>
         private async Task ProcessJobMockAsync(EmailJob job, IEmailJobRepository repo, CancellationToken ct)
         {
+            if (!string.IsNullOrWhiteSpace(_mockJobFatalError))
+            {
+                ct.ThrowIfCancellationRequested();
+
+                // Avoid overwriting a user-cancelled job (CancelJob persists Cancelled via the repository).
+                // Cancelled is the authoritative terminal state.
+                var latest = await repo.GetByIdAsync(job.Id);
+                if (latest != null && latest.Status == EmailJobStatus.Cancelled)
+                {
+                    await NotifyCompletedAsync(latest);
+                    _logger.LogInformation("Email job {JobId} skipped JobFatalError because it was cancelled", job.Id);
+                    return;
+                }
+
+                job.Status = EmailJobStatus.Failed;
+                job.LastError = _mockJobFatalError.Trim();
+                job.CompletedUtc = DateTime.UtcNow;
+                if (await TryPersistJobAsync(repo, job))
+                {
+                    await NotifyCompletedAsync(job);
+                }
+                else
+                {
+                    latest = await repo.GetByIdAsync(job.Id);
+                    if (latest != null)
+                        await NotifyCompletedAsync(latest);
+                }
+                _logger.LogWarning("Email job {JobId} failed in mock mode (JobFatalError)", job.Id);
+                return;
+            }
+
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
                     (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
@@ -625,11 +678,26 @@ namespace Web.Services
                     break;
                 }
 
-                await Task.Delay(50, ct); // Simulate send latency
+                if (_mockDelayMilliseconds > 0)
+                    await Task.Delay(_mockDelayMilliseconds, ct);
 
-                recipient.Status = EmailJobRecipientStatus.Sent;
-                recipient.SentUtc = DateTime.UtcNow;
-                recipient.Error = null;
+                var mockFailed = _mockFailAllRecipients ||
+                    (_mockRandomFailureProbability > 0 &&
+                     _mockRandom.NextDouble() < _mockRandomFailureProbability);
+
+                if (mockFailed)
+                {
+                    recipient.Status = EmailJobRecipientStatus.Failed;
+                    recipient.Error = "Mock send failure (simulated).";
+                    recipient.SentUtc = null;
+                }
+                else
+                {
+                    recipient.Status = EmailJobRecipientStatus.Sent;
+                    recipient.SentUtc = DateTime.UtcNow;
+                    recipient.Error = null;
+                }
+
                 job.LastProgressUtc = DateTime.UtcNow;
 
                 RecalculateCounts(job);
@@ -671,7 +739,9 @@ namespace Web.Services
 
             await NotifyCompletedAsync(job);
 
-            _logger.LogInformation("Email job {JobId} completed in mock mode ({Count} recipients)", job.Id, job.SentCount);
+            _logger.LogInformation(
+                "Email job {JobId} completed in mock mode: status={Status}, sent={Sent}, failed={Failed}",
+                job.Id, job.Status, job.SentCount, job.FailedCount);
         }
 
         private async Task<SmtpClient> ConnectSmtpAsync(ProtocolLogger logger, CancellationToken ct)

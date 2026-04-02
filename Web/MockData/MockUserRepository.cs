@@ -23,7 +23,7 @@ namespace Web.MockData
                 Surname = "Resident",
                 Emails = "mock@cohad.local",
                 StreetAddress = "123 Mock Lane",
-                Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+                Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator, User.Role.Board },
                 OwnedHomeIds = new List<Guid> { MockDataConstants.SampleHomeId },
                 LastLoggedIn = DateTime.UtcNow.AddDays(-1)
             };

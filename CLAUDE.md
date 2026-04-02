@@ -30,10 +30,10 @@ cd Web/ClientApp && npx ng test --no-watch --browsers=ChromeHeadless
 cd Web/ClientApp && npx ng serve --host 127.0.0.1 --port 4200
 
 # Terminal 2
-ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="http://0.0.0.0:5000" dotnet run --project Web/Web.csproj
+ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="https://127.0.0.1:5001" dotnet run --project Web/Web.csproj
 ```
 
-The backend proxies SPA requests to `http://127.0.0.1:4200`. Use `--host 127.0.0.1` (not the default) to avoid IPv4/IPv6 proxy mismatches.
+Trust the dev certificate once: `dotnet dev-certs https --trust`. The backend proxies SPA requests to `http://127.0.0.1:4200`. Use `--host 127.0.0.1` (not the default) to avoid IPv4/IPv6 proxy mismatches.
 
 ### Mock data mode (no Cosmos DB or Azure AD B2C required)
 
@@ -41,11 +41,11 @@ The backend proxies SPA requests to `http://127.0.0.1:4200`. Use `--host 127.0.0
 # Terminal 1
 cd Web/ClientApp && npm run start:mock
 
-# Terminal 2
-MockJwt__SigningKey='<32+ UTF-8 byte secret>' UnsubscribeToken__SigningKey='<32+ UTF-8 byte secret>' ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://127.0.0.1:5000" dotnet run --project Web/Web.csproj
+# Terminal 2 (from repo root — generates signing keys and runs the API)
+./scripts/run-mock-data.sh api
 ```
 
-Or use `scripts/run-mock-data.sh`. Open http://127.0.0.1:5000. The mock user is `mock@cohad.local` with Resident + Administrator roles owning 123 Mock Lane; `taylor@cohad.local` owns 456 Test Court. Data resets on restart.
+Or run `./scripts/run-mock-data.sh` with no args and paste the printed one-liner. MockData serves **HTTPS** at **https://127.0.0.1:5001**; run `dotnet dev-certs https --trust` once if the browser warns. The mock user is `mock@cohad.local` with Resident + Administrator + Board roles owning 123 Mock Lane; `taylor@cohad.local` owns 456 Test Court. Data resets on restart.
 
 ## Architecture
 
