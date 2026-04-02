@@ -168,7 +168,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
   }
 
   goBack(): void {
-    this.router.navigate(['/manage/email-jobs']);
+    this.router.navigate(['/manage/send-email']);
   }
 
   statusLabel(status: EmailJobStatus): string {

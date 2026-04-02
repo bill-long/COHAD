@@ -192,6 +192,11 @@ body.dark-theme .chip-cyan { background: rgba(42, 82, 72, 0.25); color: #96bab0;
 body.dark-theme .chip-teal { background: rgba(36, 74, 62, 0.25); color: #92b8a8; }
 body.dark-theme .chip-slate { background: rgba(74, 68, 62, 0.25); color: #b8b0a6; }
 
+/* Quill editor dark mode: placeholder text */
+body.dark-theme .ql-editor.ql-blank::before {
+    color: rgba(255, 255, 255, 0.4);
+}
+
 /* Respect reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
     .mat-mdc-card {
