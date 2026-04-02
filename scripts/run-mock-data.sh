@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Run COHAD with in-memory data and dev JWT auth (no Cosmos, no Azure AD B2C).
+# The API listens on HTTPS only (port 5001) so features that require a secure context work locally.
 #
 # Usage:
 #   ./scripts/run-mock-data.sh           Print instructions (default)
@@ -8,25 +9,30 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+MOCK_URLS='https://127.0.0.1:5001'
+
 if [[ "${1:-}" == "api" || "${1:-}" == "--api" ]]; then
   exec env \
     MockJwt__SigningKey="$(openssl rand -hex 32)" \
     UnsubscribeToken__SigningKey="$(openssl rand -hex 32)" \
     ASPNETCORE_ENVIRONMENT=MockData \
-    ASPNETCORE_URLS="http://127.0.0.1:5000" \
+    ASPNETCORE_URLS="$MOCK_URLS" \
     dotnet run --project "$ROOT/Web/Web.csproj"
 fi
 
 if [[ -n "${1:-}" ]]; then
   echo "Usage: $0 [api]" >&2
   echo "  (no args)  Show how to run Angular + API in MockData mode" >&2
-  echo "  api        Generate MockJwt/UnsubscribeToken secrets and run the API on :5000" >&2
+  echo "  api        Generate MockJwt/UnsubscribeToken secrets and run the API on $MOCK_URLS" >&2
   exit 1
 fi
 
-ONELINER='MockJwt__SigningKey="$(openssl rand -hex 32)" UnsubscribeToken__SigningKey="$(openssl rand -hex 32)" ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://127.0.0.1:5000" dotnet run --project "'"$ROOT"'/Web/Web.csproj"'
+ONELINER='MockJwt__SigningKey="$(openssl rand -hex 32)" UnsubscribeToken__SigningKey="$(openssl rand -hex 32)" ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="'"$MOCK_URLS"'" dotnet run --project "'"$ROOT"'/Web/Web.csproj"'
 
 echo "From repo root ($ROOT):"
+echo ""
+echo "  One-time — trust the ASP.NET Core dev HTTPS certificate (stops browser warnings):"
+echo "    dotnet dev-certs https --trust"
 echo ""
 echo "  Terminal 1 — Angular (mock auth):"
 echo "    cd Web/ClientApp && npm run start:mock"
@@ -37,7 +43,7 @@ echo ""
 echo "  Or from repo root, same effect as Terminal 2:"
 echo "    ./scripts/run-mock-data.sh api"
 echo ""
-echo "Open http://127.0.0.1:5000 — signed in as mock@cohad.local (admin), with two seeded homes and taylor@cohad.local to manage."
+echo "Open $MOCK_URLS — signed in as mock@cohad.local (admin), with two seeded homes and taylor@cohad.local to manage."
 echo ""
 echo "Optional — email job mock simulation (see Web/appsettings.MockData.json EmailJobs:Mock):"
 echo "  EmailJobs__Mock__DelayMilliseconds=500"

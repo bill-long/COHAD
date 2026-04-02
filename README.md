@@ -27,7 +27,7 @@ For day-to-day AI/editor hints, see [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](A
 | [`Web.UnitTests/`](Web.UnitTests/) | Fast unit tests (no Cosmos by default). |
 | [`Web.IntegrationTests/`](Web.IntegrationTests/) | Cosmos-dependent tests (skipped unless `RUN_COSMOS_INTEGRATION_TESTS=1`). |
 | [`Functions/UserPurgeFunction/`](Functions/UserPurgeFunction/) | Azure Function for scheduled user purge; has its own [README](Functions/UserPurgeFunction/README.md). |
-| [`scripts/run-mock-data.sh`](scripts/run-mock-data.sh) | Prints MockData commands; run `./scripts/run-mock-data.sh api` to generate signing keys and start the API. |
+| [`scripts/run-mock-data.sh`](scripts/run-mock-data.sh) | MockData instructions; `./scripts/run-mock-data.sh api` generates signing keys and serves the API (same **https://127.0.0.1:5001** as Development). |
 
 ---
 
@@ -45,7 +45,13 @@ For day-to-day AI/editor hints, see [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](A
 
 ## Running locally — Development (Cosmos + B2C)
 
-Typical flow uses **two terminals**: Angular on port **4200**, API on **5000** (or your choice).
+**Development** and **MockData** both serve the API over **HTTPS** at **`https://127.0.0.1:5001`** (ASP.NET Core **development certificate**). Trust it once on your machine:
+
+```bash
+dotnet dev-certs https --trust
+```
+
+Typical flow uses **two terminals**: Angular on port **4200**, API on **5001** (HTTPS).
 
 **Terminal 1 — Angular**
 
@@ -59,10 +65,10 @@ Use **`127.0.0.1`** so the backend proxy matches (avoid IPv4/IPv6 mismatches).
 **Terminal 2 — API**
 
 ```bash
-ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="http://0.0.0.0:5000" dotnet run --project Web/Web.csproj
+ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="https://127.0.0.1:5001" dotnet run --project Web/Web.csproj
 ```
 
-Open the URL printed by the API (e.g. `http://localhost:5000`). Sign-in uses **real B2C**; you need a valid redirect URI and working Cosmos settings or most data APIs will fail.
+Open **https://127.0.0.1:5001**. Sign-in uses **real B2C**; the SPA uses `window.location.origin` as the OAuth redirect URI, so register **`https://127.0.0.1:5001`** (or the path your flow requires) in the Azure AD B2C app. You also need working **Cosmos** settings or most data APIs will fail.
 
 **Cosmos DB** (required for real data) — from the `Web` directory:
 
@@ -101,7 +107,7 @@ From the **repository root**, either:
 
 Signing keys must be at least **32 UTF-8 bytes**; the script uses **64 hex characters** per key, which satisfies that.
 
-Open **http://127.0.0.1:5000**. The SPA obtains a short-lived token from **`GET /api/dev/mock-auth`** (loopback only).
+MockData uses the **same HTTPS URL and development certificate** as [Development](#running-locally--development-cosmos--b2c) above. Open **https://127.0.0.1:5001**. The SPA obtains a short-lived token from **`GET /api/dev/mock-auth`** (loopback only).
 
 **Seeded mock users** (reset on every restart):
 
@@ -231,6 +237,7 @@ There is **no** working `ng lint` target in this repo; use `ng build` for TypeSc
 |-------|----------------|
 | SPA proxy connection refused | Angular must listen on **`127.0.0.1:4200`** (use `npm start` / `ng serve --host 127.0.0.1`). |
 | MockData: 500 on mock-auth | **`MockJwt__SigningKey`** length ≥ 32 bytes. |
+| Browser warns on local HTTPS | Run **`dotnet dev-certs https --trust`**. Open **https://127.0.0.1:5001** (Development and MockData). |
 | APIs fail with Cosmos | Set **CosmosUri / CosmosKey / CosmosDatabase** (user secrets or env). |
 | Committee emails missing unsubscribe | **`UnsubscribeToken:SigningKey`** and **`AppBaseUrl`** in production. |
 

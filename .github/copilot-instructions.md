@@ -13,23 +13,20 @@ COHAD (Canyon Oaks Homeowners Association Directory) is a .NET 10 ASP.NET Core b
 ## Running the app (dev mode)
 
 1. Start Angular dev server: `cd Web/ClientApp && npx ng serve --host 0.0.0.0 --port 4200`
-2. Start .NET backend: `ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="http://0.0.0.0:5000" dotnet run --project Web/Web.csproj`
-3. The backend proxies SPA requests to `http://127.0.0.1:4200` in development mode.
+2. Start .NET backend: `ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="https://127.0.0.1:5001" dotnet run --project Web/Web.csproj` (`dotnet dev-certs https --trust` once for the dev certificate)
+3. The backend proxies SPA requests to `http://127.0.0.1:4200` in development mode. Open **https://127.0.0.1:5001**.
 
 ## Mock data mode (agents / local UX testing)
 
 Use this when you need a **signed-in** session and working APIs **without** Cosmos DB or Azure AD B2C.
 
 1. **Angular** with mock auth: `cd Web/ClientApp && npm run start:mock` (build configuration `mock` sets `environment.useMockAuth`).
-2. **Backend** with in-memory repositories and HS256 dev tokens — supply a **signing key** of at least **32 UTF-8 bytes** via environment variable **`MockJwt__SigningKey`**:
-   ```
-   MockJwt__SigningKey='<your-local-secret>' ASPNETCORE_ENVIRONMENT=MockData ASPNETCORE_URLS="http://127.0.0.1:5000" dotnet run --project Web/Web.csproj
-   ```
-3. Open **http://127.0.0.1:5000** (same proxy pattern as Development).
+2. **Backend** — from repo root: `./scripts/run-mock-data.sh api` (generates signing keys and runs the API on **https://127.0.0.1:5001**), or run `./scripts/run-mock-data.sh` and paste the printed one-liner. One-time: `dotnet dev-certs https --trust` if the browser warns about the dev certificate.
+3. Open **https://127.0.0.1:5001** (same proxy pattern as Development).
 
-The SPA obtains a dev JWT from `GET /api/dev/mock-auth` (only available in `MockData` environment from loopback requests). The token lifetime is 15 minutes. The mock user is **mock@cohad.local** with **Resident** and **Administrator** roles, owning a sample home at **123 Mock Lane**. Data resets when the process restarts.
+The SPA obtains a dev JWT from `GET /api/dev/mock-auth` (only available in `MockData` environment from loopback requests). The token lifetime is 15 minutes. The mock user is **mock@cohad.local** with **Resident**, **Administrator**, and **Board** roles, owning a sample home at **123 Mock Lane**. Data resets when the process restarts.
 
-Mock mode is selected only by **`ASPNETCORE_ENVIRONMENT=MockData`**. Use `scripts/run-mock-data.sh` to run both commands together.
+Mock mode is selected only by **`ASPNETCORE_ENVIRONMENT=MockData`**. See `scripts/run-mock-data.sh` for copy-paste commands.
 
 ## Tests
 

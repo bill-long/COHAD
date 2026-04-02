@@ -15,8 +15,8 @@ COHAD (Canyon Oaks Homeowners Association Directory) is a .NET 10 ASP.NET Core b
 ### Running the app (dev mode)
 
 1. Start Angular dev server: `cd Web/ClientApp && npx ng serve --host 0.0.0.0 --port 4200`
-2. Start .NET backend: `ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="http://0.0.0.0:5000" dotnet run --project Web/Web.csproj`
-3. The backend proxies SPA requests to `http://127.0.0.1:4200` in development mode.
+2. Start .NET backend: `ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="https://127.0.0.1:5001" dotnet run --project Web/Web.csproj` (trust the dev cert once: `dotnet dev-certs https --trust`)
+3. The backend proxies SPA requests to `http://127.0.0.1:4200` in development mode. Open **https://127.0.0.1:5001**.
 
 ### Mock data mode (agents / local UX testing)
 
@@ -24,7 +24,7 @@ Use this when you need a **signed-in** session and working APIs **without** Cosm
 
 1. **Angular** with mock auth: `cd Web/ClientApp && npm run start:mock` (build configuration `mock` sets `environment.useMockAuth`).
 2. **Backend** with in-memory repositories and HS256 dev tokens — from repo root run **`./scripts/run-mock-data.sh api`** (generates `MockJwt` / `UnsubscribeToken` secrets with OpenSSL and starts the API). Or run `./scripts/run-mock-data.sh` with no args and paste the printed one-liner. You can still set keys manually or via `dotnet user-secrets set "MockJwt:SigningKey" "..."` if you prefer (`appsettings.MockData.json` keeps empty placeholders; never commit real keys).
-3. Open **http://127.0.0.1:5000** (same proxy pattern as Development: API serves the app and proxies the SPA from port 4200).
+3. Open **https://127.0.0.1:5001** (same HTTPS URL as Development; run `dotnet dev-certs https --trust` once if needed). Same proxy pattern: API serves the app and proxies the SPA from port 4200.
 
 The SPA obtains a dev JWT from `GET /api/dev/mock-auth` (only when `ASPNETCORE_ENVIRONMENT=MockData` and only from loopback requests). The token lifetime is short-lived (15 minutes). The signed-in mock user is **mock@cohad.local** with **Resident**, **Administrator**, and **Board** roles and owns **123 Mock Lane**. Mock data also seeds a second user, **taylor@cohad.local**, who owns **456 Test Court** so administrators can exercise user/home/role management flows. Data resets when the process restarts.
 
