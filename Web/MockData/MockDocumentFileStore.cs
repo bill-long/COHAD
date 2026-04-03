@@ -42,7 +42,8 @@ namespace Web.MockData
                     ContentType = found.ContentType,
                     Stream = new MemoryStream(found.Bytes, writable: false),
                     EntityTag = new EntityTagHeaderValue($"\"{found.LastModified.Ticks:x}\""),
-                    LastModified = found.LastModified
+                    LastModified = found.LastModified,
+                    ContentLength = found.Bytes.Length
                 });
             }
         }

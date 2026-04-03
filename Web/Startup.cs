@@ -15,6 +15,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Authorization;
@@ -218,7 +219,8 @@ namespace Web
                 services.AddSingleton<IVendorReviewRepository, MockVendorReviewRepository>();
                 services.AddSingleton<IVendorFlagRepository, MockVendorFlagRepository>();
                 services.AddSingleton<IYouthServiceListingRepository, MockYouthServiceListingRepository>();
-                services.AddSingleton<IDocumentFileStore, MockDocumentFileStore>();
+                services.AddSingleton<IDocumentFileStore>(sp =>
+                    new CachedDocumentFileStore(new MockDocumentFileStore()));
                 services.AddScoped<IEmailService, NoOpEmailService>();
                 // Seeds sample completed jobs + HTML blobs for Manage → Email testing.
                 services.AddSingleton<IEmailJobRepository>(sp =>
@@ -260,7 +262,9 @@ namespace Web
                     new CosmosVendorFlagRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "VendorFlags")));
                 services.AddScoped<IYouthServiceListingRepository>(sp =>
                     new CosmosYouthServiceListingRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "YouthServices")));
-                services.AddSingleton<IDocumentFileStore, AzureBlobDocumentFileStore>();
+                services.AddSingleton<IDocumentFileStore>(sp =>
+                    new CachedDocumentFileStore(
+                        new AzureBlobDocumentFileStore(sp.GetRequiredService<IOptions<DocumentStorageOptions>>())));
 
                 services.AddScoped<IEmailService, EmailService>();
                 services.AddScoped<IEmailJobRepository>(sp =>
