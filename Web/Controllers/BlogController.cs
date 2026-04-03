@@ -101,7 +101,8 @@ namespace Web.Controllers
             var contentType = string.IsNullOrWhiteSpace(file.ContentType)
                 ? "application/octet-stream"
                 : file.ContentType;
-            Response.Headers["Cache-Control"] = "public, max-age=86400";
+            Response.Headers["Cache-Control"] = "public, no-cache";
+            Response.Headers["ETag"] = $"\"{stored.FeaturedImageBlobPath.GetHashCode():x}\"";
             return File(file.Stream, contentType);
         }
 
@@ -387,7 +388,8 @@ namespace Web.Controllers
             var contentType = string.IsNullOrWhiteSpace(file.ContentType)
                 ? "application/octet-stream"
                 : file.ContentType;
-            Response.Headers["Cache-Control"] = "public, max-age=86400";
+            Response.Headers["Cache-Control"] = "public, no-cache";
+            Response.Headers["ETag"] = $"\"{fullBlobPath.GetHashCode():x}\"";
             return File(file.Stream, contentType);
         }
 

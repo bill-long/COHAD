@@ -939,4 +939,88 @@ public sealed class EventsControllerTests
         Assert.Equal("image/jpeg", detail.PromoMediaContentType);
         Assert.EndsWith(".jpg", detail.PromoMediaDisplayName);
     }
+
+    [Fact]
+    public async Task GetUpcoming_sets_public_cache_control()
+    {
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>())).ReturnsAsync(new List<CommunityEvent>());
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        await c.GetUpcoming();
+
+        Assert.Equal("public, max-age=300", c.Response.Headers["Cache-Control"].ToString());
+    }
+
+    [Fact]
+    public async Task GetBySegment_sets_public_cache_for_anonymous_request()
+    {
+        var eventId = Guid.NewGuid();
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync("summer-bbq")).ReturnsAsync(new CommunityEvent
+        {
+            Id = eventId,
+            Title = "BBQ",
+            StartUtc = DateTime.UtcNow.AddDays(1)
+        });
+
+        // Anonymous: no authenticated identity
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        c.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+        await c.GetBySegment("summer-bbq");
+
+        Assert.Equal("public, max-age=300", c.Response.Headers["Cache-Control"].ToString());
+    }
+
+    [Fact]
+    public async Task GetBySegment_sets_private_no_store_for_authenticated_request()
+    {
+        var eventId = Guid.NewGuid();
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync("summer-bbq")).ReturnsAsync(new CommunityEvent
+        {
+            Id = eventId,
+            Title = "BBQ",
+            StartUtc = DateTime.UtcNow.AddDays(1)
+        });
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(UniqueId("u1"))).ReturnsAsync(new User
+        {
+            UniqueId = UniqueId("u1"),
+            Emails = "test@example.com"
+        });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        await c.GetBySegment("summer-bbq");
+
+        Assert.Equal("private, no-store", c.Response.Headers["Cache-Control"].ToString());
+    }
+
+    [Fact]
+    public async Task DownloadPromoMedia_sets_no_cache_with_etag()
+    {
+        var eventId = Guid.NewGuid();
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Mixer",
+            StartUtc = DateTime.UtcNow.AddDays(1),
+            PromoMediaBlobPath = "events/promo.jpg"
+        });
+
+        var mockFileStore = new Mock<IDocumentFileStore>();
+        mockFileStore.Setup(s => s.DownloadAsync("events/promo.jpg")).ReturnsAsync(new DocumentFileResult
+        {
+            Stream = new MemoryStream([1, 2, 3]),
+            ContentType = "image/jpeg"
+        });
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, mockFileStore.Object, Mock.Of<IAuditLogRepository>());
+        await c.DownloadPromoMedia(eventId.ToString("D"));
+
+        Assert.Equal("public, no-cache", c.Response.Headers["Cache-Control"].ToString());
+        Assert.False(string.IsNullOrWhiteSpace(c.Response.Headers["ETag"].ToString()));
+    }
 }

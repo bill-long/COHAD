@@ -113,7 +113,9 @@ namespace Web.Controllers
             }
 
             var currentUserUniqueId = await TryGetCurrentUserUniqueIdAsync();
-            Response.Headers["Cache-Control"] = "private, max-age=300";
+            Response.Headers["Cache-Control"] = string.IsNullOrWhiteSpace(currentUserUniqueId)
+                ? "public, max-age=300"
+                : "private, no-store";
             return Ok(CommunityEventDetail.FromStorageModel(stored, includeSignups: false, currentUserUniqueId));
         }
 
@@ -137,7 +139,8 @@ namespace Web.Controllers
             var contentType = string.IsNullOrWhiteSpace(file.ContentType)
                 ? "application/octet-stream"
                 : file.ContentType;
-            Response.Headers["Cache-Control"] = "public, max-age=86400";
+            Response.Headers["Cache-Control"] = "public, no-cache";
+            Response.Headers["ETag"] = $"\"{stored.PromoMediaBlobPath.GetHashCode():x}\"";
             // Omit fileDownloadName so the response is served inline for browser display (e.g. img src) rather than as a download attachment.
             return File(file.Stream, contentType);
         }
