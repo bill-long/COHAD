@@ -107,7 +107,12 @@ const routes: Routes = [
 ];
 
 @NgModule({
-  imports: [RouterModule.forRoot(routes, { scrollPositionRestoration: 'enabled' })],
+  imports: [RouterModule.forRoot(routes, {
+    scrollPositionRestoration: 'enabled',
+    anchorScrolling: 'enabled',
+    // Sticky app navbar (~64px); used when scrolling to URL fragments (e.g. #email-jobs).
+    scrollOffset: [0, 80],
+  })],
   exports: [RouterModule],
   providers: [{ provide: TitleStrategy, useClass: CohadTitleStrategy }]
 })

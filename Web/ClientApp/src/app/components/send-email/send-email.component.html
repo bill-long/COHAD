@@ -88,5 +88,7 @@
         </mat-card-content>
     </mat-card>
 
-    <app-email-job-list></app-email-job-list>
+    <div [attr.id]="emailJobsSectionAnchor" tabindex="-1">
+        <app-email-job-list [scrollTargetJobId]="focusJobId"></app-email-job-list>
+    </div>
 </div>

@@ -4,6 +4,11 @@
     padding: 0 20px;
 }
 
+/* Anchor target + scroll-into-view: clear sticky app toolbar */
+#email-jobs {
+    scroll-margin-top: 80px;
+}
+
 .page-title {
     margin: 0 0 1.25rem;
     font-size: var(--heading-page);

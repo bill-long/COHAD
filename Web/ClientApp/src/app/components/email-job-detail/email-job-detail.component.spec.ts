@@ -67,9 +67,13 @@ describe('EmailJobDetailComponent', () => {
     expect(component.loading).toBeFalse();
   });
 
-  it('goBack() navigates to /manage/send-email', () => {
+  it('goBack() navigates to /manage/send-email with jobs fragment and focus job', () => {
+    component.ngOnInit();
     component.goBack();
-    expect(routerSpy.navigate).toHaveBeenCalledWith(['/manage/send-email']);
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/manage/send-email'], {
+      queryParams: { focusJob: 'j1' },
+      fragment: 'email-jobs',
+    });
   });
 
   it('updates job on progress event for matching id', () => {
