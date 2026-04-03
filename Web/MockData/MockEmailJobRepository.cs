@@ -205,7 +205,8 @@ namespace Web.MockData
             foreach (var d in definitions)
             {
                 var path = $"email-jobs/{d.Id:D}.html";
-                _ = fileStore.UploadAsync(path, new MemoryStream(htmlBytes), "text/html");
+                using var stream = new MemoryStream(htmlBytes, writable: false);
+                fileStore.UploadAsync(path, stream, "text/html").GetAwaiter().GetResult();
             }
         }
 

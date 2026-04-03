@@ -5,6 +5,7 @@ import { EmailJobDetail, EmailJobStatus, EmailJobRecipientStatus } from 'src/app
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
+import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
 
 @Component({
     selector: 'app-email-job-detail',
@@ -169,8 +170,8 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
 
   goBack(): void {
     this.router.navigate(['/manage/send-email'], {
-      queryParams: { focusJob: this.jobId.toLowerCase() },
-      fragment: 'email-jobs',
+      queryParams: { [EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM]: this.jobId.toLowerCase() },
+      fragment: EMAIL_JOBS_SECTION_ANCHOR,
     });
   }
 

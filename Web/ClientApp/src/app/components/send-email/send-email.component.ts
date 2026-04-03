@@ -12,6 +12,7 @@ import { ApplicationInsightsService } from 'src/app/services/application-insight
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { applicationState, ApplicationState } from 'src/app/state';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
+import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
 
 @Component({
     selector: 'app-send-email',
@@ -26,8 +27,12 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Set when returning from job detail; list scrolls this row after jobs load. */
   focusJobId: string | null = null;
 
+  /** Bound to the jobs section wrapper so fragment / getElementById stay aligned with `EMAIL_JOBS_SECTION_ANCHOR`. */
+  readonly emailJobsSectionAnchor = EMAIL_JOBS_SECTION_ANCHOR;
+
   private routeQuerySub?: Subscription;
   private routerEventsSub?: Subscription;
+  private jobsSectionScrollTimeouts: ReturnType<typeof setTimeout>[] = [];
 
   senderEndpoint!: string;
   subject!: string;
@@ -76,7 +81,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit(): void {
     this.routeQuerySub = this.route.queryParamMap
-      .pipe(map(q => q.get('focusJob')?.toLowerCase() ?? null))
+      .pipe(map(q => q.get(EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM)?.toLowerCase() ?? null))
       .subscribe(id => { this.focusJobId = id; });
   }
 
@@ -84,7 +89,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.routerEventsSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe(() => {
-        if (this.router.parseUrl(this.router.url).fragment !== 'email-jobs') {
+        if (this.router.parseUrl(this.router.url).fragment !== EMAIL_JOBS_SECTION_ANCHOR) {
           return;
         }
         // Run after RouterScroller (setTimeout + rAF) so this wins over scroll-to-top.
@@ -93,6 +98,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.clearJobsSectionScrollTimeouts();
     this.routeQuerySub?.unsubscribe();
     this.routerEventsSub?.unsubscribe();
     this.teardownJobSubscriptions();
@@ -100,14 +106,23 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Ensures the jobs block is in view when landing with #email-jobs (runs after RouterScroller). */
   private scheduleScrollJobsSectionAfterNav(): void {
+    this.clearJobsSectionScrollTimeouts();
     const delaysMs = [0, 32, 100, 250, 400];
     for (const ms of delaysMs) {
-      setTimeout(() => this.scrollJobsSectionIntoViewIfNeeded(), ms);
+      const id = setTimeout(() => this.scrollJobsSectionIntoViewIfNeeded(), ms);
+      this.jobsSectionScrollTimeouts.push(id);
     }
   }
 
+  private clearJobsSectionScrollTimeouts(): void {
+    for (const id of this.jobsSectionScrollTimeouts) {
+      clearTimeout(id);
+    }
+    this.jobsSectionScrollTimeouts = [];
+  }
+
   private scrollJobsSectionIntoViewIfNeeded(): void {
-    const el = this.document.getElementById('email-jobs');
+    const el = this.document.getElementById(EMAIL_JOBS_SECTION_ANCHOR);
     if (!el) {
       return;
     }

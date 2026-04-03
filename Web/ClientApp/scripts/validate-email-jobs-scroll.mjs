@@ -8,8 +8,45 @@
  *
  * Optional:
  *   JOB_ID=33333333-3333-3333-3333-333333333308  (default: oldest mock seed row)
+ *   PUPPETEER_EXECUTABLE_PATH=/path/to/chrome  (optional; otherwise uses system Chrome/Chromium)
  */
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
 import puppeteer from 'puppeteer';
+
+function resolveChromeExecutable() {
+  const fromEnv = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_BIN;
+  if (fromEnv && fs.existsSync(fromEnv)) {
+    return fromEnv;
+  }
+  const candidates = [
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/snap/bin/chromium',
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  try {
+    const out = execSync(
+      'command -v google-chrome-stable || command -v google-chrome || command -v chromium || command -v chromium-browser',
+      { encoding: 'utf8', shell: '/bin/sh' }
+    );
+    const first = out.trim().split('\n')[0]?.trim();
+    if (first && fs.existsSync(first)) {
+      return first;
+    }
+  } catch {
+    // ignore
+  }
+  throw new Error(
+    'No Chrome/Chromium found for Puppeteer. Install google-chrome-stable/chromium or set PUPPETEER_EXECUTABLE_PATH.'
+  );
+}
 
 const baseUrl = (process.env.BASE_URL || 'https://127.0.0.1:5001').replace(/\/$/, '');
 const jobId = (process.env.JOB_ID || '33333333-3333-3333-3333-333333333308').toLowerCase();
@@ -18,6 +55,7 @@ const minScrollY = Number(process.env.MIN_SCROLL_Y || '120');
 
 async function main() {
   const browser = await puppeteer.launch({
+    executablePath: resolveChromeExecutable(),
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--ignore-certificate-errors'],
     ignoreHTTPSErrors: true,

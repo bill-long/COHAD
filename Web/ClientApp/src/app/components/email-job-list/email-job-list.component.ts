@@ -21,7 +21,12 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
   loading = true;
   errorText: string | null = null;
 
+  /** After a successful scroll-to-row, skip repeating when `loadJobs()` runs again (e.g. after sending mail) while `focusJob` stays in the URL. */
+  private scrolledToTargetJobId: string | null = null;
+
   private subscriptions: Subscription[] = [];
+  private targetRowScrollTimeouts: ReturnType<typeof setTimeout>[] = [];
+  private destroyed = false;
 
   constructor(
     private emailJobService: EmailJobService,
@@ -32,6 +37,13 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['scrollTargetJobId']) {
+      const prev = changes['scrollTargetJobId'].previousValue as string | null | undefined;
+      const cur = changes['scrollTargetJobId'].currentValue as string | null | undefined;
+      const prevNorm = prev?.toLowerCase() ?? null;
+      const curNorm = cur?.toLowerCase() ?? null;
+      if (prevNorm !== curNorm) {
+        this.scrolledToTargetJobId = null;
+      }
       this.scheduleScrollToTargetJob();
     }
   }
@@ -62,6 +74,8 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    this.clearTargetRowScrollScheduling();
     this.subscriptions.forEach(s => s.unsubscribe());
     this.emailJobNotifications.disconnect();
   }
@@ -106,27 +120,46 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
+  private clearTargetRowScrollScheduling(): void {
+    for (const t of this.targetRowScrollTimeouts) {
+      clearTimeout(t);
+    }
+    this.targetRowScrollTimeouts = [];
+  }
+
+  private targetRowScrollBehavior(): ScrollBehavior {
+    return this.document.defaultView?.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 'auto'
+      : 'smooth';
+  }
+
   private scheduleScrollToTargetJob(): void {
     const id = this.scrollTargetJobId?.toLowerCase();
     if (!id || this.loading) {
       return;
     }
+    if (this.scrolledToTargetJobId === id) {
+      return;
+    }
+    this.clearTargetRowScrollScheduling();
     const rowId = `email-job-row-${id}`;
     let scrolled = false;
     const tryOnce = (): void => {
-      if (scrolled) {
+      if (this.destroyed || scrolled) {
         return;
       }
       const el = this.document.getElementById(rowId);
       if (el) {
         scrolled = true;
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        this.scrolledToTargetJobId = id;
+        el.scrollIntoView({ behavior: this.targetRowScrollBehavior(), block: 'start' });
+        this.clearTargetRowScrollScheduling();
       }
     };
     requestAnimationFrame(() => requestAnimationFrame(tryOnce));
     const delaysMs = [16, 32, 64, 100, 200, 400, 700];
     for (const ms of delaysMs) {
-      setTimeout(tryOnce, ms);
+      this.targetRowScrollTimeouts.push(setTimeout(tryOnce, ms));
     }
   }
 
