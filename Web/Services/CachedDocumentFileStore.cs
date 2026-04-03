@@ -10,7 +10,8 @@ namespace Web.Services
     /// Decorator around <see cref="IDocumentFileStore"/> that caches downloaded
     /// files in memory to avoid repeated blob storage round-trips for hot content.
     /// Files larger than <see cref="MaxCachedFileSizeBytes"/> are streamed through
-    /// without buffering.
+    /// without buffering when their content length is known in advance; files with
+    /// unknown content length may still be buffered before the cache decision.
     /// </summary>
     public sealed class CachedDocumentFileStore : IDocumentFileStore, IDisposable
     {
@@ -20,6 +21,7 @@ namespace Web.Services
         private const long MaxCachedFileSizeBytes = 10 * 1024 * 1024; // 10 MB per file
         private const long CacheSizeLimitBytes = 50 * 1024 * 1024;    // 50 MB total
         private static readonly TimeSpan SlidingExpiration = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan AbsoluteExpiration = TimeSpan.FromMinutes(60);
 
         public CachedDocumentFileStore(IDocumentFileStore inner)
         {
@@ -77,6 +79,7 @@ namespace Web.Services
 
                 var options = new MemoryCacheEntryOptions()
                     .SetSlidingExpiration(SlidingExpiration)
+                    .SetAbsoluteExpiration(AbsoluteExpiration)
                     .SetSize(bytes.Length);
 
                 _cache.Set(blobPath, entry, options);
