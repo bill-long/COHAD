@@ -12,7 +12,7 @@
       <a class="blog-card" *ngFor="let post of posts" [routerLink]="['/news', post.publicSlug]">
         <div class="blog-card-grid" [class.blog-card-grid--no-image]="!post.hasFeaturedImage">
           <div class="blog-card-image-frame" *ngIf="post.hasFeaturedImage">
-            <img class="blog-card-image" [src]="post.featuredImageDownloadUrl" [alt]="post.title">
+            <img class="blog-card-image" loading="lazy" [src]="post.featuredImageDownloadUrl" [alt]="post.title">
           </div>
           <div class="blog-card-body">
             <h2>{{ post.title }}</h2>

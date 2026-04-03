@@ -79,6 +79,7 @@ namespace Web.Controllers
                 .Select(CommunityEventCard.FromStorageModel)
                 .ToList();
 
+            Response.Headers["Cache-Control"] = "public, max-age=300";
             return Ok(payload);
         }
 
@@ -97,6 +98,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
+            Response.Headers["Cache-Control"] = "public, max-age=300";
             return Ok(CommunityEventCard.FromStorageModel(next));
         }
 
@@ -111,6 +113,9 @@ namespace Web.Controllers
             }
 
             var currentUserUniqueId = await TryGetCurrentUserUniqueIdAsync();
+            Response.Headers["Cache-Control"] = string.IsNullOrWhiteSpace(currentUserUniqueId)
+                ? "public, max-age=300"
+                : "private, no-store";
             return Ok(CommunityEventDetail.FromStorageModel(stored, includeSignups: false, currentUserUniqueId));
         }
 
@@ -134,8 +139,8 @@ namespace Web.Controllers
             var contentType = string.IsNullOrWhiteSpace(file.ContentType)
                 ? "application/octet-stream"
                 : file.ContentType;
-            // Omit fileDownloadName so the response is served inline for browser display (e.g. img src) rather than as a download attachment.
-            return File(file.Stream, contentType);
+            Response.Headers["Cache-Control"] = "public, no-cache";
+            return File(file.Stream, contentType, file.LastModified, file.EntityTag);
         }
 
         [HttpGet("{segment}/promo/og-thumb")]

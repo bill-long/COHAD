@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -45,6 +47,23 @@ namespace Web
             services.AddControllers();
             services.AddSignalR();
             services.AddMemoryCache();
+
+            services.AddResponseCompression(options =>
+            {
+                // BREACH/CRIME risk is mitigated: the app uses JWT Bearer auth (no
+                // cookie-based CSRF tokens) and compressed responses do not mix
+                // secret values with attacker-controlled content.
+                options.EnableForHttps = true;
+                options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new[]
+                {
+                    "application/json",
+                    "image/svg+xml"
+                });
+            });
+            services.Configure<BrotliCompressionProviderOptions>(options =>
+            {
+                options.Level = System.IO.Compression.CompressionLevel.Fastest;
+            });
 
             // In production, the Angular files will be served from this directory
             services.AddSpaStaticFiles(configuration =>
@@ -303,6 +322,7 @@ namespace Web
             });
 
             app.UseHttpsRedirection();
+            app.UseResponseCompression();
             app.UseStaticFiles();
             if (!useDevSpaProxy)
             {

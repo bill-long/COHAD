@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using Web.Configuration;
 
 namespace Web.Services
@@ -14,6 +15,10 @@ namespace Web.Services
         public Stream Stream { get; set; }
 
         public string ContentType { get; set; }
+
+        public EntityTagHeaderValue EntityTag { get; set; }
+
+        public DateTimeOffset? LastModified { get; set; }
     }
 
     public interface IDocumentFileStore
@@ -94,10 +99,14 @@ namespace Web.Services
             }
 
             var response = await blob.DownloadStreamingAsync();
+            var etagString = response.Value.Details.ETag.ToString("H");
+            EntityTagHeaderValue.TryParse(etagString, out var entityTag);
             return new DocumentFileResult
             {
                 Stream = response.Value.Content,
-                ContentType = response.Value.Details.ContentType
+                ContentType = response.Value.Details.ContentType,
+                EntityTag = entityTag,
+                LastModified = response.Value.Details.LastModified
             };
         }
 

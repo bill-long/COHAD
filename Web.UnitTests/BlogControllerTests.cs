@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using Moq;
 using Web.Configuration;
 using Web.Controllers;
@@ -627,5 +628,51 @@ public sealed class BlogControllerTests
         var url = urlProp!.GetValue(ok.Value) as string;
         Assert.NotNull(url);
         Assert.EndsWith(".jpg", url!);
+    }
+
+    [Fact]
+    public async Task GetPublished_sets_public_cache_control()
+    {
+        var mockPosts = new Mock<IBlogPostRepository>();
+        mockPosts.Setup(r => r.GetPublishedAsync(It.IsAny<DateTime>())).ReturnsAsync(new List<BlogPost>());
+
+        var c = CreateAnonymousController(mockPosts.Object);
+        await c.GetPublished();
+
+        Assert.Equal("public, max-age=300", c.Response.Headers["Cache-Control"].ToString());
+    }
+
+    [Fact]
+    public async Task DownloadFeaturedImage_sets_no_cache_with_etag()
+    {
+        var mockPosts = new Mock<IBlogPostRepository>();
+        mockPosts.Setup(r => r.GetByRouteSegmentAsync("2026-x")).ReturnsAsync(new BlogPost
+        {
+            Id = Guid.NewGuid(),
+            FeaturedImageBlobPath = "blog/guid/photo.jpg",
+            PublicSlug = "2026-x",
+            Title = "T",
+            Content = "c",
+            PublishUtc = DateTime.UtcNow,
+            AuthorDisplayName = "A"
+        });
+
+        var mockFiles = new Mock<IDocumentFileStore>();
+        mockFiles.Setup(f => f.DownloadAsync("blog/guid/photo.jpg")).ReturnsAsync(new DocumentFileResult
+        {
+            Stream = new MemoryStream(new byte[] { 1, 2, 3 }),
+            ContentType = "image/jpeg",
+            EntityTag = new EntityTagHeaderValue("\"xyz789\""),
+            LastModified = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        });
+
+        var c = CreateAnonymousController(mockPosts.Object, files: mockFiles.Object);
+        var result = await c.DownloadFeaturedImage("2026-x");
+
+        Assert.Equal("public, no-cache", c.Response.Headers["Cache-Control"].ToString());
+        var fileResult = Assert.IsType<FileStreamResult>(result);
+        Assert.NotNull(fileResult.EntityTag);
+        Assert.Equal("\"xyz789\"", fileResult.EntityTag.Tag.ToString());
+        Assert.NotNull(fileResult.LastModified);
     }
 }
