@@ -83,7 +83,8 @@ namespace Web.Services
             {
                 HttpHeaders = new BlobHttpHeaders
                 {
-                    ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType
+                    ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+                    CacheControl = "public, no-cache"
                 }
             });
         }
