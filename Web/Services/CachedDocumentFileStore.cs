@@ -9,8 +9,10 @@ namespace Web.Services
     /// <summary>
     /// Decorator around <see cref="IDocumentFileStore"/> that caches downloaded
     /// files in memory to avoid repeated blob storage round-trips for hot content.
+    /// Files larger than <see cref="MaxCachedFileSizeBytes"/> are streamed through
+    /// without buffering.
     /// </summary>
-    public class CachedDocumentFileStore : IDocumentFileStore
+    public sealed class CachedDocumentFileStore : IDocumentFileStore, IDisposable
     {
         private readonly IDocumentFileStore _inner;
         private readonly MemoryCache _cache;
@@ -40,7 +42,8 @@ namespace Web.Services
                     Stream = new MemoryStream(cached.Bytes, writable: false),
                     ContentType = cached.ContentType,
                     EntityTag = cached.EntityTag,
-                    LastModified = cached.LastModified
+                    LastModified = cached.LastModified,
+                    ContentLength = cached.Bytes.Length
                 };
             }
 
@@ -48,6 +51,12 @@ namespace Web.Services
             if (result == null)
             {
                 return null;
+            }
+
+            // Skip buffering entirely for blobs known to exceed the per-file cache limit.
+            if (result.ContentLength.HasValue && result.ContentLength.Value > MaxCachedFileSizeBytes)
+            {
+                return result;
             }
 
             // Buffer the stream so we can cache the bytes and still return a readable stream.
@@ -78,7 +87,8 @@ namespace Web.Services
                 Stream = new MemoryStream(bytes, writable: false),
                 ContentType = result.ContentType,
                 EntityTag = result.EntityTag,
-                LastModified = result.LastModified
+                LastModified = result.LastModified,
+                ContentLength = bytes.Length
             };
         }
 
@@ -86,6 +96,11 @@ namespace Web.Services
         {
             _cache.Remove(blobPath);
             return _inner.DeleteAsync(blobPath);
+        }
+
+        public void Dispose()
+        {
+            _cache.Dispose();
         }
 
         private class CachedFile

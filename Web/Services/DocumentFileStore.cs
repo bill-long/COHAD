@@ -19,6 +19,11 @@ namespace Web.Services
         public EntityTagHeaderValue EntityTag { get; set; }
 
         public DateTimeOffset? LastModified { get; set; }
+
+        /// <summary>
+        /// Content length in bytes when known from the storage provider, or <c>null</c> if unavailable.
+        /// </summary>
+        public long? ContentLength { get; set; }
     }
 
     public interface IDocumentFileStore
@@ -107,7 +112,8 @@ namespace Web.Services
                 Stream = response.Value.Content,
                 ContentType = response.Value.Details.ContentType,
                 EntityTag = entityTag,
-                LastModified = response.Value.Details.LastModified
+                LastModified = response.Value.Details.LastModified,
+                ContentLength = response.Value.Details.ContentLength
             };
         }
 
