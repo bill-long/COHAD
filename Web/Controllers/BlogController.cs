@@ -65,6 +65,7 @@ namespace Web.Controllers
             var payload = posts
                 .Select(BlogPostCard.FromStorageModel)
                 .ToList();
+            Response.Headers["Cache-Control"] = "public, max-age=300";
             return Ok(payload);
         }
 
@@ -100,6 +101,7 @@ namespace Web.Controllers
             var contentType = string.IsNullOrWhiteSpace(file.ContentType)
                 ? "application/octet-stream"
                 : file.ContentType;
+            Response.Headers["Cache-Control"] = "public, max-age=86400";
             return File(file.Stream, contentType);
         }
 
@@ -385,6 +387,7 @@ namespace Web.Controllers
             var contentType = string.IsNullOrWhiteSpace(file.ContentType)
                 ? "application/octet-stream"
                 : file.ContentType;
+            Response.Headers["Cache-Control"] = "public, max-age=86400";
             return File(file.Stream, contentType);
         }
 

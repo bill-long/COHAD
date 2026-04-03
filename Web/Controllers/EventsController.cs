@@ -79,6 +79,7 @@ namespace Web.Controllers
                 .Select(CommunityEventCard.FromStorageModel)
                 .ToList();
 
+            Response.Headers["Cache-Control"] = "public, max-age=300";
             return Ok(payload);
         }
 
@@ -97,6 +98,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
+            Response.Headers["Cache-Control"] = "public, max-age=300";
             return Ok(CommunityEventCard.FromStorageModel(next));
         }
 
@@ -134,6 +136,7 @@ namespace Web.Controllers
             var contentType = string.IsNullOrWhiteSpace(file.ContentType)
                 ? "application/octet-stream"
                 : file.ContentType;
+            Response.Headers["Cache-Control"] = "public, max-age=86400";
             // Omit fileDownloadName so the response is served inline for browser display (e.g. img src) rather than as a download attachment.
             return File(file.Stream, contentType);
         }

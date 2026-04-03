@@ -12,7 +12,7 @@
       <a class="event-card" *ngFor="let eventItem of events" [routerLink]="['/events', eventItem.publicSlug]">
         <div class="event-card-grid">
           <div class="event-flyer-frame" *ngIf="eventItem.hasPromoMedia">
-            <img class="event-flyer-img" [src]="eventItem.promoMediaDownloadUrl" [alt]="eventItem.title">
+            <img class="event-flyer-img" loading="lazy" [src]="eventItem.promoMediaDownloadUrl" [alt]="eventItem.title">
           </div>
 
           <div class="event-body">
