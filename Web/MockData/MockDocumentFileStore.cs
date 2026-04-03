@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Net.Http.Headers;
 using Web.Services;
 
 namespace Web.MockData
@@ -40,7 +41,7 @@ namespace Web.MockData
                 {
                     ContentType = found.ContentType,
                     Stream = new MemoryStream(found.Bytes, writable: false),
-                    ETag = $"\"{found.LastModified.Ticks:x}\"",
+                    EntityTag = new EntityTagHeaderValue($"\"{found.LastModified.Ticks:x}\""),
                     LastModified = found.LastModified
                 });
             }

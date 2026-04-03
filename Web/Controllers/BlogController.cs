@@ -102,7 +102,7 @@ namespace Web.Controllers
                 ? "application/octet-stream"
                 : file.ContentType;
             Response.Headers["Cache-Control"] = "public, no-cache";
-            return File(file.Stream, contentType, file.LastModified, ParseETag(file.ETag));
+            return File(file.Stream, contentType, file.LastModified, file.EntityTag);
         }
 
         [HttpGet("manage")]
@@ -388,7 +388,7 @@ namespace Web.Controllers
                 ? "application/octet-stream"
                 : file.ContentType;
             Response.Headers["Cache-Control"] = "public, no-cache";
-            return File(file.Stream, contentType, file.LastModified, ParseETag(file.ETag));
+            return File(file.Stream, contentType, file.LastModified, file.EntityTag);
         }
 
         [HttpDelete("manage/{id:guid}")]
@@ -654,15 +654,6 @@ namespace Web.Controllers
             }
 
             await _documentFileStore.DeleteAsync(uploadedBlobPath);
-        }
-
-        private static Microsoft.Net.Http.Headers.EntityTagHeaderValue ParseETag(string etag)
-        {
-            if (string.IsNullOrWhiteSpace(etag))
-                return null;
-            if (!etag.StartsWith('"'))
-                etag = $"\"{etag}\"";
-            return Microsoft.Net.Http.Headers.EntityTagHeaderValue.Parse(etag);
         }
     }
 }

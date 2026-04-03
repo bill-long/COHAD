@@ -140,7 +140,7 @@ namespace Web.Controllers
                 ? "application/octet-stream"
                 : file.ContentType;
             Response.Headers["Cache-Control"] = "public, no-cache";
-            return File(file.Stream, contentType, file.LastModified, ParseETag(file.ETag));
+            return File(file.Stream, contentType, file.LastModified, file.EntityTag);
         }
 
         [HttpGet("{segment}/promo/og-thumb")]
@@ -769,15 +769,6 @@ namespace Web.Controllers
             var invalid = Path.GetInvalidFileNameChars();
             var cleaned = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
             return cleaned;
-        }
-
-        private static Microsoft.Net.Http.Headers.EntityTagHeaderValue ParseETag(string etag)
-        {
-            if (string.IsNullOrWhiteSpace(etag))
-                return null;
-            if (!etag.StartsWith('"'))
-                etag = $"\"{etag}\"";
-            return Microsoft.Net.Http.Headers.EntityTagHeaderValue.Parse(etag);
         }
     }
 }

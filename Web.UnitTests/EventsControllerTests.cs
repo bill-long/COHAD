@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using Moq;
 using Web.Configuration;
 using Web.Controllers;
@@ -1015,7 +1016,7 @@ public sealed class EventsControllerTests
         {
             Stream = new MemoryStream([1, 2, 3]),
             ContentType = "image/jpeg",
-            ETag = "\"abc123\"",
+            EntityTag = new EntityTagHeaderValue("\"abc123\""),
             LastModified = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
         });
 

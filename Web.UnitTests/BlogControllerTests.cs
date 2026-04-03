@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using Moq;
 using Web.Configuration;
 using Web.Controllers;
@@ -661,7 +662,7 @@ public sealed class BlogControllerTests
         {
             Stream = new MemoryStream(new byte[] { 1, 2, 3 }),
             ContentType = "image/jpeg",
-            ETag = "\"xyz789\"",
+            EntityTag = new EntityTagHeaderValue("\"xyz789\""),
             LastModified = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
         });
 
