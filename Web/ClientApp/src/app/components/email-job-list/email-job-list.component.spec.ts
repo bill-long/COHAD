@@ -169,6 +169,24 @@ describe('EmailJobListComponent', () => {
     expect(locationSpy.replaceState).not.toHaveBeenCalled();
   });
 
+  it('stripFocusNavigationFromUrl strips focusJob even when the query value is empty', () => {
+    const parsed = {
+      queryParams: { [EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM]: '', keep: '1' } as Record<string, string>,
+      fragment: null as string | null,
+    };
+    routerSpy.parseUrl.and.returnValue(parsed as any);
+    routerSpy.serializeUrl.and.callFake((tree: typeof parsed) => {
+      const q = Object.keys(tree.queryParams)
+        .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(tree.queryParams[k])}`)
+        .join('&');
+      return '/manage/send-email' + (q ? '?' + q : '');
+    });
+    routerUrlMock.value = '/manage/send-email?focusJob=&keep=1';
+    (component as unknown as { stripFocusNavigationFromUrl(): void }).stripFocusNavigationFromUrl();
+    expect(locationSpy.replaceState).toHaveBeenCalledWith('/manage/send-email', 'keep=1');
+    expect(parsed.queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM]).toBeUndefined();
+  });
+
   it('stripFocusNavigationFromUrl preserves a non–email-jobs fragment when stripping focusJob', () => {
     const parsed = {
       queryParams: { [EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM]: 'j1' } as Record<string, string>,

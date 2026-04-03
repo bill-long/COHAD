@@ -179,7 +179,10 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
    */
   private stripFocusNavigationFromUrl(): void {
     const parsed = this.router.parseUrl(this.router.url);
-    const hasFocusJob = !!parsed.queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM];
+    const hasFocusJob = Object.prototype.hasOwnProperty.call(
+      parsed.queryParams,
+      EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM
+    );
     const hasEmailJobsFragment = parsed.fragment === EMAIL_JOBS_SECTION_ANCHOR;
     if (!hasFocusJob && !hasEmailJobsFragment) {
       return;
