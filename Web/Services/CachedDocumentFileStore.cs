@@ -63,8 +63,10 @@ namespace Web.Services
 
             // Buffer the stream so we can cache the bytes and still return a readable stream.
             using var ms = new MemoryStream();
-            await result.Stream.CopyToAsync(ms);
-            await result.Stream.DisposeAsync();
+            await using (result.Stream)
+            {
+                await result.Stream.CopyToAsync(ms);
+            }
             var bytes = ms.ToArray();
 
             if (bytes.Length <= MaxCachedFileSizeBytes)
