@@ -6,7 +6,10 @@ import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
-import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM } from 'src/app/constants/email-jobs-send-page.constants';
+import {
+  EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM,
+  EMAIL_JOBS_SECTION_ANCHOR,
+} from 'src/app/constants/email-jobs-send-page.constants';
 
 @Component({
     selector: 'app-email-job-list',
@@ -170,16 +173,25 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
     return `email-job-row-${job.id.toLowerCase()}`;
   }
 
-  /** Drop `focusJob` and `#email-jobs` from the location bar once the target row has been scrolled into view. */
+  /**
+   * Drops `focusJob` from the query string and removes the `#email-jobs` fragment (see `EMAIL_JOBS_SECTION_ANCHOR`)
+   * once the target row has been scrolled into view. Other query params and non–email-jobs fragments are left unchanged.
+   */
   private stripFocusNavigationFromUrl(): void {
     const parsed = this.router.parseUrl(this.router.url);
-    if (!parsed.queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM] && !parsed.fragment) {
+    const hasFocusJob = !!parsed.queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM];
+    const hasEmailJobsFragment = parsed.fragment === EMAIL_JOBS_SECTION_ANCHOR;
+    if (!hasFocusJob && !hasEmailJobsFragment) {
       return;
     }
     const queryParams = { ...parsed.queryParams };
-    delete queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM];
+    if (hasFocusJob) {
+      delete queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM];
+    }
     parsed.queryParams = queryParams;
-    parsed.fragment = null;
+    if (hasEmailJobsFragment) {
+      parsed.fragment = null;
+    }
     const serialized = this.router.serializeUrl(parsed);
     const qIndex = serialized.indexOf('?');
     // Use Location.replaceState so we do not run a Router navigation (scrollPositionRestoration would jump to top).

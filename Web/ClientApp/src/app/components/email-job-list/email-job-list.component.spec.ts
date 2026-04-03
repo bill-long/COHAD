@@ -6,7 +6,10 @@ import { EmailJobListComponent } from './email-job-list.component';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { EmailJobSummary, EmailJobProgress, EmailJobCompleted } from 'src/app/models';
-import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM } from 'src/app/constants/email-jobs-send-page.constants';
+import {
+  EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM,
+  EMAIL_JOBS_SECTION_ANCHOR,
+} from 'src/app/constants/email-jobs-send-page.constants';
 
 const makeJob = (id: string, overrides: Partial<EmailJobSummary> = {}): EmailJobSummary => ({
   id,
@@ -140,27 +143,48 @@ describe('EmailJobListComponent', () => {
   it('stripFocusNavigationFromUrl calls Location.replaceState when focusJob or hash present', () => {
     const parsed = {
       queryParams: { [EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM]: 'j1', keep: '2' } as Record<string, string>,
-      fragment: 'email-jobs' as string | null,
+      fragment: EMAIL_JOBS_SECTION_ANCHOR as string | null,
     };
     routerSpy.parseUrl.and.returnValue(parsed as any);
     routerSpy.serializeUrl.and.callFake((tree: typeof parsed) => {
       const q = Object.keys(tree.queryParams)
         .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(tree.queryParams[k])}`)
         .join('&');
-      return '/manage/send-email' + (q ? '?' + q : '');
+      const base = '/manage/send-email' + (q ? '?' + q : '');
+      return tree.fragment ? `${base}#${tree.fragment}` : base;
     });
-    routerUrlMock.value = '/manage/send-email?focusJob=j1&keep=2#email-jobs';
+    routerUrlMock.value =
+      `/manage/send-email?focusJob=j1&keep=2#${EMAIL_JOBS_SECTION_ANCHOR}`;
     (component as unknown as { stripFocusNavigationFromUrl(): void }).stripFocusNavigationFromUrl();
     expect(locationSpy.replaceState).toHaveBeenCalledWith('/manage/send-email', 'keep=2');
     expect(parsed.queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM]).toBeUndefined();
     expect(parsed.fragment).toBeNull();
   });
 
-  it('stripFocusNavigationFromUrl is a no-op when URL has no focusJob or fragment', () => {
+  it('stripFocusNavigationFromUrl is a no-op when URL has no focusJob or email-jobs fragment', () => {
     locationSpy.replaceState.calls.reset();
     routerSpy.parseUrl.and.returnValue({ queryParams: { other: '1' }, fragment: null } as any);
     routerUrlMock.value = '/manage/send-email?other=1';
     (component as unknown as { stripFocusNavigationFromUrl(): void }).stripFocusNavigationFromUrl();
     expect(locationSpy.replaceState).not.toHaveBeenCalled();
+  });
+
+  it('stripFocusNavigationFromUrl preserves a non–email-jobs fragment when stripping focusJob', () => {
+    const parsed = {
+      queryParams: { [EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM]: 'j1' } as Record<string, string>,
+      fragment: 'other-section' as string | null,
+    };
+    routerSpy.parseUrl.and.returnValue(parsed as any);
+    routerSpy.serializeUrl.and.callFake((tree: typeof parsed) => {
+      const q = Object.keys(tree.queryParams)
+        .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(tree.queryParams[k])}`)
+        .join('&');
+      const base = '/manage/send-email' + (q ? '?' + q : '');
+      return tree.fragment ? `${base}#${tree.fragment}` : base;
+    });
+    routerUrlMock.value = '/manage/send-email?focusJob=j1#other-section';
+    (component as unknown as { stripFocusNavigationFromUrl(): void }).stripFocusNavigationFromUrl();
+    expect(locationSpy.replaceState).toHaveBeenCalledWith('/manage/send-email#other-section', '');
+    expect(parsed.fragment).toBe('other-section');
   });
 });
