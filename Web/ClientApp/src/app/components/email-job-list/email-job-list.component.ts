@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, Location } from '@angular/common';
 import { Component, Inject, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -6,6 +6,7 @@ import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
+import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM } from 'src/app/constants/email-jobs-send-page.constants';
 
 @Component({
     selector: 'app-email-job-list',
@@ -32,6 +33,7 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
     private emailJobService: EmailJobService,
     private emailJobNotifications: EmailJobNotificationsService,
     private router: Router,
+    private location: Location,
     @Inject(DOCUMENT) private document: Document
   ) { }
 
@@ -154,6 +156,7 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
         this.scrolledToTargetJobId = id;
         el.scrollIntoView({ behavior: this.targetRowScrollBehavior(), block: 'start' });
         this.clearTargetRowScrollScheduling();
+        this.stripFocusNavigationFromUrl();
       }
     };
     requestAnimationFrame(() => requestAnimationFrame(tryOnce));
@@ -165,6 +168,16 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
 
   jobRowDomId(job: EmailJobSummary): string {
     return `email-job-row-${job.id.toLowerCase()}`;
+  }
+
+  /** Drop `focusJob` and `#email-jobs` from the location bar once the target row has been scrolled into view. */
+  private stripFocusNavigationFromUrl(): void {
+    const parsed = this.router.parseUrl(this.router.url);
+    if (!parsed.queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM] && !parsed.fragment) {
+      return;
+    }
+    // Use Location.replaceState so we do not run a Router navigation (scrollPositionRestoration would jump to top).
+    this.location.replaceState('/manage/send-email', '');
   }
 
   private updateJobInList(jobId: string, updates: Partial<EmailJobSummary>): void {

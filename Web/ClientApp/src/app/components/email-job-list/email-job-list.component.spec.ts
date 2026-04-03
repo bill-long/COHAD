@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
@@ -28,6 +29,7 @@ describe('EmailJobListComponent', () => {
   let emailJobServiceSpy: jasmine.SpyObj<EmailJobService>;
   let notificationsSpy: jasmine.SpyObj<EmailJobNotificationsService>;
   let routerSpy: jasmine.SpyObj<Router>;
+  let locationSpy: jasmine.SpyObj<Location>;
   let progressSubject: Subject<EmailJobProgress>;
   let completedSubject: Subject<EmailJobCompleted>;
 
@@ -39,7 +41,10 @@ describe('EmailJobListComponent', () => {
     notificationsSpy = jasmine.createSpyObj('EmailJobNotificationsService', ['connect', 'disconnect']);
     Object.defineProperty(notificationsSpy, 'progress$', { get: () => progressSubject.asObservable() });
     Object.defineProperty(notificationsSpy, 'completed$', { get: () => completedSubject.asObservable() });
-    routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    routerSpy = jasmine.createSpyObj('Router', ['navigate', 'parseUrl']);
+    locationSpy = jasmine.createSpyObj('Location', ['replaceState']);
+    routerSpy.parseUrl.and.returnValue({ queryParams: {}, fragment: null } as any);
+    Object.defineProperty(routerSpy, 'url', { get: () => '/manage/send-email' });
 
     emailJobServiceSpy.getRecentJobs.and.returnValue(of([]));
 
@@ -48,7 +53,8 @@ describe('EmailJobListComponent', () => {
         EmailJobListComponent,
         { provide: EmailJobService, useValue: emailJobServiceSpy },
         { provide: EmailJobNotificationsService, useValue: notificationsSpy },
-        { provide: Router, useValue: routerSpy }
+        { provide: Router, useValue: routerSpy },
+        { provide: Location, useValue: locationSpy }
       ]
     });
 

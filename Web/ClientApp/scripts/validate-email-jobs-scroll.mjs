@@ -170,12 +170,11 @@ async function main() {
     await page.waitForSelector('button.back-link', { timeout: 15000 });
     await page.click('button.back-link');
 
-    await page.waitForFunction(
-      () => window.location.href.includes('/manage/send-email') && window.location.href.includes('focusJob='),
-      { timeout: 15000 }
-    );
+    await page.waitForFunction(() => window.location.pathname.includes('/manage/send-email'), {
+      timeout: 15000,
+    });
 
-    // Allow router + deferred scroll (retries up to ~400ms) + smooth row scroll
+    // Router may replace the URL to drop focusJob/#email-jobs after scrolling; allow scroll + strip to finish.
     await new Promise(r => setTimeout(r, 1200));
 
     const afterBack = await page.evaluate(id => {
