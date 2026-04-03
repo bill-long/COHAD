@@ -176,8 +176,18 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
     if (!parsed.queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM] && !parsed.fragment) {
       return;
     }
+    const queryParams = { ...parsed.queryParams };
+    delete queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM];
+    parsed.queryParams = queryParams;
+    parsed.fragment = null;
+    const serialized = this.router.serializeUrl(parsed);
+    const qIndex = serialized.indexOf('?');
     // Use Location.replaceState so we do not run a Router navigation (scrollPositionRestoration would jump to top).
-    this.location.replaceState('/manage/send-email', '');
+    if (qIndex >= 0) {
+      this.location.replaceState(serialized.slice(0, qIndex), serialized.slice(qIndex + 1));
+    } else {
+      this.location.replaceState(serialized, '');
+    }
   }
 
   private updateJobInList(jobId: string, updates: Partial<EmailJobSummary>): void {

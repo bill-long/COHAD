@@ -6,6 +6,7 @@ import { EmailJobListComponent } from './email-job-list.component';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { EmailJobSummary, EmailJobProgress, EmailJobCompleted } from 'src/app/models';
+import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM } from 'src/app/constants/email-jobs-send-page.constants';
 
 const makeJob = (id: string, overrides: Partial<EmailJobSummary> = {}): EmailJobSummary => ({
   id,
@@ -30,6 +31,8 @@ describe('EmailJobListComponent', () => {
   let notificationsSpy: jasmine.SpyObj<EmailJobNotificationsService>;
   let routerSpy: jasmine.SpyObj<Router>;
   let locationSpy: jasmine.SpyObj<Location>;
+  /** Mutable current URL for `router.url` (tests may assign `.value`). */
+  let routerUrlMock: { value: string };
   let progressSubject: Subject<EmailJobProgress>;
   let completedSubject: Subject<EmailJobCompleted>;
 
@@ -41,10 +44,12 @@ describe('EmailJobListComponent', () => {
     notificationsSpy = jasmine.createSpyObj('EmailJobNotificationsService', ['connect', 'disconnect']);
     Object.defineProperty(notificationsSpy, 'progress$', { get: () => progressSubject.asObservable() });
     Object.defineProperty(notificationsSpy, 'completed$', { get: () => completedSubject.asObservable() });
-    routerSpy = jasmine.createSpyObj('Router', ['navigate', 'parseUrl']);
+    routerSpy = jasmine.createSpyObj('Router', ['navigate', 'parseUrl', 'serializeUrl']);
     locationSpy = jasmine.createSpyObj('Location', ['replaceState']);
     routerSpy.parseUrl.and.returnValue({ queryParams: {}, fragment: null } as any);
-    Object.defineProperty(routerSpy, 'url', { get: () => '/manage/send-email' });
+    routerSpy.serializeUrl.and.returnValue('/manage/send-email');
+    routerUrlMock = { value: '/manage/send-email' };
+    Object.defineProperty(routerSpy, 'url', { get: () => routerUrlMock.value });
 
     emailJobServiceSpy.getRecentJobs.and.returnValue(of([]));
 
@@ -130,5 +135,32 @@ describe('EmailJobListComponent', () => {
   it('navigates to job detail on viewJob()', () => {
     component.viewJob(makeJob('j1'));
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/manage/email-jobs', 'j1']);
+  });
+
+  it('stripFocusNavigationFromUrl calls Location.replaceState when focusJob or hash present', () => {
+    const parsed = {
+      queryParams: { [EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM]: 'j1', keep: '2' } as Record<string, string>,
+      fragment: 'email-jobs' as string | null,
+    };
+    routerSpy.parseUrl.and.returnValue(parsed as any);
+    routerSpy.serializeUrl.and.callFake((tree: typeof parsed) => {
+      const q = Object.keys(tree.queryParams)
+        .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(tree.queryParams[k])}`)
+        .join('&');
+      return '/manage/send-email' + (q ? '?' + q : '');
+    });
+    routerUrlMock.value = '/manage/send-email?focusJob=j1&keep=2#email-jobs';
+    (component as unknown as { stripFocusNavigationFromUrl(): void }).stripFocusNavigationFromUrl();
+    expect(locationSpy.replaceState).toHaveBeenCalledWith('/manage/send-email', 'keep=2');
+    expect(parsed.queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM]).toBeUndefined();
+    expect(parsed.fragment).toBeNull();
+  });
+
+  it('stripFocusNavigationFromUrl is a no-op when URL has no focusJob or fragment', () => {
+    locationSpy.replaceState.calls.reset();
+    routerSpy.parseUrl.and.returnValue({ queryParams: { other: '1' }, fragment: null } as any);
+    routerUrlMock.value = '/manage/send-email?other=1';
+    (component as unknown as { stripFocusNavigationFromUrl(): void }).stripFocusNavigationFromUrl();
+    expect(locationSpy.replaceState).not.toHaveBeenCalled();
   });
 });

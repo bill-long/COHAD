@@ -193,6 +193,14 @@ async function main() {
 
     console.log(JSON.stringify({ baseUrl, jobId, beforeBack, afterBack }, null, 2));
 
+    const cleaned = new URL(afterBack.href);
+    if (cleaned.searchParams.has('focusJob')) {
+      throw new Error(`Expected focusJob removed from URL after back scroll; got ${afterBack.href}`);
+    }
+    if (cleaned.hash && cleaned.hash.includes('email-jobs')) {
+      throw new Error(`Expected #email-jobs removed from URL after back scroll; got ${afterBack.href}`);
+    }
+
     const scrollY = afterBack.scrollY;
     const jobsTop = afterBack.emailJobsTop;
     const titleTop = afterBack.composeTitleTop;
