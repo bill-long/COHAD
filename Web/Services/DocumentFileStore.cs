@@ -14,6 +14,10 @@ namespace Web.Services
         public Stream Stream { get; set; }
 
         public string ContentType { get; set; }
+
+        public string ETag { get; set; }
+
+        public DateTimeOffset? LastModified { get; set; }
     }
 
     public interface IDocumentFileStore
@@ -97,7 +101,9 @@ namespace Web.Services
             return new DocumentFileResult
             {
                 Stream = response.Value.Content,
-                ContentType = response.Value.Details.ContentType
+                ContentType = response.Value.Details.ContentType,
+                ETag = response.Value.Details.ETag.ToString("H"),
+                LastModified = response.Value.Details.LastModified
             };
         }
 

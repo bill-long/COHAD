@@ -1014,13 +1014,18 @@ public sealed class EventsControllerTests
         mockFileStore.Setup(s => s.DownloadAsync("events/promo.jpg")).ReturnsAsync(new DocumentFileResult
         {
             Stream = new MemoryStream([1, 2, 3]),
-            ContentType = "image/jpeg"
+            ContentType = "image/jpeg",
+            ETag = "\"abc123\"",
+            LastModified = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
         });
 
         var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, mockFileStore.Object, Mock.Of<IAuditLogRepository>());
-        await c.DownloadPromoMedia(eventId.ToString("D"));
+        var result = await c.DownloadPromoMedia(eventId.ToString("D"));
 
         Assert.Equal("public, no-cache", c.Response.Headers["Cache-Control"].ToString());
-        Assert.False(string.IsNullOrWhiteSpace(c.Response.Headers["ETag"].ToString()));
+        var fileResult = Assert.IsType<FileStreamResult>(result);
+        Assert.NotNull(fileResult.EntityTag);
+        Assert.Equal("\"abc123\"", fileResult.EntityTag.Tag.ToString());
+        Assert.NotNull(fileResult.LastModified);
     }
 }

@@ -140,9 +140,7 @@ namespace Web.Controllers
                 ? "application/octet-stream"
                 : file.ContentType;
             Response.Headers["Cache-Control"] = "public, no-cache";
-            Response.Headers["ETag"] = $"\"{stored.PromoMediaBlobPath.GetHashCode():x}\"";
-            // Omit fileDownloadName so the response is served inline for browser display (e.g. img src) rather than as a download attachment.
-            return File(file.Stream, contentType);
+            return File(file.Stream, contentType, file.LastModified, ParseETag(file.ETag));
         }
 
         [HttpGet("{segment}/promo/og-thumb")]
@@ -771,6 +769,15 @@ namespace Web.Controllers
             var invalid = Path.GetInvalidFileNameChars();
             var cleaned = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
             return cleaned;
+        }
+
+        private static Microsoft.Net.Http.Headers.EntityTagHeaderValue ParseETag(string etag)
+        {
+            if (string.IsNullOrWhiteSpace(etag))
+                return null;
+            if (!etag.StartsWith('"'))
+                etag = $"\"{etag}\"";
+            return Microsoft.Net.Http.Headers.EntityTagHeaderValue.Parse(etag);
         }
     }
 }

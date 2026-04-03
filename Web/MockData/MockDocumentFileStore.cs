@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -18,7 +19,8 @@ namespace Web.MockData
                 _files[blobPath] = new StoredFile
                 {
                     ContentType = contentType,
-                    Bytes = ms.ToArray()
+                    Bytes = ms.ToArray(),
+                    LastModified = DateTimeOffset.UtcNow
                 };
             }
 
@@ -37,7 +39,9 @@ namespace Web.MockData
                 return Task.FromResult(new DocumentFileResult
                 {
                     ContentType = found.ContentType,
-                    Stream = new MemoryStream(found.Bytes, writable: false)
+                    Stream = new MemoryStream(found.Bytes, writable: false),
+                    ETag = $"\"{found.LastModified.Ticks:x}\"",
+                    LastModified = found.LastModified
                 });
             }
         }
@@ -57,6 +61,8 @@ namespace Web.MockData
             public string ContentType { get; set; }
 
             public byte[] Bytes { get; set; }
+
+            public DateTimeOffset LastModified { get; set; }
         }
     }
 }

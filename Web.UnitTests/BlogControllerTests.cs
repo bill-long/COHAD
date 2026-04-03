@@ -660,13 +660,18 @@ public sealed class BlogControllerTests
         mockFiles.Setup(f => f.DownloadAsync("blog/guid/photo.jpg")).ReturnsAsync(new DocumentFileResult
         {
             Stream = new MemoryStream(new byte[] { 1, 2, 3 }),
-            ContentType = "image/jpeg"
+            ContentType = "image/jpeg",
+            ETag = "\"xyz789\"",
+            LastModified = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
         });
 
         var c = CreateAnonymousController(mockPosts.Object, files: mockFiles.Object);
-        await c.DownloadFeaturedImage("2026-x");
+        var result = await c.DownloadFeaturedImage("2026-x");
 
         Assert.Equal("public, no-cache", c.Response.Headers["Cache-Control"].ToString());
-        Assert.False(string.IsNullOrWhiteSpace(c.Response.Headers["ETag"].ToString()));
+        var fileResult = Assert.IsType<FileStreamResult>(result);
+        Assert.NotNull(fileResult.EntityTag);
+        Assert.Equal("\"xyz789\"", fileResult.EntityTag.Tag.ToString());
+        Assert.NotNull(fileResult.LastModified);
     }
 }
