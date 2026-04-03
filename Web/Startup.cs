@@ -50,6 +50,9 @@ namespace Web
 
             services.AddResponseCompression(options =>
             {
+                // BREACH/CRIME risk is mitigated: the app uses JWT Bearer auth (no
+                // cookie-based CSRF tokens) and compressed responses do not mix
+                // secret values with attacker-controlled content.
                 options.EnableForHttps = true;
                 options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new[]
                 {

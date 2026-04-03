@@ -113,6 +113,7 @@ namespace Web.Controllers
             }
 
             var currentUserUniqueId = await TryGetCurrentUserUniqueIdAsync();
+            Response.Headers["Cache-Control"] = "private, max-age=300";
             return Ok(CommunityEventDetail.FromStorageModel(stored, includeSignups: false, currentUserUniqueId));
         }
 
