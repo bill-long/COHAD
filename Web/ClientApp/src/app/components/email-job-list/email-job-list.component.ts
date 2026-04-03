@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, Location } from '@angular/common';
 import { Component, Inject, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -6,6 +6,10 @@ import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
+import {
+  EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM,
+  EMAIL_JOBS_SECTION_ANCHOR,
+} from 'src/app/constants/email-jobs-send-page.constants';
 
 @Component({
     selector: 'app-email-job-list',
@@ -32,6 +36,7 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
     private emailJobService: EmailJobService,
     private emailJobNotifications: EmailJobNotificationsService,
     private router: Router,
+    private location: Location,
     @Inject(DOCUMENT) private document: Document
   ) { }
 
@@ -154,6 +159,7 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
         this.scrolledToTargetJobId = id;
         el.scrollIntoView({ behavior: this.targetRowScrollBehavior(), block: 'start' });
         this.clearTargetRowScrollScheduling();
+        this.stripFocusNavigationFromUrl();
       }
     };
     requestAnimationFrame(() => requestAnimationFrame(tryOnce));
@@ -165,6 +171,38 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
 
   jobRowDomId(job: EmailJobSummary): string {
     return `email-job-row-${job.id.toLowerCase()}`;
+  }
+
+  /**
+   * Drops `focusJob` from the query string and removes the `#email-jobs` fragment (see `EMAIL_JOBS_SECTION_ANCHOR`)
+   * once the target row has been scrolled into view. Other query params and non–email-jobs fragments are left unchanged.
+   */
+  private stripFocusNavigationFromUrl(): void {
+    const parsed = this.router.parseUrl(this.router.url);
+    const hasFocusJob = Object.prototype.hasOwnProperty.call(
+      parsed.queryParams,
+      EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM
+    );
+    const hasEmailJobsFragment = parsed.fragment === EMAIL_JOBS_SECTION_ANCHOR;
+    if (!hasFocusJob && !hasEmailJobsFragment) {
+      return;
+    }
+    const queryParams = { ...parsed.queryParams };
+    if (hasFocusJob) {
+      delete queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM];
+    }
+    parsed.queryParams = queryParams;
+    if (hasEmailJobsFragment) {
+      parsed.fragment = null;
+    }
+    const serialized = this.router.serializeUrl(parsed);
+    const qIndex = serialized.indexOf('?');
+    // Use Location.replaceState so we do not run a Router navigation (scrollPositionRestoration would jump to top).
+    if (qIndex >= 0) {
+      this.location.replaceState(serialized.slice(0, qIndex), serialized.slice(qIndex + 1));
+    } else {
+      this.location.replaceState(serialized, '');
+    }
   }
 
   private updateJobInList(jobId: string, updates: Partial<EmailJobSummary>): void {
