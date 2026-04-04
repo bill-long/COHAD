@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services.Repositories;
+using Web.UpdateModels;
 
 namespace Web.Controllers
 {
@@ -227,22 +228,5 @@ namespace Web.Controllers
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
             return await _userRepository.GetByUniqueIdAsync(uniqueId);
         }
-    }
-
-    public class CreateFolderRequest
-    {
-        public string Name { get; set; }
-    }
-
-    public class UpdateFolderRequest
-    {
-        public string Name { get; set; }
-        public int? SortOrder { get; set; }
-    }
-
-    public class ReorderItem
-    {
-        public Guid Id { get; set; }
-        public int SortOrder { get; set; }
     }
 }

@@ -17,30 +17,32 @@
             <mat-icon class="folder-row-icon">folder</mat-icon>
             <span class="folder-row-name">{{ folder.name }}</span>
             <span class="folder-row-count">({{ folder.documentCount }})</span>
-            <button type="button" mat-icon-button (click)="moveFolderUp(folder)" [disabled]="i === 0" title="Move up">
+            <button type="button" mat-icon-button (click)="moveFolderUp(folder)" [disabled]="i === 0" title="Move up" aria-label="Move folder up">
               <mat-icon>arrow_upward</mat-icon>
             </button>
-            <button type="button" mat-icon-button (click)="moveFolderDown(folder)" [disabled]="i === folders.length - 1" title="Move down">
+            <button type="button" mat-icon-button (click)="moveFolderDown(folder)" [disabled]="i === folders.length - 1" title="Move down" aria-label="Move folder down">
               <mat-icon>arrow_downward</mat-icon>
             </button>
-            <button type="button" mat-icon-button (click)="startEditFolder(folder)" title="Rename">
+            <button type="button" mat-icon-button (click)="startEditFolder(folder)" title="Rename" aria-label="Rename folder">
               <mat-icon>edit</mat-icon>
             </button>
             <button type="button" mat-icon-button color="warn"
               (click)="deleteFolder(folder)"
               [disabled]="deletingFolderId === folder.id || folder.documentCount > 0"
-              [title]="folder.documentCount > 0 ? 'Remove documents before deleting' : 'Delete folder'">
+              [title]="folder.documentCount > 0 ? 'Remove documents before deleting' : 'Delete folder'"
+              [attr.aria-label]="folder.documentCount > 0 ? 'Cannot delete folder with documents' : 'Delete folder'">
               <mat-icon>delete</mat-icon>
             </button>
           </ng-container>
 
           <ng-container *ngIf="editingFolderId === folder.id">
             <input class="folder-edit-input" type="text" [(ngModel)]="editingFolderName" maxlength="100"
+              aria-label="Rename folder" placeholder="Rename folder"
               (keyup.enter)="saveEditFolder(folder)" (keyup.escape)="cancelEditFolder()">
-            <button type="button" mat-icon-button color="primary" (click)="saveEditFolder(folder)" title="Save">
+            <button type="button" mat-icon-button color="primary" (click)="saveEditFolder(folder)" title="Save" aria-label="Save folder name">
               <mat-icon>check</mat-icon>
             </button>
-            <button type="button" mat-icon-button (click)="cancelEditFolder()" title="Cancel">
+            <button type="button" mat-icon-button (click)="cancelEditFolder()" title="Cancel" aria-label="Cancel folder rename">
               <mat-icon>close</mat-icon>
             </button>
           </ng-container>
@@ -48,7 +50,7 @@
       </div>
 
       <div class="folder-create-row">
-        <input class="folder-create-input" type="text" placeholder="New folder name" [(ngModel)]="newFolderName" maxlength="100"
+        <input class="folder-create-input" type="text" placeholder="New folder name" aria-label="New folder name" [(ngModel)]="newFolderName" maxlength="100"
           (keyup.enter)="createFolder()" [disabled]="creatingFolder">
         <button type="button" mat-stroked-button (click)="createFolder()" [disabled]="creatingFolder || !newFolderName.trim()">
           {{ creatingFolder ? 'Creating...' : 'Add Folder' }}
@@ -70,7 +72,8 @@
           Choose File
         </button>
 
-        <select class="folder-select" [(ngModel)]="selectedFolderId" [disabled]="uploadInProgress">
+        <label for="manage-document-folder" class="visually-hidden">Upload to folder</label>
+        <select id="manage-document-folder" class="folder-select" [(ngModel)]="selectedFolderId" [disabled]="uploadInProgress">
           <option value="">(No folder)</option>
           <option *ngFor="let folder of folders" [value]="folder.id">{{ folder.name }}</option>
         </select>

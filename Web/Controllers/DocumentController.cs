@@ -137,6 +137,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
+            string folderName = null;
             if (request.FolderId.HasValue)
             {
                 var folder = await _folderRepository.GetByIdAsync(request.FolderId.Value);
@@ -144,6 +145,8 @@ namespace Web.Controllers
                 {
                     return BadRequest("The specified folder does not exist.");
                 }
+
+                folderName = folder.Name;
             }
 
             var id = Guid.NewGuid();
@@ -189,13 +192,6 @@ namespace Web.Controllers
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
                 UserId = apiUser.UniqueId
             });
-
-            string folderName = null;
-            if (created.FolderId.HasValue)
-            {
-                var f = await _folderRepository.GetByIdAsync(created.FolderId.Value);
-                folderName = f?.Name;
-            }
 
             return Ok(ResidentDocumentSummary.FromStorageModel(created, folderName));
         }
