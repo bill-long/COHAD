@@ -4,12 +4,15 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using Web.Configuration;
 using Web.Models;
 using Web.PresentationModels;
@@ -79,8 +82,7 @@ namespace Web.Controllers
                 .Select(CommunityEventCard.FromStorageModel)
                 .ToList();
 
-            Response.Headers["Cache-Control"] = "public, max-age=300";
-            return Ok(payload);
+            return OkWithETag(payload);
         }
 
         [HttpGet("next")]
@@ -98,8 +100,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            Response.Headers["Cache-Control"] = "public, max-age=300";
-            return Ok(CommunityEventCard.FromStorageModel(next));
+            return OkWithETag(CommunityEventCard.FromStorageModel(next));
         }
 
         [HttpGet("{segment}")]
@@ -113,10 +114,15 @@ namespace Web.Controllers
             }
 
             var currentUserUniqueId = await TryGetCurrentUserUniqueIdAsync();
-            Response.Headers["Cache-Control"] = string.IsNullOrWhiteSpace(currentUserUniqueId)
-                ? "public, max-age=300"
-                : "private, no-store";
-            return Ok(CommunityEventDetail.FromStorageModel(stored, includeSignups: false, currentUserUniqueId));
+            var detail = CommunityEventDetail.FromStorageModel(stored, includeSignups: false, currentUserUniqueId);
+
+            if (string.IsNullOrWhiteSpace(currentUserUniqueId))
+            {
+                return OkWithETag(detail);
+            }
+
+            Response.Headers["Cache-Control"] = "private, no-store";
+            return Ok(detail);
         }
 
         [HttpGet("{segment}/promo")]
@@ -769,6 +775,34 @@ namespace Web.Controllers
             var invalid = Path.GetInvalidFileNameChars();
             var cleaned = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
             return cleaned;
+        }
+
+        private static readonly JsonSerializerOptions CamelCaseJson = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
+        /// <summary>
+        /// Returns a JSON response with <c>Cache-Control: public, no-cache</c> and an ETag
+        /// derived from the serialised payload. If the client sends a matching
+        /// <c>If-None-Match</c> header, a 304 Not Modified is returned instead.
+        /// </summary>
+        private IActionResult OkWithETag<T>(T payload)
+        {
+            var json = JsonSerializer.SerializeToUtf8Bytes(payload, CamelCaseJson);
+            var etag = new EntityTagHeaderValue(
+                $"\"{Convert.ToBase64String(SHA256.HashData(json))}\"");
+
+            Response.Headers.CacheControl = "public, no-cache";
+            Response.Headers.ETag = etag.ToString();
+
+            if (Request.GetTypedHeaders().IfNoneMatch
+                    ?.Any(e => e.Compare(etag, useStrongComparison: true)) == true)
+            {
+                return StatusCode(StatusCodes.Status304NotModified);
+            }
+
+            return new FileContentResult(json, "application/json");
         }
     }
 }
