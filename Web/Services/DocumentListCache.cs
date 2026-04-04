@@ -17,7 +17,10 @@ namespace Web.Services
     /// Caches the document and folder list queries in memory so repeated
     /// reads from authenticated users avoid Cosmos DB round-trips.
     /// Write operations (upload, delete, folder CRUD) invalidate the
-    /// relevant cache entries.
+    /// relevant cache entries for the current application instance only.
+    /// Because <see cref="IMemoryCache" /> is per-process, scaled-out
+    /// deployments can still serve stale cached data from other instances
+    /// until those entries expire or a distributed invalidation strategy is used.
     /// </summary>
     public sealed class DocumentListCache
     {
@@ -40,7 +43,7 @@ namespace Web.Services
             _documentRepository = documentRepository;
             _folderRepository = folderRepository;
             _cache = cache;
-            _jsonOptions = jsonOptions;
+            _jsonOptions = jsonOptions ?? new JsonSerializerOptions(JsonSerializerDefaults.Web);
         }
 
         public async Task<List<ResidentDocument>> GetAllDocumentsAsync()
