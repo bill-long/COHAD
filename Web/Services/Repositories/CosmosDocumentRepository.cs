@@ -30,7 +30,8 @@ namespace Web.Services.Repositories
 
         public async Task<List<ResidentDocument>> GetAllAsync()
         {
-            var iterator = _documentsContainer.GetItemQueryIterator<JObject>(new CosmosQueryDefinition("SELECT * FROM c"));
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE STARTSWITH(c.id, 'ResidentDocument|')");
+            var iterator = _documentsContainer.GetItemQueryIterator<JObject>(query);
             var results = new List<ResidentDocument>();
             while (iterator.HasMoreResults)
             {

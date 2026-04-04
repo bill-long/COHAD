@@ -247,3 +247,162 @@
         margin-left: 0;
     }
 }
+
+/* --- Folder management --- */
+
+.admin-panel--folders {
+    margin-bottom: 1rem;
+}
+
+.folder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 0.75rem;
+}
+
+.folder-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0;
+}
+
+.folder-row-icon {
+    color: var(--text-secondary);
+    font-size: 1.15rem;
+    width: 1.15rem;
+    height: 1.15rem;
+}
+
+.folder-row-name {
+    font-weight: 500;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.folder-row-count {
+    color: var(--text-tertiary);
+    font-size: 0.85rem;
+    margin-right: 0.25rem;
+}
+
+.folder-edit-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    font-size: 0.95rem;
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+.folder-create-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.folder-create-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    font-size: 0.95rem;
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+.folder-create-input::placeholder {
+    color: var(--text-muted);
+}
+
+.folder-select {
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    background: var(--surface);
+    color: var(--text-primary);
+    min-width: 140px;
+}
+
+/* --- Folder grouped document list --- */
+
+.folder-group {
+    margin-bottom: 1rem;
+}
+
+.folder-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 0.35rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    width: 100%;
+    text-align: left;
+}
+
+.folder-header:hover {
+    color: var(--text-secondary);
+}
+
+.folder-toggle-icon {
+    color: var(--text-tertiary);
+    font-size: 1.2rem;
+    width: 1.2rem;
+    height: 1.2rem;
+}
+
+.folder-icon {
+    color: var(--text-secondary);
+    font-size: 1.15rem;
+    width: 1.15rem;
+    height: 1.15rem;
+}
+
+.folder-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.folder-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.4rem;
+    height: 1.25rem;
+    border-radius: 999px;
+    background: var(--surface-chip);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0 0.35rem;
+}
+
+.folder-documents {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding-left: 1.4rem;
+    margin-top: 0.35rem;
+}
+
+.unfiled-heading {
+    margin: 0 0 0.65rem;
+    font-size: var(--heading-section);
+    font-weight: var(--heading-section-weight);
+}

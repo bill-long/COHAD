@@ -19,5 +19,7 @@ namespace Web.Models
         public string UploadedByUniqueId { get; set; }
 
         public DateTime CreatedUtc { get; set; }
+
+        public Guid? FolderId { get; set; }
     }
 }

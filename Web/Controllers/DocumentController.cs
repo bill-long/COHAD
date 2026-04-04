@@ -32,6 +32,7 @@ namespace Web.Controllers
 
         private readonly IUserRepository _userRepository;
         private readonly IDocumentRepository _documentRepository;
+        private readonly IDocumentFolderRepository _folderRepository;
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly DocumentStorageOptions _storageOptions;
@@ -39,12 +40,14 @@ namespace Web.Controllers
         public DocumentController(
             IUserRepository userRepository,
             IDocumentRepository documentRepository,
+            IDocumentFolderRepository folderRepository,
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
             IOptions<DocumentStorageOptions> storageOptions)
         {
             _userRepository = userRepository;
             _documentRepository = documentRepository;
+            _folderRepository = folderRepository;
             _documentFileStore = documentFileStore;
             _auditLogRepository = auditLogRepository;
             _storageOptions = storageOptions.Value;
@@ -65,9 +68,12 @@ namespace Web.Controllers
             }
 
             var docs = await _documentRepository.GetAllAsync();
+            var folders = await _folderRepository.GetAllAsync();
+            var folderLookup = folders.ToDictionary(f => f.Id, f => f.Name);
             var payload = docs
                 .OrderByDescending(d => d.CreatedUtc)
-                .Select(ResidentDocumentSummary.FromStorageModel)
+                .Select(d => ResidentDocumentSummary.FromStorageModel(
+                    d, d.FolderId != null && folderLookup.TryGetValue(d.FolderId.Value, out var name) ? name : null))
                 .ToList();
 
             return Ok(payload);
@@ -131,6 +137,18 @@ namespace Web.Controllers
                 return NotFound();
             }
 
+            string folderName = null;
+            if (request.FolderId.HasValue)
+            {
+                var folder = await _folderRepository.GetByIdAsync(request.FolderId.Value);
+                if (folder == null)
+                {
+                    return BadRequest("The specified folder does not exist.");
+                }
+
+                folderName = folder.Name;
+            }
+
             var id = Guid.NewGuid();
             var rawDisplayName = string.IsNullOrWhiteSpace(request.DisplayName)
                 ? Path.GetFileNameWithoutExtension(request.File.FileName)
@@ -159,7 +177,8 @@ namespace Web.Controllers
                 ContentType = request.File.ContentType,
                 SizeBytes = request.File.Length,
                 UploadedByUniqueId = apiUser.UniqueId,
-                CreatedUtc = DateTime.UtcNow
+                CreatedUtc = DateTime.UtcNow,
+                FolderId = request.FolderId
             };
 
             await _documentRepository.UpsertAsync(created);
@@ -174,7 +193,7 @@ namespace Web.Controllers
                 UserId = apiUser.UniqueId
             });
 
-            return Ok(ResidentDocumentSummary.FromStorageModel(created));
+            return Ok(ResidentDocumentSummary.FromStorageModel(created, folderName));
         }
 
         [HttpDelete("{id:guid}")]
