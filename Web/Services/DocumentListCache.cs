@@ -56,8 +56,8 @@ namespace Web.Services
             }
 
             var docs = await _documentRepository.GetAllAsync();
-            _cache.Set(DocumentsCacheKey, new List<ResidentDocument>(docs), CacheOptions());
-            return docs;
+            _cache.Set(DocumentsCacheKey, docs, CacheOptions());
+            return new List<ResidentDocument>(docs);
         }
 
         public async Task<List<DocumentFolder>> GetAllFoldersAsync()
@@ -68,8 +68,8 @@ namespace Web.Services
             }
 
             var folders = await _folderRepository.GetAllAsync();
-            _cache.Set(FoldersCacheKey, new List<DocumentFolder>(folders), CacheOptions());
-            return folders;
+            _cache.Set(FoldersCacheKey, folders, CacheOptions());
+            return new List<DocumentFolder>(folders);
         }
 
         /// <summary>Invalidate after document upload or delete.</summary>
