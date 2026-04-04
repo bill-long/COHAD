@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -39,7 +40,8 @@ public sealed class EventsControllerTests
             auditLog,
             new SkiaSharpOgThumbnailService(),
             imageUploadHelper ?? DefaultImageUploadHelper(),
-            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
+            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
+            Options.Create(new JsonOptions()));
 
         c.ControllerContext = new ControllerContext
         {
@@ -587,11 +589,12 @@ public sealed class EventsControllerTests
         var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
         var result = await c.GetUpcoming();
 
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var list = Assert.IsAssignableFrom<IReadOnlyList<CommunityEventCard>>(ok.Value);
-        Assert.Equal(2, list.Count);
-        Assert.Equal("Earlier", list[0].Title);
-        Assert.Equal("Later", list[1].Title);
+        var ok = Assert.IsType<FileContentResult>(result);
+        using var doc = JsonDocument.Parse(ok.FileContents);
+        var arr = doc.RootElement.EnumerateArray().ToList();
+        Assert.Equal(2, arr.Count);
+        Assert.Equal("Earlier", arr[0].GetProperty("title").GetString());
+        Assert.Equal("Later", arr[1].GetProperty("title").GetString());
     }
 
     [Fact]
@@ -630,10 +633,10 @@ public sealed class EventsControllerTests
         var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
         var result = await c.GetNextUpcoming();
 
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var card = Assert.IsType<CommunityEventCard>(ok.Value);
-        Assert.Equal(earliestId, card.Id);
-        Assert.Equal("First", card.Title);
+        var ok = Assert.IsType<FileContentResult>(result);
+        using var doc = JsonDocument.Parse(ok.FileContents);
+        Assert.Equal(earliestId, doc.RootElement.GetProperty("id").GetGuid());
+        Assert.Equal("First", doc.RootElement.GetProperty("title").GetString());
     }
 
     [Fact]
@@ -950,7 +953,7 @@ public sealed class EventsControllerTests
         var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
         await c.GetUpcoming();
 
-        Assert.Equal("public, max-age=300", c.Response.Headers["Cache-Control"].ToString());
+        Assert.Equal("public, no-cache", c.Response.Headers["Cache-Control"].ToString());
     }
 
     [Fact]
@@ -970,7 +973,7 @@ public sealed class EventsControllerTests
         c.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
         await c.GetBySegment("summer-bbq");
 
-        Assert.Equal("public, max-age=300", c.Response.Headers["Cache-Control"].ToString());
+        Assert.Equal("public, no-cache", c.Response.Headers["Cache-Control"].ToString());
     }
 
     [Fact]
@@ -1028,5 +1031,176 @@ public sealed class EventsControllerTests
         Assert.NotNull(fileResult.EntityTag);
         Assert.Equal("\"abc123\"", fileResult.EntityTag.Tag.ToString());
         Assert.NotNull(fileResult.LastModified);
+    }
+
+    // ── ETag / no-cache tests ──
+
+    [Fact]
+    public async Task GetUpcoming_returns_no_cache_and_ETag()
+    {
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<CommunityEvent>
+            {
+                new() { Id = Guid.NewGuid(), Title = "Picnic", StartUtc = DateTime.UtcNow.AddDays(1) }
+            });
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var result = await c.GetUpcoming();
+
+        Assert.Equal("public, no-cache", c.Response.Headers.CacheControl.ToString());
+        Assert.False(string.IsNullOrEmpty(c.Response.Headers.ETag.ToString()));
+        Assert.IsType<FileContentResult>(result);
+        Assert.Equal("application/json", ((FileContentResult)result).ContentType);
+    }
+
+    [Fact]
+    public async Task GetUpcoming_returns_304_when_If_None_Match_matches()
+    {
+        var eventId = Guid.NewGuid();
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<CommunityEvent>
+            {
+                new() { Id = eventId, Title = "Picnic", StartUtc = DateTime.UtcNow.AddDays(1) }
+            });
+
+        // First call: get the ETag
+        var c1 = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        await c1.GetUpcoming();
+        var etag = c1.Response.Headers.ETag.ToString();
+
+        // Second call: send If-None-Match with the same ETag
+        var c2 = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        c2.Request.Headers["If-None-Match"] = etag;
+        var result = await c2.GetUpcoming();
+
+        var status = Assert.IsType<StatusCodeResult>(result);
+        Assert.Equal(StatusCodes.Status304NotModified, status.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetUpcoming_returns_200_with_new_ETag_when_data_changes()
+    {
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<CommunityEvent>
+            {
+                new() { Id = Guid.NewGuid(), Title = "Picnic", StartUtc = DateTime.UtcNow.AddDays(1) }
+            });
+
+        // First call: get the ETag
+        var c1 = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        await c1.GetUpcoming();
+        var etag1 = c1.Response.Headers.ETag.ToString();
+
+        // Change the data
+        mockEvents.Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<CommunityEvent>
+            {
+                new() { Id = Guid.NewGuid(), Title = "Updated Picnic", StartUtc = DateTime.UtcNow.AddDays(2) }
+            });
+
+        // Second call: send If-None-Match with the old ETag
+        var c2 = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        c2.Request.Headers["If-None-Match"] = etag1;
+        var result = await c2.GetUpcoming();
+
+        Assert.IsType<FileContentResult>(result);
+        var etag2 = c2.Response.Headers.ETag.ToString();
+        Assert.NotEqual(etag1, etag2);
+    }
+
+    [Fact]
+    public async Task GetNextUpcoming_returns_no_cache_and_ETag()
+    {
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<CommunityEvent>
+            {
+                new() { Id = Guid.NewGuid(), Title = "Picnic", StartUtc = DateTime.UtcNow.AddDays(1) }
+            });
+
+        var c = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var result = await c.GetNextUpcoming();
+
+        Assert.Equal("public, no-cache", c.Response.Headers.CacheControl.ToString());
+        Assert.False(string.IsNullOrEmpty(c.Response.Headers.ETag.ToString()));
+        Assert.IsType<FileContentResult>(result);
+    }
+
+    [Fact]
+    public async Task GetNextUpcoming_returns_304_when_If_None_Match_matches()
+    {
+        var eventId = Guid.NewGuid();
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetWithStartUtcOnOrAfterAsync(It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<CommunityEvent>
+            {
+                new() { Id = eventId, Title = "Picnic", StartUtc = DateTime.UtcNow.AddDays(1) }
+            });
+
+        var c1 = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        await c1.GetNextUpcoming();
+        var etag = c1.Response.Headers.ETag.ToString();
+
+        var c2 = CreateController(Mock.Of<IUserRepository>(), mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        c2.Request.Headers["If-None-Match"] = etag;
+        var result = await c2.GetNextUpcoming();
+
+        var status = Assert.IsType<StatusCodeResult>(result);
+        Assert.Equal(StatusCodes.Status304NotModified, status.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetBySegment_anonymous_returns_no_cache_and_ETag()
+    {
+        var eventId = Guid.NewGuid();
+        var slug = "2026-picnic";
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(slug))
+            .ReturnsAsync(new CommunityEvent { Id = eventId, Title = "Picnic", StartUtc = DateTime.UtcNow.AddDays(1), PublicSlug = slug });
+
+        // No user identity → anonymous
+        var c = new EventsController(
+            Mock.Of<IUserRepository>(),
+            mockEvents.Object,
+            Mock.Of<IDocumentFileStore>(),
+            Mock.Of<IAuditLogRepository>(),
+            new SkiaSharpOgThumbnailService(),
+            DefaultImageUploadHelper(),
+            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
+            Options.Create(new JsonOptions()));
+        c.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+
+        var result = await c.GetBySegment(slug);
+
+        Assert.Equal("public, no-cache", c.Response.Headers.CacheControl.ToString());
+        Assert.False(string.IsNullOrEmpty(c.Response.Headers.ETag.ToString()));
+        Assert.IsType<FileContentResult>(result);
+    }
+
+    [Fact]
+    public async Task GetBySegment_authenticated_returns_no_store_without_ETag()
+    {
+        var eventId = Guid.NewGuid();
+        var slug = "2026-picnic";
+        var uniqueId = UniqueId("u1");
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User { UniqueId = uniqueId });
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(slug))
+            .ReturnsAsync(new CommunityEvent { Id = eventId, Title = "Picnic", StartUtc = DateTime.UtcNow.AddDays(1), PublicSlug = slug });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var result = await c.GetBySegment(slug);
+
+        Assert.Equal("private, no-store", c.Response.Headers["Cache-Control"].ToString());
+        Assert.True(string.IsNullOrEmpty(c.Response.Headers.ETag.ToString()));
+        Assert.IsType<OkObjectResult>(result);
     }
 }

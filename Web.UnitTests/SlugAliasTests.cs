@@ -191,7 +191,8 @@ public sealed class SlugAliasTests
             Mock.Of<IAuditLogRepository>(),
             Mock.Of<IOgThumbnailService>(),
             DefaultImageUploadHelper(),
-            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
+            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
+            Options.Create(new JsonOptions()));
 
         c.ControllerContext = new ControllerContext
         {
