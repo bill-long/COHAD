@@ -7,6 +7,7 @@
       <a mat-button routerLink="news" routerLinkActive="active-link">News</a>
       <a *ngIf="showEventsNav$ | async" mat-button routerLink="events" routerLinkActive="active-link">Events</a>
       <a mat-button routerLink="about" routerLinkActive="active-link">About</a>
+      <a mat-button routerLink="committees" routerLinkActive="active-link">Committees</a>
       <a *ngIf="vm.showGuestPrivacy" mat-button routerLink="privacy" routerLinkActive="active-link" [routerLinkActiveOptions]="{exact: true}">Privacy
         Policy</a>
       <a mat-button *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
@@ -59,6 +60,7 @@
       <a mat-menu-item color="primary" routerLink="news" routerLinkActive="active-link">News</a>
       <a *ngIf="showEventsNav$ | async" mat-menu-item color="primary" routerLink="events" routerLinkActive="active-link">Events</a>
       <a mat-menu-item color="primary" routerLink="about" routerLinkActive="active-link">About</a>
+      <a mat-menu-item color="primary" routerLink="committees" routerLinkActive="active-link">Committees</a>
       <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
       <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
       <button

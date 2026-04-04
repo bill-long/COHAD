@@ -16,6 +16,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSliderModule } from '@angular/material/slider';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatListModule } from '@angular/material/list';
@@ -88,6 +89,8 @@ import { EmailPreferencesComponent } from './components/email-preferences/email-
 import { EmailJobListComponent } from './components/email-job-list/email-job-list.component';
 import { EmailJobDetailComponent } from './components/email-job-detail/email-job-detail.component';
 import { GlobalErrorHandler } from './services/global-error-handler';
+import { CommitteesComponent } from './components/committees/committees.component';
+import { ManageCommitteesComponent } from './components/manage-committees/manage-committees.component';
 
 @NgModule({ declarations: [
         AppComponent,
@@ -135,7 +138,9 @@ import { GlobalErrorHandler } from './services/global-error-handler';
         MilkdownEditorComponent,
         EmailPreferencesComponent,
         EmailJobListComponent,
-        EmailJobDetailComponent
+        EmailJobDetailComponent,
+        CommitteesComponent,
+        ManageCommitteesComponent
     ],
     bootstrap: [AppComponent], imports: [BrowserModule,
         AppRoutingModule,
@@ -184,6 +189,7 @@ import { GlobalErrorHandler } from './services/global-error-handler';
         MatChipsModule,
         MatAutocompleteModule,
         MatCheckboxModule,
+        MatSliderModule,
         MatSelectModule,
         MatTooltipModule,
         MatListModule,

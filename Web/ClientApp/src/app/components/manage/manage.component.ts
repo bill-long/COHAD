@@ -59,4 +59,8 @@ export class ManageComponent implements OnInit {
       u.roles.includes('Resident') &&
       u.roles.filter(r => rolePermissions.manageBlogRoles.includes(r)).length > 0))
   }
+
+  get manageCommitteesVisible$(): Observable<boolean> {
+    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageCommitteesRoles.includes(r)).length > 0))
+  }
 }

@@ -432,5 +432,67 @@ namespace Web.Services.Cosmos
 
             return new List<EmailJobRecipient>();
         }
+
+        // ── Committee ────────────────────────────────────────────────
+
+        internal static Committee ToCommittee(JObject doc)
+        {
+            return new Committee
+            {
+                Id = doc.Value<string>("id"),
+                CommitteeEmail = doc.Value<string>("CommitteeEmail"),
+                DisplayName = doc.Value<string>("DisplayName"),
+                Description = doc.Value<string>("Description"),
+                DisplayOrder = doc.Value<int?>("DisplayOrder") ?? 0,
+                Members = ToCommitteeMembers(doc["Members"]),
+                ManagementRole = Enum.TryParse<User.Role>(doc.Value<string>("ManagementRole"), out var mr) ? mr : null,
+                GraphMessageRuleId = doc.Value<string>("GraphMessageRuleId"),
+                LastSyncedUtc = doc.Value<DateTime?>("LastSyncedUtc"),
+                LastSyncStatus = doc.Value<string>("LastSyncStatus"),
+                LastSyncError = doc.Value<string>("LastSyncError")
+            };
+        }
+
+        internal static JObject ToCommitteeDocument(Committee committee)
+        {
+            return new JObject
+            {
+                ["id"] = committee.Id,
+                ["CommitteeEmail"] = committee.CommitteeEmail,
+                ["DisplayName"] = committee.DisplayName,
+                ["Description"] = committee.Description,
+                ["DisplayOrder"] = committee.DisplayOrder,
+                ["Members"] = JArray.FromObject(committee.Members ?? new List<CommitteeMember>()),
+                ["ManagementRole"] = committee.ManagementRole?.ToString(),
+                ["GraphMessageRuleId"] = committee.GraphMessageRuleId,
+                ["LastSyncedUtc"] = committee.LastSyncedUtc,
+                ["LastSyncStatus"] = committee.LastSyncStatus,
+                ["LastSyncError"] = committee.LastSyncError
+            };
+        }
+
+        private static List<CommitteeMember> ToCommitteeMembers(JToken token)
+        {
+            if (token is JArray arr)
+            {
+                return arr
+                    .Select(t => new CommitteeMember
+                    {
+                        Id = t.Value<Guid?>("Id") ?? Guid.Empty,
+                        DisplayName = t.Value<string>("DisplayName"),
+                        Title = t.Value<string>("Title"),
+                        Bio = t.Value<string>("Bio"),
+                        PhotoBlobPath = t.Value<string>("PhotoBlobPath"),
+                        PhotoContentType = t.Value<string>("PhotoContentType"),
+                        Email = t.Value<string>("Email"),
+                        ReceivesForwardedEmail = t.Value<bool?>("ReceivesForwardedEmail") ?? false,
+                        PhotoOffsetY = t.Value<int?>("PhotoOffsetY") ?? 50,
+                        DisplayOrder = t.Value<int?>("DisplayOrder") ?? 0
+                    })
+                    .ToList();
+            }
+
+            return new List<CommitteeMember>();
+        }
     }
 }

@@ -1,0 +1,51 @@
+<div class="container committees-page">
+  <section class="committees-shell">
+    <div class="committees-header">
+      <h1>Our Committees</h1>
+      <p>Meet the volunteers who keep Canyon Oaks running.</p>
+    </div>
+
+    <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="error" role="alert">{{ error }}</div>
+    <div class="loading-state" *ngIf="loading">Loading committees...</div>
+
+    <div class="committees-list" *ngIf="!loading && committees.length > 0">
+      <section class="committee-section" *ngFor="let committee of committees">
+        <div class="committee-heading">
+          <h2 class="committee-name">{{ committee.displayName }}</h2>
+          <p class="committee-description">{{ committee.description }}</p>
+          <a class="committee-email" href="mailto:{{ committee.committeeEmail }}">
+            <mat-icon class="committee-email-icon">email</mat-icon>
+            {{ committee.committeeEmail }}
+          </a>
+        </div>
+
+        <div class="members-grid" *ngIf="committee.members.length > 0">
+          <div class="member-card" *ngFor="let member of committee.members">
+            <div class="member-photo-frame">
+              <img *ngIf="member.hasPhoto && member.photoDownloadUrl"
+                   class="member-photo"
+                   [src]="member.photoDownloadUrl"
+                   [alt]="member.displayName"
+                   [style.object-position]="'center ' + member.photoOffsetY + '%'"
+                   loading="lazy">
+              <div *ngIf="!member.hasPhoto || !member.photoDownloadUrl" class="member-avatar">
+                <mat-icon>person</mat-icon>
+              </div>
+            </div>
+            <div class="member-info">
+              <h3 class="member-name">{{ member.displayName }}</h3>
+              <span class="member-title" *ngIf="member.title">{{ member.title }}</span>
+              <p class="member-bio" *ngIf="member.bio">{{ member.bio }}</p>
+            </div>
+          </div>
+        </div>
+
+        <p class="no-members" *ngIf="committee.members.length === 0">No members listed.</p>
+      </section>
+    </div>
+
+    <div *ngIf="!loading && committees.length === 0 && !error" class="empty-state">
+      No committees are available right now.
+    </div>
+  </section>
+</div>

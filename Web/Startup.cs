@@ -59,6 +59,11 @@ namespace Web
                     sp.GetRequiredService<IDocumentFolderRepository>(),
                     sp.GetRequiredService<IMemoryCache>(),
                     sp.GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions));
+            services.AddScoped<CommitteeListCache>(sp =>
+                new CommitteeListCache(
+                    sp.GetRequiredService<ICommitteeRepository>(),
+                    sp.GetRequiredService<IMemoryCache>(),
+                    sp.GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions));
 
             services.AddResponseCompression(options =>
             {
@@ -185,12 +190,21 @@ namespace Web
                 options.AddPolicy("Board", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Board)));
                 options.AddPolicy("SocialCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.SocialCommittee)));
                 options.AddPolicy("SunshineCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.SunshineCommittee)));
+                options.AddPolicy("ArchitecturalCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.ArchitecturalCommittee)));
 
                 // Any role that can send committee emails — used for email job management endpoints and the SignalR hub.
                 options.AddPolicy("EmailSender", policy => policy.Requirements.Add(
                     new AnyRoleAuthorizationRequirement(
                         User.Role.Administrator, User.Role.Board, User.Role.WelcomeCommittee,
-                        User.Role.GardenClub, User.Role.SocialCommittee, User.Role.SunshineCommittee)));
+                        User.Role.GardenClub, User.Role.SocialCommittee, User.Role.SunshineCommittee,
+                        User.Role.ArchitecturalCommittee)));
+
+                // Any role that can manage at least one committee — used for committee admin endpoints.
+                options.AddPolicy("CommitteeEditor", policy => policy.Requirements.Add(
+                    new AnyRoleAuthorizationRequirement(
+                        User.Role.Administrator, User.Role.Board, User.Role.WelcomeCommittee,
+                        User.Role.GardenClub, User.Role.SocialCommittee, User.Role.SunshineCommittee,
+                        User.Role.ArchitecturalCommittee)));
             });
 
             services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();
@@ -231,6 +245,8 @@ namespace Web
                 services.AddSingleton<IVendorReviewRepository, MockVendorReviewRepository>();
                 services.AddSingleton<IVendorFlagRepository, MockVendorFlagRepository>();
                 services.AddSingleton<IYouthServiceListingRepository, MockYouthServiceListingRepository>();
+                services.AddSingleton<ICommitteeRepository, MockCommitteeRepository>();
+                services.AddSingleton<IGraphMailboxService, MockGraphMailboxService>();
                 services.AddSingleton<IDocumentFileStore>(sp =>
                     new CachedDocumentFileStore(new MockDocumentFileStore()));
                 services.AddScoped<IEmailService, NoOpEmailService>();
@@ -276,6 +292,8 @@ namespace Web
                     new CosmosVendorFlagRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "VendorFlags")));
                 services.AddScoped<IYouthServiceListingRepository>(sp =>
                     new CosmosYouthServiceListingRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "YouthServices")));
+                services.AddScoped<ICommitteeRepository>(sp =>
+                    new CosmosCommitteeRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Committees")));
                 services.AddSingleton<IDocumentFileStore>(sp =>
                     new CachedDocumentFileStore(
                         new AzureBlobDocumentFileStore(sp.GetRequiredService<IOptions<DocumentStorageOptions>>())));
@@ -283,6 +301,20 @@ namespace Web
                 services.AddScoped<IEmailService, EmailService>();
                 services.AddScoped<IEmailJobRepository>(sp =>
                     new CosmosEmailJobRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "EmailJobs")));
+
+                // Graph API for committee mailbox forwarding — registered only when credentials are configured.
+                var graphTenantId = Configuration["Graph:TenantId"];
+                var graphClientId = Configuration["Graph:ClientId"];
+                var graphClientSecret = Configuration["Graph:ClientSecret"];
+                if (!string.IsNullOrWhiteSpace(graphTenantId) && !string.IsNullOrWhiteSpace(graphClientId)
+                    && !string.IsNullOrWhiteSpace(graphClientSecret))
+                {
+                    services.AddSingleton<IGraphMailboxService, GraphMailboxService>();
+                }
+                else
+                {
+                    services.AddSingleton<IGraphMailboxService, NotConfiguredGraphMailboxService>();
+                }
             }
 
             // Email job queue and background processor (shared across environments)

@@ -1,0 +1,165 @@
+<div class="manage-committees-page">
+  <section class="manage-committees-shell">
+    <div class="manage-committees-header">
+      <h1>Committees</h1>
+      <p>Edit committee details, manage members, and sync email forwarding.</p>
+    </div>
+
+    <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="error" role="alert">{{ error }}</div>
+    <div class="cohad-inline-alert cohad-inline-alert--success" *ngIf="success" role="status">{{ success }}</div>
+
+    <div class="loading-state" *ngIf="loading">Loading committees...</div>
+
+    <div class="order-actions" *ngIf="isAdmin && orderChanged">
+      <button type="button" mat-flat-button color="primary"
+              [disabled]="savingOrder"
+              (click)="saveOrder()">
+        <mat-icon>save</mat-icon>
+        {{ savingOrder ? 'Saving...' : 'Save Order' }}
+      </button>
+    </div>
+
+    <mat-accordion *ngIf="!loading && committees.length > 0" multi>
+      <mat-expansion-panel *ngFor="let committee of committees; let i = index" class="committee-panel">
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <span class="committee-order-controls" *ngIf="isAdmin" (click)="$event.stopPropagation()">
+              <button mat-icon-button [disabled]="i === 0" (click)="moveCommittee(i, -1)" matTooltip="Move up" class="order-btn">
+                <mat-icon>arrow_upward</mat-icon>
+              </button>
+              <button mat-icon-button [disabled]="i === committees.length - 1" (click)="moveCommittee(i, 1)" matTooltip="Move down" class="order-btn">
+                <mat-icon>arrow_downward</mat-icon>
+              </button>
+            </span>
+            {{ committee.displayName }}
+          </mat-panel-title>
+          <mat-panel-description>
+            {{ committee.members.length }} {{ committee.members.length === 1 ? 'member' : 'members' }}
+            · {{ committee.committeeEmail }}
+          </mat-panel-description>
+        </mat-expansion-panel-header>
+
+        <div class="committee-fields">
+          <mat-form-field appearance="outline" class="field-full">
+            <mat-label>Description</mat-label>
+            <textarea matInput [(ngModel)]="committee.description" rows="3"></textarea>
+          </mat-form-field>
+        </div>
+
+        <!-- Members -->
+        <h3 class="members-heading">Members</h3>
+
+        <div cdkDropList (cdkDropListDropped)="dropMember($event, committee)" class="members-list">
+          <div class="member-row" *ngFor="let member of committee.members" cdkDrag>
+            <mat-icon class="drag-handle" cdkDragHandle>drag_indicator</mat-icon>
+
+            <div class="member-fields">
+              <mat-form-field appearance="outline" class="field-name">
+                <mat-label>Name</mat-label>
+                <input matInput [(ngModel)]="member.displayName">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="field-title">
+                <mat-label>Title</mat-label>
+                <input matInput [(ngModel)]="member.title">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="field-email">
+                <mat-label>Email</mat-label>
+                <input matInput type="email" [(ngModel)]="member.email">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="field-full">
+                <mat-label>Bio</mat-label>
+                <textarea matInput [(ngModel)]="member.bio" rows="2"></textarea>
+              </mat-form-field>
+
+              <div class="member-options">
+                <mat-checkbox [(ngModel)]="member.receivesForwardedEmail">
+                  Receives forwarded email
+                </mat-checkbox>
+              </div>
+
+              <div class="member-photo-upload">
+                <button type="button" mat-stroked-button (click)="photoInput.click()">
+                  <mat-icon>photo_camera</mat-icon>
+                  {{ member.hasPhoto || hasPendingPhoto(committee.id, member.id) ? 'Change photo' : 'Upload photo' }}
+                </button>
+                <input #photoInput type="file" accept="image/*" hidden (change)="onPhotoSelected($event, committee, member)">
+                <span class="photo-pending" *ngIf="hasPendingPhoto(committee.id, member.id)">
+                  {{ getPendingPhotoName(committee.id, member.id) }}
+                </span>
+              </div>
+
+              <div class="photo-position" *ngIf="member.hasPhoto || hasPendingPhoto(committee.id, member.id)">
+                <div class="photo-preview-frame">
+                  <img *ngIf="getPhotoPreviewUrl(committee.id, member) as previewUrl"
+                       class="photo-preview-img"
+                       [src]="previewUrl"
+                       [style.object-position]="'center ' + member.photoOffsetY + '%'"
+                       [alt]="member.displayName ? member.displayName + ' photo preview' : 'Member photo preview'">
+                </div>
+                <div class="photo-slider-group">
+                  <label class="photo-slider-label">Vertical position</label>
+                  <mat-slider min="0" max="100" step="1" discrete class="photo-slider">
+                    <input matSliderThumb [(ngModel)]="member.photoOffsetY">
+                  </mat-slider>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" mat-icon-button color="warn"
+                    class="remove-member-btn"
+                    [disabled]="isDeletingMember(committee.id, member.id)"
+                    (click)="removeMember(committee, member)"
+                    matTooltip="Remove member">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <div class="panel-actions">
+          <button type="button" mat-stroked-button color="primary" (click)="addMember(committee)">
+            <mat-icon>person_add</mat-icon> Add member
+          </button>
+
+          <div class="panel-actions-right">
+            <button type="button" mat-stroked-button
+                    [disabled]="syncingKey === committee.id"
+                    (click)="syncForwarding(committee)">
+              <mat-icon>sync</mat-icon>
+              {{ syncingKey === committee.id ? 'Syncing...' : 'Sync Forwarding to O365' }}
+            </button>
+
+            <button type="button" mat-flat-button color="primary"
+                    [disabled]="savingKey === committee.id"
+                    (click)="saveCommittee(committee)">
+              {{ savingKey === committee.id ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="sync-status" *ngIf="getSyncStatus(committee.id) as status">
+          <div class="sync-status-row" *ngIf="status.lastSyncedUtc">
+            <span class="sync-label">Last synced:</span>
+            <span>{{ status.lastSyncedUtc | date:'medium' }}</span>
+          </div>
+          <div class="sync-status-row" *ngIf="status.lastSyncStatus">
+            <span class="sync-label">Status:</span>
+            <span [class.sync-success]="status.lastSyncStatus === 'Success'"
+                  [class.sync-error]="status.lastSyncStatus !== 'Success'">
+              {{ status.lastSyncStatus }}
+            </span>
+          </div>
+          <div class="sync-status-row sync-error-detail" *ngIf="status.lastSyncError">
+            {{ status.lastSyncError }}
+          </div>
+        </div>
+      </mat-expansion-panel>
+    </mat-accordion>
+
+    <div *ngIf="!loading && committees.length === 0 && !error" class="empty-state">
+      No committees found.
+    </div>
+  </section>
+</div>

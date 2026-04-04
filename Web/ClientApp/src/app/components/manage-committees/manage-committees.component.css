@@ -1,0 +1,261 @@
+.manage-committees-page {
+  max-width: 980px;
+}
+
+.manage-committees-shell {
+  background: var(--surface-muted);
+  border: 1px solid var(--border-faint);
+  border-radius: 12px;
+  padding: 1.35rem;
+  box-shadow: 0 6px 18px var(--surface-subtle);
+}
+
+.manage-committees-header h1 {
+  margin: 0;
+  font-size: var(--heading-page);
+  font-weight: var(--heading-page-weight);
+  letter-spacing: var(--heading-page-tracking);
+}
+
+.manage-committees-header p {
+  margin: 0.5rem 0 1.2rem;
+  color: var(--text-secondary);
+}
+
+.loading-state,
+.empty-state {
+  color: var(--text-muted);
+}
+
+.committee-panel {
+  margin-bottom: 0.5rem;
+}
+
+.committee-order-controls {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.25rem;
+}
+
+.order-btn {
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+}
+
+.order-btn mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.order-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.committee-fields {
+  margin-bottom: 0.75rem;
+}
+
+.field-full {
+  width: 100%;
+}
+
+.field-name,
+.field-title,
+.field-email {
+  width: 100%;
+}
+
+.members-heading {
+  margin: 0.5rem 0 0.65rem;
+  font-size: var(--heading-card);
+  font-weight: var(--heading-card-weight);
+}
+
+.members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.member-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border: 1px solid var(--border-faint);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--surface);
+  transition: box-shadow 200ms ease;
+}
+
+.member-row:hover {
+  box-shadow: 0 2px 8px var(--surface-subtle);
+}
+
+.drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  margin-top: 0.7rem;
+  flex-shrink: 0;
+}
+
+.member-fields {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.member-fields .field-full {
+  grid-column: 1 / -1;
+}
+
+.member-options {
+  grid-column: 1 / -1;
+}
+
+.member-photo-upload {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.photo-pending {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.photo-position {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+.photo-preview-frame {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--border-faint);
+  background: var(--surface-section);
+}
+
+.photo-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.photo-slider-label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.photo-slider {
+  width: 100%;
+  max-width: 220px;
+}
+
+.remove-member-btn {
+  flex-shrink: 0;
+  margin-top: 0.5rem;
+}
+
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-faint);
+}
+
+.panel-actions-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sync-status {
+  margin-top: 0.75rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border-faint);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.88rem;
+}
+
+.sync-status-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.sync-label {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.sync-success {
+  color: var(--success, #4caf50);
+}
+
+.sync-error {
+  color: var(--warn, #f44336);
+}
+
+.sync-error-detail {
+  color: var(--warn, #f44336);
+  font-size: 0.84rem;
+  margin-top: 0.25rem;
+}
+
+/* CDK drag-drop styles */
+.cdk-drag-preview {
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+}
+
+.cdk-drag-placeholder {
+  opacity: 0.3;
+}
+
+.cdk-drag-animating {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+@media (max-width: 600px) {
+  .member-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .panel-actions-right {
+    flex-direction: column;
+  }
+}
