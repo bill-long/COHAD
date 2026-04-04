@@ -15,7 +15,11 @@ namespace Web.PresentationModels
 
         public DateTime CreatedUtc { get; private set; }
 
-        public static ResidentDocumentSummary FromStorageModel(ResidentDocument document)
+        public Guid? FolderId { get; private set; }
+
+        public string FolderName { get; private set; }
+
+        public static ResidentDocumentSummary FromStorageModel(ResidentDocument document, string folderName = null)
         {
             return new ResidentDocumentSummary
             {
@@ -23,7 +27,9 @@ namespace Web.PresentationModels
                 DisplayName = document.DisplayName,
                 ContentType = document.ContentType,
                 SizeBytes = document.SizeBytes,
-                CreatedUtc = document.CreatedUtc
+                CreatedUtc = document.CreatedUtc,
+                FolderId = document.FolderId,
+                FolderName = folderName
             };
         }
     }

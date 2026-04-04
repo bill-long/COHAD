@@ -212,6 +212,7 @@ namespace Web
                         sp.GetRequiredService<IUserRepository>()));
                 services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
                 services.AddSingleton<IDocumentRepository, MockDocumentRepository>();
+                services.AddSingleton<IDocumentFolderRepository, MockDocumentFolderRepository>();
                 services.AddSingleton<ICommunityEventRepository, MockCommunityEventRepository>();
                 services.AddSingleton<IBlogPostRepository, MockBlogPostRepository>();
                 services.AddSingleton<IBlogCommentRepository, MockBlogCommentRepository>();
@@ -248,6 +249,8 @@ namespace Web
                         sp.GetRequiredService<ILogger<CosmosAuditLogRepository>>()));
                 services.AddScoped<IDocumentRepository>(sp =>
                     new CosmosDocumentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
+                services.AddScoped<IDocumentFolderRepository>(sp =>
+                    new CosmosDocumentFolderRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
                 services.AddScoped<ICommunityEventRepository>(sp =>
                     new CosmosCommunityEventRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Events")));
                 services.AddScoped<IBlogPostRepository>(sp =>

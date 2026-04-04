@@ -7,6 +7,56 @@
 
     <div class="manage-documents-error" *ngIf="error" role="alert">{{ error }}</div>
 
+    <!-- Folder management -->
+    <section class="admin-panel admin-panel--folders">
+      <h2>Folders</h2>
+
+      <div class="folder-list" *ngIf="folders.length > 0">
+        <div class="folder-row" *ngFor="let folder of folders; let i = index">
+          <ng-container *ngIf="editingFolderId !== folder.id">
+            <mat-icon class="folder-row-icon">folder</mat-icon>
+            <span class="folder-row-name">{{ folder.name }}</span>
+            <span class="folder-row-count">({{ folder.documentCount }})</span>
+            <button type="button" mat-icon-button (click)="moveFolderUp(folder)" [disabled]="i === 0" title="Move up">
+              <mat-icon>arrow_upward</mat-icon>
+            </button>
+            <button type="button" mat-icon-button (click)="moveFolderDown(folder)" [disabled]="i === folders.length - 1" title="Move down">
+              <mat-icon>arrow_downward</mat-icon>
+            </button>
+            <button type="button" mat-icon-button (click)="startEditFolder(folder)" title="Rename">
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button type="button" mat-icon-button color="warn"
+              (click)="deleteFolder(folder)"
+              [disabled]="deletingFolderId === folder.id || folder.documentCount > 0"
+              [title]="folder.documentCount > 0 ? 'Remove documents before deleting' : 'Delete folder'">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </ng-container>
+
+          <ng-container *ngIf="editingFolderId === folder.id">
+            <input class="folder-edit-input" type="text" [(ngModel)]="editingFolderName" maxlength="100"
+              (keyup.enter)="saveEditFolder(folder)" (keyup.escape)="cancelEditFolder()">
+            <button type="button" mat-icon-button color="primary" (click)="saveEditFolder(folder)" title="Save">
+              <mat-icon>check</mat-icon>
+            </button>
+            <button type="button" mat-icon-button (click)="cancelEditFolder()" title="Cancel">
+              <mat-icon>close</mat-icon>
+            </button>
+          </ng-container>
+        </div>
+      </div>
+
+      <div class="folder-create-row">
+        <input class="folder-create-input" type="text" placeholder="New folder name" [(ngModel)]="newFolderName" maxlength="100"
+          (keyup.enter)="createFolder()" [disabled]="creatingFolder">
+        <button type="button" mat-stroked-button (click)="createFolder()" [disabled]="creatingFolder || !newFolderName.trim()">
+          {{ creatingFolder ? 'Creating...' : 'Add Folder' }}
+        </button>
+      </div>
+    </section>
+
+    <!-- Upload -->
     <section class="admin-panel admin-panel--upload">
       <h2>Upload</h2>
       <div class="drop-zone" [class.drag-active]="dragActive" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
@@ -19,6 +69,12 @@
         <button type="button" mat-stroked-button (click)="triggerFilePicker()" [disabled]="uploadInProgress">
           Choose File
         </button>
+
+        <select class="folder-select" [(ngModel)]="selectedFolderId" [disabled]="uploadInProgress">
+          <option value="">(No folder)</option>
+          <option *ngFor="let folder of folders" [value]="folder.id">{{ folder.name }}</option>
+        </select>
+
         <button type="button" mat-flat-button color="primary" (click)="uploadDocument()" [disabled]="uploadInProgress">
           {{ uploadInProgress ? 'Uploading...' : 'Upload Document' }}
         </button>
@@ -38,37 +94,78 @@
       <div class="upload-progress-label upload-progress-label-row" *ngIf="uploadInProgress">{{ uploadProgress }}%</div>
     </section>
 
+    <!-- Document list -->
     <h2 class="list-heading">Current documents</h2>
 
     <div class="loading-state" *ngIf="loading">Loading documents...</div>
 
-    <section class="documents-list" *ngIf="!loading && documents.length > 0">
-      <div class="document-card" *ngFor="let doc of documents">
-        <button class="file-link" type="button" (click)="downloadFile(doc)">
-          <mat-icon class="file-icon">{{ getFileIcon(doc) }}</mat-icon>
-          <span class="file-name">{{ doc.displayName }}</span>
-          <span class="file-chip">{{ getFileTypeChip(doc) }}</span>
-        </button>
+    <ng-container *ngIf="!loading && hasDocuments">
+      <section class="folder-group" *ngFor="let group of folderGroups">
+        <ng-container *ngIf="group.documents.length > 0">
+          <button class="folder-header" type="button" (click)="toggleFolder(group)">
+            <mat-icon class="folder-toggle-icon">{{ group.collapsed ? 'chevron_right' : 'expand_more' }}</mat-icon>
+            <mat-icon class="folder-icon">{{ group.collapsed ? 'folder' : 'folder_open' }}</mat-icon>
+            <span class="folder-name">{{ group.folder.name }}</span>
+            <span class="folder-count">{{ group.documents.length }}</span>
+          </button>
 
-        <div class="document-meta">
-          <span>{{ doc.createdUtc | date:'mediumDate' }}</span>
-          <span class="meta-separator">-</span>
-          <span>{{ formatSize(doc.sizeBytes) }}</span>
+          <div class="folder-documents" *ngIf="!group.collapsed">
+            <div class="document-card" *ngFor="let doc of group.documents">
+              <button class="file-link" type="button" (click)="downloadFile(doc)">
+                <mat-icon class="file-icon">{{ getFileIcon(doc) }}</mat-icon>
+                <span class="file-name">{{ doc.displayName }}</span>
+                <span class="file-chip">{{ getFileTypeChip(doc) }}</span>
+              </button>
+
+              <div class="document-meta">
+                <span>{{ doc.createdUtc | date:'mediumDate' }}</span>
+                <span class="meta-separator">-</span>
+                <span>{{ formatSize(doc.sizeBytes) }}</span>
+              </div>
+
+              <button
+                type="button"
+                mat-stroked-button
+                color="warn"
+                class="document-delete-btn"
+                [disabled]="deletingId === doc.id"
+                (click)="deleteDocument(doc)">
+                Delete
+              </button>
+            </div>
+          </div>
+        </ng-container>
+      </section>
+
+      <section class="documents-list" *ngIf="unfiledDocuments.length > 0">
+        <h3 class="unfiled-heading" *ngIf="folderGroups.length > 0">Unfiled</h3>
+        <div class="document-card" *ngFor="let doc of unfiledDocuments">
+          <button class="file-link" type="button" (click)="downloadFile(doc)">
+            <mat-icon class="file-icon">{{ getFileIcon(doc) }}</mat-icon>
+            <span class="file-name">{{ doc.displayName }}</span>
+            <span class="file-chip">{{ getFileTypeChip(doc) }}</span>
+          </button>
+
+          <div class="document-meta">
+            <span>{{ doc.createdUtc | date:'mediumDate' }}</span>
+            <span class="meta-separator">-</span>
+            <span>{{ formatSize(doc.sizeBytes) }}</span>
+          </div>
+
+          <button
+            type="button"
+            mat-stroked-button
+            color="warn"
+            class="document-delete-btn"
+            [disabled]="deletingId === doc.id"
+            (click)="deleteDocument(doc)">
+            Delete
+          </button>
         </div>
+      </section>
+    </ng-container>
 
-        <button
-          type="button"
-          mat-stroked-button
-          color="warn"
-          class="document-delete-btn"
-          [disabled]="deletingId === doc.id"
-          (click)="deleteDocument(doc)">
-          Delete
-        </button>
-      </div>
-    </section>
-
-    <div *ngIf="!loading && documents.length === 0" class="empty-state">
+    <div *ngIf="!loading && !hasDocuments" class="empty-state">
       No documents uploaded yet.
     </div>
   </section>

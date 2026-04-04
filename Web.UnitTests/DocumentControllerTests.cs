@@ -26,12 +26,14 @@ public sealed class DocumentControllerTests
         IDocumentRepository documents,
         IDocumentFileStore fileStore,
         IAuditLogRepository auditLog,
+        IDocumentFolderRepository folders = null,
         string nameId = "u1",
         string idp = "google.com")
     {
         var c = new DocumentController(
             users,
             documents,
+            folders ?? Mock.Of<IDocumentFolderRepository>(),
             fileStore,
             auditLog,
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
@@ -89,8 +91,10 @@ public sealed class DocumentControllerTests
         });
         var mockDocs = new Mock<IDocumentRepository>();
         mockDocs.Setup(r => r.GetAllAsync()).ReturnsAsync(docs);
+        var mockFolders = new Mock<IDocumentFolderRepository>();
+        mockFolders.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<DocumentFolder>());
 
-        var c = CreateController(mockUsers.Object, mockDocs.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var c = CreateController(mockUsers.Object, mockDocs.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>(), mockFolders.Object);
 
         var result = await c.Get();
 

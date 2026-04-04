@@ -8,6 +8,8 @@ export interface ResidentDocument {
   contentType: string;
   sizeBytes: number;
   createdUtc: string;
+  folderId?: string;
+  folderName?: string;
 }
 
 @Injectable({
@@ -24,9 +26,12 @@ export class DocumentsService {
     return this.httpClient.get(`api/document/${documentId}`, { responseType: 'blob' });
   }
 
-  upload(file: File): Observable<HttpEvent<ResidentDocument>> {
+  upload(file: File, folderId?: string): Observable<HttpEvent<ResidentDocument>> {
     const formData = new FormData();
     formData.append('file', file);
+    if (folderId) {
+      formData.append('folderId', folderId);
+    }
     const request = new HttpRequest<FormData>('POST', 'api/document', formData, {
       reportProgress: true
     });

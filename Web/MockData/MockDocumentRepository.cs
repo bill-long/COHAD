@@ -68,7 +68,8 @@ namespace Web.MockData
                 ContentType = document.ContentType,
                 SizeBytes = document.SizeBytes,
                 UploadedByUniqueId = document.UploadedByUniqueId,
-                CreatedUtc = document.CreatedUtc
+                CreatedUtc = document.CreatedUtc,
+                FolderId = document.FolderId
             };
         }
     }

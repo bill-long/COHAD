@@ -16,6 +16,7 @@ namespace Web.Services.Cosmos
         internal static string ToPaymentDocumentId(Guid paymentId) => $"Payment|{paymentId:D}";
         internal static string ToAuditLogDocumentId(Guid auditLogId) => $"AuditLog|{auditLogId:D}";
         internal static string ToResidentDocumentId(Guid documentId) => $"ResidentDocument|{documentId:D}";
+        internal static string ToDocumentFolderId(Guid folderId) => $"DocumentFolder|{folderId:D}";
         internal static string ToCommunityEventId(Guid eventId) => $"CommunityEvent|{eventId:D}";
         internal static string ToEmailJobDocumentId(Guid jobId) => $"EmailJob|{jobId:D}";
 
@@ -238,7 +239,8 @@ namespace Web.Services.Cosmos
                 ContentType = doc.Value<string>("ContentType"),
                 SizeBytes = doc.Value<long?>("SizeBytes") ?? 0,
                 UploadedByUniqueId = doc.Value<string>("UploadedByUniqueId"),
-                CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue
+                CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
+                FolderId = ParseNullableGuid(doc["FolderId"])
             };
         }
 
@@ -253,7 +255,31 @@ namespace Web.Services.Cosmos
                 ["ContentType"] = document.ContentType,
                 ["SizeBytes"] = document.SizeBytes,
                 ["UploadedByUniqueId"] = document.UploadedByUniqueId,
-                ["CreatedUtc"] = JToken.FromObject(document.CreatedUtc)
+                ["CreatedUtc"] = JToken.FromObject(document.CreatedUtc),
+                ["FolderId"] = document.FolderId != null ? document.FolderId.Value.ToString("D") : JValue.CreateNull()
+            };
+        }
+
+        internal static DocumentFolder ToDocumentFolder(JObject doc)
+        {
+            var rawId = doc.Value<string>("id");
+            return new DocumentFolder
+            {
+                Id = ParseLegacyGuid(rawId),
+                Name = doc.Value<string>("Name"),
+                SortOrder = doc.Value<int?>("SortOrder") ?? 0,
+                CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue
+            };
+        }
+
+        internal static JObject ToDocumentFolderDocument(DocumentFolder folder)
+        {
+            return new JObject
+            {
+                ["id"] = ToDocumentFolderId(folder.Id),
+                ["Name"] = folder.Name,
+                ["SortOrder"] = folder.SortOrder,
+                ["CreatedUtc"] = JToken.FromObject(folder.CreatedUtc)
             };
         }
 
