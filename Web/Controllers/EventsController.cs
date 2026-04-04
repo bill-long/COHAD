@@ -789,7 +789,7 @@ namespace Web.Controllers
         {
             var json = JsonSerializer.SerializeToUtf8Bytes(payload, _jsonSerializerOptions);
             var etag = new EntityTagHeaderValue(
-                $"\"{Convert.ToBase64String(SHA256.HashData(json))}\"");
+                $"\"{Convert.ToBase64String(SHA256.HashData(json))}\"", isWeak: true);
 
             Response.Headers.CacheControl = "public, no-cache";
             Response.Headers.ETag = etag.ToString();
