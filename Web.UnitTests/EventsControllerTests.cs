@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -39,7 +40,8 @@ public sealed class EventsControllerTests
             auditLog,
             new SkiaSharpOgThumbnailService(),
             imageUploadHelper ?? DefaultImageUploadHelper(),
-            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
+            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
+            Options.Create(new JsonOptions()));
 
         c.ControllerContext = new ControllerContext
         {
@@ -588,11 +590,11 @@ public sealed class EventsControllerTests
         var result = await c.GetUpcoming();
 
         var ok = Assert.IsType<FileContentResult>(result);
-        var json = System.Text.Encoding.UTF8.GetString(ok.FileContents);
-        // Verify ordering: "Earlier" should appear before "Later" in the serialized output
-        Assert.Contains("Earlier", json);
-        Assert.Contains("Later", json);
-        Assert.True(json.IndexOf("Earlier", StringComparison.Ordinal) < json.IndexOf("Later", StringComparison.Ordinal));
+        using var doc = JsonDocument.Parse(ok.FileContents);
+        var arr = doc.RootElement.EnumerateArray().ToList();
+        Assert.Equal(2, arr.Count);
+        Assert.Equal("Earlier", arr[0].GetProperty("title").GetString());
+        Assert.Equal("Later", arr[1].GetProperty("title").GetString());
     }
 
     [Fact]
@@ -632,8 +634,9 @@ public sealed class EventsControllerTests
         var result = await c.GetNextUpcoming();
 
         var ok = Assert.IsType<FileContentResult>(result);
-        var json = System.Text.Encoding.UTF8.GetString(ok.FileContents);
-        Assert.Contains("\"title\":\"First\"", json);
+        using var doc = JsonDocument.Parse(ok.FileContents);
+        Assert.Equal(earliestId, doc.RootElement.GetProperty("id").GetGuid());
+        Assert.Equal("First", doc.RootElement.GetProperty("title").GetString());
     }
 
     [Fact]
@@ -1166,7 +1169,8 @@ public sealed class EventsControllerTests
             Mock.Of<IAuditLogRepository>(),
             new SkiaSharpOgThumbnailService(),
             DefaultImageUploadHelper(),
-            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
+            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
+            Options.Create(new JsonOptions()));
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext()

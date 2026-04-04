@@ -52,6 +52,7 @@ namespace Web.Controllers
         private readonly IOgThumbnailService _ogThumbnailService;
         private readonly IImageUploadHelper _imageUploadHelper;
         private readonly DocumentStorageOptions _storageOptions;
+        private readonly JsonSerializerOptions _jsonSerializerOptions;
 
         public EventsController(
             IUserRepository userRepository,
@@ -60,7 +61,8 @@ namespace Web.Controllers
             IAuditLogRepository auditLogRepository,
             IOgThumbnailService ogThumbnailService,
             IImageUploadHelper imageUploadHelper,
-            IOptions<DocumentStorageOptions> storageOptions)
+            IOptions<DocumentStorageOptions> storageOptions,
+            IOptions<JsonOptions> jsonOptions)
         {
             _userRepository = userRepository;
             _communityEventRepository = communityEventRepository;
@@ -69,6 +71,7 @@ namespace Web.Controllers
             _ogThumbnailService = ogThumbnailService;
             _imageUploadHelper = imageUploadHelper;
             _storageOptions = storageOptions.Value;
+            _jsonSerializerOptions = jsonOptions.Value.JsonSerializerOptions;
         }
 
         [HttpGet]
@@ -777,19 +780,14 @@ namespace Web.Controllers
             return cleaned;
         }
 
-        private static readonly JsonSerializerOptions CamelCaseJson = new()
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
-
         /// <summary>
         /// Returns a JSON response with <c>Cache-Control: public, no-cache</c> and an ETag
-        /// derived from the serialised payload. If the client sends a matching
+        /// derived from the serialized payload. If the client sends a matching
         /// <c>If-None-Match</c> header, a 304 Not Modified is returned instead.
         /// </summary>
         private IActionResult OkWithETag<T>(T payload)
         {
-            var json = JsonSerializer.SerializeToUtf8Bytes(payload, CamelCaseJson);
+            var json = JsonSerializer.SerializeToUtf8Bytes(payload, _jsonSerializerOptions);
             var etag = new EntityTagHeaderValue(
                 $"\"{Convert.ToBase64String(SHA256.HashData(json))}\"");
 
@@ -797,7 +795,7 @@ namespace Web.Controllers
             Response.Headers.ETag = etag.ToString();
 
             if (Request.GetTypedHeaders().IfNoneMatch
-                    ?.Any(e => e.Compare(etag, useStrongComparison: true)) == true)
+                    ?.Any(e => e.Compare(etag, useStrongComparison: false)) == true)
             {
                 return StatusCode(StatusCodes.Status304NotModified);
             }
