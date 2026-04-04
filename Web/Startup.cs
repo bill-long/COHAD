@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -52,6 +53,12 @@ namespace Web
             services.AddControllers();
             services.AddSignalR();
             services.AddMemoryCache();
+            services.AddScoped<DocumentListCache>(sp =>
+                new DocumentListCache(
+                    sp.GetRequiredService<IDocumentRepository>(),
+                    sp.GetRequiredService<IDocumentFolderRepository>(),
+                    sp.GetRequiredService<IMemoryCache>(),
+                    sp.GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions));
 
             services.AddResponseCompression(options =>
             {

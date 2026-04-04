@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
@@ -30,12 +31,15 @@ public sealed class DocumentControllerTests
         string nameId = "u1",
         string idp = "google.com")
     {
+        folders ??= Mock.Of<IDocumentFolderRepository>();
+        var cache = new DocumentListCache(documents, folders, new MemoryCache(new MemoryCacheOptions()));
         var c = new DocumentController(
             users,
             documents,
-            folders ?? Mock.Of<IDocumentFolderRepository>(),
+            folders,
             fileStore,
             auditLog,
+            cache,
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
 
         c.ControllerContext = new ControllerContext
@@ -98,9 +102,9 @@ public sealed class DocumentControllerTests
 
         var result = await c.Get();
 
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var payload = Assert.IsAssignableFrom<IEnumerable<object>>(ok.Value);
-        Assert.NotEmpty(payload);
+        var ok = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("application/json", ok.ContentType);
+        Assert.NotEmpty(ok.FileContents);
     }
 
     [Fact]

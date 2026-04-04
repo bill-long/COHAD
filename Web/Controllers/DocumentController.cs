@@ -35,6 +35,7 @@ namespace Web.Controllers
         private readonly IDocumentFolderRepository _folderRepository;
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IAuditLogRepository _auditLogRepository;
+        private readonly DocumentListCache _listCache;
         private readonly DocumentStorageOptions _storageOptions;
 
         public DocumentController(
@@ -43,6 +44,7 @@ namespace Web.Controllers
             IDocumentFolderRepository folderRepository,
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
+            DocumentListCache listCache,
             IOptions<DocumentStorageOptions> storageOptions)
         {
             _userRepository = userRepository;
@@ -50,6 +52,7 @@ namespace Web.Controllers
             _folderRepository = folderRepository;
             _documentFileStore = documentFileStore;
             _auditLogRepository = auditLogRepository;
+            _listCache = listCache;
             _storageOptions = storageOptions.Value;
         }
 
@@ -67,8 +70,8 @@ namespace Web.Controllers
                 return Forbid();
             }
 
-            var docs = await _documentRepository.GetAllAsync();
-            var folders = await _folderRepository.GetAllAsync();
+            var docs = await _listCache.GetAllDocumentsAsync();
+            var folders = await _listCache.GetAllFoldersAsync();
             var folderLookup = folders.ToDictionary(f => f.Id, f => f.Name);
             var payload = docs
                 .OrderByDescending(d => d.CreatedUtc)
@@ -76,7 +79,7 @@ namespace Web.Controllers
                     d, d.FolderId != null && folderLookup.TryGetValue(d.FolderId.Value, out var name) ? name : null))
                 .ToList();
 
-            return Ok(payload);
+            return _listCache.OkWithETag(payload, Request, Response);
         }
 
         [HttpGet("{id:guid}")]
@@ -182,6 +185,7 @@ namespace Web.Controllers
             };
 
             await _documentRepository.UpsertAsync(created);
+            _listCache.InvalidateDocuments();
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),
@@ -214,6 +218,7 @@ namespace Web.Controllers
 
             await _documentFileStore.DeleteAsync(stored.BlobPath);
             await _documentRepository.DeleteAsync(id);
+            _listCache.InvalidateDocuments();
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
                 Id = Guid.NewGuid(),

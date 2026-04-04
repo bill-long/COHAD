@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
@@ -31,7 +32,8 @@ public sealed class DocumentFolderControllerTests
         string nameId = "u1",
         string idp = "google.com")
     {
-        var c = new DocumentFolderController(users, folders, documents, auditLog);
+        var cache = new DocumentListCache(documents, folders, new MemoryCache(new MemoryCacheOptions()));
+        var c = new DocumentFolderController(users, folders, documents, auditLog, cache);
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -112,13 +114,16 @@ public sealed class DocumentFolderControllerTests
 
         var result = await c.Get();
 
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var payload = Assert.IsAssignableFrom<List<DocumentFolderSummary>>(ok.Value);
-        Assert.Equal(2, payload.Count);
-        Assert.Equal("Alpha", payload[0].Name);
-        Assert.Equal(2, payload[0].DocumentCount);
-        Assert.Equal("Zebra", payload[1].Name);
-        Assert.Equal(1, payload[1].DocumentCount);
+        var ok = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("application/json", ok.ContentType);
+        using var doc = System.Text.Json.JsonDocument.Parse(ok.FileContents);
+        var arr = doc.RootElement;
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, arr.ValueKind);
+        Assert.Equal(2, arr.GetArrayLength());
+        Assert.Equal("Alpha", arr[0].GetProperty("Name").GetString());
+        Assert.Equal(2, arr[0].GetProperty("DocumentCount").GetInt32());
+        Assert.Equal("Zebra", arr[1].GetProperty("Name").GetString());
+        Assert.Equal(1, arr[1].GetProperty("DocumentCount").GetInt32());
     }
 
     [Fact]
