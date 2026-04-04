@@ -79,7 +79,7 @@ namespace Web.Controllers
                     d, d.FolderId != null && folderLookup.TryGetValue(d.FolderId.Value, out var name) ? name : null))
                 .ToList();
 
-            return _listCache.OkWithETag(payload, Request, Response);
+            return _listCache.OkWithETag(payload, Request, Response, DocumentListCache.DocumentsResponseKey);
         }
 
         [HttpGet("{id:guid}")]

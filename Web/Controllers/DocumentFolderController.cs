@@ -65,7 +65,7 @@ namespace Web.Controllers
                     f, countsByFolder.GetValueOrDefault(f.Id, 0)))
                 .ToList();
 
-            return _listCache.OkWithETag(payload, Request, Response);
+            return _listCache.OkWithETag(payload, Request, Response, DocumentListCache.FoldersResponseKey);
         }
 
         [HttpPost]

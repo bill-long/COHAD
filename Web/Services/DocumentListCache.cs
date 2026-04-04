@@ -31,6 +31,8 @@ namespace Web.Services
 
         private const string DocumentsCacheKey = "DocumentListCache:Documents";
         private const string FoldersCacheKey = "DocumentListCache:Folders";
+        internal const string DocumentsResponseKey = "DocumentListCache:Response:Documents";
+        internal const string FoldersResponseKey = "DocumentListCache:Response:Folders";
         private static readonly TimeSpan SlidingExpiration = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan AbsoluteExpiration = TimeSpan.FromMinutes(30);
 
@@ -50,11 +52,11 @@ namespace Web.Services
         {
             if (_cache.TryGetValue(DocumentsCacheKey, out List<ResidentDocument> cached))
             {
-                return cached;
+                return new List<ResidentDocument>(cached);
             }
 
             var docs = await _documentRepository.GetAllAsync();
-            _cache.Set(DocumentsCacheKey, docs, CacheOptions());
+            _cache.Set(DocumentsCacheKey, new List<ResidentDocument>(docs), CacheOptions());
             return docs;
         }
 
@@ -62,11 +64,11 @@ namespace Web.Services
         {
             if (_cache.TryGetValue(FoldersCacheKey, out List<DocumentFolder> cached))
             {
-                return cached;
+                return new List<DocumentFolder>(cached);
             }
 
             var folders = await _folderRepository.GetAllAsync();
-            _cache.Set(FoldersCacheKey, folders, CacheOptions());
+            _cache.Set(FoldersCacheKey, new List<DocumentFolder>(folders), CacheOptions());
             return folders;
         }
 
@@ -74,16 +76,20 @@ namespace Web.Services
         public void InvalidateDocuments()
         {
             _cache.Remove(DocumentsCacheKey);
+            _cache.Remove(DocumentsResponseKey);
             // Folder counts depend on documents, so invalidate folders too.
             _cache.Remove(FoldersCacheKey);
+            _cache.Remove(FoldersResponseKey);
         }
 
         /// <summary>Invalidate after folder create, update, delete, or reorder.</summary>
         public void InvalidateFolders()
         {
             _cache.Remove(FoldersCacheKey);
+            _cache.Remove(FoldersResponseKey);
             // Document summaries include folder names, so invalidate documents too.
             _cache.Remove(DocumentsCacheKey);
+            _cache.Remove(DocumentsResponseKey);
         }
 
         /// <summary>
@@ -91,11 +97,37 @@ namespace Web.Services
         /// a weak ETag derived from the serialized payload. If the client sends a
         /// matching <c>If-None-Match</c> header, a 304 Not Modified is returned.
         /// </summary>
-        public IActionResult OkWithETag<T>(T payload, HttpRequest request, HttpResponse response)
+        /// <param name="payload">The object to serialize as the response body.</param>
+        /// <param name="request">The current HTTP request (for If-None-Match header).</param>
+        /// <param name="response">The current HTTP response (for Cache-Control/ETag headers).</param>
+        /// <param name="responseCacheKey">
+        /// Optional cache key for the serialized bytes and ETag. When provided, subsequent
+        /// calls with the same key skip JSON serialization and SHA-256 hashing entirely
+        /// until the entry is evicted. Pass <c>null</c> to always serialize fresh.
+        /// </param>
+        public IActionResult OkWithETag<T>(T payload, HttpRequest request, HttpResponse response,
+            string responseCacheKey = null)
         {
-            var json = JsonSerializer.SerializeToUtf8Bytes(payload, _jsonOptions);
-            var etag = new EntityTagHeaderValue(
-                $"\"{Convert.ToBase64String(SHA256.HashData(json))}\"", isWeak: true);
+            byte[] json;
+            EntityTagHeaderValue etag;
+
+            if (responseCacheKey != null &&
+                _cache.TryGetValue(responseCacheKey, out CachedResponse cachedResponse))
+            {
+                json = cachedResponse.Json;
+                etag = cachedResponse.ETag;
+            }
+            else
+            {
+                json = JsonSerializer.SerializeToUtf8Bytes(payload, _jsonOptions);
+                etag = new EntityTagHeaderValue(
+                    $"\"{Convert.ToBase64String(SHA256.HashData(json))}\"", isWeak: true);
+
+                if (responseCacheKey != null)
+                {
+                    _cache.Set(responseCacheKey, new CachedResponse(json, etag), CacheOptions());
+                }
+            }
 
             response.Headers.CacheControl = "private, no-cache";
             response.Headers.ETag = etag.ToString();
@@ -115,5 +147,7 @@ namespace Web.Services
                 .SetSlidingExpiration(SlidingExpiration)
                 .SetAbsoluteExpiration(AbsoluteExpiration);
         }
+
+        private sealed record CachedResponse(byte[] Json, EntityTagHeaderValue ETag);
     }
 }
