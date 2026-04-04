@@ -206,19 +206,37 @@ namespace Web.Controllers
                 return BadRequest("At least one item is required.");
             }
 
+            var duplicateIds = items
+                .GroupBy(item => item.Id)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .ToList();
+
+            if (duplicateIds.Count > 0)
+            {
+                return BadRequest($"Duplicate folder IDs are not allowed: {string.Join(", ", duplicateIds)}");
+            }
+
             var folders = await _folderRepository.GetAllAsync();
             var lookup = folders.ToDictionary(f => f.Id);
 
             foreach (var item in items)
             {
-                if (!lookup.TryGetValue(item.Id, out var folder))
+                if (!lookup.ContainsKey(item.Id))
                 {
                     return NotFound($"Folder {item.Id} not found.");
                 }
-
-                folder.SortOrder = item.SortOrder;
-                await _folderRepository.UpsertAsync(folder);
             }
+
+            var upsertTasks = new List<Task>(items.Count);
+            foreach (var item in items)
+            {
+                var folder = lookup[item.Id];
+                folder.SortOrder = item.SortOrder;
+                upsertTasks.Add(_folderRepository.UpsertAsync(folder));
+            }
+
+            await Task.WhenAll(upsertTasks);
 
             return Ok();
         }
