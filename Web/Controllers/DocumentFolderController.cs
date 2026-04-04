@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Web.Models;
 using Web.PresentationModels;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 
@@ -20,17 +21,20 @@ namespace Web.Controllers
         private readonly IDocumentFolderRepository _folderRepository;
         private readonly IDocumentRepository _documentRepository;
         private readonly IAuditLogRepository _auditLogRepository;
+        private readonly DocumentListCache _listCache;
 
         public DocumentFolderController(
             IUserRepository userRepository,
             IDocumentFolderRepository folderRepository,
             IDocumentRepository documentRepository,
-            IAuditLogRepository auditLogRepository)
+            IAuditLogRepository auditLogRepository,
+            DocumentListCache listCache)
         {
             _userRepository = userRepository;
             _folderRepository = folderRepository;
             _documentRepository = documentRepository;
             _auditLogRepository = auditLogRepository;
+            _listCache = listCache;
         }
 
         [HttpGet]
@@ -47,8 +51,8 @@ namespace Web.Controllers
                 return Forbid();
             }
 
-            var folders = await _folderRepository.GetAllAsync();
-            var documents = await _documentRepository.GetAllAsync();
+            var folders = await _listCache.GetAllFoldersAsync();
+            var documents = await _listCache.GetAllDocumentsAsync();
             var countsByFolder = documents
                 .Where(d => d.FolderId != null)
                 .GroupBy(d => d.FolderId.Value)
@@ -61,7 +65,7 @@ namespace Web.Controllers
                     f, countsByFolder.GetValueOrDefault(f.Id, 0)))
                 .ToList();
 
-            return Ok(payload);
+            return _listCache.OkWithETag(payload, Request, Response, DocumentListCache.FoldersResponseKey);
         }
 
         [HttpPost]
@@ -95,6 +99,7 @@ namespace Web.Controllers
             };
 
             await _folderRepository.UpsertAsync(folder);
+            _listCache.InvalidateFolders();
 
             var apiUser = await GetApiUserAsync();
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
@@ -145,6 +150,7 @@ namespace Web.Controllers
             }
 
             await _folderRepository.UpsertAsync(folder);
+            _listCache.InvalidateFolders();
 
             var apiUser = await GetApiUserAsync();
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
@@ -158,7 +164,7 @@ namespace Web.Controllers
                 UserId = apiUser?.UniqueId
             });
 
-            var documents = await _documentRepository.GetAllAsync();
+            var documents = await _listCache.GetAllDocumentsAsync();
             var count = documents.Count(d => d.FolderId == id);
             return Ok(DocumentFolderSummary.FromStorageModel(folder, count));
         }
@@ -173,7 +179,7 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var documents = await _documentRepository.GetAllAsync();
+            var documents = await _listCache.GetAllDocumentsAsync();
             var count = documents.Count(d => d.FolderId == id);
             if (count > 0)
             {
@@ -181,6 +187,7 @@ namespace Web.Controllers
             }
 
             await _folderRepository.DeleteAsync(id);
+            _listCache.InvalidateFolders();
 
             var apiUser = await GetApiUserAsync();
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
@@ -237,6 +244,7 @@ namespace Web.Controllers
             }
 
             await Task.WhenAll(upsertTasks);
+            _listCache.InvalidateFolders();
 
             return Ok();
         }

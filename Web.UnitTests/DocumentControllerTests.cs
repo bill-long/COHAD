@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
@@ -20,6 +22,7 @@ namespace Web.UnitTests;
 public sealed class DocumentControllerTests
 {
     private const string IdentityProviderClaim = "http://schemas.microsoft.com/identity/claims/identityprovider";
+    private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
 
     private static DocumentController CreateController(
         IUserRepository users,
@@ -30,12 +33,15 @@ public sealed class DocumentControllerTests
         string nameId = "u1",
         string idp = "google.com")
     {
+        folders ??= Mock.Of<IDocumentFolderRepository>();
+        var cache = new DocumentListCache(documents, folders, new MemoryCache(new MemoryCacheOptions()), WebJsonOptions);
         var c = new DocumentController(
             users,
             documents,
-            folders ?? Mock.Of<IDocumentFolderRepository>(),
+            folders,
             fileStore,
             auditLog,
+            cache,
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
 
         c.ControllerContext = new ControllerContext
@@ -98,9 +104,63 @@ public sealed class DocumentControllerTests
 
         var result = await c.Get();
 
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var payload = Assert.IsAssignableFrom<IEnumerable<object>>(ok.Value);
-        Assert.NotEmpty(payload);
+        var ok = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("application/json", ok.ContentType);
+        Assert.NotEmpty(ok.FileContents);
+    }
+
+    [Fact]
+    public async Task Get_sets_CacheControl_and_ETag_headers()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role> { User.Role.Resident }
+        });
+        var mockDocs = new Mock<IDocumentRepository>();
+        mockDocs.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<ResidentDocument>());
+        var mockFolders = new Mock<IDocumentFolderRepository>();
+        mockFolders.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<DocumentFolder>());
+
+        var c = CreateController(mockUsers.Object, mockDocs.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>(), mockFolders.Object);
+        await c.Get();
+
+        Assert.Equal("private, no-cache", c.Response.Headers.CacheControl.ToString());
+        Assert.False(string.IsNullOrEmpty(c.Response.Headers.ETag.ToString()));
+    }
+
+    [Fact]
+    public async Task Get_returns_304_when_If_None_Match_matches()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
+        {
+            UniqueId = uniqueId,
+            Roles = new List<User.Role> { User.Role.Resident }
+        });
+        var mockDocs = new Mock<IDocumentRepository>();
+        mockDocs.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<ResidentDocument>
+        {
+            new() { Id = Guid.NewGuid(), DisplayName = "a.pdf", CreatedUtc = DateTime.UtcNow }
+        });
+        var mockFolders = new Mock<IDocumentFolderRepository>();
+        mockFolders.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<DocumentFolder>());
+
+        // First call: get the ETag
+        var c1 = CreateController(mockUsers.Object, mockDocs.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>(), mockFolders.Object);
+        await c1.Get();
+        var etag = c1.Response.Headers.ETag.ToString();
+
+        // Second call: send If-None-Match with the same ETag
+        var c2 = CreateController(mockUsers.Object, mockDocs.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>(), mockFolders.Object);
+        c2.Request.Headers["If-None-Match"] = etag;
+        var result = await c2.Get();
+
+        var status = Assert.IsType<StatusCodeResult>(result);
+        Assert.Equal(StatusCodes.Status304NotModified, status.StatusCode);
     }
 
     [Fact]

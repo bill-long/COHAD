@@ -4,9 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
@@ -22,6 +24,7 @@ namespace Web.UnitTests;
 public sealed class DocumentFolderControllerTests
 {
     private const string IdentityProviderClaim = "http://schemas.microsoft.com/identity/claims/identityprovider";
+    private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
 
     private static DocumentFolderController CreateController(
         IUserRepository users,
@@ -31,7 +34,8 @@ public sealed class DocumentFolderControllerTests
         string nameId = "u1",
         string idp = "google.com")
     {
-        var c = new DocumentFolderController(users, folders, documents, auditLog);
+        var cache = new DocumentListCache(documents, folders, new MemoryCache(new MemoryCacheOptions()), WebJsonOptions);
+        var c = new DocumentFolderController(users, folders, documents, auditLog, cache);
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -112,13 +116,16 @@ public sealed class DocumentFolderControllerTests
 
         var result = await c.Get();
 
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var payload = Assert.IsAssignableFrom<List<DocumentFolderSummary>>(ok.Value);
-        Assert.Equal(2, payload.Count);
-        Assert.Equal("Alpha", payload[0].Name);
-        Assert.Equal(2, payload[0].DocumentCount);
-        Assert.Equal("Zebra", payload[1].Name);
-        Assert.Equal(1, payload[1].DocumentCount);
+        var ok = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("application/json", ok.ContentType);
+        using var doc = System.Text.Json.JsonDocument.Parse(ok.FileContents);
+        var arr = doc.RootElement;
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, arr.ValueKind);
+        Assert.Equal(2, arr.GetArrayLength());
+        Assert.Equal("Alpha", arr[0].GetProperty("name").GetString());
+        Assert.Equal(2, arr[0].GetProperty("documentCount").GetInt32());
+        Assert.Equal("Zebra", arr[1].GetProperty("name").GetString());
+        Assert.Equal(1, arr[1].GetProperty("documentCount").GetInt32());
     }
 
     [Fact]
@@ -234,5 +241,54 @@ public sealed class DocumentFolderControllerTests
 
         Assert.IsType<OkResult>(result);
         mockFolders.Verify(r => r.DeleteAsync(folderId), Times.Once);
+    }
+
+    [Fact]
+    public async Task Get_sets_CacheControl_and_ETag_headers()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(ResidentUser());
+
+        var mockFolders = new Mock<IDocumentFolderRepository>();
+        mockFolders.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<DocumentFolder>());
+        var mockDocs = new Mock<IDocumentRepository>();
+        mockDocs.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<ResidentDocument>());
+
+        var c = CreateController(mockUsers.Object, mockFolders.Object, mockDocs.Object, Mock.Of<IAuditLogRepository>());
+        await c.Get();
+
+        Assert.Equal("private, no-cache", c.Response.Headers.CacheControl.ToString());
+        Assert.False(string.IsNullOrEmpty(c.Response.Headers.ETag.ToString()));
+    }
+
+    [Fact]
+    public async Task Get_returns_304_when_If_None_Match_matches()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(ResidentUser());
+
+        var folderId = Guid.NewGuid();
+        var mockFolders = new Mock<IDocumentFolderRepository>();
+        mockFolders.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<DocumentFolder>
+        {
+            new() { Id = folderId, Name = "Folder", SortOrder = 0 }
+        });
+        var mockDocs = new Mock<IDocumentRepository>();
+        mockDocs.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<ResidentDocument>());
+
+        // First call: get the ETag
+        var c1 = CreateController(mockUsers.Object, mockFolders.Object, mockDocs.Object, Mock.Of<IAuditLogRepository>());
+        await c1.Get();
+        var etag = c1.Response.Headers.ETag.ToString();
+
+        // Second call: send If-None-Match with the same ETag
+        var c2 = CreateController(mockUsers.Object, mockFolders.Object, mockDocs.Object, Mock.Of<IAuditLogRepository>());
+        c2.Request.Headers["If-None-Match"] = etag;
+        var result = await c2.Get();
+
+        var status = Assert.IsType<StatusCodeResult>(result);
+        Assert.Equal(StatusCodes.Status304NotModified, status.StatusCode);
     }
 }
