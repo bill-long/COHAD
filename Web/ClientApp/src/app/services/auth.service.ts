@@ -52,9 +52,9 @@ export class AuthService {
 
         redirectUri: window.location.origin,
 
-        clientId: '6034a3a8-53b5-401b-a66f-54be5966a067',
+        clientId: '66d25d05-4ece-4b61-a40d-a16b2fe0adbd',
 
-        dummyClientSecret: '9g~nU-gSmG27VQfevME3-A5qpBWBHsis.X',
+        dummyClientSecret: '***REMOVED***',
 
         responseType: 'code',
 
