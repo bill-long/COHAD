@@ -61,7 +61,8 @@ namespace Web.Controllers
             }
 
             var payload = query
-                .OrderBy(l => l.Name)
+                .OrderBy(l => ExtractSurname(l.Name))
+                .ThenBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(l => YouthServiceListingPresentation.FromStorageModel(l, CanEdit(apiUser, l.CreatedByUniqueId)))
                 .ToList();
             return Ok(payload);
@@ -256,6 +257,13 @@ namespace Web.Controllers
             }
 
             return user.Roles?.Contains(Models.User.Role.Administrator) == true;
+        }
+
+        private static string ExtractSurname(string name)
+        {
+            var trimmed = (name ?? string.Empty).Trim();
+            var lastSpace = trimmed.LastIndexOf(' ');
+            return lastSpace >= 0 ? trimmed.Substring(lastSpace + 1) : trimmed;
         }
 
         private async Task<User> GetApiUserAsync()
