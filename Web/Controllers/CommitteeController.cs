@@ -272,6 +272,7 @@ namespace Web.Controllers
             {
                 // Validate all referenced residents exist
                 var requestedResidentIds = request.Members
+                    .Where(m => m != null)
                     .Select(m => m.ResidentId)
                     .Where(id => id != Guid.Empty)
                     .Distinct()
@@ -292,7 +293,7 @@ namespace Web.Controllers
                     return BadRequest($"Unknown resident IDs: {string.Join(", ", missingResidentIds)}");
                 }
 
-                foreach (var mu in request.Members)
+                foreach (var mu in request.Members.Where(m => m != null))
                 {
                     if (mu.ResidentId == Guid.Empty)
                     {

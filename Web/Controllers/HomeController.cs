@@ -85,7 +85,7 @@ namespace Web.Controllers
 
             // Validate and sanitize incoming residents.
             var incomingResidents = (updatedHome.Residents ?? new List<Resident>())
-                .Where(r => !string.IsNullOrWhiteSpace(r.GivenName?.Trim()))
+                .Where(r => r != null && !string.IsNullOrWhiteSpace(r.GivenName?.Trim()))
                 .ToList();
 
             foreach (var resident in incomingResidents)
@@ -101,7 +101,7 @@ namespace Web.Controllers
                 {
                     resident.EmailAddresses =
                         resident.EmailAddresses
-                            .Where(e => !string.IsNullOrWhiteSpace(e.Address) && e.Address.Contains("@", StringComparison.OrdinalIgnoreCase))
+                            .Where(e => e != null && !string.IsNullOrWhiteSpace(e.Address) && e.Address.Contains("@", StringComparison.OrdinalIgnoreCase))
                             .ToList();
                 }
             }
