@@ -77,34 +77,27 @@
   height: 1rem;
 }
 
-.members-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.members-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
 }
 
 .member-card {
   display: flex;
-  align-items: flex-start;
-  gap: 1.25rem;
-  padding: 1rem 1.25rem;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 1.25rem 1rem;
   border: 1px solid var(--border-faint);
   border-radius: 10px;
   background: var(--surface-muted);
 }
 
-.member-identity {
-  flex: 0 0 25%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
 .member-photo-frame {
   flex-shrink: 0;
-  width: 72px;
-  height: 72px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   overflow: hidden;
   background: var(--surface-section);
@@ -150,17 +143,13 @@
   font-weight: 500;
 }
 
-.member-bio-area {
-  flex: 1;
-  min-width: 0;
-  padding-top: 0.15rem;
-}
-
 .member-bio {
-  margin: 0;
-  font-size: 0.9rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.5;
+  text-align: left;
+  align-self: stretch;
 }
 
 .member-bio--clamped {
@@ -179,6 +168,7 @@
   font-size: 0.82rem;
   font-weight: 500;
   cursor: pointer;
+  align-self: flex-start;
 }
 
 .bio-read-more:hover {
@@ -190,18 +180,14 @@
   margin: 0;
 }
 
-@media (max-width: 600px) {
-  .member-card {
-    flex-direction: column;
-    align-items: center;
+@media (max-width: 768px) {
+  .members-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
+}
 
-  .member-identity {
-    flex: none;
-    width: 100%;
-  }
-
-  .member-bio-area {
-    width: 100%;
+@media (max-width: 480px) {
+  .members-grid {
+    grid-template-columns: 1fr;
   }
 }
