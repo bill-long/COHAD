@@ -32,11 +32,16 @@
                 <mat-icon>person</mat-icon>
               </div>
             </div>
-            <div class="member-info">
-              <h3 class="member-name">{{ member.displayName }}</h3>
-              <span class="member-title" *ngIf="member.title">{{ member.title }}</span>
-              <p class="member-bio" *ngIf="member.bio">{{ member.bio }}</p>
-            </div>
+            <h3 class="member-name">{{ member.displayName }}</h3>
+            <span class="member-title" *ngIf="member.title">{{ member.title }}</span>
+            <ng-container *ngIf="member.bio">
+              <p class="member-bio member-bio--clamped">{{ member.bio }}</p>
+              <button class="bio-read-more"
+                      [attr.aria-label]="'Read more about ' + member.displayName"
+                      (click)="openBio(committee, member)">
+                Read more
+              </button>
+            </ng-container>
           </div>
         </div>
 

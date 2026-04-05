@@ -1,0 +1,27 @@
+<h2 mat-dialog-title class="dialog-title">
+  {{ data.member.displayName }}
+  <span class="dialog-committee">{{ data.committeeName }}</span>
+</h2>
+
+<div mat-dialog-content class="dialog-body">
+  <div class="dialog-profile">
+    <div class="dialog-photo-frame">
+      <img *ngIf="data.member.hasPhoto && data.member.photoDownloadUrl"
+           class="dialog-photo"
+           [src]="data.member.photoDownloadUrl"
+           [alt]="data.member.displayName"
+           [style.object-position]="'center ' + data.member.photoOffsetY + '%'">
+      <div *ngIf="!data.member.hasPhoto || !data.member.photoDownloadUrl" class="dialog-avatar">
+        <mat-icon>person</mat-icon>
+      </div>
+    </div>
+    <div class="dialog-meta">
+      <span class="dialog-member-title" *ngIf="data.member.title">{{ data.member.title }}</span>
+    </div>
+  </div>
+  <p class="dialog-bio">{{ data.member.bio }}</p>
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button (click)="close()">Close</button>
+</div>
