@@ -1,8 +1,8 @@
 import { Component, Inject, OnDestroy, OnInit } from '@angular/core';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
-import { Observable, Subscription } from 'rxjs';
-import { CommitteeAdmin, CommitteeMemberAdmin, CommitteeService, ForwardingSyncStatus } from 'src/app/services/committee.service';
+import { Observable, Subscription, forkJoin } from 'rxjs';
+import { CommitteeAdmin, CommitteeMemberAdmin, CommitteeService, ForwardingSyncStatus, ResidentPickerItem } from 'src/app/services/committee.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { MatDialog } from '@angular/material/dialog';
 import { ApplicationState, applicationState } from 'src/app/state';
@@ -15,6 +15,7 @@ import { ApplicationState, applicationState } from 'src/app/state';
 })
 export class ManageCommitteesComponent implements OnInit, OnDestroy {
   committees: CommitteeAdmin[] = [];
+  allResidents: ResidentPickerItem[] = [];
   loading = false;
   error = '';
   success = '';
@@ -124,6 +125,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       : 0;
     committee.members.push({
       id: crypto.randomUUID(),
+      residentId: '',
       displayName: '',
       title: null,
       bio: null,
@@ -133,6 +135,25 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       photoOffsetY: 50,
       displayOrder: nextOrder
     });
+  }
+
+  /** Returns residents not already on this committee, for the picker dropdown. */
+  availableResidents(committee: CommitteeAdmin, currentMember: CommitteeMemberAdmin): ResidentPickerItem[] {
+    const usedIds = new Set(
+      committee.members
+        .filter(m => m.id !== currentMember.id && m.residentId)
+        .map(m => m.residentId)
+    );
+    return this.allResidents.filter(r => !usedIds.has(r.id));
+  }
+
+  onResidentSelected(member: CommitteeMemberAdmin, residentId: string): void {
+    member.residentId = residentId;
+    const resident = this.allResidents.find(r => r.id === residentId);
+    if (resident) {
+      member.displayName = resident.displayName;
+      member.email = resident.email ?? '';
+    }
   }
 
   onPhotoSelected(event: Event, committee: CommitteeAdmin, member: CommitteeMemberAdmin): void {
@@ -274,9 +295,13 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
 
   private loadCommittees(): void {
     this.loading = true;
-    this.committeeService.getAdminAll().subscribe({
-      next: committees => {
+    forkJoin({
+      committees: this.committeeService.getAdminAll(),
+      residents: this.committeeService.getResidents()
+    }).subscribe({
+      next: ({ committees, residents }) => {
         this.committees = committees ?? [];
+        this.allResidents = residents ?? [];
         this.savedOrder = this.committees.map(c => c.id);
         this.loading = false;
         for (const c of this.committees) {
@@ -285,6 +310,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.committees = [];
+        this.allResidents = [];
         this.loading = false;
         this.error = 'Failed to load committees.';
       }

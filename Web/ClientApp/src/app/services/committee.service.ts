@@ -25,6 +25,7 @@ export interface CommitteeCard {
 
 export interface CommitteeMemberAdmin {
   id: string;
+  residentId: string;
   displayName: string;
   title: string | null;
   bio: string | null;
@@ -53,6 +54,13 @@ export interface ForwardingSyncStatus {
   lastSyncError: string | null;
 }
 
+export interface ResidentPickerItem {
+  id: string;
+  homeId: string;
+  displayName: string;
+  email: string | null;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -69,6 +77,10 @@ export class CommitteeService {
   }
 
   // Admin endpoints
+  getResidents(): Observable<ResidentPickerItem[]> {
+    return this.httpClient.get<ResidentPickerItem[]>('api/committee/admin/residents');
+  }
+
   getAdminAll(): Observable<CommitteeAdmin[]> {
     return this.httpClient.get<CommitteeAdmin[]>('api/committee/admin');
   }

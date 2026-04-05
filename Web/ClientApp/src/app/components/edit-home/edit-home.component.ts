@@ -341,6 +341,8 @@ export class EditHomeComponent implements OnInit, OnChanges {
     }
 
     this.homeCopy.residents.push({
+      id: '',
+      homeId: this.homeCopy.id,
       givenName: '',
       surname: '',
       emailAddresses: [],

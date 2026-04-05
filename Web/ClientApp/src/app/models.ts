@@ -80,6 +80,8 @@ export interface HomeAssociatedUser {
 }
 
 export interface Resident {
+    id: string;
+    homeId: string;
     givenName: string;
     surname: string;
     emailAddresses: EmailAddress[];

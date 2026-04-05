@@ -117,6 +117,22 @@ namespace Web.Controllers
         // Admin endpoints
         // ──────────────────────────────────────────────
 
+        [HttpGet("admin/residents")]
+        [Authorize(Policy = "CommitteeEditor")]
+        public async Task<IActionResult> GetResidentsForPicker()
+        {
+            var residents = await _residentRepository.GetAllAsync();
+            return Ok(residents
+                .OrderBy(r => r.GivenName).ThenBy(r => r.Surname)
+                .Select(r => new
+                {
+                    r.Id,
+                    r.HomeId,
+                    DisplayName = $"{r.GivenName} {r.Surname}".Trim(),
+                    Email = r.EmailAddresses?.FirstOrDefault()?.Address
+                }));
+        }
+
         [HttpGet("admin")]
         [Authorize(Policy = "CommitteeEditor")]
         public async Task<IActionResult> GetAllAdmin()
