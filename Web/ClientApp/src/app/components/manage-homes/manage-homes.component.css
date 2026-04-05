@@ -1,9 +1,42 @@
 table {
-    width: 100%;
+  width: 100%;
+}
+
+.table-scroll-wrapper {
+  width: 100%;
 }
 
 .focusedHomeEditor {
-    margin: 16px auto 48px;
-    padding: 0 16px;
-    max-width: 960px;
+  margin: 16px auto 48px;
+  padding: 0 16px;
+  max-width: 960px;
+}
+
+@media (max-width: 600px) {
+  .table-scroll-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mat-column-phoneNumber,
+  .mat-column-emailAddress {
+    display: none;
+  }
+
+  table .mat-mdc-cell,
+  table .mat-mdc-header-cell {
+    padding: 8px 6px;
+  }
+
+  .focusedHomeEditor {
+    padding: 0 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  table .mat-mdc-cell,
+  table .mat-mdc-header-cell {
+    padding: 6px 4px;
+    font-size: 0.85rem;
+  }
 }

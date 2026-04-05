@@ -1,121 +1,131 @@
 <div class="email-job-detail-page">
-    <mat-card>
-        <mat-card-content>
-            <button type="button" class="back-link" (click)="goBack()">← Back to Email Jobs</button>
-            <h2 class="page-title">Email Job</h2>
+  <mat-card>
+    <mat-card-content>
+      <button type="button" class="back-link" (click)="goBack()">← Back to Email Jobs</button>
+      <h2 class="page-title">Email Job</h2>
 
-            <div *ngIf="loading" class="loading-state">
-                <mat-spinner diameter="32"></mat-spinner>
-                <span>Loading job…</span>
-            </div>
+      <div *ngIf="loading" class="loading-state">
+        <mat-spinner diameter="32"></mat-spinner>
+        <span>Loading job…</span>
+      </div>
 
-            <div *ngIf="errorText != null" class="cohad-inline-alert cohad-inline-alert--error">
-                {{ errorText }}
-            </div>
+      <div *ngIf="errorText != null" class="cohad-inline-alert cohad-inline-alert--error">
+        {{ errorText }}
+      </div>
 
-            <ng-container *ngIf="!loading && job">
-                <!-- Metadata -->
-                <div class="job-meta">
-                    <div class="meta-row">
-                        <span class="meta-label">Status</span>
-                        <span class="status-badge" [ngClass]="statusClass(job.status)">
-                            {{ statusLabel(job.status) }}
-                        </span>
-                    </div>
-                    <div class="meta-row">
-                        <span class="meta-label">From</span>
-                        <span>{{ job.fromDisplay }}</span>
-                    </div>
-                    <div class="meta-row">
-                        <span class="meta-label">Subject</span>
-                        <span>{{ job.subject }}</span>
-                    </div>
-                    <div class="meta-row">
-                        <span class="meta-label">Created by</span>
-                        <span>{{ job.createdByDisplayName }}</span>
-                    </div>
-                    <div class="meta-row">
-                        <span class="meta-label">Created</span>
-                        <span>{{ job.createdUtc | date:'medium' }}</span>
-                    </div>
-                    <div *ngIf="job.startedUtc" class="meta-row">
-                        <span class="meta-label">Started</span>
-                        <span>{{ job.startedUtc | date:'medium' }}</span>
-                    </div>
-                    <div *ngIf="job.completedUtc" class="meta-row">
-                        <span class="meta-label">Completed</span>
-                        <span>{{ job.completedUtc | date:'medium' }}</span>
-                    </div>
-                    <div *ngIf="job.lastError" class="meta-row">
-                        <span class="meta-label">Error</span>
-                        <span class="error-text">{{ job.lastError }}</span>
-                    </div>
-                </div>
+      <ng-container *ngIf="!loading && job">
+        <!-- Metadata -->
+        <div class="job-meta">
+          <div class="meta-row">
+            <span class="meta-label">Status</span>
+            <span class="status-badge" [ngClass]="statusClass(job.status)">
+              {{ statusLabel(job.status) }}
+            </span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">From</span>
+            <span>{{ job.fromDisplay }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Subject</span>
+            <span>{{ job.subject }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Created by</span>
+            <span>{{ job.createdByDisplayName }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Created</span>
+            <span>{{ job.createdUtc | date: 'medium' }}</span>
+          </div>
+          <div *ngIf="job.startedUtc" class="meta-row">
+            <span class="meta-label">Started</span>
+            <span>{{ job.startedUtc | date: 'medium' }}</span>
+          </div>
+          <div *ngIf="job.completedUtc" class="meta-row">
+            <span class="meta-label">Completed</span>
+            <span>{{ job.completedUtc | date: 'medium' }}</span>
+          </div>
+          <div *ngIf="job.lastError" class="meta-row">
+            <span class="meta-label">Error</span>
+            <span class="error-text">{{ job.lastError }}</span>
+          </div>
+        </div>
 
-                <!-- Progress -->
-                <div class="progress-section">
-                    <div class="progress-bar-container">
-                        <div class="progress-bar-fill" [style.width.%]="progressPercent"></div>
-                    </div>
-                    <div class="progress-counts">
-                        <span class="count-sent">✓ {{ job.sentCount }} sent</span>
-                        <span class="count-failed">✗ {{ job.failedCount }} failed</span>
-                        <span class="count-pending">⏳ {{ pendingCount }} pending</span>
-                        <span class="count-total">{{ job.totalRecipients }} total</span>
-                    </div>
-                </div>
+        <!-- Progress -->
+        <div class="progress-section">
+          <div class="progress-bar-container">
+            <div class="progress-bar-fill" [style.width.%]="progressPercent"></div>
+          </div>
+          <div class="progress-counts">
+            <span class="count-sent">✓ {{ job.sentCount }} sent</span>
+            <span class="count-failed">✗ {{ job.failedCount }} failed</span>
+            <span class="count-pending">⏳ {{ pendingCount }} pending</span>
+            <span class="count-total">{{ job.totalRecipients }} total</span>
+          </div>
+        </div>
 
-                <!-- Actions -->
-                <div class="actions" *ngIf="canRetry || canCancel">
-                    <p *ngIf="showStuckRecoveryHint"
-                       class="job-actions-hint"
-                       [class.job-actions-hint--stale]="isStaleQueuedJob"
-                       role="note">
-                        <ng-container *ngIf="!isStaleQueuedJob">
-                            If this job does not start or stops making progress, use <strong>Cancel job</strong>, then choose <strong>Run again</strong>.
-                        </ng-container>
-                        <ng-container *ngIf="isStaleQueuedJob">
-                            This job has been queued for a while without starting. Use <strong>Cancel job</strong>, then <strong>Run again</strong> to put it back on the send queue.
-                        </ng-container>
-                    </p>
-                    <div class="action-buttons">
-                        <button *ngIf="canRetry" mat-flat-button color="primary"
-                                (click)="retryJob()" [disabled]="actionInProgress"
-                                matTooltip="Puts the job back in the send queue."
-                                [matTooltipDisabled]="job.status !== 'Cancelled'">
-                            {{ retryButtonLabel }}
-                        </button>
-                        <button *ngIf="canCancel" mat-flat-button color="warn"
-                                (click)="cancelJob()" [disabled]="actionInProgress"
-                                [matTooltip]="cancelJobTooltip">
-                            Cancel job
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Recipients -->
-                <h3 class="section-title">Recipients</h3>
-                <table *ngIf="job.recipients && job.recipients.length > 0" class="recipients-table">
-                    <thead>
-                        <tr>
-                            <th class="col-email">Email</th>
-                            <th class="col-r-status">Status</th>
-                            <th class="col-error">Error</th>
-                            <th class="col-sent-time">Sent</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr *ngFor="let r of job.recipients">
-                            <td class="cell-truncate">{{ r.email }}</td>
-                            <td>
-                                <span class="status-badge" [ngClass]="recipientStatusClass(r.status)">{{ r.status }}</span>
-                            </td>
-                            <td class="cell-truncate error-text">{{ r.error }}</td>
-                            <td class="cell-date">{{ r.sentUtc | date:'mediumTime' }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+        <!-- Actions -->
+        <div class="actions" *ngIf="canRetry || canCancel">
+          <p *ngIf="showStuckRecoveryHint" class="job-actions-hint" [class.job-actions-hint--stale]="isStaleQueuedJob" role="note">
+            <ng-container *ngIf="!isStaleQueuedJob">
+              If this job does not start or stops making progress, use <strong>Cancel job</strong>, then choose <strong>Run again</strong>.
             </ng-container>
-        </mat-card-content>
-    </mat-card>
+            <ng-container *ngIf="isStaleQueuedJob">
+              This job has been queued for a while without starting. Use <strong>Cancel job</strong>, then <strong>Run again</strong> to put
+              it back on the send queue.
+            </ng-container>
+          </p>
+          <div class="action-buttons">
+            <button
+              *ngIf="canRetry"
+              mat-flat-button
+              color="primary"
+              (click)="retryJob()"
+              [disabled]="actionInProgress"
+              matTooltip="Puts the job back in the send queue."
+              [matTooltipDisabled]="job.status !== 'Cancelled'"
+            >
+              {{ retryButtonLabel }}
+            </button>
+            <button
+              *ngIf="canCancel"
+              mat-flat-button
+              color="warn"
+              (click)="cancelJob()"
+              [disabled]="actionInProgress"
+              [matTooltip]="cancelJobTooltip"
+            >
+              Cancel job
+            </button>
+          </div>
+        </div>
+
+        <!-- Recipients -->
+        <h3 class="section-title">Recipients</h3>
+        <div class="table-scroll-wrapper">
+          <table *ngIf="job.recipients && job.recipients.length > 0" class="recipients-table">
+            <thead>
+              <tr>
+                <th class="col-email">Email</th>
+                <th class="col-r-status">Status</th>
+                <th class="col-error">Error</th>
+                <th class="col-sent-time">Sent</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of job.recipients">
+                <td class="cell-truncate">{{ r.email }}</td>
+                <td>
+                  <span class="status-badge" [ngClass]="recipientStatusClass(r.status)">{{ r.status }}</span>
+                </td>
+                <td class="cell-truncate error-text">{{ r.error }}</td>
+                <td class="cell-date">{{ r.sentUtc | date: 'mediumTime' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+    </mat-card-content>
+  </mat-card>
 </div>
