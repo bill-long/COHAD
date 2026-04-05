@@ -79,14 +79,16 @@
 
 .members-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1rem;
 }
 
 .member-card {
   display: flex;
-  gap: 0.85rem;
-  padding: 0.85rem;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 1.25rem 1rem;
   border: 1px solid var(--border-faint);
   border-radius: 10px;
   background: var(--surface-muted);
@@ -100,8 +102,8 @@
 
 .member-photo-frame {
   flex-shrink: 0;
-  width: 72px;
-  height: 72px;
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
   overflow: hidden;
   background: var(--surface-section);
@@ -109,6 +111,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-bottom: 0.75rem;
 }
 
 .member-photo {
@@ -127,13 +130,9 @@
 }
 
 .member-avatar mat-icon {
-  font-size: 2rem;
-  width: 2rem;
-  height: 2rem;
-}
-
-.member-info {
-  min-width: 0;
+  font-size: 2.25rem;
+  width: 2.25rem;
+  height: 2.25rem;
 }
 
 .member-name {
@@ -151,10 +150,12 @@
 }
 
 .member-bio {
-  margin: 0.35rem 0 0;
+  margin: 0.5rem 0 0;
   font-size: 0.875rem;
   color: var(--text-secondary);
   line-height: 1.5;
+  text-align: left;
+  align-self: stretch;
 }
 
 .member-bio--clamped {
@@ -168,7 +169,7 @@
   background: none;
   border: none;
   padding: 0;
-  margin-top: 0.2rem;
+  margin-top: 0.25rem;
   color: var(--primary-sage);
   font-size: 0.82rem;
   font-weight: 500;
