@@ -257,8 +257,10 @@ namespace Web.Controllers
                 }
             }
 
-            // Null Members = no member changes (keep existing); prevents accidental data loss from partial payloads
+            // Track old blobs to delete after the committee is persisted.
+            var staleBlobPaths = new List<string>();
             IReadOnlyDictionary<Guid, Resident> resolvedResidents = null;
+
             if (request.Members == null)
             {
                 if (uploadedPhotos.Count > 0)
@@ -342,11 +344,11 @@ namespace Web.Controllers
                         var result = await _imageUploadHelper.ConvertAndUploadAsync(
                             photoFile, ext, $"committees/{key}", memberId.ToString("D"));
 
-                        // Delete old blob if path changed (e.g. extension change .jpg → .png)
+                        // Collect old blob for cleanup after committee is persisted.
                         if (!string.IsNullOrWhiteSpace(existing?.PhotoBlobPath)
                             && existing.PhotoBlobPath != result.BlobPath)
                         {
-                            await _documentFileStore.DeleteAsync(existing.PhotoBlobPath);
+                            staleBlobPaths.Add(existing.PhotoBlobPath);
                         }
 
                         member.PhotoBlobPath = result.BlobPath;
@@ -357,20 +359,33 @@ namespace Web.Controllers
                 }
             }
 
-            // Delete photos for removed members
+            // Collect photos for removed members (deleted after committee is persisted).
             var removedIds = existingMembers.Keys.Except(updatedMembers.Select(m => m.Id)).ToList();
             foreach (var removedId in removedIds)
             {
                 if (existingMembers.TryGetValue(removedId, out var removed)
                     && !string.IsNullOrWhiteSpace(removed.PhotoBlobPath))
                 {
-                    await _documentFileStore.DeleteAsync(removed.PhotoBlobPath);
+                    staleBlobPaths.Add(removed.PhotoBlobPath);
                 }
             }
 
             committee.Members = updatedMembers;
             await _committeeRepository.UpsertAsync(committee);
             _listCache.Invalidate();
+
+            // Now safe to delete stale blobs — committee is persisted.
+            foreach (var blobPath in staleBlobPaths)
+            {
+                try
+                {
+                    await _documentFileStore.DeleteAsync(blobPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete stale photo blob {BlobPath}", blobPath);
+                }
+            }
 
             await AuditAsync(committee.Id, committee.DisplayName, "Updated committee.");
 
@@ -396,10 +411,7 @@ namespace Web.Controllers
             if (member == null)
                 return NotFound();
 
-            if (!string.IsNullOrWhiteSpace(member.PhotoBlobPath))
-            {
-                await _documentFileStore.DeleteAsync(member.PhotoBlobPath);
-            }
+            var photoBlobPath = member.PhotoBlobPath;
 
             var resident = await _residentRepository.GetByIdAsync(member.ResidentId);
             var memberName = PresentationModels.CommitteeMemberHelpers.ResidentDisplayName(resident);
@@ -407,6 +419,19 @@ namespace Web.Controllers
             committee.Members.Remove(member);
             await _committeeRepository.UpsertAsync(committee);
             _listCache.Invalidate();
+
+            // Delete photo blob after committee is persisted.
+            if (!string.IsNullOrWhiteSpace(photoBlobPath))
+            {
+                try
+                {
+                    await _documentFileStore.DeleteAsync(photoBlobPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete photo blob {BlobPath} for removed member {MemberId}", photoBlobPath, memberId);
+                }
+            }
 
             await AuditAsync(committee.Id, committee.DisplayName,
                 $"Removed member \"{memberName}\".");

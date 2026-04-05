@@ -29,7 +29,8 @@ namespace Web.Services
             var clientSecret = config["Graph:ClientSecret"];
 
             var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-            _graphClient = new GraphServiceClient(credential);
+            _graphClient = new GraphServiceClient(credential,
+                new[] { "https://graph.microsoft.com/.default" });
         }
 
         public async Task<Committee> SyncForwardingRuleAsync(Committee committee,
