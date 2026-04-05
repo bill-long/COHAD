@@ -1,40 +1,40 @@
 <mat-form-field appearance="fill" *ngIf="focusedUser == null">
-    <mat-label>Search</mat-label>
-    <input matInput [formControl]="userFilter">
+  <mat-label>Search</mat-label>
+  <input matInput [formControl]="userFilter" />
 </mat-form-field>
 
-<table mat-table [dataSource]="dataSource" matSort [ngClass]="{ 'displaynone': focusedUser != null }">
-
+<div class="table-scroll-wrapper" [ngClass]="{ displaynone: focusedUser != null }">
+  <table mat-table [dataSource]="dataSource" matSort>
     <ng-container matColumnDef="givenName">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.givenName">
-          Given Name
-          <span class="resize-handle" (mousedown)="startResize($event, 'givenName')"></span>
-        </th>
-        <td mat-cell *matCellDef="let user"> {{user.givenName}} </td>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.givenName">
+        Given Name
+        <span class="resize-handle" (mousedown)="startResize($event, 'givenName')"></span>
+      </th>
+      <td mat-cell *matCellDef="let user">{{ user.givenName }}</td>
     </ng-container>
 
     <ng-container matColumnDef="surname">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.surname">
-          Surname
-          <span class="resize-handle" (mousedown)="startResize($event, 'surname')"></span>
-        </th>
-        <td mat-cell *matCellDef="let user"> {{user.surname}} </td>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.surname">
+        Surname
+        <span class="resize-handle" (mousedown)="startResize($event, 'surname')"></span>
+      </th>
+      <td mat-cell *matCellDef="let user">{{ user.surname }}</td>
     </ng-container>
 
     <ng-container matColumnDef="email">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.email" class="hide-email">
-          Email
-          <span class="resize-handle" (mousedown)="startResize($event, 'email')"></span>
-        </th>
-        <td mat-cell *matCellDef="let user" class="hide-email"> {{user.email}} </td>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.email" class="hide-email">
+        Email
+        <span class="resize-handle" (mousedown)="startResize($event, 'email')"></span>
+      </th>
+      <td mat-cell *matCellDef="let user" class="hide-email">{{ user.email }}</td>
     </ng-container>
 
     <ng-container matColumnDef="identityProvider">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.identityProvider" class="hide-identityProvider">
-          Identity Provider
-          <span class="resize-handle" (mousedown)="startResize($event, 'identityProvider')"></span>
-        </th>
-        <td mat-cell *matCellDef="let user" class="hide-identityProvider"> {{user.identityProvider}} </td>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.identityProvider" class="hide-identityProvider">
+        Identity Provider
+        <span class="resize-handle" (mousedown)="startResize($event, 'identityProvider')"></span>
+      </th>
+      <td mat-cell *matCellDef="let user" class="hide-identityProvider">{{ user.identityProvider }}</td>
     </ng-container>
 
     <ng-container matColumnDef="lastLoggedIn">
@@ -42,8 +42,8 @@
         Last Login
         <span class="resize-handle" (mousedown)="startResize($event, 'lastLoggedIn')"></span>
       </th>
-      <td mat-cell *matCellDef="let user" class="hide-lastLoggedIn"> {{user.lastLoggedIn | date:'medium'}} </td>
-  </ng-container>
+      <td mat-cell *matCellDef="let user" class="hide-lastLoggedIn">{{ user.lastLoggedIn | date: 'medium' }}</td>
+    </ng-container>
 
     <ng-container matColumnDef="daysUntilPurge">
       <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.daysUntilPurge" class="hide-daysUntilPurge">
@@ -52,54 +52,54 @@
       </th>
       <td mat-cell *matCellDef="let user" class="hide-daysUntilPurge">
         <ng-container *ngIf="getDaysUntilPurge(user) !== null; else noPurgeClock">
-          {{getDaysUntilPurge(user)}}
+          {{ getDaysUntilPurge(user) }}
         </ng-container>
         <ng-template #noPurgeClock>-</ng-template>
       </td>
     </ng-container>
 
     <ng-container matColumnDef="streetAddress">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.streetAddress" class="hide-streetAddress">
-          Street Address
-          <span class="resize-handle" (mousedown)="startResize($event, 'streetAddress')"></span>
-        </th>
-        <td mat-cell *matCellDef="let user" class="hide-streetAddress"> {{user.streetAddress}} </td>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.streetAddress" class="hide-streetAddress">
+        Street Address
+        <span class="resize-handle" (mousedown)="startResize($event, 'streetAddress')"></span>
+      </th>
+      <td mat-cell *matCellDef="let user" class="hide-streetAddress">{{ user.streetAddress }}</td>
     </ng-container>
 
     <ng-container matColumnDef="roles">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.roles">
-          Roles
-          <span class="resize-handle" (mousedown)="startResize($event, 'roles')"></span>
-        </th>
-        <td mat-cell *matCellDef="let user">
-            <div *ngFor="let role of user.roles">{{role}}</div>
-        </td>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.roles">
+        Roles
+        <span class="resize-handle" (mousedown)="startResize($event, 'roles')"></span>
+      </th>
+      <td mat-cell *matCellDef="let user">
+        <div *ngFor="let role of user.roles">{{ role }}</div>
+      </td>
     </ng-container>
 
     <ng-container matColumnDef="ownedHomes">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.ownedHomes">
-          Homes
-          <span class="resize-handle" (mousedown)="startResize($event, 'ownedHomes')"></span>
-        </th>
-        <td mat-cell *matCellDef="let user">
-            <div *ngFor="let home of user.ownedHomes">{{home.streetNumber}} {{home.streetName}}</div>
-        </td>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header [style.width.px]="columnWidths.ownedHomes">
+        Homes
+        <span class="resize-handle" (mousedown)="startResize($event, 'ownedHomes')"></span>
+      </th>
+      <td mat-cell *matCellDef="let user">
+        <div *ngFor="let home of user.ownedHomes">{{ home.streetNumber }} {{ home.streetName }}</div>
+      </td>
     </ng-container>
 
     <ng-container matColumnDef="actions">
-        <th mat-header-cell *matHeaderCellDef [style.width.px]="columnWidths.actions">
-          <span class="resize-handle" (mousedown)="startResize($event, 'actions')"></span>
-        </th>
-        <td mat-cell *matCellDef="let user">
-            <button mat-icon-button color="primary" aria-label="Edit" (click)="focusedUser = user">
-                <mat-icon>edit</mat-icon>
-            </button>
-        </td>
+      <th mat-header-cell *matHeaderCellDef [style.width.px]="columnWidths.actions">
+        <span class="resize-handle" (mousedown)="startResize($event, 'actions')"></span>
+      </th>
+      <td mat-cell *matCellDef="let user">
+        <button mat-icon-button color="primary" aria-label="Edit" (click)="focusedUser = user">
+          <mat-icon>edit</mat-icon>
+        </button>
+      </td>
     </ng-container>
 
     <tr mat-header-row *matHeaderRowDef="columnsToDisplay"></tr>
     <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
-</table>
+  </table>
+</div>
 
-<app-user *ngIf="focusedUser != null" [apiUser]="focusedUser" [allHomes]="(allHomes$ | async)!"
-    (doneEvent)="focusedUser = null"></app-user>
+<app-user *ngIf="focusedUser != null" [apiUser]="focusedUser" [allHomes]="(allHomes$ | async)!" (doneEvent)="focusedUser = null"></app-user>

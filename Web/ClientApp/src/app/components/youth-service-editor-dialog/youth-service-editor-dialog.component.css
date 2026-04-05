@@ -19,6 +19,16 @@ textarea {
   margin-bottom: 8px;
 }
 
+@media (max-width: 600px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .span-2 {
+    grid-column: auto;
+  }
+}
+
 .action-spacer {
   flex: 1 1 auto;
 }

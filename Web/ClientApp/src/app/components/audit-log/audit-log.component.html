@@ -1,7 +1,7 @@
 <div class="audit-log-page">
   <mat-form-field appearance="fill" class="audit-search-field">
     <mat-label>Search audit log</mat-label>
-    <input matInput [formControl]="searchControl" placeholder="User, subject, action">
+    <input matInput [formControl]="searchControl" placeholder="User, subject, action" />
   </mat-form-field>
 
   <div class="audit-status" *ngIf="isLoadingInitial">
@@ -13,44 +13,44 @@
     {{ errorMessage }}
   </div>
 
-  <table mat-table [dataSource]="entries" class="audit-log-table" *ngIf="!isLoadingInitial">
-    <ng-container matColumnDef="time">
-      <th mat-header-cell *matHeaderCellDef class="col-time">Time</th>
-      <td mat-cell *matCellDef="let auditEntry" class="col-time">{{auditEntry.time | date:'medium'}}</td>
-    </ng-container>
+  <div class="table-scroll-wrapper" *ngIf="!isLoadingInitial">
+    <table mat-table [dataSource]="entries" class="audit-log-table">
+      <ng-container matColumnDef="time">
+        <th mat-header-cell *matHeaderCellDef class="col-time">Time</th>
+        <td mat-cell *matCellDef="let auditEntry" class="col-time">{{ auditEntry.time | date: 'medium' }}</td>
+      </ng-container>
 
-    <ng-container matColumnDef="subjectId">
-      <th mat-header-cell *matHeaderCellDef class="col-subject-id">Subject Id</th>
-      <td mat-cell *matCellDef="let auditEntry" class="col-subject-id">{{auditEntry.subjectId}}</td>
-    </ng-container>
+      <ng-container matColumnDef="subjectId">
+        <th mat-header-cell *matHeaderCellDef class="col-subject-id">Subject Id</th>
+        <td mat-cell *matCellDef="let auditEntry" class="col-subject-id">{{ auditEntry.subjectId }}</td>
+      </ng-container>
 
-    <ng-container matColumnDef="subjectName">
-      <th mat-header-cell *matHeaderCellDef class="col-subject-name">Subject Name</th>
-      <td mat-cell *matCellDef="let auditEntry" class="col-subject-name">{{auditEntry.subjectName}}</td>
-    </ng-container>
+      <ng-container matColumnDef="subjectName">
+        <th mat-header-cell *matHeaderCellDef class="col-subject-name">Subject Name</th>
+        <td mat-cell *matCellDef="let auditEntry" class="col-subject-name">{{ auditEntry.subjectName }}</td>
+      </ng-container>
 
-    <ng-container matColumnDef="action">
-      <th mat-header-cell *matHeaderCellDef class="col-action">Action</th>
-      <td mat-cell *matCellDef="let auditEntry" class="col-action">{{auditEntry.action}}</td>
-    </ng-container>
+      <ng-container matColumnDef="action">
+        <th mat-header-cell *matHeaderCellDef class="col-action">Action</th>
+        <td mat-cell *matCellDef="let auditEntry" class="col-action">{{ auditEntry.action }}</td>
+      </ng-container>
 
-    <ng-container matColumnDef="userDisplayName">
-      <th mat-header-cell *matHeaderCellDef class="col-user">User</th>
-      <td mat-cell *matCellDef="let auditEntry" class="col-user">{{auditEntry.userDisplayName}}</td>
-    </ng-container>
+      <ng-container matColumnDef="userDisplayName">
+        <th mat-header-cell *matHeaderCellDef class="col-user">User</th>
+        <td mat-cell *matCellDef="let auditEntry" class="col-user">{{ auditEntry.userDisplayName }}</td>
+      </ng-container>
 
-    <tr mat-header-row *matHeaderRowDef="columnsToDisplay; sticky: true"></tr>
-    <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
-  </table>
+      <tr mat-header-row *matHeaderRowDef="columnsToDisplay; sticky: true"></tr>
+      <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
+    </table>
+  </div>
 
   <div class="audit-status" *ngIf="isLoadingMore">
     <mat-spinner diameter="24"></mat-spinner>
     <span>Loading older events...</span>
   </div>
 
-  <div class="audit-status" *ngIf="!isLoadingMore && !hasMore && entries.length > 0">
-    End of audit history.
-  </div>
+  <div class="audit-status" *ngIf="!isLoadingMore && !hasMore && entries.length > 0">End of audit history.</div>
 
   <div class="audit-status" *ngIf="!isLoadingMore && entries.length === 0 && !errorMessage && !isLoadingInitial">
     No matching audit entries found.

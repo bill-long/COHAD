@@ -76,7 +76,7 @@
   white-space: pre-line;
 }
 
-@media (max-width: 359px) {
+@media (max-width: 480px) {
   .dialog-body {
     min-width: 0;
     max-width: 100%;
