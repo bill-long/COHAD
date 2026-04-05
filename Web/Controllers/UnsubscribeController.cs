@@ -81,7 +81,7 @@ namespace Web.Controllers
                 return NotFound(new { error = "Home not found." });
 
             var residents = await _residentRepository.GetByHomeIdAsync(payload.HomeId);
-            var matchingAddresses = FindMatchingEmailAddresses(home, residents, payload.Email);
+            var (matchingAddresses, _) = FindMatchingEmailAddresses(home, residents, payload.Email);
             if (matchingAddresses.Count == 0)
                 return NotFound(new { error = "Email address not found on this home." });
 
@@ -151,7 +151,7 @@ namespace Web.Controllers
                     return NotFound(new { error = "Home not found." });
 
                 var residents = await _residentRepository.GetByHomeIdAsync(payload.HomeId);
-                var matchingAddresses = FindMatchingEmailAddresses(home, residents, payload.Email);
+                var (matchingAddresses, affectedResidents) = FindMatchingEmailAddresses(home, residents, payload.Email);
                 if (matchingAddresses.Count == 0)
                     return NotFound(new { error = "Email address not found on this home." });
 
@@ -160,12 +160,10 @@ namespace Web.Controllers
                 try
                 {
                     await _homeRepository.UpsertAsync(home);
-                    // Save all residents that might have had email preferences modified.
-                    // If a resident upsert fails after the home save, log the error but
-                    // still return the result — the home update was already committed.
+                    // Only upsert residents that own a matched email address.
                     try
                     {
-                        foreach (var resident in residents)
+                        foreach (var resident in affectedResidents)
                             await _residentRepository.UpsertAsync(resident);
                     }
                     catch (Exception ex)
@@ -186,9 +184,11 @@ namespace Web.Controllers
             return Conflict(new { error = "Unable to save preferences due to concurrent updates. Please try again." });
         }
 
-        private static List<EmailAddress> FindMatchingEmailAddresses(Home home, List<Resident> residents, string email)
+        private static (List<EmailAddress> Addresses, HashSet<Resident> Residents) FindMatchingEmailAddresses(
+            Home home, List<Resident> residents, string email)
         {
             var matches = new List<EmailAddress>();
+            var affectedResidents = new HashSet<Resident>();
             var normalizedEmail = email.Trim().ToLowerInvariant();
 
             if (residents != null)
@@ -204,6 +204,7 @@ namespace Web.Controllers
                             addr.Address.Trim().ToLowerInvariant() == normalizedEmail)
                         {
                             matches.Add(addr);
+                            affectedResidents.Add(resident);
                         }
                     }
                 }
@@ -215,7 +216,7 @@ namespace Web.Controllers
                 matches.Add(home.EmailAddress);
             }
 
-            return matches;
+            return (matches, affectedResidents);
         }
     }
 }
