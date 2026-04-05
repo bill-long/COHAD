@@ -1,70 +1,86 @@
 .page {
-    margin: 24px auto 56px;
-    padding: 0 20px;
-    max-width: 960px;
+  margin: 24px auto 56px;
+  padding: 0 20px;
+  max-width: 960px;
 }
 
 .pageHeader {
-    margin: 8px 0 16px;
+  margin: 8px 0 16px;
 }
 
 .pageTitle {
-    margin: 0;
-    font-size: var(--heading-page);
-    font-weight: var(--heading-page-weight);
-    letter-spacing: var(--heading-page-tracking);
+  margin: 0;
+  font-size: var(--heading-page);
+  font-weight: var(--heading-page-weight);
+  letter-spacing: var(--heading-page-tracking);
 }
 
 .subtitle {
-    color: var(--text-secondary);
+  color: var(--text-secondary);
 }
 
 .card {
-    margin-top: 12px;
+  margin-top: 12px;
 }
 
 .infoCard {
-    background: var(--surface-muted);
+  background: var(--surface-muted);
 }
 
 .kvGrid {
-    display: grid;
-    grid-template-columns: 180px 1fr;
-    gap: 4px 16px;
-    align-items: baseline;
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 4px 16px;
+  align-items: baseline;
 }
 
 .k {
-    color: var(--text-secondary);
-    font-weight: 500;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .v {
-    overflow-wrap: anywhere;
+  overflow-wrap: anywhere;
 }
 
 .homesHeader {
-    margin-top: 20px;
+  margin-top: 0;
+}
+
+.accountCard {
+  margin-top: 24px;
 }
 
 .homesList {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
 }
 
 .emptyStateTitle {
-    font-weight: 500;
-    margin-bottom: 4px;
+  font-weight: 500;
+  margin-bottom: 4px;
 }
 
 .emptyStateBody {
-    color: var(--text-secondary);
+  color: var(--text-secondary);
 }
 
 @media (max-width: 600px) {
-    .kvGrid {
-        grid-template-columns: 1fr;
-    }
+  .kvGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .page {
+    padding: 0 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 0 12px;
+    margin-top: 16px;
+    margin-bottom: 40px;
+  }
 }

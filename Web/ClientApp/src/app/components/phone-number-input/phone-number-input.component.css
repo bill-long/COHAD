@@ -1,8 +1,14 @@
 mat-form-field {
-    width: 190px;
-    max-width: 100%;
+  width: 190px;
+  max-width: 100%;
 }
 
 .mat-input-element:disabled {
-    color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+@media (max-width: 600px) {
+  mat-form-field {
+    width: 100%;
+  }
 }

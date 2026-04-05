@@ -63,3 +63,12 @@
   }
 }
 
+@media (max-width: 480px) {
+  .phoneRow {
+    flex-direction: column;
+  }
+
+  .phoneType {
+    width: 100%;
+  }
+}

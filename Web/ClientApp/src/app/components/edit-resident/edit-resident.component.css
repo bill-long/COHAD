@@ -320,7 +320,6 @@
 }
 
 @media (max-width: 600px) {
-
   .metaRow {
     display: none;
   }
@@ -335,6 +334,11 @@
 
   .headerActions button {
     white-space: normal;
+    min-width: 0;
+  }
+
+  .typeField {
+    width: 100%;
   }
 
   .fullActions {
@@ -357,22 +361,28 @@
   .checkboxGrid {
     grid-template-columns: 1fr;
   }
-}
 
-@media (max-width: 480px) {
-  .residentPanel ::ng-deep .mat-content {
-    flex: 1 1 100%;
+  /* Reduce expansion panel body padding (default ~24px each side) */
+  .residentPanel ::ng-deep .mat-expansion-panel-body {
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
-  .sectionHeader {
-    align-items: flex-start;
-    flex-direction: column;
+  /* Reduce nested padding to reclaim horizontal space */
+  .section {
+    padding: 8px;
   }
 
+  .itemCard {
+    padding: 8px;
+  }
+
+  /* Stack email/phone fields and actions vertically */
   .itemMain,
   .phoneMain {
-    gap: 8px;
+    flex-direction: column;
     align-items: stretch;
+    gap: 8px;
   }
 
   .emailField,
@@ -387,6 +397,69 @@
     justify-content: flex-start;
     align-self: flex-start;
   }
+
+  /* Section header stacks title above action button */
+  .sectionHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .residentPanel ::ng-deep .mat-content {
+    flex: 1 1 100%;
+  }
+
+  /* Further reduce expansion panel padding */
+  .residentPanel ::ng-deep .mat-expansion-panel-body {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .residentPanel ::ng-deep .mat-expansion-panel-header {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .section {
+    padding: 6px;
+  }
+
+  .itemCard {
+    padding: 6px;
+  }
+
+  .headerActions {
+    padding-right: 28px;
+  }
+
+  .residentHeader .titleRow {
+    min-width: 0;
+  }
+
+  .residentPanel ::ng-deep .mat-expansion-panel-header-title {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  /* Touch targets for comfortable finger tapping */
+  .headerActions button,
+  .itemActions button,
+  .inlineConfirm button,
+  .sectionHeader button {
+    min-height: 44px;
+  }
+
+  /* Inline confirm stretches full width so buttons share space evenly */
+  .inlineConfirm {
+    width: 100%;
+  }
+
+  .inlineConfirm button {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 @media (max-width: 320px) {
@@ -394,5 +467,25 @@
     min-height: 60px;
     padding-top: 6px;
     padding-bottom: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .residentPanel ::ng-deep .mat-expansion-panel-body {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .headerActions {
+    padding-right: 24px;
+    gap: 4px;
+  }
+
+  .section {
+    padding: 4px;
+  }
+
+  .itemCard {
+    padding: 4px;
   }
 }
