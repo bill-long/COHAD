@@ -91,35 +91,6 @@ namespace Web.Controllers
             return Ok(summaries);
         }
 
-        [HttpGet("flagged")]
-        [Authorize(Policy = "Administrator")]
-        public async Task<IActionResult> GetFlaggedVendors()
-        {
-            var pendingFlags = await _vendorFlagRepository.GetAllPendingAsync();
-            var grouped = pendingFlags.GroupBy(f => f.VendorId).ToList();
-            var vendorsById = (await _vendorRepository.GetAllAsync()).ToDictionary(v => v.Id);
-
-            var result = new List<object>();
-            foreach (var group in grouped)
-            {
-                if (!vendorsById.TryGetValue(group.Key, out var vendor))
-                {
-                    continue;
-                }
-
-                result.Add(
-                    new
-                    {
-                        vendorId = vendor.Id,
-                        vendorName = vendor.Name,
-                        pendingFlagCount = group.Count(),
-                    }
-                );
-            }
-
-            return Ok(result);
-        }
-
         [HttpGet("flagged/notifications")]
         [Authorize(Policy = "Administrator")]
         public async Task<IActionResult> GetFlagNotifications()

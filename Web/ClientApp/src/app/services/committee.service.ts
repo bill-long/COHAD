@@ -71,10 +71,6 @@ export class CommitteeService {
     return this.httpClient.get<CommitteeCard[]>('api/committee');
   }
 
-  getByKey(key: string): Observable<CommitteeCard> {
-    return this.httpClient.get<CommitteeCard>(`api/committee/${encodeURIComponent(key)}`);
-  }
-
   // Admin endpoints
   getResidents(): Observable<ResidentPickerItem[]> {
     return this.httpClient.get<ResidentPickerItem[]>('api/committee/admin/residents');
