@@ -368,13 +368,34 @@
     padding-right: 12px;
   }
 
-  /* Reduce nested padding to reclaim horizontal space */
+  /* Flatten nested boxes into divider-separated items */
   .section {
-    padding: 8px;
+    border: none;
+    border-radius: 0;
+    background: none;
+    padding: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-faint);
+  }
+
+  .panelBody > .section:first-child,
+  .panelBody > ng-container > .section:first-of-type {
+    border-top: none;
+    padding-top: 0;
   }
 
   .itemCard {
-    padding: 8px;
+    border: none;
+    border-radius: 0;
+    background: none;
+    padding: 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-faint);
+  }
+
+  .list > .itemCard:first-child {
+    border-top: none;
+    padding-top: 0;
   }
 
   /* Stack email/phone fields and actions vertically */
@@ -420,14 +441,6 @@
   .residentPanel ::ng-deep .mat-expansion-panel-header {
     padding-left: 12px;
     padding-right: 12px;
-  }
-
-  .section {
-    padding: 6px;
-  }
-
-  .itemCard {
-    padding: 6px;
   }
 
   .headerActions {
@@ -479,13 +492,5 @@
   .headerActions {
     padding-right: 24px;
     gap: 4px;
-  }
-
-  .section {
-    padding: 4px;
-  }
-
-  .itemCard {
-    padding: 4px;
   }
 }
