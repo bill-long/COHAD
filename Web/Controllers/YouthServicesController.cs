@@ -61,7 +61,7 @@ namespace Web.Controllers
             }
 
             var payload = query
-                .OrderBy(l => ExtractSurname(l.Name))
+                .OrderBy(l => ExtractSurname(l.Name), StringComparer.OrdinalIgnoreCase)
                 .ThenBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(l => YouthServiceListingPresentation.FromStorageModel(l, CanEdit(apiUser, l.CreatedByUniqueId)))
                 .ToList();

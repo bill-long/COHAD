@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Web.Controllers;
 using Web.Models;
+using Web.PresentationModels;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 
@@ -14,6 +15,70 @@ namespace Web.UnitTests;
 
 public sealed class YouthServicesControllerTests
 {
+    [Fact]
+    public async Task GetAll_returns_listings_sorted_by_surname_then_full_name()
+    {
+        var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        var listingRepo = new Mock<IYouthServiceListingRepository>(MockBehavior.Strict);
+        var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
+
+        listingRepo
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<YouthServiceListing>
+                {
+                    new()
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = "Zara Adams",
+                        CreatedByUniqueId = "other",
+                    },
+                    new()
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = "Amy carter",
+                        CreatedByUniqueId = "other",
+                    },
+                    new()
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = "Beth Carter",
+                        CreatedByUniqueId = "other",
+                    },
+                    new()
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = "Jake Adams",
+                        CreatedByUniqueId = "other",
+                    },
+                    new()
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = "Solo",
+                        CreatedByUniqueId = "other",
+                    },
+                }
+            );
+
+        var controller = BuildController(userRepo.Object, listingRepo.Object, auditRepo.Object);
+        var result = await controller.GetAll();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var items = Assert.IsType<List<YouthServiceListingPresentation>>(ok.Value);
+        var names = items.ConvertAll(i => i.Name);
+        Assert.Equal(new List<string> { "Jake Adams", "Zara Adams", "Amy carter", "Beth Carter", "Solo" }, names);
+    }
+
     [Fact]
     public async Task Create_returns_bad_request_when_name_missing()
     {
