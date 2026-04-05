@@ -270,8 +270,32 @@
     grid-template-columns: 1fr;
   }
 
+  .compactRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .sectionHeader {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .sectionActions {
+    justify-content: flex-start;
+  }
+
+  .associatedUserRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
   .compactValue {
-    max-width: 180px;
+    max-width: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .residentDragRow {
@@ -291,6 +315,17 @@
     height: 18px;
     line-height: 18px;
     font-size: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .section {
+    padding: 10px;
+  }
+
+  .sectionActions button {
+    white-space: normal;
+    min-width: 0;
   }
 }
 
