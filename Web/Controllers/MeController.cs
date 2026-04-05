@@ -59,10 +59,10 @@ namespace Web.Controllers
                     // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
                     // See also https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
                     ownedHomes = await _homeRepository.GetByIdsAsync(user.OwnedHomeIds);
-                    var allResidents = await _residentRepository.GetAllAsync();
+                    var ownedResidents = await _residentRepository.GetByHomeIdsAsync(user.OwnedHomeIds);
                     var allUsers = await _userRepository.GetAllAsync();
                     PopulateAssociatedUsers(ownedHomes, allUsers);
-                    PopulateResidents(ownedHomes, allResidents);
+                    PopulateResidents(ownedHomes, ownedResidents);
                 }
                 return PresentationUser.FromStorageModel(user, ownedHomes);
             }

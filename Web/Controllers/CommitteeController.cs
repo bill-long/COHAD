@@ -432,7 +432,7 @@ namespace Web.Controllers
                 var recipientCount = committee.Members?
                     .Count(m => m.ReceivesForwardedEmail
                         && residents.TryGetValue(m.ResidentId, out var r)
-                        && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e.Address)) == true) ?? 0;
+                        && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true) ?? 0;
 
                 if (string.Equals(committee.LastSyncStatus, "NotConfigured", StringComparison.OrdinalIgnoreCase))
                 {
@@ -506,7 +506,7 @@ namespace Web.Controllers
                 ForwardingRecipients = (committee.Members ?? new List<CommitteeMember>())
                     .Where(m => m.ReceivesForwardedEmail
                         && residents.TryGetValue(m.ResidentId, out var r)
-                        && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e.Address)) == true)
+                        && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true)
                     .Select(m =>
                     {
                         var r = residents.GetValueOrDefault(m.ResidentId);

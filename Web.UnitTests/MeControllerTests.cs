@@ -22,6 +22,7 @@ public sealed class MeControllerTests
     {
         var mock = new Mock<IResidentRepository>();
         mock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Resident>());
+        mock.Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>())).ReturnsAsync(new List<Resident>());
         return mock.Object;
     }
 

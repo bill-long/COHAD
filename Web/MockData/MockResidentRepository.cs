@@ -52,6 +52,16 @@ namespace Web.MockData
             }
         }
 
+        public Task<List<Resident>> GetByHomeIdsAsync(IEnumerable<Guid> homeIds)
+        {
+            var idSet = homeIds?.ToHashSet() ?? new HashSet<Guid>();
+            lock (_residents)
+            {
+                return Task.FromResult(
+                    _residents.Values.Where(r => idSet.Contains(r.HomeId)).Select(Clone).ToList());
+            }
+        }
+
         public Task<Resident> UpsertAsync(Resident resident)
         {
             lock (_residents)

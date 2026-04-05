@@ -106,13 +106,19 @@ namespace Web.Controllers
             var existingResidents = await _residentRepository.GetByHomeIdAsync(updatedHome.Id);
             var existingById = existingResidents.Where(r => r.Id != Guid.Empty).ToDictionary(r => r.Id);
 
+            var invalidResidentId = incomingResidents
+                .FirstOrDefault(r => r.Id != Guid.Empty && !existingById.ContainsKey(r.Id));
+            if (invalidResidentId != null)
+            {
+                return BadRequest("Resident IDs must already belong to the home being updated.");
+            }
+
             foreach (var incoming in incomingResidents)
             {
-                if (incoming.Id == Guid.Empty || !existingById.ContainsKey(incoming.Id))
+                if (incoming.Id == Guid.Empty)
                 {
                     // New resident — assign ID.
-                    if (incoming.Id == Guid.Empty)
-                        incoming.Id = Guid.NewGuid();
+                    incoming.Id = Guid.NewGuid();
                     await _residentRepository.UpsertAsync(incoming);
                 }
                 else

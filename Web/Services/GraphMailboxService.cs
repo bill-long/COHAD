@@ -38,12 +38,12 @@ namespace Web.Services
             var recipients = (committee.Members ?? new List<CommitteeMember>())
                 .Where(m => m.ReceivesForwardedEmail)
                 .Select(m => residents.GetValueOrDefault(m.ResidentId))
-                .Where(r => r?.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e.Address)) == true)
+                .Where(r => r?.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true)
                 .Select(r => new Recipient
                 {
                     EmailAddress = new Microsoft.Graph.Models.EmailAddress
                     {
-                        Address = r.EmailAddresses.First(e => !string.IsNullOrWhiteSpace(e.Address)).Address,
+                        Address = r.EmailAddresses.First(e => !string.IsNullOrWhiteSpace(e?.Address)).Address,
                         Name = $"{r.GivenName} {r.Surname}".Trim()
                     }
                 })

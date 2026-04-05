@@ -150,8 +150,9 @@ namespace Web.Services.Cosmos
             // Keep legacy storage format for backward compatibility.
             doc["PhoneNumber"] = JsonConvert.SerializeObject(home.PhoneNumber);
             doc["EmailAddress"] = JsonConvert.SerializeObject(home.EmailAddress);
-            // Residents are now stored in a separate "Residents" container — not serialized here.
-            doc.Remove("Residents");
+            // Residents are now stored in a separate "Residents" container.
+            // Preserve any existing "Residents" field in the document so that a rollback
+            // to the previous code version can still read them until migration cleanup.
         }
 
         internal static Payment ToPayment(JObject doc)
