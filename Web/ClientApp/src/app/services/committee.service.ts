@@ -30,7 +30,7 @@ export interface CommitteeMemberAdmin {
   title: string | null;
   bio: string | null;
   hasPhoto: boolean;
-  email: string;
+  email: string | null;
   receivesForwardedEmail: boolean;
   photoOffsetY: number;
   displayOrder: number;
