@@ -75,3 +75,10 @@
   line-height: 1.65;
   white-space: pre-line;
 }
+
+@media (max-width: 359px) {
+  .dialog-body {
+    min-width: 0;
+    max-width: 100%;
+  }
+}

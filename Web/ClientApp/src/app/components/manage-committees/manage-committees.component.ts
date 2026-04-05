@@ -389,7 +389,8 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         this.allResidents = [];
         this.residentSearchText.clear();
         this.filteredResidentsCache.clear();
-        this.residentLookupSize = -1;        this.loading = false;
+        this.residentLookupSize = -1;
+        this.loading = false;
         this.error = 'Failed to load committees.';
       }
     });
