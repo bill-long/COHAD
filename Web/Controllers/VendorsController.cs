@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -354,7 +356,7 @@ namespace Web.Controllers
             var now = DateTime.UtcNow;
             var review = new VendorReview
             {
-                Id = Guid.NewGuid(),
+                Id = DeterministicReviewId(id, apiUser.UniqueId),
                 VendorId = id,
                 AuthorUniqueId = apiUser.UniqueId,
                 AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
@@ -558,6 +560,18 @@ namespace Web.Controllers
                     UserId = apiUser.UniqueId,
                 }
             );
+        }
+
+        /// <summary>
+        /// Produces a deterministic GUID from (vendorId, authorUniqueId) so that two
+        /// racing CreateReview requests target the same Cosmos document and the second
+        /// upsert is idempotent rather than creating a duplicate.
+        /// </summary>
+        private static Guid DeterministicReviewId(Guid vendorId, string authorUniqueId)
+        {
+            var input = Encoding.UTF8.GetBytes($"{vendorId:D}:{authorUniqueId.ToLowerInvariant()}");
+            var hash = SHA256.HashData(input);
+            return new Guid(hash.AsSpan(0, 16));
         }
     }
 }

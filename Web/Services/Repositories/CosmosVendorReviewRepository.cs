@@ -7,6 +7,7 @@ using Web.Models;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
 using CosmosPartitionKey = Microsoft.Azure.Cosmos.PartitionKey;
 using CosmosQueryDefinition = Microsoft.Azure.Cosmos.QueryDefinition;
+using CosmosQueryRequestOptions = Microsoft.Azure.Cosmos.QueryRequestOptions;
 
 namespace Web.Services.Repositories
 {
@@ -72,11 +73,14 @@ namespace Web.Services.Repositories
         public async Task<VendorReview> GetByVendorAndAuthorAsync(Guid vendorId, string authorUniqueId)
         {
             var query = new CosmosQueryDefinition(
-                "SELECT * FROM c WHERE c.VendorId = @vendorId AND c.AuthorUniqueId = @authorUniqueId"
+                "SELECT TOP 1 * FROM c WHERE c.VendorId = @vendorId AND LOWER(c.AuthorUniqueId) = @authorUniqueIdLower"
             )
                 .WithParameter("@vendorId", vendorId.ToString("D"))
-                .WithParameter("@authorUniqueId", authorUniqueId);
-            var iterator = _vendorReviewsContainer.GetItemQueryIterator<JObject>(query);
+                .WithParameter("@authorUniqueIdLower", authorUniqueId?.ToLowerInvariant());
+            var iterator = _vendorReviewsContainer.GetItemQueryIterator<JObject>(
+                query,
+                requestOptions: new CosmosQueryRequestOptions { MaxItemCount = 1 }
+            );
             while (iterator.HasMoreResults)
             {
                 var response = await iterator.ReadNextAsync();
