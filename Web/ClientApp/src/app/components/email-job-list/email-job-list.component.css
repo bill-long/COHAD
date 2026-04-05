@@ -1,140 +1,166 @@
 .email-job-list-page {
-    margin-top: 24px;
+  margin-top: 24px;
 }
 
 .page-title {
-    margin: 0 0 1.25rem;
-    font-size: var(--heading-page);
-    font-weight: var(--heading-page-weight);
-    letter-spacing: var(--heading-page-tracking);
+  margin: 0 0 1.25rem;
+  font-size: var(--heading-page);
+  font-weight: var(--heading-page-weight);
+  letter-spacing: var(--heading-page-tracking);
 }
 
 .loading-state {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: var(--text-secondary);
-    padding: 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  padding: 1rem 0;
 }
 
 .empty-state {
-    color: var(--text-muted);
-    padding: 1rem 0;
+  color: var(--text-muted);
+  padding: 1rem 0;
 }
 
 /* Sticky app toolbar: keep scrolled-to row from sitting under it */
 .jobs-table tbody tr.job-row {
-    scroll-margin-top: 80px;
+  scroll-margin-top: 80px;
 }
 
 .jobs-table {
-    width: 100%;
-    border-collapse: collapse;
+  width: 100%;
+  border-collapse: collapse;
 }
 
 .jobs-table th {
-    text-align: left;
-    font-weight: 600;
-    padding: 10px 12px;
-    border-bottom: 2px solid var(--border-faint);
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+  text-align: left;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--border-faint);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .jobs-table td {
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border-faint);
-    vertical-align: middle;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-faint);
+  vertical-align: middle;
 }
 
 .job-row {
-    cursor: pointer;
-    transition: background-color 150ms ease;
+  cursor: pointer;
+  transition: background-color 150ms ease;
 }
 
 .job-row:hover {
-    background-color: var(--surface-subtle);
+  background-color: var(--surface-subtle);
 }
 
-.col-status { width: 120px; }
-.col-from { width: 180px; }
-.col-subject { width: auto; }
-.col-progress { width: 150px; }
-.col-date { width: 140px; }
+.col-status {
+  width: 120px;
+}
+.col-from {
+  width: 180px;
+}
+.col-subject {
+  width: auto;
+}
+.col-progress {
+  width: 150px;
+}
+.col-date {
+  width: 140px;
+}
 
 .cell-truncate {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
 }
 
 .cell-date {
-    white-space: nowrap;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
 .status-badge {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    white-space: nowrap;
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .status-queued {
-    background: var(--surface-subtle);
-    color: var(--text-secondary);
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
 }
 
 .status-in-progress {
-    background: #dce8f0;
-    color: #1a5276;
+  background: #dce8f0;
+  color: #1a5276;
 }
 
 .status-completed {
-    background: var(--success-bg);
-    color: var(--success);
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .status-partial {
-    background: #fef3e0;
-    color: #e65100;
+  background: #fef3e0;
+  color: #e65100;
 }
 
 .status-failed {
-    background: var(--error-bg, #fde8e8);
-    color: var(--error);
+  background: var(--error-bg, #fde8e8);
+  color: var(--error);
 }
 
 .status-cancelled {
-    background: var(--surface-subtle);
-    color: var(--text-muted);
+  background: var(--surface-subtle);
+  color: var(--text-muted);
 }
 
 .progress-text {
-    font-size: 0.9rem;
+  font-size: 0.9rem;
 }
 
 .sent-count {
-    font-weight: 600;
+  font-weight: 600;
 }
 
 .failed-count {
-    color: var(--error);
+  color: var(--error);
 }
 
 .total-count {
-    color: var(--text-secondary);
+  color: var(--text-secondary);
 }
 
-@media (max-width: 700px) {
-    .col-from,
-    .col-date {
-        display: none;
-    }
+@media (max-width: 600px) {
+  .col-from,
+  .col-date {
+    display: none;
+  }
+
+  .jobs-table th,
+  .jobs-table td {
+    padding: 8px 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .col-progress {
+    display: none;
+  }
+
+  .jobs-table th,
+  .jobs-table td {
+    padding: 6px 4px;
+  }
 }

@@ -1,12 +1,24 @@
 .residents-container {
-    min-height: 80vh;
-    margin: 20px;
+  min-height: 80vh;
+  margin: 20px;
 }
 
 nav[mat-tab-nav-bar] {
-    margin-bottom: 16px;
+  margin-bottom: 16px;
 }
 
 .residents-content {
-    width: 100%;
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  .residents-container {
+    margin: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .residents-container {
+    margin: 8px;
+  }
 }

@@ -1,189 +1,189 @@
 .event-detail-page {
-    max-width: 1040px;
-    padding: 2rem 1.25rem;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
+  max-width: 1040px;
+  padding: 2rem 1.25rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .event-detail-card {
-    max-width: 100%;
+  max-width: 100%;
 }
 
 .event-detail-nav {
-    margin: 0 0 0.75rem;
+  margin: 0 0 0.75rem;
 }
 
 .event-detail-overline {
-    margin: 0 0 0.35rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
+  margin: 0 0 0.35rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
 }
 
 .event-detail-card > mat-card-content:first-of-type h1.mat-headline-medium {
-    margin: 0 0 0.35rem;
+  margin: 0 0 0.35rem;
 }
 
 .event-detail-datetime {
-    margin: 0;
-    color: var(--text-secondary);
+  margin: 0;
+  color: var(--text-secondary);
 }
 
 .event-detail-section {
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 
 .event-detail-section-heading {
-    margin: 0 0 0.75rem;
+  margin: 0 0 0.75rem;
 }
 
 .event-detail-description {
-    margin: 0;
-    white-space: pre-wrap;
-    max-width: 65ch;
+  margin: 0;
+  white-space: pre-wrap;
+  max-width: 65ch;
 }
 
 .promo-wrap {
-    margin-top: 0;
+  margin-top: 0;
 }
 
 .promo-flyer-frame {
-    width: 100%;
-    background: var(--surface-section);
-    border-radius: 14px;
-    border: 1px solid var(--border-faint);
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  width: 100%;
+  background: var(--surface-section);
+  border-radius: 14px;
+  border: 1px solid var(--border-faint);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .promo-image {
-    max-width: 100%;
-    max-height: min(85vh, 960px);
-    object-fit: contain;
+  max-width: 100%;
+  max-height: min(85vh, 960px);
+  object-fit: contain;
 }
 
 .signup-card {
-    margin: 0;
-    width: 100%;
-    box-sizing: border-box;
-    align-self: stretch;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+  align-self: stretch;
 }
 
 .signup-card-title {
-    margin: 0 0 0.75rem;
+  margin: 0 0 0.75rem;
 }
 
 .signup-helper {
-    margin: 0 0 0.9rem;
+  margin: 0 0 0.9rem;
 }
 
 .signup-helper--solo {
-    margin-bottom: 0;
+  margin-bottom: 0;
 }
 
 .signup-form-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    max-width: min(100%, 520px);
-    margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: min(100%, 520px);
+  margin-bottom: 1rem;
 }
 
 .signup-form-fields > mat-form-field.event-detail-field {
-    margin-bottom: 0;
+  margin-bottom: 0;
 }
 
 .signup-form-counts {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.65rem;
-    align-items: start;
-    min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  align-items: start;
+  min-width: 0;
 }
 
-@media (max-width: 419px) {
-    .signup-form-counts {
-        grid-template-columns: 1fr;
-    }
+@media (max-width: 480px) {
+  .signup-form-counts {
+    grid-template-columns: 1fr;
+  }
 }
 
 .signup-form-counts > mat-form-field.event-detail-field {
-    margin-bottom: 0;
-    min-width: 0;
+  margin-bottom: 0;
+  min-width: 0;
 }
 
 .event-detail-field {
-    width: 100%;
+  width: 100%;
 }
 
 .event-detail-field--textarea textarea {
-    min-height: 3.25rem;
-    resize: vertical;
+  min-height: 3.25rem;
+  resize: vertical;
 }
 
 .event-detail-signup-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.45rem;
-    min-width: 8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-width: 8rem;
 }
 
 .event-detail-signup-spinner {
-    display: inline-block;
+  display: inline-block;
 }
 
 .event-detail-feedback-card {
-    margin-top: 0.85rem;
-    max-width: min(100%, 520px);
+  margin-top: 0.85rem;
+  max-width: min(100%, 520px);
 }
 
 .event-detail-feedback-text {
-    margin: 0;
+  margin: 0;
 }
 
 .event-detail-feedback-card--error {
-    border-color: color-mix(in srgb, var(--error) 35%, var(--border-faint)) !important;
-    background: var(--error-bg);
+  border-color: color-mix(in srgb, var(--error) 35%, var(--border-faint)) !important;
+  background: var(--error-bg);
 }
 
 .event-detail-feedback-card--error .event-detail-feedback-text {
-    color: var(--error);
+  color: var(--error);
 }
 
 .event-detail-feedback-card--success {
-    border-color: color-mix(in srgb, var(--success) 35%, var(--border-faint)) !important;
-    background: var(--success-bg);
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border-faint)) !important;
+  background: var(--success-bg);
 }
 
 .event-detail-feedback-card--success .event-detail-feedback-text {
-    color: var(--success);
+  color: var(--success);
 }
 
 .event-detail-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    padding: 2rem 1rem;
-    color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 1rem;
+  color: var(--text-secondary);
 }
 
 .event-detail-loading p {
-    margin: 0;
+  margin: 0;
 }
 
 .event-detail-page-error {
-    border-color: color-mix(in srgb, var(--error) 35%, var(--border-faint)) !important;
-    background: var(--error-bg);
+  border-color: color-mix(in srgb, var(--error) 35%, var(--border-faint)) !important;
+  background: var(--error-bg);
 }
 
 .event-detail-page-error .mat-body-large {
-    margin: 0;
-    color: var(--error);
+  margin: 0;
+  color: var(--error);
 }
