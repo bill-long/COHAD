@@ -113,23 +113,35 @@ namespace Web.Controllers
                 return BadRequest("Resident IDs must already belong to the home being updated.");
             }
 
+            // Upsert home first — this is the concurrency-checked operation (ETag).
+            // If it fails, no resident or committee mutations have been applied yet.
+            storedHome.EmailAddress = updatedHome.EmailAddress;
+            storedHome.PhoneNumber = updatedHome.PhoneNumber;
+
+            try
+            {
+                await _homeRepository.UpsertAsync(storedHome);
+            }
+            catch (ConcurrencyConflictException)
+            {
+                return Conflict(new { error = "Home was modified by another request. Please refresh and try again." });
+            }
+
+            // Home saved — now apply resident creates/updates/deletes.
             foreach (var incoming in incomingResidents)
             {
                 if (incoming.Id == Guid.Empty)
                 {
-                    // New resident — assign ID.
                     incoming.Id = Guid.NewGuid();
                     await _residentRepository.UpsertAsync(incoming);
                 }
                 else
                 {
-                    // Existing resident — update.
                     await _residentRepository.UpsertAsync(incoming);
                     existingById.Remove(incoming.Id);
                 }
             }
 
-            // Any remaining in existingById were removed.
             var removedResidentIds = new List<Guid>();
             foreach (var removed in existingById.Values)
             {
@@ -139,9 +151,6 @@ namespace Web.Controllers
 
             // Cascade: remove deleted residents from any committees they belong to.
             await _residentCleanup.RemoveFromCommitteesAsync(removedResidentIds);
-
-            storedHome.EmailAddress = updatedHome.EmailAddress;
-            storedHome.PhoneNumber = updatedHome.PhoneNumber;
 
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
@@ -153,8 +162,6 @@ namespace Web.Controllers
                 UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
                 UserId = apiUser.UniqueId
             });
-
-            await _homeRepository.UpsertAsync(storedHome);
 
             return Ok();
         }
