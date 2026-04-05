@@ -39,7 +39,7 @@ export class ManageComponent implements OnInit {
   }
 
   get printDirectoryVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0))
+    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.printDirectoryRoles.includes(r)).length > 0))
   }
 
   get manageDocumentsVisible$(): Observable<boolean> {
