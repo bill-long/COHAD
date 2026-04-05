@@ -35,7 +35,16 @@
             <div class="member-info">
               <h3 class="member-name">{{ member.displayName }}</h3>
               <span class="member-title" *ngIf="member.title">{{ member.title }}</span>
-              <p class="member-bio" *ngIf="member.bio">{{ member.bio }}</p>
+              <ng-container *ngIf="member.bio">
+                <p class="member-bio"
+                   [class.member-bio--clamped]="!expandedBios.has(bioKey(committee, member))"
+                   #bioEl>{{ member.bio }}</p>
+                <button *ngIf="isBioClamped(bioEl, committee, member)"
+                        class="bio-toggle"
+                        (click)="toggleBio(committee, member)">
+                  {{ expandedBios.has(bioKey(committee, member)) ? 'Show less' : 'Read more' }}
+                </button>
+              </ng-container>
             </div>
           </div>
         </div>

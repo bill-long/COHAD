@@ -157,6 +157,28 @@
   line-height: 1.5;
 }
 
+.member-bio--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bio-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 0.2rem;
+  color: var(--primary-sage);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.bio-toggle:hover {
+  text-decoration: underline;
+}
+
 .no-members {
   color: var(--text-muted);
   margin: 0;
