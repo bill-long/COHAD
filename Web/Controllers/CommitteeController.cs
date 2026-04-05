@@ -129,7 +129,9 @@ namespace Web.Controllers
                     r.Id,
                     r.HomeId,
                     DisplayName = $"{r.GivenName} {r.Surname}".Trim(),
-                    Email = r.EmailAddresses?.FirstOrDefault()?.Address
+                    Email = r.EmailAddresses?
+                        .Select(e => e?.Address)
+                        .FirstOrDefault(address => !string.IsNullOrWhiteSpace(address))
                 }));
         }
 
@@ -513,7 +515,8 @@ namespace Web.Controllers
                         return new
                         {
                             DisplayName = PresentationModels.CommitteeMemberHelpers.ResidentDisplayName(r),
-                            Email = r?.EmailAddresses?.FirstOrDefault()?.Address
+                            Email = r?.EmailAddresses?
+                                .FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))?.Address
                         };
                     })
                     .ToList()

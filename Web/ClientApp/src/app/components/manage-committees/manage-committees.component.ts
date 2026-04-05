@@ -144,7 +144,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         .filter(m => m.id !== currentMember.id && m.residentId)
         .map(m => m.residentId)
     );
-    return this.allResidents.filter(r => !usedIds.has(r.id));
+    return this.allResidents.filter(r => r.id === currentMember.residentId || !usedIds.has(r.id));
   }
 
   onResidentSelected(member: CommitteeMemberAdmin, residentId: string): void {

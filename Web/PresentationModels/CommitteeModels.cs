@@ -147,7 +147,8 @@ namespace Web.PresentationModels
             Title = m.Title,
             Bio = m.Bio,
             HasPhoto = !string.IsNullOrWhiteSpace(m.PhotoBlobPath),
-            Email = resident?.EmailAddresses?.FirstOrDefault()?.Address,
+            Email = resident?.EmailAddresses?
+                .FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))?.Address,
             ReceivesForwardedEmail = m.ReceivesForwardedEmail,
             PhotoOffsetY = m.PhotoOffsetY,
             DisplayOrder = m.DisplayOrder
