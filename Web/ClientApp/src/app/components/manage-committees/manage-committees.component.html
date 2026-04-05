@@ -59,13 +59,13 @@
                 <input matInput
                        [value]="getResidentSearchText(member)"
                        (input)="onResidentSearch(member, $event)"
-                       (focus)="onResidentSearch(member, $event)"
+                       (focus)="onResidentFocus(member, $event)"
                        [matAutocomplete]="residentAuto"
                        placeholder="Search by name or email...">
                 <mat-autocomplete #residentAuto="matAutocomplete"
                                   (optionSelected)="onResidentSelected(member, $event.option.value)"
-                                  [displayWith]="residentDisplayFn.bind(this)">
-                  <mat-option *ngFor="let r of filteredResidents(committee, member)" [value]="r.id">
+                                  [displayWith]="residentDisplayFn">
+                  <mat-option *ngFor="let r of getFilteredResidents(committee, member)" [value]="r.id">
                     {{ r.displayName }}<span class="resident-email" *ngIf="r.email"> — {{ r.email }}</span>
                   </mat-option>
                 </mat-autocomplete>

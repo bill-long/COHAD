@@ -30,10 +30,6 @@ export class CommitteesComponent implements OnInit {
     });
   }
 
-  isBioOverflowing(el: HTMLElement): boolean {
-    return el.scrollHeight > el.clientHeight + 1;
-  }
-
   private loadCommittees(): void {
     this.loading = true;
     this.committeeService.getAll().subscribe({
