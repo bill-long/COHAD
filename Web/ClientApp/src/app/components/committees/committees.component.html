@@ -37,6 +37,7 @@
             <ng-container *ngIf="member.bio">
               <p class="member-bio member-bio--clamped">{{ member.bio }}</p>
               <button class="bio-read-more"
+                      [attr.aria-label]="'Read more about ' + member.displayName"
                       (click)="openBio(committee, member)">
                 Read more
               </button>

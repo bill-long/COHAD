@@ -108,6 +108,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
           committee.members = committee.members.filter(m => m.id !== member.id);
           this.pendingPhotos.get(committee.id)?.delete(member.id);
           this.revokePreview(committee.id, member.id);
+          this.filteredResidentsCache.clear();
           this.deletingMember = null;
           this.success = `${member.displayName} removed from ${committee.displayName}.`;
         },
@@ -135,6 +136,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       photoOffsetY: 50,
       displayOrder: nextOrder
     });
+    this.filteredResidentsCache.clear();
   }
 
   /** Tracks per-member search text, keyed by member.id */
@@ -145,9 +147,18 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
 
   /** Stable arrow-function reference for mat-autocomplete [displayWith]. */
   residentDisplayFn = (residentId: string): string => {
-    const resident = this.allResidents.find(r => r.id === residentId);
-    return resident?.displayName ?? '';
+    this.ensureResidentLookup();
+    return this.residentDisplayById.get(residentId) ?? '';
   };
+
+  private residentDisplayById = new Map<string, string>();
+  private residentLookupSize = -1;
+
+  private ensureResidentLookup(): void {
+    if (this.residentLookupSize === this.allResidents.length) { return; }
+    this.residentDisplayById = new Map(this.allResidents.map(r => [r.id, r.displayName]));
+    this.residentLookupSize = this.allResidents.length;
+  }
 
   /** Returns cached filtered residents for a committee member. */
   getFilteredResidents(committee: CommitteeAdmin, currentMember: CommitteeMemberAdmin): ResidentPickerItem[] {
@@ -172,19 +183,23 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     if (this.residentSearchText.has(member.id)) {
       return this.residentSearchText.get(member.id)!;
     }
-    const resident = this.allResidents.find(r => r.id === member.residentId);
-    return resident?.displayName ?? '';
+    this.ensureResidentLookup();
+    return this.residentDisplayById.get(member.residentId) ?? '';
   }
 
   onResidentSelected(member: CommitteeMemberAdmin, residentId: string): void {
     member.residentId = residentId;
+    this.ensureResidentLookup();
+    const displayName = this.residentDisplayById.get(residentId);
+    if (displayName) {
+      member.displayName = displayName;
+    }
     const resident = this.allResidents.find(r => r.id === residentId);
     if (resident) {
-      member.displayName = resident.displayName;
       member.email = resident.email ?? '';
     }
     this.residentSearchText.delete(member.id);
-    this.invalidateResidentCache(member.id);
+    this.filteredResidentsCache.clear();
   }
 
   private recomputeFilteredResidents(committee: CommitteeAdmin, currentMember: CommitteeMemberAdmin): ResidentPickerItem[] {
