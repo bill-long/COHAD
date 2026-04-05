@@ -522,8 +522,8 @@ namespace Web.Services.Cosmos
                 return arr
                     .Select(t => new CommitteeMember
                     {
-                        Id = t.Value<Guid?>("Id") ?? Guid.Empty,
-                        ResidentId = t.Value<Guid?>("ResidentId") ?? Guid.Empty,
+                        Id = Guid.TryParse(t["Id"]?.ToString(), out var id) ? id : Guid.Empty,
+                        ResidentId = Guid.TryParse(t["ResidentId"]?.ToString(), out var rid) ? rid : Guid.Empty,
                         Title = t.Value<string>("Title"),
                         Bio = t.Value<string>("Bio"),
                         PhotoBlobPath = t.Value<string>("PhotoBlobPath"),
