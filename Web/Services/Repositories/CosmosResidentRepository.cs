@@ -57,7 +57,8 @@ namespace Web.Services.Repositories
                 return new List<Resident>();
             }
 
-            // Parameterized IN clause to avoid injection and query-length issues.
+            // Parameterized IN clause to avoid injection.
+            // Note: very large ID lists may hit Cosmos parameter-count or query-length limits.
             var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id IN ("
                 + string.Join(", ", idList.Select((_, i) => $"@id{i}")) + ")");
             for (var i = 0; i < idList.Count; i++)

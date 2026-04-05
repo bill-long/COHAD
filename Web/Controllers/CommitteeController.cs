@@ -267,7 +267,8 @@ namespace Web.Controllers
                     return BadRequest("Photo uploads are not allowed when Members is omitted.");
                 }
 
-                updatedMembers.AddRange(existingMembers.Values);
+                // Preserve existing members exactly as-is (no reordering or dedup).
+                updatedMembers.AddRange(committee.Members ?? []);
             }
             else
             {
