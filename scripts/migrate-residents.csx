@@ -71,9 +71,24 @@ var client = new CosmosClient(cosmosUri, cosmosKey, new CosmosClientOptions
 var database = client.GetDatabase(cosmosDatabase);
 var homesContainer = database.GetContainer("Homes");
 
-// Ensure the Residents container exists (PartitionKey.None = legacy pattern).
-var residentsContainer = (await database.CreateContainerIfNotExistsAsync(
-    new ContainerProperties("Residents", "/id"))).Container;
+// The Residents container must already exist with no partition key (PartitionKey.None)
+// to match the legacy pattern used by all other COHAD containers.
+// Create it in the Azure Portal or via CLI before running this script:
+//   az cosmosdb sql container create --account-name <acct> --database-name <db> \
+//     --resource-group <rg> --name Residents --partition-key-path ""
+var residentsContainer = database.GetContainer("Residents");
+
+// Verify the container is reachable.
+try
+{
+    await residentsContainer.ReadContainerAsync();
+    Console.WriteLine("Residents container found.");
+}
+catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+{
+    Console.Error.WriteLine("ERROR: Residents container does not exist. Create it first (with no partition key).");
+    return;
+}
 
 // ── Read all Home documents ──────────────────────────────────────
 
@@ -203,7 +218,7 @@ foreach (var homeDoc in homes)
         }
         else
         {
-            await residentsContainer.CreateItemAsync(newDoc, new PartitionKey(docId));
+            await residentsContainer.CreateItemAsync(newDoc, PartitionKey.None);
             Console.WriteLine($"    Created {docId} — {residentObj.Value<string>("GivenName")} {residentObj.Value<string>("Surname")}");
         }
 
@@ -214,7 +229,7 @@ foreach (var homeDoc in homes)
     if (cleanup && !dryRun)
     {
         homeDoc.Remove("Residents");
-        await homesContainer.ReplaceItemAsync(homeDoc, rawId, new PartitionKey(rawId));
+        await homesContainer.ReplaceItemAsync(homeDoc, rawId, PartitionKey.None);
         Console.WriteLine($"    Cleaned up Residents field from Home {homeId:D}");
     }
     else if (cleanup && dryRun)
