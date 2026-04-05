@@ -137,14 +137,43 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Returns residents not already on this committee, for the picker dropdown. */
-  availableResidents(committee: CommitteeAdmin, currentMember: CommitteeMemberAdmin): ResidentPickerItem[] {
+  /** Tracks per-member search text, keyed by member.id */
+  private residentSearchText = new Map<string, string>();
+
+  /** Returns residents not already on this committee, filtered by search text. */
+  filteredResidents(committee: CommitteeAdmin, currentMember: CommitteeMemberAdmin): ResidentPickerItem[] {
     const usedIds = new Set(
       committee.members
         .filter(m => m.id !== currentMember.id && m.residentId)
         .map(m => m.residentId)
     );
-    return this.allResidents.filter(r => r.id === currentMember.residentId || !usedIds.has(r.id));
+    const available = this.allResidents.filter(r => r.id === currentMember.residentId || !usedIds.has(r.id));
+
+    const query = (this.residentSearchText.get(currentMember.id) ?? '').toLowerCase().trim();
+    if (!query) { return available; }
+
+    return available.filter(r =>
+      r.displayName.toLowerCase().includes(query) ||
+      (r.email ?? '').toLowerCase().includes(query)
+    );
+  }
+
+  onResidentSearch(member: CommitteeMemberAdmin, event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.residentSearchText.set(member.id, value);
+  }
+
+  getResidentSearchText(member: CommitteeMemberAdmin): string {
+    if (this.residentSearchText.has(member.id)) {
+      return this.residentSearchText.get(member.id)!;
+    }
+    const resident = this.allResidents.find(r => r.id === member.residentId);
+    return resident?.displayName ?? '';
+  }
+
+  residentDisplayFn(residentId: string): string {
+    const resident = this.allResidents.find(r => r.id === residentId);
+    return resident?.displayName ?? '';
   }
 
   onResidentSelected(member: CommitteeMemberAdmin, residentId: string): void {
@@ -154,6 +183,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       member.displayName = resident.displayName;
       member.email = resident.email ?? '';
     }
+    this.residentSearchText.delete(member.id);
   }
 
   onPhotoSelected(event: Event, committee: CommitteeAdmin, member: CommitteeMemberAdmin): void {

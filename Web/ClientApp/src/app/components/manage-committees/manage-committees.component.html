@@ -56,12 +56,19 @@
             <div class="member-fields">
               <mat-form-field appearance="outline" class="field-name">
                 <mat-label>Resident</mat-label>
-                <mat-select [value]="member.residentId"
-                            (selectionChange)="onResidentSelected(member, $event.value)">
-                  <mat-option *ngFor="let r of availableResidents(committee, member)" [value]="r.id">
+                <input matInput
+                       [value]="getResidentSearchText(member)"
+                       (input)="onResidentSearch(member, $event)"
+                       (focus)="onResidentSearch(member, $event)"
+                       [matAutocomplete]="residentAuto"
+                       placeholder="Search by name or email...">
+                <mat-autocomplete #residentAuto="matAutocomplete"
+                                  (optionSelected)="onResidentSelected(member, $event.option.value)"
+                                  [displayWith]="residentDisplayFn.bind(this)">
+                  <mat-option *ngFor="let r of filteredResidents(committee, member)" [value]="r.id">
                     {{ r.displayName }}<span class="resident-email" *ngIf="r.email"> — {{ r.email }}</span>
                   </mat-option>
-                </mat-select>
+                </mat-autocomplete>
               </mat-form-field>
               <span class="resolved-info" *ngIf="member.residentId && member.displayName">
                 {{ member.displayName }}<span *ngIf="member.email"> · {{ member.email }}</span>
