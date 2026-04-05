@@ -4,9 +4,11 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Web.Controllers;
 using Web.Models;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 using Xunit;
@@ -25,7 +27,12 @@ public sealed class HomeControllerUpdateTests
         string nameId = "nid-1",
         string idp = "google.com")
     {
-        var c = new HomeController(users, homes, residents ?? Mock.Of<IResidentRepository>(), audit)
+        var c = new HomeController(users, homes, residents ?? Mock.Of<IResidentRepository>(), audit,
+            new ResidentCleanupService(
+                Mock.Of<ICommitteeRepository>(),
+                new CommitteeListCache(Mock.Of<ICommitteeRepository>(), new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())),
+                Mock.Of<IDocumentFileStore>(),
+                Mock.Of<ILogger<ResidentCleanupService>>()))
         {
             ControllerContext = new ControllerContext
             {

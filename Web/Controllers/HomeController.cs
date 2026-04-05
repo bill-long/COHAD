@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Web.Models;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 
@@ -19,17 +20,20 @@ namespace Web.Controllers
         private readonly IHomeRepository _homeRepository;
         private readonly IResidentRepository _residentRepository;
         private readonly IAuditLogRepository _auditLogRepository;
+        private readonly ResidentCleanupService _residentCleanup;
 
         public HomeController(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
-            IAuditLogRepository auditLogRepository)
+            IAuditLogRepository auditLogRepository,
+            ResidentCleanupService residentCleanup)
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
             _residentRepository = residentRepository;
             _auditLogRepository = auditLogRepository;
+            _residentCleanup = residentCleanup;
         }
 
         /// <summary>
@@ -120,10 +124,15 @@ namespace Web.Controllers
             }
 
             // Any remaining in existingById were removed.
+            var removedResidentIds = new List<Guid>();
             foreach (var removed in existingById.Values)
             {
                 await _residentRepository.DeleteAsync(removed.Id);
+                removedResidentIds.Add(removed.Id);
             }
+
+            // Cascade: remove deleted residents from any committees they belong to.
+            await _residentCleanup.RemoveFromCommitteesAsync(removedResidentIds);
 
             storedHome.EmailAddress = updatedHome.EmailAddress;
             storedHome.PhoneNumber = updatedHome.PhoneNumber;

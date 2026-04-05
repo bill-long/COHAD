@@ -4,9 +4,11 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Web.Controllers;
 using Web.Models;
+using Web.Services;
 using Web.Services.Repositories;
 using Xunit;
 
@@ -31,7 +33,12 @@ public sealed class HomeControllerAssociationsTests
             mock.Setup(r => r.GetByHomeIdAsync(It.IsAny<Guid>())).ReturnsAsync(new List<Resident>());
             residents = mock.Object;
         }
-        var c = new HomeController(users, homes, residents, audit)
+        var c = new HomeController(users, homes, residents, audit,
+            new ResidentCleanupService(
+                Mock.Of<ICommitteeRepository>(),
+                new CommitteeListCache(Mock.Of<ICommitteeRepository>(), new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())),
+                Mock.Of<IDocumentFileStore>(),
+                Mock.Of<ILogger<ResidentCleanupService>>()))
         {
             ControllerContext = new ControllerContext
             {

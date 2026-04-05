@@ -64,6 +64,7 @@ namespace Web
                     sp.GetRequiredService<ICommitteeRepository>(),
                     sp.GetRequiredService<IMemoryCache>(),
                     sp.GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions));
+            services.AddScoped<ResidentCleanupService>();
 
             services.AddResponseCompression(options =>
             {
