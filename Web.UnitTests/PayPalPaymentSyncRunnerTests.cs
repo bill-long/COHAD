@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Web.MockData;
 using Web.Models;
 using Web.Services;
+using Web.Services.Repositories;
 using Xunit;
 
 namespace Web.UnitTests;
@@ -19,8 +20,9 @@ public sealed class PayPalPaymentSyncRunnerTests
     public async Task RunAsync_links_existing_payment_without_home_when_email_matches_directory()
     {
         var homes = new MockHomeRepository();
+        var residents = new MockResidentRepository();
         var users = new MockUserRepository();
-        var payments = new MockPaymentRepository(homes, users);
+        var payments = new MockPaymentRepository(homes, residents, users);
 
         var paymentId = Guid.NewGuid();
         await payments.AddAsync(new Payment
@@ -34,7 +36,7 @@ public sealed class PayPalPaymentSyncRunnerTests
             PayPalTransactionId = "TX-EXISTING-UNLINKED"
         });
 
-        var runner = CreateRunner(payments, users, homes, syncLookbackDays: 1);
+        var runner = CreateRunner(payments, users, homes, residents, syncLookbackDays: 1);
         var result = await runner.RunAsync();
 
         Assert.Equal(0, result.Inserted);
@@ -51,8 +53,9 @@ public sealed class PayPalPaymentSyncRunnerTests
     public async Task RunAsync_does_not_count_existing_linked_when_email_has_no_home_match()
     {
         var homes = new MockHomeRepository();
+        var residents = new MockResidentRepository();
         var users = new MockUserRepository();
-        var payments = new MockPaymentRepository(homes, users);
+        var payments = new MockPaymentRepository(homes, residents, users);
 
         await payments.AddAsync(new Payment
         {
@@ -65,7 +68,7 @@ public sealed class PayPalPaymentSyncRunnerTests
             PayPalTransactionId = "TX-ORPHAN"
         });
 
-        var runner = CreateRunner(payments, users, homes, syncLookbackDays: 1);
+        var runner = CreateRunner(payments, users, homes, residents, syncLookbackDays: 1);
         var result = await runner.RunAsync();
 
         Assert.Equal(0, result.ExistingLinked);
@@ -75,6 +78,7 @@ public sealed class PayPalPaymentSyncRunnerTests
         MockPaymentRepository payments,
         MockUserRepository users,
         MockHomeRepository homes,
+        MockResidentRepository residents,
         int syncLookbackDays)
     {
         var handler = new PayPalStubHandler();
@@ -98,6 +102,7 @@ public sealed class PayPalPaymentSyncRunnerTests
             payments,
             users,
             homes,
+            residents,
             payPalOptions,
             NullLogger<PayPalPaymentSyncRunner>.Instance);
     }

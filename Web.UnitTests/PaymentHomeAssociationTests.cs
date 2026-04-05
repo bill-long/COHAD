@@ -29,17 +29,19 @@ public sealed class PaymentHomeAssociationTests
     {
         var homes = new List<Home>
         {
-            new Home
+            new Home { Id = HomeA }
+        };
+        var residentsByHome = new Dictionary<Guid, List<Resident>>
+        {
+            [HomeA] = new List<Resident>
             {
-                Id = HomeA,
-                Residents = new List<Resident>
+                new Resident
                 {
-                    new Resident
+                    Id = Guid.NewGuid(),
+                    HomeId = HomeA,
+                    EmailAddresses = new List<EmailAddress>
                     {
-                        EmailAddresses = new List<EmailAddress>
-                        {
-                            new EmailAddress { Address = "Resident@Example.com" }
-                        }
+                        new EmailAddress { Address = "Resident@Example.com" }
                     }
                 }
             }
@@ -49,6 +51,7 @@ public sealed class PaymentHomeAssociationTests
         var ids = PaymentHomeAssociation.FindHomeIdsForPayerEmail(
             UserEmailHelpers.NormalizeEmail("resident@example.com"),
             homes,
+            residentsByHome,
             users);
 
         Assert.Equal(new[] { HomeA }, ids);
@@ -59,8 +62,9 @@ public sealed class PaymentHomeAssociationTests
     {
         var homes = new List<Home>
         {
-            new Home { Id = HomeA, Residents = new List<Resident>() }
+            new Home { Id = HomeA }
         };
+        var residentsByHome = new Dictionary<Guid, List<Resident>>();
         var users = new List<User>
         {
             new User
@@ -73,6 +77,7 @@ public sealed class PaymentHomeAssociationTests
         var ids = PaymentHomeAssociation.FindHomeIdsForPayerEmail(
             UserEmailHelpers.NormalizeEmail("owner@test.local"),
             homes,
+            residentsByHome,
             users);
 
         Assert.Equal(new[] { HomeA }, ids);
@@ -86,18 +91,19 @@ public sealed class PaymentHomeAssociationTests
             new Home
             {
                 Id = HomeA,
-                Residents = new List<Resident>(),
                 AssociatedUsers = new List<HomeAssociatedUser>
                 {
                     new HomeAssociatedUser { Emails = "assoc@cohad.local" }
                 }
             }
         };
+        var residentsByHome = new Dictionary<Guid, List<Resident>>();
         var users = new List<User>();
 
         var ids = PaymentHomeAssociation.FindHomeIdsForPayerEmail(
             UserEmailHelpers.NormalizeEmail("assoc@cohad.local"),
             homes,
+            residentsByHome,
             users);
 
         Assert.Equal(new[] { HomeA }, ids);
@@ -119,11 +125,13 @@ public sealed class PaymentHomeAssociationTests
                 EmailAddress = new EmailAddress { Address = "shared@example.com" }
             }
         };
+        var residentsByHome = new Dictionary<Guid, List<Resident>>();
         var users = new List<User>();
 
         var ids = PaymentHomeAssociation.FindHomeIdsForPayerEmail(
             UserEmailHelpers.NormalizeEmail("shared@example.com"),
             homes,
+            residentsByHome,
             users);
 
         Assert.Equal(new[] { HomeA, HomeB }, ids);
@@ -166,8 +174,9 @@ public sealed class PaymentHomeAssociationTests
     {
         var homes = new List<Home>
         {
-            new Home { Id = HomeA, Residents = new List<Resident>() }
+            new Home { Id = HomeA }
         };
+        var residentsByHome = new Dictionary<Guid, List<Resident>>();
         var users = new List<User>
         {
             new User
@@ -180,6 +189,7 @@ public sealed class PaymentHomeAssociationTests
         var idsSecond = PaymentHomeAssociation.FindHomeIdsForPayerEmail(
             UserEmailHelpers.NormalizeEmail("second@x.com"),
             homes,
+            residentsByHome,
             users);
 
         Assert.Equal(new[] { HomeA }, idsSecond);

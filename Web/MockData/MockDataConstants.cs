@@ -22,6 +22,10 @@ namespace Web.MockData
         public const string SecondaryUserNameIdentifier = "user-2";
         public static readonly string SecondaryUserUniqueId = IdentityProvider + SecondaryUserNameIdentifier;
 
+        // Stable IDs for seeded residents (person entities).
+        public static readonly Guid MockResident1Id = Guid.Parse("44444444-4444-4444-4444-444444444401");
+        public static readonly Guid TaylorResident1Id = Guid.Parse("44444444-4444-4444-4444-444444444402");
+
         /// <summary>Stable IDs for seeded mock email jobs (Manage → Email list / detail testing).</summary>
         public static readonly Guid SampleEmailJobSeed1 = Guid.Parse("33333333-3333-3333-3333-333333333301");
         public static readonly Guid SampleEmailJobSeed2 = Guid.Parse("33333333-3333-3333-3333-333333333302");

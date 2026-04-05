@@ -38,6 +38,7 @@ namespace Web.Services
     {
         private readonly IUserRepository _userRepository;
         private readonly IHomeRepository _homeRepository;
+        private readonly IResidentRepository _residentRepository;
         private readonly IUnsubscribeTokenService _tokenService;
         private readonly SmtpOptions _options;
         private readonly string _appBaseUrl;
@@ -45,11 +46,13 @@ namespace Web.Services
         public EmailService(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
+            IResidentRepository residentRepository,
             IUnsubscribeTokenService tokenService,
             IConfiguration config)
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
+            _residentRepository = residentRepository;
             _tokenService = tokenService;
             _options = new SmtpOptions
             {
@@ -261,12 +264,14 @@ namespace Web.Services
         {
             var seen = new Dictionary<string, EmailRecipient>(StringComparer.OrdinalIgnoreCase);
             var homes = await _homeRepository.GetAllAsync();
+            var allResidents = await _residentRepository.GetAllAsync();
+            var residentsByHome = allResidents.GroupBy(r => r.HomeId).ToDictionary(g => g.Key, g => g.ToList());
 
             foreach (var home in homes)
             {
-                if (home.Residents != null)
+                if (residentsByHome.TryGetValue(home.Id, out var residents))
                 {
-                    foreach (var resident in home.Residents)
+                    foreach (var resident in residents)
                     {
                         if (resident.EmailAddresses == null) continue;
                         foreach (var addr in resident.EmailAddresses.Where(filter))

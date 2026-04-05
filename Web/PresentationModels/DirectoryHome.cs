@@ -7,7 +7,7 @@ namespace Web.PresentationModels
 {
     public class DirectoryHome
     {
-        public static DirectoryHome FromStorageModel(Home storedHome)
+        public static DirectoryHome FromStorageModel(Home storedHome, List<Resident> residents)
         {
             return new DirectoryHome
             {
@@ -15,7 +15,7 @@ namespace Web.PresentationModels
                 StreetNumber = storedHome.StreetNumber,
                 PhoneNumber = (storedHome.PhoneNumber?.VisibleInDirectory ?? false) ? DirectoryPhoneNumber.FromStorageModel(storedHome.PhoneNumber) : null,
                 EmailAddress = (storedHome.EmailAddress?.VisibleInDirectory ?? false) ? DirectoryEmailAddress.FromStorageModel(storedHome.EmailAddress) : null,
-                Residents = storedHome.Residents?.Select(DirectoryResident.FromStorageModel).ToList() ?? new List<DirectoryResident>()
+                Residents = residents?.Select(DirectoryResident.FromStorageModel).ToList() ?? new List<DirectoryResident>()
             };
         }
 

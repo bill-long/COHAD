@@ -36,7 +36,11 @@ namespace Web.Models
     {
         public Guid Id { get; set; }
 
-        public string DisplayName { get; set; }
+        /// <summary>
+        /// Reference to the <see cref="Resident"/> entity. Display name and email are
+        /// resolved from the linked resident at read time — never duplicated here.
+        /// </summary>
+        public Guid ResidentId { get; set; }
 
         /// <summary>
         /// Optional position title (e.g. "President", "Chair"). Null when the member has no title.
@@ -49,9 +53,6 @@ namespace Web.Models
         public string PhotoBlobPath { get; set; }
 
         public string PhotoContentType { get; set; }
-
-        /// <summary>Personal email address where forwarded committee mail is delivered.</summary>
-        public string Email { get; set; }
 
         /// <summary>
         /// When true, this member receives forwarded email from the committee's O365 shared mailbox.

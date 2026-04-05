@@ -27,8 +27,55 @@ public sealed class CommitteeControllerTests
     private const string IdentityProviderClaim = "http://schemas.microsoft.com/identity/claims/identityprovider";
     private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
 
+    private static readonly Guid AliceResidentId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid BobResidentId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+    private static readonly Guid NewPersonResidentId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+    private static readonly Guid SampleHomeId = Guid.Parse("99999999-9999-9999-9999-999999999999");
+
+    private static Resident AliceResident() => new Resident
+    {
+        Id = AliceResidentId, HomeId = SampleHomeId,
+        GivenName = "Alice", Surname = "",
+        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "alice@example.com" } }
+    };
+
+    private static Resident BobResident() => new Resident
+    {
+        Id = BobResidentId, HomeId = SampleHomeId,
+        GivenName = "Bob", Surname = "",
+        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "bob@example.com" } }
+    };
+
+    private static Resident NewPersonResident() => new Resident
+    {
+        Id = NewPersonResidentId, HomeId = SampleHomeId,
+        GivenName = "New", Surname = "Person",
+        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "new@example.com" } }
+    };
+
+    private static Mock<IResidentRepository> DefaultResidentRepoMock()
+    {
+        var allResidents = new Dictionary<Guid, Resident>
+        {
+            { AliceResidentId, AliceResident() },
+            { BobResidentId, BobResident() },
+            { NewPersonResidentId, NewPersonResident() },
+        };
+
+        var mock = new Mock<IResidentRepository>();
+        mock.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync((IEnumerable<Guid> ids) =>
+                ids.Where(id => allResidents.ContainsKey(id))
+                   .Select(id => allResidents[id])
+                   .ToList());
+        mock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync((Guid id) => allResidents.GetValueOrDefault(id));
+        return mock;
+    }
+
     private static CommitteeController CreateController(
         ICommitteeRepository? committeeRepo = null,
+        IResidentRepository? residentRepo = null,
         IDocumentFileStore? fileStore = null,
         IImageUploadHelper? imageUploadHelper = null,
         IGraphMailboxService? graphMailboxService = null,
@@ -39,6 +86,7 @@ public sealed class CommitteeControllerTests
         string idp = "google.com")
     {
         committeeRepo ??= Mock.Of<ICommitteeRepository>();
+        residentRepo ??= DefaultResidentRepoMock().Object;
         fileStore ??= Mock.Of<IDocumentFileStore>();
         imageUploadHelper ??= DefaultImageUploadHelper();
         graphMailboxService ??= Mock.Of<IGraphMailboxService>();
@@ -48,6 +96,7 @@ public sealed class CommitteeControllerTests
 
         var c = new CommitteeController(
             committeeRepo,
+            residentRepo,
             userRepo,
             auditLogRepo,
             cache,
@@ -96,20 +145,18 @@ public sealed class CommitteeControllerTests
             new CommitteeMember
             {
                 Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-                DisplayName = "Alice",
+                ResidentId = AliceResidentId,
                 Title = "President",
                 Bio = "Longtime resident.",
-                Email = "alice@example.com",
                 ReceivesForwardedEmail = true,
                 DisplayOrder = 1
             },
             new CommitteeMember
             {
                 Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-                DisplayName = "Bob",
+                ResidentId = BobResidentId,
                 Title = "Treasurer",
                 Bio = "Manages budget.",
-                Email = "bob@example.com",
                 ReceivesForwardedEmail = true,
                 DisplayOrder = 2
             }
@@ -272,8 +319,8 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), DisplayName = "Alice Updated", Email = "alice@example.com", DisplayOrder = 1 },
-                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), DisplayName = "Bob", Email = "bob@example.com", DisplayOrder = 2 }
+                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 },
+                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), ResidentId = BobResidentId, DisplayOrder = 2 }
             }
         }, WebJsonOptions);
 
@@ -283,7 +330,7 @@ public sealed class CommitteeControllerTests
         var ok = Assert.IsType<OkObjectResult>(result);
         var admin = Assert.IsType<CommitteeAdmin>(ok.Value);
         Assert.Equal("Updated description", admin.Description);
-        Assert.Equal("Alice Updated", admin.Members[0].DisplayName);
+        Assert.Equal("Alice", admin.Members[0].DisplayName);
         mockRepo.Verify(r => r.UpsertAsync(It.IsAny<Committee>()), Times.Once);
     }
 
@@ -301,8 +348,8 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), DisplayName = "Alice", Email = "alice@example.com", DisplayOrder = 1 },
-                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), DisplayName = "Bob", Email = "bob@example.com", DisplayOrder = 2 }
+                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 },
+                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), ResidentId = BobResidentId, DisplayOrder = 2 }
             }
         }, WebJsonOptions);
 
@@ -331,8 +378,8 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), DisplayName = "Alice", Email = "alice@example.com", DisplayOrder = 1 },
-                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), DisplayName = "Bob", Email = "bob@example.com", DisplayOrder = 2 }
+                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 },
+                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), ResidentId = BobResidentId, DisplayOrder = 2 }
             }
         }, WebJsonOptions);
 
@@ -362,7 +409,7 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), DisplayName = "Alice", Email = "alice@example.com", DisplayOrder = 1 }
+                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 }
             }
         }, WebJsonOptions);
 
@@ -389,7 +436,7 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), DisplayName = "Alice", Email = "alice@example.com", DisplayOrder = 1 }
+                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 }
             }
         }, WebJsonOptions);
 
@@ -459,7 +506,7 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), DisplayName = "Alice", Email = "alice@example.com", DisplayOrder = 1 }
+                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 }
             }
         }, WebJsonOptions);
 
@@ -516,7 +563,7 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), DisplayName = "Alice", Email = "alice@example.com", DisplayOrder = 1 }
+                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 }
             }
         }, WebJsonOptions);
 
@@ -552,8 +599,8 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = memberId, DisplayName = "Alice", Email = "alice@example.com", DisplayOrder = 1 },
-                new() { Id = committee.Members[1].Id, DisplayName = "Bob", Email = "bob@example.com", DisplayOrder = 2 }
+                new() { Id = memberId, ResidentId = AliceResidentId, DisplayOrder = 1 },
+                new() { Id = committee.Members[1].Id, ResidentId = BobResidentId, DisplayOrder = 2 }
             }
         }, WebJsonOptions);
 
@@ -584,9 +631,9 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), DisplayName = "Alice", Email = "alice@example.com", DisplayOrder = 1 },
+                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 },
                 // New member — Id is empty Guid, should get a generated ID
-                new() { Id = Guid.Empty, DisplayName = "New Person", Email = "new@example.com", DisplayOrder = 3 }
+                new() { Id = Guid.Empty, ResidentId = NewPersonResidentId, DisplayOrder = 3 }
             }
         }, WebJsonOptions);
 
@@ -595,7 +642,7 @@ public sealed class CommitteeControllerTests
 
         Assert.NotNull(saved);
         Assert.Equal(2, saved.Members.Count);
-        var newMember = saved.Members.First(m => m.DisplayName == "New Person");
+        var newMember = saved.Members.First(m => m.ResidentId == NewPersonResidentId);
         Assert.NotEqual(Guid.Empty, newMember.Id);
     }
 
@@ -607,8 +654,8 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
-        // Simulates what the frontend sends: full CommitteeAdmin JSON with a new member (no homeId field)
-        var json = """
+        // Simulates what the frontend sends: full CommitteeAdmin JSON with a new member
+        var json = $$"""
         {
             "id": "board",
             "displayName": "Board",
@@ -618,15 +665,13 @@ public sealed class CommitteeControllerTests
             "members": [
                 {
                     "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-                    "displayName": "Alice",
-                    "email": "alice@example.com",
+                    "residentId": "{{AliceResidentId:D}}",
                     "receivesForwardedEmail": true,
                     "photoOffsetY": 50,
                     "displayOrder": 1
                 },
                 {
-                    "displayName": "New Person",
-                    "email": "new@example.com",
+                    "residentId": "{{NewPersonResidentId:D}}",
                     "receivesForwardedEmail": true,
                     "photoOffsetY": 50,
                     "displayOrder": 3
@@ -665,7 +710,7 @@ public sealed class CommitteeControllerTests
         Assert.IsType<NoContentResult>(result);
         mockFileStore.Verify(s => s.DeleteAsync("committees/board/aaaaaaaa.jpg"), Times.Once);
         mockRepo.Verify(r => r.UpsertAsync(It.Is<Committee>(
-            comm => comm.Members.Count == 1 && comm.Members[0].DisplayName == "Bob")), Times.Once);
+            comm => comm.Members.Count == 1 && comm.Members[0].ResidentId == BobResidentId)), Times.Once);
     }
 
     [Fact]
@@ -691,12 +736,12 @@ public sealed class CommitteeControllerTests
         var member = new CommitteeMember
         {
             Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-            DisplayName = "Alice",
+            ResidentId = AliceResidentId,
             PhotoBlobPath = "committees/board/aaaaaaaa.jpg",
             PhotoContentType = "image/jpeg"
         };
 
-        var card = CommitteeMemberCard.FromStorageModel(member, "board");
+        var card = CommitteeMemberCard.FromStorageModel(member, "board", AliceResident());
 
         Assert.True(card.HasPhoto);
         Assert.StartsWith("/api/committee/", card.PhotoDownloadUrl);
@@ -709,23 +754,23 @@ public sealed class CommitteeControllerTests
         var member = new CommitteeMember
         {
             Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-            DisplayName = "Alice",
+            ResidentId = AliceResidentId,
             PhotoBlobPath = "committees/board/aaaaaaaa.jpg"
         };
 
         // Default is 50
         Assert.Equal(50, member.PhotoOffsetY);
 
-        var card = CommitteeMemberCard.FromStorageModel(member, "board");
+        var card = CommitteeMemberCard.FromStorageModel(member, "board", AliceResident());
         Assert.Equal(50, card.PhotoOffsetY);
 
         // Custom value
         member.PhotoOffsetY = 25;
-        var card2 = CommitteeMemberCard.FromStorageModel(member, "board");
+        var card2 = CommitteeMemberCard.FromStorageModel(member, "board", AliceResident());
         Assert.Equal(25, card2.PhotoOffsetY);
 
         // Admin model round-trip
-        var admin = CommitteeMemberAdmin.FromStorageModel(member);
+        var admin = CommitteeMemberAdmin.FromStorageModel(member, AliceResident());
         Assert.Equal(25, admin.PhotoOffsetY);
     }
 
@@ -747,8 +792,8 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), DisplayName = "Alice", Email = "alice@example.com", PhotoOffsetY = -10, DisplayOrder = 1 },
-                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), DisplayName = "Bob", Email = "bob@example.com", PhotoOffsetY = 200, DisplayOrder = 2 }
+                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, PhotoOffsetY = -10, DisplayOrder = 1 },
+                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), ResidentId = BobResidentId, PhotoOffsetY = 200, DisplayOrder = 2 }
             }
         }, WebJsonOptions);
 
@@ -766,11 +811,11 @@ public sealed class CommitteeControllerTests
         var member = new CommitteeMember
         {
             Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-            DisplayName = "Alice",
+            ResidentId = AliceResidentId,
             PhotoBlobPath = null
         };
 
-        var card = CommitteeMemberCard.FromStorageModel(member, "board");
+        var card = CommitteeMemberCard.FromStorageModel(member, "board", AliceResident());
 
         Assert.False(card.HasPhoto);
         Assert.Null(card.PhotoDownloadUrl);
@@ -886,8 +931,8 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
         var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph.Setup(g => g.SyncForwardingRuleAsync(It.IsAny<Committee>()))
-            .ReturnsAsync((Committee c) =>
+        mockGraph.Setup(g => g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>()))
+            .ReturnsAsync((Committee c, IReadOnlyDictionary<Guid, Resident> r) =>
             {
                 c.LastSyncedUtc = DateTime.UtcNow;
                 c.LastSyncStatus = "Success";
@@ -909,7 +954,7 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
         var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph.Setup(g => g.SyncForwardingRuleAsync(It.IsAny<Committee>()))
+        mockGraph.Setup(g => g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>()))
             .ThrowsAsync(new Exception("Graph API timeout"));
 
         var c = CreateController(committeeRepo: mockRepo.Object, graphMailboxService: mockGraph.Object);
@@ -954,7 +999,7 @@ public sealed class CommitteeControllerTests
             DisplayOrder = 1,
             Members = new List<CommitteeMemberUpdate>
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), DisplayName = "Alice", Email = "alice@example.com", DisplayOrder = 1 }
+                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 }
             }
         }, WebJsonOptions);
 
@@ -1017,8 +1062,8 @@ public sealed class CommitteeControllerTests
         });
 
         var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph.Setup(g => g.SyncForwardingRuleAsync(It.IsAny<Committee>()))
-            .ReturnsAsync((Committee c) =>
+        mockGraph.Setup(g => g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>()))
+            .ReturnsAsync((Committee c, IReadOnlyDictionary<Guid, Resident> r) =>
             {
                 c.LastSyncedUtc = DateTime.UtcNow;
                 c.LastSyncStatus = "Success";

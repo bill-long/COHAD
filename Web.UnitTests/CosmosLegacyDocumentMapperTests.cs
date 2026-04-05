@@ -161,8 +161,8 @@ public sealed class CosmosLegacyDocumentMapperTests
         }");
         var home = CosmosLegacyDocumentMapper.ToHome(doc);
         Assert.Equal(110, home.StreetNumber);
-        Assert.NotNull(home.Residents);
-        Assert.Empty(home.Residents);
+        // Residents are now stored in a separate container; ToHome no longer populates them.
+        Assert.Null(home.Residents);
     }
 
     [Fact]

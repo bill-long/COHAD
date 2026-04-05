@@ -259,3 +259,15 @@
     flex-direction: column;
   }
 }
+
+.resolved-info {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+  margin: -0.5rem 0 0.5rem 0;
+}
+
+.resident-email {
+  color: var(--text-secondary, #999);
+  font-size: 0.9em;
+}

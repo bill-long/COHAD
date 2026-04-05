@@ -22,6 +22,7 @@ namespace Web.Services
         private readonly IPaymentRepository _payments;
         private readonly IUserRepository _users;
         private readonly IHomeRepository _homes;
+        private readonly IResidentRepository _residents;
         private readonly IOptions<PayPalOptions> _options;
         private readonly ILogger<PayPalPaymentSyncRunner> _logger;
 
@@ -30,6 +31,7 @@ namespace Web.Services
             IPaymentRepository payments,
             IUserRepository users,
             IHomeRepository homes,
+            IResidentRepository residents,
             IOptions<PayPalOptions> options,
             ILogger<PayPalPaymentSyncRunner> logger)
         {
@@ -37,6 +39,7 @@ namespace Web.Services
             _payments = payments;
             _users = users;
             _homes = homes;
+            _residents = residents;
             _options = options;
             _logger = logger;
         }
@@ -56,8 +59,10 @@ namespace Web.Services
 
             var users = await _users.GetAllAsync().ConfigureAwait(false);
             var homes = await _homes.GetAllAsync().ConfigureAwait(false);
+            var allResidents = await _residents.GetAllAsync().ConfigureAwait(false);
+            var residentsByHome = allResidents.GroupBy(r => r.HomeId).ToDictionary(g => g.Key, g => g.ToList());
             var emailToUniqueId = BuildEmailIndex(users);
-            var homeLookup = new PayerEmailHomeLookup(homes, users);
+            var homeLookup = new PayerEmailHomeLookup(homes, residentsByHome, users);
 
             var details = await _payPal
                 .ListAllTransactionDetailsAsync(startUtc, endUtc, cancellationToken)
@@ -302,12 +307,17 @@ namespace Web.Services
         private sealed class PayerEmailHomeLookup
         {
             private readonly IReadOnlyList<Home> _homes;
+            private readonly IReadOnlyDictionary<Guid, List<Resident>> _residentsByHome;
             private readonly IReadOnlyList<User> _users;
             private readonly Dictionary<string, IReadOnlyList<Guid>> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-            public PayerEmailHomeLookup(IReadOnlyList<Home> homes, IReadOnlyList<User> users)
+            public PayerEmailHomeLookup(
+                IReadOnlyList<Home> homes,
+                IReadOnlyDictionary<Guid, List<Resident>> residentsByHome,
+                IReadOnlyList<User> users)
             {
                 _homes = homes;
+                _residentsByHome = residentsByHome;
                 _users = users;
             }
 
@@ -320,7 +330,7 @@ namespace Web.Services
 
                 if (!_cache.TryGetValue(normalizedEmail, out var homeIds))
                 {
-                    homeIds = PaymentHomeAssociation.FindHomeIdsForPayerEmail(normalizedEmail, _homes, _users);
+                    homeIds = PaymentHomeAssociation.FindHomeIdsForPayerEmail(normalizedEmail, _homes, _residentsByHome, _users);
                     _cache[normalizedEmail] = homeIds;
                 }
 

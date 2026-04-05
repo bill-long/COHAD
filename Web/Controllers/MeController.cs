@@ -21,17 +21,20 @@ namespace Web.Controllers
     {
         private readonly IUserRepository _userRepository;
         private readonly IHomeRepository _homeRepository;
+        private readonly IResidentRepository _residentRepository;
         private readonly IEmailService _emailService;
         private readonly ILogger<MeController> _logger;
 
         public MeController(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
+            IResidentRepository residentRepository,
             IEmailService emailService,
             ILogger<MeController> logger)
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
+            _residentRepository = residentRepository;
             _emailService = emailService;
             _logger = logger;
         }
@@ -56,8 +59,10 @@ namespace Web.Controllers
                     // See https://github.com/dotnet/efcore/issues/16920 for some of the issues with referenced types in Cosmos DB
                     // See also https://docs.microsoft.com/en-us/ef/core/providers/cosmos/limitations
                     ownedHomes = await _homeRepository.GetByIdsAsync(user.OwnedHomeIds);
+                    var ownedResidents = await _residentRepository.GetByHomeIdsAsync(user.OwnedHomeIds);
                     var allUsers = await _userRepository.GetAllAsync();
                     PopulateAssociatedUsers(ownedHomes, allUsers);
+                    PopulateResidents(ownedHomes, ownedResidents);
                 }
                 return PresentationUser.FromStorageModel(user, ownedHomes);
             }
@@ -122,6 +127,15 @@ namespace Web.Controllers
                         IdentityProvider = u.IdentityProvider
                     })
                     .ToList();
+            }
+        }
+
+        private static void PopulateResidents(List<Home> homes, List<Resident> allResidents)
+        {
+            var byHomeId = allResidents.GroupBy(r => r.HomeId).ToDictionary(g => g.Key, g => g.ToList());
+            foreach (var home in homes)
+            {
+                home.Residents = byHomeId.TryGetValue(home.Id, out var residents) ? residents : new List<Resident>();
             }
         }
     }
