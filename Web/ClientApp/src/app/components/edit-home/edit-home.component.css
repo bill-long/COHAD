@@ -316,13 +316,42 @@
     line-height: 18px;
     font-size: 18px;
   }
+
+  /* Remove card chrome — go full-bleed on mobile */
+  :host ::ng-deep .homeCard.mat-mdc-card {
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  :host ::ng-deep .homeCard .mat-mdc-card-content {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  :host ::ng-deep .homeCard .mat-mdc-card-header {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Flatten section boxes */
+  .section {
+    border: none;
+    border-radius: 0;
+    background: none;
+    padding: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-faint);
+  }
+
+  .sections > .section:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
 }
 
 @media (max-width: 480px) {
-  .section {
-    padding: 10px;
-  }
-
   .sectionActions button {
     white-space: normal;
     min-width: 0;
