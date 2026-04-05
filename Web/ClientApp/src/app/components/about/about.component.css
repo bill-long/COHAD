@@ -87,6 +87,9 @@
     border: 1px solid var(--border-faint);
     background: var(--surface-muted);
     transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
 }
 
 .about-committee-card:hover {
@@ -115,6 +118,18 @@
     font-size: 0.875rem;
     line-height: 1.5;
     color: var(--text-muted);
+}
+
+.about-committee-count {
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+}
+
+.about-committees-cta {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.25rem;
 }
 
 @media (max-width: 768px) {

@@ -21,6 +21,9 @@
         <a mat-tab-link *ngIf="manageBlogVisible$ | async"
            routerLink="blog" routerLinkActive #rla7="routerLinkActive"
            [active]="rla7.isActive">News</a>
+        <a mat-tab-link *ngIf="manageCommitteesVisible$ | async"
+           routerLink="committees" routerLinkActive #rla9="routerLinkActive"
+           [active]="rla9.isActive">Committees</a>
         <a mat-tab-link *ngIf="manageAuditVisible$ | async"
            routerLink="audit-log" routerLinkActive #rla8="routerLinkActive"
            [active]="rla8.isActive">Audit Log</a>

@@ -55,7 +55,8 @@ namespace Web.Models
             GardenClub,
             Board,
             SocialCommittee,
-            SunshineCommittee
+            SunshineCommittee,
+            ArchitecturalCommittee
         }
 
         public static string GetUniqueIdFromClaims(IEnumerable<Claim> claims)

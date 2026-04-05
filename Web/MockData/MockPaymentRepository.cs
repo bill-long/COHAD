@@ -11,13 +11,15 @@ namespace Web.MockData
     public sealed class MockPaymentRepository : IPaymentRepository
     {
         private readonly IHomeRepository _homes;
+        private readonly IResidentRepository _residents;
         private readonly IUserRepository _users;
         private readonly List<Payment> _payments = new();
         private readonly object _lock = new();
 
-        public MockPaymentRepository(IHomeRepository homes, IUserRepository users)
+        public MockPaymentRepository(IHomeRepository homes, IResidentRepository residents, IUserRepository users)
         {
             _homes = homes;
+            _residents = residents;
             _users = users;
         }
 
@@ -65,7 +67,9 @@ namespace Web.MockData
             if (owned.Count > 0)
             {
                 var homes = await _homes.GetByIdsAsync(owned).ConfigureAwait(false);
-                var emailSets = PaymentHomeAssociation.BuildEmailSetsByHome(homes);
+                var allResidents = await _residents.GetAllAsync().ConfigureAwait(false);
+                var residentsByHome = allResidents.GroupBy(r => r.HomeId).ToDictionary(g => g.Key, g => g.ToList());
+                var emailSets = PaymentHomeAssociation.BuildEmailSetsByHome(homes, residentsByHome);
                 var allUsers = await _users.GetAllAsync().ConfigureAwait(false);
                 PaymentHomeAssociation.MergeAccountEmailsFromUsersIntoHomeSets(allUsers, owned, emailSets);
 

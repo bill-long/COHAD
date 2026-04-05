@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { CommitteeCard, CommitteeService } from 'src/app/services/committee.service';
 
 @Component({
     selector: 'app-about',
@@ -7,10 +8,20 @@ import { Component, OnInit } from '@angular/core';
     standalone: false
 })
 export class AboutComponent implements OnInit {
+  committees: CommitteeCard[] = [];
+  committeesLoaded = false;
 
-  constructor() { }
+  constructor(private readonly committeeService: CommitteeService) { }
 
-  ngOnInit() {
+  ngOnInit(): void {
+    this.committeeService.getAll().subscribe({
+      next: committees => {
+        this.committees = committees ?? [];
+        this.committeesLoaded = true;
+      },
+      error: () => {
+        this.committeesLoaded = true;
+      }
+    });
   }
-
 }

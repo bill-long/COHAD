@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -20,11 +21,19 @@ namespace Web.Controllers
 
         private readonly IUnsubscribeTokenService _tokenService;
         private readonly IHomeRepository _homeRepository;
+        private readonly IResidentRepository _residentRepository;
+        private readonly ILogger<UnsubscribeController> _logger;
 
-        public UnsubscribeController(IUnsubscribeTokenService tokenService, IHomeRepository homeRepository)
+        public UnsubscribeController(
+            IUnsubscribeTokenService tokenService,
+            IHomeRepository homeRepository,
+            IResidentRepository residentRepository,
+            ILogger<UnsubscribeController> logger)
         {
             _tokenService = tokenService;
             _homeRepository = homeRepository;
+            _residentRepository = residentRepository;
+            _logger = logger;
         }
 
         /// <summary>
@@ -71,7 +80,8 @@ namespace Web.Controllers
             if (home == null)
                 return NotFound(new { error = "Home not found." });
 
-            var matchingAddresses = FindMatchingEmailAddresses(home, payload.Email);
+            var residents = await _residentRepository.GetByHomeIdAsync(payload.HomeId);
+            var (matchingAddresses, _) = FindMatchingEmailAddresses(home, residents, payload.Email);
             if (matchingAddresses.Count == 0)
                 return NotFound(new { error = "Email address not found on this home." });
 
@@ -140,7 +150,8 @@ namespace Web.Controllers
                 if (home == null)
                     return NotFound(new { error = "Home not found." });
 
-                var matchingAddresses = FindMatchingEmailAddresses(home, payload.Email);
+                var residents = await _residentRepository.GetByHomeIdAsync(payload.HomeId);
+                var (matchingAddresses, affectedResidents) = FindMatchingEmailAddresses(home, residents, payload.Email);
                 if (matchingAddresses.Count == 0)
                     return NotFound(new { error = "Email address not found on this home." });
 
@@ -149,6 +160,17 @@ namespace Web.Controllers
                 try
                 {
                     await _homeRepository.UpsertAsync(home);
+                    // Only upsert residents that own a matched email address.
+                    try
+                    {
+                        foreach (var resident in affectedResidents)
+                            await _residentRepository.UpsertAsync(resident);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to persist resident preference updates for home {HomeId} after home save succeeded", payload.HomeId);
+                    }
+
                     return result;
                 }
                 catch (ConcurrencyConflictException)
@@ -162,14 +184,16 @@ namespace Web.Controllers
             return Conflict(new { error = "Unable to save preferences due to concurrent updates. Please try again." });
         }
 
-        private static List<EmailAddress> FindMatchingEmailAddresses(Home home, string email)
+        private static (List<EmailAddress> Addresses, HashSet<Resident> Residents) FindMatchingEmailAddresses(
+            Home home, List<Resident> residents, string email)
         {
             var matches = new List<EmailAddress>();
+            var affectedResidents = new HashSet<Resident>();
             var normalizedEmail = email.Trim().ToLowerInvariant();
 
-            if (home.Residents != null)
+            if (residents != null)
             {
-                foreach (var resident in home.Residents)
+                foreach (var resident in residents)
                 {
                     if (resident.EmailAddresses == null)
                         continue;
@@ -180,6 +204,7 @@ namespace Web.Controllers
                             addr.Address.Trim().ToLowerInvariant() == normalizedEmail)
                         {
                             matches.Add(addr);
+                            affectedResidents.Add(resident);
                         }
                     }
                 }
@@ -191,7 +216,7 @@ namespace Web.Controllers
                 matches.Add(home.EmailAddress);
             }
 
-            return matches;
+            return (matches, affectedResidents);
         }
     }
 }

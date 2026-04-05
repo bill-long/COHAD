@@ -107,48 +107,18 @@
     </div>
   </section>
 
-  <section class="about-section about-section--full">
+  <section class="about-section about-section--full" *ngIf="committeesLoaded && committees.length > 0">
     <h2 class="about-section-title about-committees-title">Our Committees</h2>
     <div class="about-committees">
-      <div class="about-committee-card">
+      <a class="about-committee-card" *ngFor="let committee of committees" routerLink="/committees">
         <mat-icon class="about-committee-icon">groups</mat-icon>
-        <h3 class="about-committee-name">Board</h3>
-        <p class="about-committee-desc">
-          Oversees COHAD operations, manages the budget, and coordinates with committees
-          to serve the neighborhood.
-        </p>
-      </div>
-      <div class="about-committee-card">
-        <mat-icon class="about-committee-icon">waving_hand</mat-icon>
-        <h3 class="about-committee-name">Welcome Committee</h3>
-        <p class="about-committee-desc">
-          Greets new residents, delivers welcome packets, and helps newcomers feel at home
-          in Canyon Oaks.
-        </p>
-      </div>
-      <div class="about-committee-card">
-        <mat-icon class="about-committee-icon">yard</mat-icon>
-        <h3 class="about-committee-name">Garden Club</h3>
-        <p class="about-committee-desc">
-          Maintains our neighborhood entrances and common areas, keeping Canyon Oaks
-          beautiful year-round.
-        </p>
-      </div>
-      <div class="about-committee-card">
-        <mat-icon class="about-committee-icon">celebration</mat-icon>
-        <h3 class="about-committee-name">Social Committee</h3>
-        <p class="about-committee-desc">
-          Plans and hosts community events that bring neighbors together for fun and fellowship.
-        </p>
-      </div>
-      <div class="about-committee-card">
-        <mat-icon class="about-committee-icon">favorite</mat-icon>
-        <h3 class="about-committee-name">Sunshine Committee</h3>
-        <p class="about-committee-desc">
-          Reaches out to neighbors during milestones and difficult times with cards, meals,
-          and acts of kindness.
-        </p>
-      </div>
+        <h3 class="about-committee-name">{{ committee.displayName }}</h3>
+        <p class="about-committee-desc">{{ committee.description }}</p>
+        <span class="about-committee-count">{{ committee.memberCount }} {{ committee.memberCount === 1 ? 'member' : 'members' }}</span>
+      </a>
+    </div>
+    <div class="about-committees-cta">
+      <a mat-stroked-button color="primary" routerLink="/committees">View all committees</a>
     </div>
   </section>
 

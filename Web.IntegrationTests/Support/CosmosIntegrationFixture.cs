@@ -35,10 +35,14 @@ public sealed class CosmosIntegrationFixture : IAsyncLifetime
             Client.GetContainer(DatabaseId, "AuditLog"),
             NullLogger<CosmosAuditLogRepository>.Instance);
 
+    public IResidentRepository CreateResidentRepository() =>
+        new CosmosResidentRepository(Client.GetContainer(DatabaseId, "Residents"));
+
     public IPaymentRepository CreatePaymentRepository() =>
         new CosmosPaymentRepository(
             Client.GetContainer(DatabaseId, "Payments"),
             CreateHomeRepository(),
+            CreateResidentRepository(),
             CreateUserRepository());
 
     public async Task InitializeAsync()
@@ -127,7 +131,7 @@ public sealed class CosmosIntegrationFixture : IAsyncLifetime
             throw new InvalidOperationException("CosmosTests:PartitionKeyPath is required when AutoProvision is true.");
         }
 
-        var containerNames = new[] { "Users", "Homes", "Payments", "AuditLog" };
+        var containerNames = new[] { "Users", "Homes", "Residents", "Payments", "AuditLog" };
         foreach (var name in containerNames)
         {
             await database.CreateContainerIfNotExistsAsync(new ContainerProperties(name, pkPath)).ConfigureAwait(false);

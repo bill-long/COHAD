@@ -35,6 +35,8 @@ import { BlogDetailComponent } from './components/blog-detail/blog-detail.compon
 import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
 import { EmailPreferencesComponent } from './components/email-preferences/email-preferences.component';
 import { EmailJobDetailComponent } from './components/email-job-detail/email-job-detail.component';
+import { CommitteesComponent } from './components/committees/committees.component';
+import { ManageCommitteesComponent } from './components/manage-committees/manage-committees.component';
 
 @Injectable({ providedIn: 'root' })
 export class CohadTitleStrategy extends TitleStrategy {
@@ -50,6 +52,7 @@ const routes: Routes = [
   { path: '', component: HomeComponent, title: 'Home' },
   { path: 'privacy', component: PrivacyComponent, title: 'Privacy Policy' },
   { path: 'about', component: AboutComponent, title: 'About' },
+  { path: 'committees', component: CommitteesComponent, title: 'Committees' },
   { path: 'directory', redirectTo: 'residents/directory', pathMatch: 'full' },
   { path: 'map', redirectTo: 'residents/map', pathMatch: 'full' },
   { path: 'documents', redirectTo: 'residents/documents', pathMatch: 'full' },
@@ -98,6 +101,13 @@ const routes: Routes = [
         canActivate: [RoleGuard],
         data: { allowedRoles: rolePermissions.manageBlogRoles, requireResidentRole: true },
         title: 'Manage Blog'
+      },
+      {
+        path: 'committees',
+        component: ManageCommitteesComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageCommitteesRoles },
+        title: 'Manage Committees'
       },
       { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageAuditLogRoles }, title: 'Audit Log' }
     ]

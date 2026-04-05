@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Web.Controllers;
 using Web.Models;
@@ -15,10 +16,34 @@ namespace Web.UnitTests
     {
         private readonly Mock<IUnsubscribeTokenService> _tokenService = new();
         private readonly Mock<IHomeRepository> _homeRepository = new();
+        private readonly Mock<IResidentRepository> _residentRepository = new();
 
         private UnsubscribeController CreateController()
         {
-            return new UnsubscribeController(_tokenService.Object, _homeRepository.Object);
+            return new UnsubscribeController(_tokenService.Object, _homeRepository.Object, _residentRepository.Object, Mock.Of<ILogger<UnsubscribeController>>());
+        }
+
+        private static Resident CreateTestResident(Guid homeId, string email, bool allOptedIn = true)
+        {
+            return new Resident
+            {
+                Id = Guid.NewGuid(),
+                HomeId = homeId,
+                GivenName = "Jane",
+                Surname = "Doe",
+                EmailAddresses = new List<EmailAddress>
+                {
+                    new EmailAddress
+                    {
+                        Address = email,
+                        BoardEmailOptedIn = allOptedIn,
+                        WelcomeEmailOptedIn = allOptedIn,
+                        GardenClubEmailOptedIn = allOptedIn,
+                        SocialCommitteeEmailOptedIn = allOptedIn,
+                        SunshineCommitteeEmailOptedIn = allOptedIn
+                    }
+                }
+            };
         }
 
         private static Home CreateTestHome(Guid id, string email, bool allOptedIn = true)
@@ -37,27 +62,14 @@ namespace Web.UnitTests
                     SocialCommitteeEmailOptedIn = true,
                     SunshineCommitteeEmailOptedIn = true
                 },
-                Residents = new List<Resident>
-                {
-                    new Resident
-                    {
-                        GivenName = "Jane",
-                        Surname = "Doe",
-                        EmailAddresses = new List<EmailAddress>
-                        {
-                            new EmailAddress
-                            {
-                                Address = email,
-                                BoardEmailOptedIn = allOptedIn,
-                                WelcomeEmailOptedIn = allOptedIn,
-                                GardenClubEmailOptedIn = allOptedIn,
-                                SocialCommitteeEmailOptedIn = allOptedIn,
-                                SunshineCommitteeEmailOptedIn = allOptedIn
-                            }
-                        }
-                    }
-                }
+                Residents = new List<Resident>()
             };
+        }
+
+        private void SetupResidentForHome(Guid homeId, Resident resident)
+        {
+            _residentRepository.Setup(r => r.GetByHomeIdAsync(homeId)).ReturnsAsync(new List<Resident> { resident });
+            _residentRepository.Setup(r => r.UpsertAsync(It.IsAny<Resident>())).ReturnsAsync((Resident r) => r);
         }
 
         // --- OneClickUnsubscribe ---
@@ -120,11 +132,13 @@ namespace Web.UnitTests
             var homeId = Guid.NewGuid();
             var email = "jane@example.com";
             var home = CreateTestHome(homeId, email, allOptedIn: true);
+            var resident = CreateTestResident(homeId, email, allOptedIn: true);
 
             _tokenService.Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
+            SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
             var result = await controller.OneClickUnsubscribe(category, "tok", "One-Click");
@@ -132,7 +146,7 @@ namespace Web.UnitTests
             Assert.IsType<OkObjectResult>(result);
             _homeRepository.Verify(r => r.UpsertAsync(home), Times.Once);
 
-            var addr = home.Residents[0].EmailAddresses[0];
+            var addr = resident.EmailAddresses[0];
             switch (category)
             {
                 case "board": Assert.False(addr.BoardEmailOptedIn); break;
@@ -148,10 +162,12 @@ namespace Web.UnitTests
         {
             var homeId = Guid.NewGuid();
             var home = CreateTestHome(homeId, "other@example.com");
+            var resident = CreateTestResident(homeId, "other@example.com");
 
             _tokenService.Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = "missing@example.com" });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
+            SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
             var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
@@ -164,17 +180,19 @@ namespace Web.UnitTests
         {
             var homeId = Guid.NewGuid();
             var home = CreateTestHome(homeId, "Jane@Example.COM");
+            var resident = CreateTestResident(homeId, "Jane@Example.COM");
 
             _tokenService.Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = "jane@example.com" });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
+            SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
             var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
 
             Assert.IsType<OkObjectResult>(result);
-            Assert.False(home.Residents[0].EmailAddresses[0].BoardEmailOptedIn);
+            Assert.False(resident.EmailAddresses[0].BoardEmailOptedIn);
         }
 
         // --- GetPreferences ---
@@ -196,10 +214,12 @@ namespace Web.UnitTests
             var homeId = Guid.NewGuid();
             var email = "jane@example.com";
             var home = CreateTestHome(homeId, email, allOptedIn: true);
+            var resident = CreateTestResident(homeId, email, allOptedIn: true);
 
             _tokenService.Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
+            SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
             var result = await controller.GetPreferences("tok") as OkObjectResult;
@@ -246,11 +266,13 @@ namespace Web.UnitTests
             var homeId = Guid.NewGuid();
             var email = "jane@example.com";
             var home = CreateTestHome(homeId, email, allOptedIn: true);
+            var resident = CreateTestResident(homeId, email, allOptedIn: true);
 
             _tokenService.Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
+            SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
             var dto = new UpdateEmailPreferencesDto
@@ -266,7 +288,7 @@ namespace Web.UnitTests
             Assert.IsType<OkObjectResult>(result);
             _homeRepository.Verify(r => r.UpsertAsync(home), Times.Once);
 
-            var addr = home.Residents[0].EmailAddresses[0];
+            var addr = resident.EmailAddresses[0];
             Assert.False(addr.BoardEmailOptedIn);
             Assert.True(addr.WelcomeEmailOptedIn);
             Assert.False(addr.GardenClubEmailOptedIn);
@@ -293,24 +315,24 @@ namespace Web.UnitTests
                     SocialCommitteeEmailOptedIn = true,
                     SunshineCommitteeEmailOptedIn = true
                 },
-                Residents = new List<Resident>
+                Residents = new List<Resident>()
+            };
+            var resident = new Resident
+            {
+                Id = Guid.NewGuid(),
+                HomeId = homeId,
+                GivenName = "Test",
+                Surname = "User",
+                EmailAddresses = new List<EmailAddress>
                 {
-                    new Resident
+                    new EmailAddress
                     {
-                        GivenName = "Test",
-                        Surname = "User",
-                        EmailAddresses = new List<EmailAddress>
-                        {
-                            new EmailAddress
-                            {
-                                Address = email,
-                                BoardEmailOptedIn = true,
-                                WelcomeEmailOptedIn = true,
-                                GardenClubEmailOptedIn = true,
-                                SocialCommitteeEmailOptedIn = true,
-                                SunshineCommitteeEmailOptedIn = true
-                            }
-                        }
+                        Address = email,
+                        BoardEmailOptedIn = true,
+                        WelcomeEmailOptedIn = true,
+                        GardenClubEmailOptedIn = true,
+                        SocialCommitteeEmailOptedIn = true,
+                        SunshineCommitteeEmailOptedIn = true
                     }
                 }
             };
@@ -319,13 +341,14 @@ namespace Web.UnitTests
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
+            SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
             var dto = new UpdateEmailPreferencesDto { BoardEmailOptedIn = false };
             await controller.UpdatePreferences("tok", dto);
 
             // Both the resident and home-level email should be updated
-            Assert.False(home.Residents[0].EmailAddresses[0].BoardEmailOptedIn);
+            Assert.False(resident.EmailAddresses[0].BoardEmailOptedIn);
             Assert.False(home.EmailAddress.BoardEmailOptedIn);
         }
 
@@ -343,10 +366,17 @@ namespace Web.UnitTests
             // First call returns a home, but upsert throws concurrency conflict
             var home1 = CreateTestHome(homeId, email, allOptedIn: true);
             var home2 = CreateTestHome(homeId, email, allOptedIn: true);
+            var resident1 = CreateTestResident(homeId, email, allOptedIn: true);
+            var resident2 = CreateTestResident(homeId, email, allOptedIn: true);
 
             var getCallCount = 0;
             _homeRepository.Setup(r => r.GetByIdAsync(homeId))
                 .ReturnsAsync(() => getCallCount++ == 0 ? home1 : home2);
+
+            var residentCallCount = 0;
+            _residentRepository.Setup(r => r.GetByHomeIdAsync(homeId))
+                .ReturnsAsync(() => new List<Resident> { residentCallCount++ == 0 ? resident1 : resident2 });
+            _residentRepository.Setup(r => r.UpsertAsync(It.IsAny<Resident>())).ReturnsAsync((Resident r) => r);
 
             var upsertCallCount = 0;
             _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>()))
@@ -364,8 +394,8 @@ namespace Web.UnitTests
             // Should have been called twice (first attempt + retry)
             Assert.Equal(2, getCallCount);
             Assert.Equal(2, upsertCallCount);
-            // The second home object should have the preference flipped
-            Assert.False(home2.Residents[0].EmailAddresses[0].BoardEmailOptedIn);
+            // The second resident object should have the preference flipped
+            Assert.False(resident2.EmailAddresses[0].BoardEmailOptedIn);
         }
 
         [Fact]
@@ -379,6 +409,10 @@ namespace Web.UnitTests
 
             _homeRepository.Setup(r => r.GetByIdAsync(homeId))
                 .ReturnsAsync(() => CreateTestHome(homeId, email, allOptedIn: true));
+
+            _residentRepository.Setup(r => r.GetByHomeIdAsync(homeId))
+                .ReturnsAsync(() => new List<Resident> { CreateTestResident(homeId, email, allOptedIn: true) });
+            _residentRepository.Setup(r => r.UpsertAsync(It.IsAny<Resident>())).ReturnsAsync((Resident r) => r);
 
             _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>()))
                 .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));

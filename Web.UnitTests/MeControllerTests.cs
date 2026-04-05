@@ -18,14 +18,24 @@ public sealed class MeControllerTests
 {
     private const string IdentityProviderClaim = "http://schemas.microsoft.com/identity/claims/identityprovider";
 
+    private static IResidentRepository CreateDefaultResidentMock()
+    {
+        var mock = new Mock<IResidentRepository>();
+        mock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Resident>());
+        mock.Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>())).ReturnsAsync(new List<Resident>());
+        return mock.Object;
+    }
+
     private static MeController CreateController(
         IUserRepository userRepository,
         IHomeRepository homeRepository,
         IEmailService emailService,
+        IResidentRepository? residentRepository = null,
         string nameId = "u1",
         string idp = "google.com")
     {
-        var controller = new MeController(userRepository, homeRepository, emailService, Mock.Of<ILogger<MeController>>())
+        residentRepository ??= CreateDefaultResidentMock();
+        var controller = new MeController(userRepository, homeRepository, residentRepository, emailService, Mock.Of<ILogger<MeController>>())
         {
             ControllerContext = new ControllerContext
             {

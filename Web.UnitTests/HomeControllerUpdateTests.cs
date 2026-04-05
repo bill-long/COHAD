@@ -4,9 +4,11 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Web.Controllers;
 using Web.Models;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 using Xunit;
@@ -21,10 +23,17 @@ public sealed class HomeControllerUpdateTests
         IUserRepository users,
         IHomeRepository homes,
         IAuditLogRepository audit,
+        IResidentRepository? residents = null,
         string nameId = "nid-1",
         string idp = "google.com")
     {
-        var c = new HomeController(users, homes, audit)
+        var c = new HomeController(users, homes, residents ?? Mock.Of<IResidentRepository>(), audit,
+            new ResidentCleanupService(
+                Mock.Of<ICommitteeRepository>(),
+                new CommitteeListCache(Mock.Of<ICommitteeRepository>(), new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())),
+                Mock.Of<IDocumentFileStore>(),
+                Mock.Of<ILogger<ResidentCleanupService>>()),
+            Mock.Of<ILogger<HomeController>>())
         {
             ControllerContext = new ControllerContext
             {
@@ -42,6 +51,15 @@ public sealed class HomeControllerUpdateTests
     }
 
     private static string ExpectedUniqueId(string nameId, string idp) => $"{idp}{nameId}";
+
+    private static Mock<IResidentRepository> CreateResidentMock(Guid homeId, List<Resident>? existing = null)
+    {
+        var mock = new Mock<IResidentRepository>();
+        mock.Setup(r => r.GetByHomeIdAsync(homeId)).ReturnsAsync(existing ?? new List<Resident>());
+        mock.Setup(r => r.UpsertAsync(It.IsAny<Resident>())).ReturnsAsync((Resident r) => r);
+        mock.Setup(r => r.DeleteAsync(It.IsAny<Guid>())).Returns(Task.CompletedTask);
+        return mock;
+    }
 
     [Fact]
     public async Task Update_returns_Forbid_when_not_owner_and_not_administrator()
@@ -92,7 +110,7 @@ public sealed class HomeControllerUpdateTests
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, nameId: "u1");
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, CreateResidentMock(homeId).Object, nameId: "u1");
 
         var result = await c.Update(new UpdatedHome { Id = homeId, Residents = new List<Resident>() });
         Assert.IsType<OkResult>(result);
@@ -128,7 +146,7 @@ public sealed class HomeControllerUpdateTests
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, nameId: "admin");
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, CreateResidentMock(homeId).Object, nameId: "admin");
 
         var result = await c.Update(new UpdatedHome { Id = homeId, Residents = new List<Resident>() });
         Assert.IsType<OkResult>(result);
@@ -177,15 +195,20 @@ public sealed class HomeControllerUpdateTests
             StreetName = "S",
             Residents = new List<Resident>()
         });
-        Home? saved = null;
-        mockHomes.Setup(r => r.UpsertAsync(It.IsAny<Home>()))
-            .Callback<Home>(h => saved = h)
-            .ReturnsAsync((Home h) => h);
+        mockHomes.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync((Home h) => h);
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, nameId: "u1");
+        var savedResidents = new List<Resident>();
+        var mockResidents = new Mock<IResidentRepository>();
+        mockResidents.Setup(r => r.GetByHomeIdAsync(homeId)).ReturnsAsync(new List<Resident>());
+        mockResidents.Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
+            .Callback<Resident>(r => savedResidents.Add(r))
+            .ReturnsAsync((Resident r) => r);
+        mockResidents.Setup(r => r.DeleteAsync(It.IsAny<Guid>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, mockResidents.Object, nameId: "u1");
 
         await c.Update(new UpdatedHome
         {
@@ -205,10 +228,9 @@ public sealed class HomeControllerUpdateTests
             }
         });
 
-        Assert.NotNull(saved);
-        Assert.Single(saved!.Residents);
-        Assert.Empty(saved.Residents[0].EmailAddresses);
-        Assert.Empty(saved.Residents[0].PhoneNumbers);
+        Assert.Single(savedResidents);
+        Assert.Empty(savedResidents[0].EmailAddresses);
+        Assert.Empty(savedResidents[0].PhoneNumbers);
     }
 
     [Fact]
@@ -232,15 +254,20 @@ public sealed class HomeControllerUpdateTests
             StreetName = "S",
             Residents = new List<Resident>()
         });
-        Home? saved = null;
-        mockHomes.Setup(r => r.UpsertAsync(It.IsAny<Home>()))
-            .Callback<Home>(h => saved = h)
-            .ReturnsAsync((Home h) => h);
+        mockHomes.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync((Home h) => h);
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, nameId: "u1");
+        var savedResidents = new List<Resident>();
+        var mockResidents = new Mock<IResidentRepository>();
+        mockResidents.Setup(r => r.GetByHomeIdAsync(homeId)).ReturnsAsync(new List<Resident>());
+        mockResidents.Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
+            .Callback<Resident>(r => savedResidents.Add(r))
+            .ReturnsAsync((Resident r) => r);
+        mockResidents.Setup(r => r.DeleteAsync(It.IsAny<Guid>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, mockResidents.Object, nameId: "u1");
 
         await c.Update(new UpdatedHome
         {
@@ -262,9 +289,9 @@ public sealed class HomeControllerUpdateTests
             }
         });
 
-        Assert.NotNull(saved);
-        Assert.Single(saved!.Residents[0].EmailAddresses);
-        Assert.Equal("good@example.com", saved.Residents[0].EmailAddresses[0].Address);
+        Assert.Single(savedResidents);
+        Assert.Single(savedResidents[0].EmailAddresses);
+        Assert.Equal("good@example.com", savedResidents[0].EmailAddresses[0].Address);
     }
 
     [Fact]
@@ -288,15 +315,20 @@ public sealed class HomeControllerUpdateTests
             StreetName = "S",
             Residents = new List<Resident>()
         });
-        Home? saved = null;
-        mockHomes.Setup(r => r.UpsertAsync(It.IsAny<Home>()))
-            .Callback<Home>(h => saved = h)
-            .ReturnsAsync((Home h) => h);
+        mockHomes.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync((Home h) => h);
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, nameId: "u1");
+        var savedResidents = new List<Resident>();
+        var mockResidents = new Mock<IResidentRepository>();
+        mockResidents.Setup(r => r.GetByHomeIdAsync(homeId)).ReturnsAsync(new List<Resident>());
+        mockResidents.Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
+            .Callback<Resident>(r => savedResidents.Add(r))
+            .ReturnsAsync((Resident r) => r);
+        mockResidents.Setup(r => r.DeleteAsync(It.IsAny<Guid>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, mockResidents.Object, nameId: "u1");
 
         await c.Update(new UpdatedHome
         {
@@ -309,8 +341,7 @@ public sealed class HomeControllerUpdateTests
             }
         });
 
-        Assert.NotNull(saved);
-        Assert.Single(saved!.Residents);
-        Assert.Equal("Keep", saved.Residents[0].GivenName);
+        Assert.Single(savedResidents);
+        Assert.Equal("Keep", savedResidents[0].GivenName);
     }
 }

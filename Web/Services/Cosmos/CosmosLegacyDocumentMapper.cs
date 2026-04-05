@@ -124,7 +124,8 @@ namespace Web.Services.Cosmos
                 StreetName = doc.Value<string>("StreetName"),
                 PhoneNumber = DeserializeFlexible<PhoneNumber>(doc["PhoneNumber"]),
                 EmailAddress = DeserializeFlexible<EmailAddress>(doc["EmailAddress"]),
-                Residents = DeserializeFlexible<List<Resident>>(doc["Residents"]) ?? new List<Resident>(),
+                // Residents are now stored in a separate "Residents" container.
+                // Controllers populate Home.Residents from IResidentRepository when needed.
                 ETag = doc.Value<string>("_etag")
             };
         }
@@ -149,7 +150,9 @@ namespace Web.Services.Cosmos
             // Keep legacy storage format for backward compatibility.
             doc["PhoneNumber"] = JsonConvert.SerializeObject(home.PhoneNumber);
             doc["EmailAddress"] = JsonConvert.SerializeObject(home.EmailAddress);
-            doc["Residents"] = JsonConvert.SerializeObject(home.Residents ?? new List<Resident>());
+            // Residents are now stored in a separate "Residents" container.
+            // Preserve any existing "Residents" field in the document so that a rollback
+            // to the previous code version can still read them until migration cleanup.
         }
 
         internal static Payment ToPayment(JObject doc)
@@ -431,6 +434,108 @@ namespace Web.Services.Cosmos
             }
 
             return new List<EmailJobRecipient>();
+        }
+
+        // ── Committee ────────────────────────────────────────────────
+
+        // ── Resident (person entity) ────────────────────────────────
+
+        internal static string ResidentEntityDocumentId(Guid residentId) => $"Resident|{residentId:D}";
+
+        internal static Resident ToResidentEntity(JObject doc)
+        {
+            var rawId = doc.Value<string>("id");
+            return new Resident
+            {
+                Id = ParseLegacyGuid(rawId),
+                HomeId = Guid.TryParse(doc.Value<string>("HomeId"), out var hid) ? hid : Guid.Empty,
+                GivenName = doc.Value<string>("GivenName"),
+                Surname = doc.Value<string>("Surname"),
+                YearOfBirth = doc.Value<int?>("YearOfBirth") ?? 0,
+                CollegeName = doc.Value<string>("CollegeName"),
+                ResidentType = Enum.TryParse<Resident.Type>(doc.Value<string>("ResidentType"), out var rt)
+                    ? rt
+                    : Resident.Type.Homeowner,
+                EmailAddresses = DeserializeFlexible<List<EmailAddress>>(doc["EmailAddresses"]) ?? new List<EmailAddress>(),
+                PhoneNumbers = DeserializeFlexible<List<PhoneNumber>>(doc["PhoneNumbers"]) ?? new List<PhoneNumber>()
+            };
+        }
+
+        internal static JObject ToResidentEntityDocument(Resident resident)
+        {
+            return new JObject
+            {
+                ["id"] = ResidentEntityDocumentId(resident.Id),
+                ["HomeId"] = resident.HomeId.ToString("D"),
+                ["GivenName"] = resident.GivenName,
+                ["Surname"] = resident.Surname,
+                ["YearOfBirth"] = resident.YearOfBirth,
+                ["CollegeName"] = resident.CollegeName,
+                ["ResidentType"] = resident.ResidentType.ToString(),
+                ["EmailAddresses"] = JsonConvert.SerializeObject(resident.EmailAddresses ?? new List<EmailAddress>()),
+                ["PhoneNumbers"] = JsonConvert.SerializeObject(resident.PhoneNumbers ?? new List<PhoneNumber>())
+            };
+        }
+
+        // ── Committee ────────────────────────────────────────────────
+
+        internal static Committee ToCommittee(JObject doc)
+        {
+            return new Committee
+            {
+                Id = doc.Value<string>("id"),
+                CommitteeEmail = doc.Value<string>("CommitteeEmail"),
+                DisplayName = doc.Value<string>("DisplayName"),
+                Description = doc.Value<string>("Description"),
+                DisplayOrder = doc.Value<int?>("DisplayOrder") ?? 0,
+                Members = ToCommitteeMembers(doc["Members"]),
+                ManagementRole = Enum.TryParse<User.Role>(doc.Value<string>("ManagementRole"), out var mr) ? mr : null,
+                GraphMessageRuleId = doc.Value<string>("GraphMessageRuleId"),
+                LastSyncedUtc = doc.Value<DateTime?>("LastSyncedUtc"),
+                LastSyncStatus = doc.Value<string>("LastSyncStatus"),
+                LastSyncError = doc.Value<string>("LastSyncError")
+            };
+        }
+
+        internal static JObject ToCommitteeDocument(Committee committee)
+        {
+            return new JObject
+            {
+                ["id"] = committee.Id,
+                ["CommitteeEmail"] = committee.CommitteeEmail,
+                ["DisplayName"] = committee.DisplayName,
+                ["Description"] = committee.Description,
+                ["DisplayOrder"] = committee.DisplayOrder,
+                ["Members"] = JArray.FromObject(committee.Members ?? new List<CommitteeMember>()),
+                ["ManagementRole"] = committee.ManagementRole?.ToString(),
+                ["GraphMessageRuleId"] = committee.GraphMessageRuleId,
+                ["LastSyncedUtc"] = committee.LastSyncedUtc,
+                ["LastSyncStatus"] = committee.LastSyncStatus,
+                ["LastSyncError"] = committee.LastSyncError
+            };
+        }
+
+        private static List<CommitteeMember> ToCommitteeMembers(JToken token)
+        {
+            if (token is JArray arr)
+            {
+                return arr
+                    .Select(t => new CommitteeMember
+                    {
+                        Id = t.Value<Guid?>("Id") ?? Guid.Empty,
+                        ResidentId = t.Value<Guid?>("ResidentId") ?? Guid.Empty,
+                        Title = t.Value<string>("Title"),
+                        Bio = t.Value<string>("Bio"),
+                        PhotoBlobPath = t.Value<string>("PhotoBlobPath"),
+                        PhotoContentType = t.Value<string>("PhotoContentType"),
+                        ReceivesForwardedEmail = t.Value<bool?>("ReceivesForwardedEmail") ?? false,
+                        PhotoOffsetY = t.Value<int?>("PhotoOffsetY") ?? 50,
+                        DisplayOrder = t.Value<int?>("DisplayOrder") ?? 0
+                    })
+                    .ToList();
+            }
+
+            return new List<CommitteeMember>();
         }
     }
 }

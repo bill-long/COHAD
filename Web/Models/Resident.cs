@@ -5,6 +5,10 @@ namespace Web.Models
 {
     public class Resident
     {
+        public Guid Id { get; set; }
+
+        public Guid HomeId { get; set; }
+
         public string GivenName { get; set; }
 
         public string Surname { get; set; }
