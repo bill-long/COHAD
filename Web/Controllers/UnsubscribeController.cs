@@ -20,11 +20,16 @@ namespace Web.Controllers
 
         private readonly IUnsubscribeTokenService _tokenService;
         private readonly IHomeRepository _homeRepository;
+        private readonly IResidentRepository _residentRepository;
 
-        public UnsubscribeController(IUnsubscribeTokenService tokenService, IHomeRepository homeRepository)
+        public UnsubscribeController(
+            IUnsubscribeTokenService tokenService,
+            IHomeRepository homeRepository,
+            IResidentRepository residentRepository)
         {
             _tokenService = tokenService;
             _homeRepository = homeRepository;
+            _residentRepository = residentRepository;
         }
 
         /// <summary>
@@ -71,7 +76,8 @@ namespace Web.Controllers
             if (home == null)
                 return NotFound(new { error = "Home not found." });
 
-            var matchingAddresses = FindMatchingEmailAddresses(home, payload.Email);
+            var residents = await _residentRepository.GetByHomeIdAsync(payload.HomeId);
+            var matchingAddresses = FindMatchingEmailAddresses(home, residents, payload.Email);
             if (matchingAddresses.Count == 0)
                 return NotFound(new { error = "Email address not found on this home." });
 
@@ -140,7 +146,8 @@ namespace Web.Controllers
                 if (home == null)
                     return NotFound(new { error = "Home not found." });
 
-                var matchingAddresses = FindMatchingEmailAddresses(home, payload.Email);
+                var residents = await _residentRepository.GetByHomeIdAsync(payload.HomeId);
+                var matchingAddresses = FindMatchingEmailAddresses(home, residents, payload.Email);
                 if (matchingAddresses.Count == 0)
                     return NotFound(new { error = "Email address not found on this home." });
 
@@ -149,6 +156,9 @@ namespace Web.Controllers
                 try
                 {
                     await _homeRepository.UpsertAsync(home);
+                    // Save all residents that might have had email preferences modified.
+                    foreach (var resident in residents)
+                        await _residentRepository.UpsertAsync(resident);
                     return result;
                 }
                 catch (ConcurrencyConflictException)
@@ -162,14 +172,14 @@ namespace Web.Controllers
             return Conflict(new { error = "Unable to save preferences due to concurrent updates. Please try again." });
         }
 
-        private static List<EmailAddress> FindMatchingEmailAddresses(Home home, string email)
+        private static List<EmailAddress> FindMatchingEmailAddresses(Home home, List<Resident> residents, string email)
         {
             var matches = new List<EmailAddress>();
             var normalizedEmail = email.Trim().ToLowerInvariant();
 
-            if (home.Residents != null)
+            if (residents != null)
             {
-                foreach (var resident in home.Residents)
+                foreach (var resident in residents)
                 {
                     if (resident.EmailAddresses == null)
                         continue;

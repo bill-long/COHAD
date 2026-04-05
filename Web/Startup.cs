@@ -234,6 +234,7 @@ namespace Web
                 services.AddSingleton<IPaymentRepository>(sp =>
                     new MockPaymentRepository(
                         sp.GetRequiredService<IHomeRepository>(),
+                        sp.GetRequiredService<IResidentRepository>(),
                         sp.GetRequiredService<IUserRepository>()));
                 services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
                 services.AddSingleton<IDocumentRepository, MockDocumentRepository>();
@@ -246,6 +247,7 @@ namespace Web
                 services.AddSingleton<IVendorFlagRepository, MockVendorFlagRepository>();
                 services.AddSingleton<IYouthServiceListingRepository, MockYouthServiceListingRepository>();
                 services.AddSingleton<ICommitteeRepository, MockCommitteeRepository>();
+                services.AddSingleton<IResidentRepository, MockResidentRepository>();
                 services.AddSingleton<IGraphMailboxService, MockGraphMailboxService>();
                 services.AddSingleton<IDocumentFileStore>(sp =>
                     new CachedDocumentFileStore(new MockDocumentFileStore()));
@@ -269,6 +271,7 @@ namespace Web
                     new CosmosPaymentRepository(
                         sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments"),
                         sp.GetRequiredService<IHomeRepository>(),
+                        sp.GetRequiredService<IResidentRepository>(),
                         sp.GetRequiredService<IUserRepository>()));
                 services.AddScoped<IAuditLogRepository>(sp =>
                     new CosmosAuditLogRepository(
@@ -294,6 +297,8 @@ namespace Web
                     new CosmosYouthServiceListingRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "YouthServices")));
                 services.AddScoped<ICommitteeRepository>(sp =>
                     new CosmosCommitteeRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Committees")));
+                services.AddScoped<IResidentRepository>(sp =>
+                    new CosmosResidentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Residents")));
                 services.AddSingleton<IDocumentFileStore>(sp =>
                     new CachedDocumentFileStore(
                         new AzureBlobDocumentFileStore(sp.GetRequiredService<IOptions<DocumentStorageOptions>>())));

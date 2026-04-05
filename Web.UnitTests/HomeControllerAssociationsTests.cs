@@ -20,10 +20,18 @@ public sealed class HomeControllerAssociationsTests
         IUserRepository users,
         IHomeRepository homes,
         IAuditLogRepository audit,
+        IResidentRepository? residents = null,
         string nameId = "nid-1",
         string idp = "google.com")
     {
-        var c = new HomeController(users, homes, audit)
+        if (residents == null)
+        {
+            var mock = new Mock<IResidentRepository>();
+            mock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Resident>());
+            mock.Setup(r => r.GetByHomeIdAsync(It.IsAny<Guid>())).ReturnsAsync(new List<Resident>());
+            residents = mock.Object;
+        }
+        var c = new HomeController(users, homes, residents, audit)
         {
             ControllerContext = new ControllerContext
             {

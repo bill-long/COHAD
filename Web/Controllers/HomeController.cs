@@ -17,15 +17,18 @@ namespace Web.Controllers
     {
         private readonly IUserRepository _userRepository;
         private readonly IHomeRepository _homeRepository;
+        private readonly IResidentRepository _residentRepository;
         private readonly IAuditLogRepository _auditLogRepository;
 
         public HomeController(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
+            IResidentRepository residentRepository,
             IAuditLogRepository auditLogRepository)
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
+            _residentRepository = residentRepository;
             _auditLogRepository = auditLogRepository;
         }
 
@@ -37,7 +40,9 @@ namespace Web.Controllers
         {
             var homes = await _homeRepository.GetAllAsync();
             var users = await _userRepository.GetAllAsync();
+            var allResidents = await _residentRepository.GetAllAsync();
             PopulateAssociatedUsers(homes, users);
+            PopulateResidents(homes, allResidents);
             return homes;
         }
 
@@ -46,8 +51,6 @@ namespace Web.Controllers
         /// do this for any home, but Resident role can only do this
         /// for their owned homes.
         /// </summary>
-        /// <param name="updatedHome"></param>
-        /// <returns></returns>
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] UpdatedHome updatedHome)
         {
@@ -72,18 +75,22 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            foreach (var resident in updatedHome.Residents)
+            // Validate and sanitize incoming residents.
+            var incomingResidents = (updatedHome.Residents ?? new List<Resident>())
+                .Where(r => !string.IsNullOrEmpty(r.GivenName))
+                .ToList();
+
+            foreach (var resident in incomingResidents)
             {
+                resident.HomeId = updatedHome.Id;
+
                 if (resident.ResidentType == Resident.Type.Child)
                 {
-                    // Ensure we don't store contact info for children
-                    // The front end should not allow this, but we check here just in case
                     resident.EmailAddresses = new List<EmailAddress>();
                     resident.PhoneNumbers = new List<PhoneNumber>();
                 }
                 else if (resident.EmailAddresses != null && resident.EmailAddresses.Any())
                 {
-                    // Make sure email addresses are valid
                     resident.EmailAddresses =
                         resident.EmailAddresses
                             .Where(e => !string.IsNullOrWhiteSpace(e.Address) && e.Address.Contains("@", StringComparison.OrdinalIgnoreCase))
@@ -91,9 +98,35 @@ namespace Web.Controllers
                 }
             }
 
+            // Diff against existing residents and apply creates/updates/deletes.
+            var existingResidents = await _residentRepository.GetByHomeIdAsync(updatedHome.Id);
+            var existingById = existingResidents.Where(r => r.Id != Guid.Empty).ToDictionary(r => r.Id);
+
+            foreach (var incoming in incomingResidents)
+            {
+                if (incoming.Id == Guid.Empty || !existingById.ContainsKey(incoming.Id))
+                {
+                    // New resident — assign ID.
+                    if (incoming.Id == Guid.Empty)
+                        incoming.Id = Guid.NewGuid();
+                    await _residentRepository.UpsertAsync(incoming);
+                }
+                else
+                {
+                    // Existing resident — update.
+                    await _residentRepository.UpsertAsync(incoming);
+                    existingById.Remove(incoming.Id);
+                }
+            }
+
+            // Any remaining in existingById were removed.
+            foreach (var removed in existingById.Values)
+            {
+                await _residentRepository.DeleteAsync(removed.Id);
+            }
+
             storedHome.EmailAddress = updatedHome.EmailAddress;
             storedHome.PhoneNumber = updatedHome.PhoneNumber;
-            storedHome.Residents = updatedHome.Residents.Where(r => !string.IsNullOrEmpty(r.GivenName)).ToList();
 
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {
@@ -169,6 +202,15 @@ namespace Web.Controllers
                         IdentityProvider = u.IdentityProvider
                     })
                     .ToList();
+            }
+        }
+
+        private static void PopulateResidents(List<Home> homes, List<Resident> allResidents)
+        {
+            var byHomeId = allResidents.GroupBy(r => r.HomeId).ToDictionary(g => g.Key, g => g.ToList());
+            foreach (var home in homes)
+            {
+                home.Residents = byHomeId.TryGetValue(home.Id, out var residents) ? residents : new List<Resident>();
             }
         }
     }

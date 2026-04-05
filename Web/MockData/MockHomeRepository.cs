@@ -37,31 +37,7 @@ namespace Web.MockData
                     SocialCommitteeEmailOptedIn = false,
                     SunshineCommitteeEmailOptedIn = false
                 },
-                Residents = new List<Resident>
-                {
-                    new Resident
-                    {
-                        GivenName = "Mock",
-                        Surname = "Resident",
-                        YearOfBirth = 1980,
-                        CollegeName = "",
-                        ResidentType = Resident.Type.Homeowner,
-                        EmailAddresses = new List<EmailAddress>
-                        {
-                            new EmailAddress
-                            {
-                                Address = "mock@cohad.local",
-                                VisibleInDirectory = true,
-                                BoardEmailOptedIn = true,
-                                WelcomeEmailOptedIn = false,
-                                GardenClubEmailOptedIn = false,
-                                SocialCommitteeEmailOptedIn = false,
-                                SunshineCommitteeEmailOptedIn = false
-                            }
-                        },
-                        PhoneNumbers = new List<PhoneNumber>()
-                    }
-                },
+                // Residents are stored in the separate MockResidentRepository.
                 AssociatedUsers = new List<HomeAssociatedUser>()
             };
             _homes[primaryHome.Id] = CloneHome(primaryHome);
@@ -90,31 +66,7 @@ namespace Web.MockData
                     SocialCommitteeEmailOptedIn = false,
                     SunshineCommitteeEmailOptedIn = false
                 },
-                Residents = new List<Resident>
-                {
-                    new Resident
-                    {
-                        GivenName = "Taylor",
-                        Surname = "Neighbor",
-                        YearOfBirth = 1990,
-                        CollegeName = "",
-                        ResidentType = Resident.Type.Homeowner,
-                        EmailAddresses = new List<EmailAddress>
-                        {
-                            new EmailAddress
-                            {
-                                Address = "taylor@cohad.local",
-                                VisibleInDirectory = true,
-                                BoardEmailOptedIn = true,
-                                WelcomeEmailOptedIn = false,
-                                GardenClubEmailOptedIn = false,
-                                SocialCommitteeEmailOptedIn = false,
-                                SunshineCommitteeEmailOptedIn = false
-                            }
-                        },
-                        PhoneNumbers = new List<PhoneNumber>()
-                    }
-                },
+                // Residents are stored in the separate MockResidentRepository.
                 AssociatedUsers = new List<HomeAssociatedUser>()
             };
             _homes[secondaryHome.Id] = CloneHome(secondaryHome);
@@ -191,7 +143,7 @@ namespace Web.MockData
                 StreetName = h.StreetName,
                 PhoneNumber = ClonePhoneNumber(h.PhoneNumber),
                 EmailAddress = CloneEmailAddress(h.EmailAddress),
-                Residents = h.Residents?.Select(CloneResident).ToList() ?? new List<Resident>(),
+                // Residents are not stored on the Home — they live in IResidentRepository.
                 AssociatedUsers = h.AssociatedUsers?.Select(CloneAssociatedUser).ToList() ?? new List<HomeAssociatedUser>()
             };
         }
@@ -229,25 +181,6 @@ namespace Web.MockData
                 GardenClubEmailOptedIn = e.GardenClubEmailOptedIn,
                 SocialCommitteeEmailOptedIn = e.SocialCommitteeEmailOptedIn,
                 SunshineCommitteeEmailOptedIn = e.SunshineCommitteeEmailOptedIn
-            };
-        }
-
-        private static Resident CloneResident(Resident r)
-        {
-            if (r == null)
-            {
-                return null;
-            }
-
-            return new Resident
-            {
-                GivenName = r.GivenName,
-                Surname = r.Surname,
-                YearOfBirth = r.YearOfBirth,
-                CollegeName = r.CollegeName,
-                ResidentType = r.ResidentType,
-                EmailAddresses = r.EmailAddresses?.Select(CloneEmailAddress).ToList() ?? new List<EmailAddress>(),
-                PhoneNumbers = r.PhoneNumbers?.Select(ClonePhoneNumber).ToList() ?? new List<PhoneNumber>()
             };
         }
 

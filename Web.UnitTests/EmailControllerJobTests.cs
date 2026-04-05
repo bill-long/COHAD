@@ -30,6 +30,7 @@ public sealed class EmailControllerJobTests
 
     private readonly Mock<IUserRepository> _users = new();
     private readonly Mock<IHomeRepository> _homes = new();
+    private readonly Mock<IResidentRepository> _residents = new();
     private readonly Mock<IAuditLogRepository> _audit = new();
     private readonly Mock<IEmailJobRepository> _jobRepo = new();
     private readonly Mock<IDocumentFileStore> _fileStore = new();
@@ -39,6 +40,9 @@ public sealed class EmailControllerJobTests
 
     public EmailControllerJobTests()
     {
+        // Default resident mock returns empty so tests don't crash.
+        _residents.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Resident>());
+
         // Default cleanup query returns empty so tests exercise the non-exception path.
         _jobRepo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
             .ReturnsAsync(new List<EmailJob>());
@@ -108,6 +112,7 @@ public sealed class EmailControllerJobTests
         var controller = new EmailController(
             _users.Object,
             _homes.Object,
+            _residents.Object,
             _audit.Object,
             _jobRepo.Object,
             _fileStore.Object,

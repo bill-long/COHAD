@@ -21,6 +21,7 @@ namespace Web.Controllers
     {
         private readonly IUserRepository _userRepository;
         private readonly IHomeRepository _homeRepository;
+        private readonly IResidentRepository _residentRepository;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly IEmailJobRepository _emailJobRepository;
         private readonly IDocumentFileStore _fileStore;
@@ -33,6 +34,7 @@ namespace Web.Controllers
         public EmailController(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
+            IResidentRepository residentRepository,
             IAuditLogRepository auditLogRepository,
             IEmailJobRepository emailJobRepository,
             IDocumentFileStore fileStore,
@@ -44,6 +46,7 @@ namespace Web.Controllers
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
+            _residentRepository = residentRepository;
             _auditLogRepository = auditLogRepository;
             _emailJobRepository = emailJobRepository;
             _fileStore = fileStore;
@@ -301,12 +304,14 @@ namespace Web.Controllers
         {
             var seen = new Dictionary<string, EmailJobRecipient>(StringComparer.OrdinalIgnoreCase);
             var homes = await _homeRepository.GetAllAsync();
+            var allResidents = await _residentRepository.GetAllAsync();
+            var residentsByHome = allResidents.GroupBy(r => r.HomeId).ToDictionary(g => g.Key, g => g.ToList());
 
             foreach (var home in homes)
             {
-                if (home.Residents != null)
+                if (residentsByHome.TryGetValue(home.Id, out var residents))
                 {
-                    foreach (var resident in home.Residents)
+                    foreach (var resident in residents)
                     {
                         if (resident.EmailAddresses == null) continue;
                         foreach (var addr in resident.EmailAddresses.Where(filter))

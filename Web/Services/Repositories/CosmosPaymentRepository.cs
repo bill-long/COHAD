@@ -48,12 +48,14 @@ namespace Web.Services.Repositories
 
         private readonly CosmosContainer _paymentsContainer;
         private readonly IHomeRepository _homes;
+        private readonly IResidentRepository _residents;
         private readonly IUserRepository _users;
 
-        public CosmosPaymentRepository(CosmosContainer paymentsContainer, IHomeRepository homes, IUserRepository users)
+        public CosmosPaymentRepository(CosmosContainer paymentsContainer, IHomeRepository homes, IResidentRepository residents, IUserRepository users)
         {
             _paymentsContainer = paymentsContainer;
             _homes = homes;
+            _residents = residents;
             _users = users;
         }
 
@@ -117,7 +119,9 @@ SELECT * FROM c WHERE
             if (ownedHomeIds.Count > 0)
             {
                 var homes = await _homes.GetByIdsAsync(ownedHomeIds).ConfigureAwait(false);
-                var emailSets = PaymentHomeAssociation.BuildEmailSetsByHome(homes);
+                var allResidents = await _residents.GetAllAsync().ConfigureAwait(false);
+                var residentsByHome = allResidents.GroupBy(r => r.HomeId).ToDictionary(g => g.Key, g => g.ToList());
+                var emailSets = PaymentHomeAssociation.BuildEmailSetsByHome(homes, residentsByHome);
                 var allUsers = await _users.GetAllAsync().ConfigureAwait(false);
                 PaymentHomeAssociation.MergeAccountEmailsFromUsersIntoHomeSets(allUsers, ownedHomeIds, emailSets);
 

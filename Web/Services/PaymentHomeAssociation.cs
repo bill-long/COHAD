@@ -13,7 +13,9 @@ namespace Web.Services
         /// <summary>
         /// For each home, all normalized email addresses that count as "on" that home for dues visibility.
         /// </summary>
-        public static Dictionary<Guid, HashSet<string>> BuildEmailSetsByHome(IEnumerable<Home> homes)
+        public static Dictionary<Guid, HashSet<string>> BuildEmailSetsByHome(
+            IEnumerable<Home> homes,
+            IReadOnlyDictionary<Guid, List<Resident>> residentsByHome)
         {
             var map = new Dictionary<Guid, HashSet<string>>();
             foreach (var home in homes)
@@ -21,11 +23,14 @@ namespace Web.Services
                 var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 AddEmail(set, home.EmailAddress?.Address);
 
-                foreach (var resident in home.Residents ?? Enumerable.Empty<Resident>())
+                if (residentsByHome != null && residentsByHome.TryGetValue(home.Id, out var residents))
                 {
-                    foreach (var e in resident.EmailAddresses ?? Enumerable.Empty<EmailAddress>())
+                    foreach (var resident in residents)
                     {
-                        AddEmail(set, e?.Address);
+                        foreach (var e in resident.EmailAddresses ?? Enumerable.Empty<EmailAddress>())
+                        {
+                            AddEmail(set, e?.Address);
+                        }
                     }
                 }
 
@@ -89,6 +94,7 @@ namespace Web.Services
         public static IReadOnlyList<Guid> FindHomeIdsForPayerEmail(
             string normalizedEmail,
             IReadOnlyList<Home> homes,
+            IReadOnlyDictionary<Guid, List<Resident>> residentsByHome,
             IReadOnlyList<User> users)
         {
             if (string.IsNullOrEmpty(normalizedEmail))
@@ -97,7 +103,7 @@ namespace Web.Services
             }
 
             var found = new HashSet<Guid>();
-            var emailSets = BuildEmailSetsByHome(homes);
+            var emailSets = BuildEmailSetsByHome(homes, residentsByHome);
             foreach (var kv in emailSets)
             {
                 if (kv.Value.Contains(normalizedEmail))
