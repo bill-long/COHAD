@@ -22,7 +22,7 @@ function minimalAdmin(): ApiUser {
     email: 'a@b.c',
     streetAddress: '',
     roles: ['Administrator'],
-    ownedHomes: []
+    ownedHomes: [],
   };
 }
 
@@ -41,7 +41,7 @@ describe('VendorFlagNotificationsService', () => {
     const connection = {
       on: jasmine.createSpy('hubOn'),
       start: jasmine.createSpy('hubStart').and.returnValue(Promise.resolve()),
-      stop: jasmine.createSpy('hubStop').and.returnValue(Promise.resolve())
+      stop: jasmine.createSpy('hubStop').and.returnValue(Promise.resolve()),
     };
     spyOn(hubProto, 'withUrl').and.callFake(function (this: SignalR.HubConnectionBuilder) {
       return this;
@@ -61,7 +61,7 @@ describe('VendorFlagNotificationsService', () => {
   beforeEach(() => {
     state$ = new BehaviorSubject<ApplicationState>({
       ...initialStateValue,
-      apiUser: null
+      apiUser: null,
     });
     vendorsSpy = jasmine.createSpyObj('VendorsService', ['getPendingFlagNotifications']);
     vendorsSpy.getPendingFlagNotifications.and.returnValue(of([]));
@@ -74,8 +74,8 @@ describe('VendorFlagNotificationsService', () => {
         { provide: VendorsService, useValue: vendorsSpy },
         { provide: OAuthService, useValue: oauthSpy },
         MockAuthTokenService,
-        { provide: applicationState, useValue: state$.asObservable() }
-      ]
+        { provide: applicationState, useValue: state$.asObservable() },
+      ],
     });
   });
 
@@ -87,7 +87,7 @@ describe('VendorFlagNotificationsService', () => {
         vendorName: 'Vendor',
         authorDisplayName: 'Auth',
         flagNote: 'first',
-        createdUtc: '2025-01-02T00:00:00Z'
+        createdUtc: '2025-01-02T00:00:00Z',
       },
       {
         flagId: 'f1',
@@ -95,8 +95,8 @@ describe('VendorFlagNotificationsService', () => {
         vendorName: 'Vendor',
         authorDisplayName: 'Auth',
         flagNote: 'second',
-        createdUtc: '2025-01-01T00:00:00Z'
-      }
+        createdUtc: '2025-01-01T00:00:00Z',
+      },
     ];
     vendorsSpy.getPendingFlagNotifications.and.returnValue(of(rows));
 
@@ -123,9 +123,9 @@ describe('VendorFlagNotificationsService', () => {
           vendorName: 'V',
           authorDisplayName: 'A',
           flagNote: 'note',
-          createdUtc: '2025-01-01T00:00:00Z'
-        }
-      ])
+          createdUtc: '2025-01-01T00:00:00Z',
+        },
+      ]),
     );
 
     TestBed.inject(VendorFlagNotificationsService);

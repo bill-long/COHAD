@@ -12,7 +12,7 @@ namespace Web.Models
         Completed = 2,
         PartiallyCompleted = 3,
         Failed = 4,
-        Cancelled = 5
+        Cancelled = 5,
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -20,7 +20,7 @@ namespace Web.Models
     {
         Pending = 0,
         Sent = 1,
-        Failed = 2
+        Failed = 2,
     }
 
     public class EmailJob

@@ -17,9 +17,7 @@ export function httpErrorMessage(err: unknown, fallback: string): string {
     return body;
   }
   if (body instanceof ProgressEvent) {
-    return err.status === 0
-      ? 'Network error. Check your connection and try again.'
-      : fallback;
+    return err.status === 0 ? 'Network error. Check your connection and try again.' : fallback;
   }
   if (body != null && typeof body === 'object' && !Array.isArray(body)) {
     const o = body as { error?: unknown; message?: unknown; title?: unknown };

@@ -12,7 +12,7 @@ export interface EventEditorDialogData {
   selector: 'app-event-editor-dialog',
   templateUrl: './event-editor-dialog.component.html',
   styleUrls: ['./event-editor-dialog.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class EventEditorDialogComponent {
   @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
@@ -38,7 +38,7 @@ export class EventEditorDialogComponent {
   constructor(
     private readonly eventsService: EventsService,
     public readonly dialogRef: MatDialogRef<EventEditorDialogComponent, boolean>,
-    @Inject(MAT_DIALOG_DATA) public readonly data: EventEditorDialogData
+    @Inject(MAT_DIALOG_DATA) public readonly data: EventEditorDialogData,
   ) {
     const ev = data.event;
     if (ev != null) {
@@ -114,23 +114,23 @@ export class EventEditorDialogComponent {
           startUtc,
           allowSignups: this.allowSignups,
           signupMode: this.signupMode,
-          removePromoMedia: this.removePromoMedia
+          removePromoMedia: this.removePromoMedia,
         },
-        this.selectedFile
+        this.selectedFile,
       )
       .pipe(
         finalize(() => {
           this.saving = false;
           this.dialogRef.disableClose = false;
-        })
+        }),
       )
       .subscribe({
         next: () => {
           this.dialogRef.close(true);
         },
-        error: (err) => {
+        error: err => {
           this.error = httpErrorMessage(err, 'Failed to save event.');
-        }
+        },
       });
   }
 
@@ -175,14 +175,7 @@ export class EventEditorDialogComponent {
     }
     const hours = Number(match[1]);
     const minutes = Number(match[2]);
-    if (
-      Number.isNaN(hours) ||
-      Number.isNaN(minutes) ||
-      hours < 0 ||
-      hours > 23 ||
-      minutes < 0 ||
-      minutes > 59
-    ) {
+    if (Number.isNaN(hours) || Number.isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
       return null;
     }
     const d = new Date(this.startDate);

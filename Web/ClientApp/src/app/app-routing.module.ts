@@ -40,7 +40,9 @@ import { ManageCommitteesComponent } from './components/manage-committees/manage
 
 @Injectable({ providedIn: 'root' })
 export class CohadTitleStrategy extends TitleStrategy {
-  constructor(private readonly title: Title) { super(); }
+  constructor(private readonly title: Title) {
+    super();
+  }
 
   override updateTitle(routerState: RouterStateSnapshot): void {
     const pageTitle = this.buildTitle(routerState);
@@ -68,62 +70,158 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'myinfo' },
-      { path: 'directory', component: DirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Directory' },
-      { path: 'map', component: MapComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Map' },
-      { path: 'documents', component: DocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Documents' },
+      {
+        path: 'directory',
+        component: DirectoryComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: ['Resident', 'Administrator'] },
+        title: 'Directory',
+      },
+      {
+        path: 'map',
+        component: MapComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: ['Resident', 'Administrator'] },
+        title: 'Map',
+      },
+      {
+        path: 'documents',
+        component: DocumentsComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: ['Resident', 'Administrator'] },
+        title: 'Documents',
+      },
       { path: 'dues', component: DuesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident'] }, title: 'Dues' },
       { path: 'myinfo', component: MyinfoComponent, title: 'My Info' },
-      { path: 'vendors', component: VendorsComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Vendor List' },
-      { path: 'vendors/:id', component: VendorDetailComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Vendor Details' },
-      { path: 'youth-services', component: YouthServicesComponent, canActivate: [RoleGuard], data: { allowedRoles: ['Resident', 'Administrator'] }, title: 'Youth Services' }
-    ]
+      {
+        path: 'vendors',
+        component: VendorsComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: ['Resident', 'Administrator'] },
+        title: 'Vendor List',
+      },
+      {
+        path: 'vendors/:id',
+        component: VendorDetailComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: ['Resident', 'Administrator'] },
+        title: 'Vendor Details',
+      },
+      {
+        path: 'youth-services',
+        component: YouthServicesComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: ['Resident', 'Administrator'] },
+        title: 'Youth Services',
+      },
+    ],
   },
-  { path: 'rendered-print-directory', component: RenderedPrintableDirectoryComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.printDirectoryRoles }, title: 'Print Directory' },
-  { path: 'rendered-print-map', component: RenderedPrintableMapComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, title: 'Print Map' },
   {
-    path: 'manage', component: ManageComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, children: [
-      { path: 'users', component: ManageUsersComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles }, title: 'Manage Users' },
-      { path: 'homes', component: ManageHomesComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageHomesRoles }, title: 'Manage Homes' },
-      { path: 'send-email', component: SendEmailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles }, title: 'Send Email' },
-      { path: 'email-jobs/:id', component: EmailJobDetailComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageEmailRoles }, title: 'Email Job' },
-      { path: 'print', component: ManagePrintComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageRoles }, title: 'Print' },
-      { path: 'documents', component: ManageDocumentsComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageUsersRoles }, title: 'Manage Documents' },
+    path: 'rendered-print-directory',
+    component: RenderedPrintableDirectoryComponent,
+    canActivate: [RoleGuard],
+    data: { allowedRoles: rolePermissions.printDirectoryRoles },
+    title: 'Print Directory',
+  },
+  {
+    path: 'rendered-print-map',
+    component: RenderedPrintableMapComponent,
+    canActivate: [RoleGuard],
+    data: { allowedRoles: rolePermissions.manageRoles },
+    title: 'Print Map',
+  },
+  {
+    path: 'manage',
+    component: ManageComponent,
+    canActivate: [RoleGuard],
+    data: { allowedRoles: rolePermissions.manageRoles },
+    children: [
+      {
+        path: 'users',
+        component: ManageUsersComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageUsersRoles },
+        title: 'Manage Users',
+      },
+      {
+        path: 'homes',
+        component: ManageHomesComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageHomesRoles },
+        title: 'Manage Homes',
+      },
+      {
+        path: 'send-email',
+        component: SendEmailComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageEmailRoles },
+        title: 'Send Email',
+      },
+      {
+        path: 'email-jobs/:id',
+        component: EmailJobDetailComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageEmailRoles },
+        title: 'Email Job',
+      },
+      {
+        path: 'print',
+        component: ManagePrintComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageRoles },
+        title: 'Print',
+      },
+      {
+        path: 'documents',
+        component: ManageDocumentsComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageUsersRoles },
+        title: 'Manage Documents',
+      },
       {
         path: 'events',
         component: ManageEventsComponent,
         canActivate: [RoleGuard],
         data: { allowedRoles: rolePermissions.manageEventsRoles, requireResidentRole: true },
-        title: 'Manage Events'
+        title: 'Manage Events',
       },
       {
         path: 'blog',
         component: ManageBlogComponent,
         canActivate: [RoleGuard],
         data: { allowedRoles: rolePermissions.manageBlogRoles, requireResidentRole: true },
-        title: 'Manage Blog'
+        title: 'Manage Blog',
       },
       {
         path: 'committees',
         component: ManageCommitteesComponent,
         canActivate: [RoleGuard],
         data: { allowedRoles: rolePermissions.manageCommitteesRoles },
-        title: 'Manage Committees'
+        title: 'Manage Committees',
       },
-      { path: 'audit-log', component: AuditLogComponent, canActivate: [RoleGuard], data: { allowedRoles: rolePermissions.manageAuditLogRoles }, title: 'Audit Log' }
-    ]
+      {
+        path: 'audit-log',
+        component: AuditLogComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageAuditLogRoles },
+        title: 'Audit Log',
+      },
+    ],
   },
   { path: 'email-preferences', component: EmailPreferencesComponent, title: 'Email Preferences' },
-  { path: 'unauthorized', component: UnauthorizedComponent, title: 'Unauthorized' }
+  { path: 'unauthorized', component: UnauthorizedComponent, title: 'Unauthorized' },
 ];
 
 @NgModule({
-  imports: [RouterModule.forRoot(routes, {
-    scrollPositionRestoration: 'enabled',
-    anchorScrolling: 'enabled',
-    // Sticky app navbar (~64px); used when scrolling to URL fragments (e.g. #email-jobs).
-    scrollOffset: [0, 80],
-  })],
+  imports: [
+    RouterModule.forRoot(routes, {
+      scrollPositionRestoration: 'enabled',
+      anchorScrolling: 'enabled',
+      // Sticky app navbar (~64px); used when scrolling to URL fragments (e.g. #email-jobs).
+      scrollOffset: [0, 80],
+    }),
+  ],
   exports: [RouterModule],
-  providers: [{ provide: TitleStrategy, useClass: CohadTitleStrategy }]
+  providers: [{ provide: TitleStrategy, useClass: CohadTitleStrategy }],
 })
-export class AppRoutingModule { }
+export class AppRoutingModule {}

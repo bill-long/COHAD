@@ -60,10 +60,10 @@ export interface ManageEventsPayload {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class EventsService {
-  constructor(private readonly httpClient: HttpClient) { }
+  constructor(private readonly httpClient: HttpClient) {}
 
   getUpcoming(): Observable<EventCard[]> {
     return this.httpClient.get<EventCard[]>('api/events');

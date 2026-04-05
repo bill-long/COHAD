@@ -19,7 +19,7 @@ export class MockAuthInterceptor implements HttpInterceptor {
     }
 
     const authReq = req.clone({
-      setHeaders: { Authorization: `Bearer ${token}` }
+      setHeaders: { Authorization: `Bearer ${token}` },
     });
     return next.handle(authReq);
   }

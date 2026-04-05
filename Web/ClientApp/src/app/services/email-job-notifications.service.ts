@@ -19,8 +19,8 @@ export class EmailJobNotificationsService {
 
   constructor(
     private readonly oauthService: OAuthService,
-    private readonly mockAuthTokens: MockAuthTokenService
-  ) { }
+    private readonly mockAuthTokens: MockAuthTokenService,
+  ) {}
 
   connect(): void {
     if (this.connection || this.pendingConnection) {
@@ -29,7 +29,7 @@ export class EmailJobNotificationsService {
 
     const connection = new HubConnectionBuilder()
       .withUrl('/hubs/email-jobs', {
-        accessTokenFactory: () => this.getHubAccessToken()
+        accessTokenFactory: () => this.getHubAccessToken(),
       })
       .withAutomaticReconnect()
       .build();
@@ -47,7 +47,9 @@ export class EmailJobNotificationsService {
       .start()
       .then(() => {
         if (this.pendingConnection !== connection) {
-          connection.stop().catch(() => { /* No-op. */ });
+          connection.stop().catch(() => {
+            /* No-op. */
+          });
           return;
         }
         this.connection = connection;
@@ -64,11 +66,15 @@ export class EmailJobNotificationsService {
     if (this.pendingConnection) {
       const pending = this.pendingConnection;
       this.pendingConnection = null;
-      pending.stop().catch(() => { /* No-op. */ });
+      pending.stop().catch(() => {
+        /* No-op. */
+      });
     }
 
     if (this.connection) {
-      this.connection.stop().catch(() => { /* No-op. */ });
+      this.connection.stop().catch(() => {
+        /* No-op. */
+      });
       this.connection = null;
     }
   }

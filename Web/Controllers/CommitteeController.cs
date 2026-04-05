@@ -23,7 +23,10 @@ namespace Web.Controllers
     {
         private static readonly HashSet<string> AllowedPhotoExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
-            ".png", ".jpg", ".jpeg", ".webp"
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".webp",
         };
 
         private readonly ICommitteeRepository _committeeRepository;
@@ -47,7 +50,8 @@ namespace Web.Controllers
             IImageUploadHelper imageUploadHelper,
             IGraphMailboxService graphMailboxService,
             IOptions<DocumentStorageOptions> storageOptions,
-            ILogger<CommitteeController> logger)
+            ILogger<CommitteeController> logger
+        )
         {
             _committeeRepository = committeeRepository;
             _residentRepository = residentRepository;
@@ -121,16 +125,19 @@ namespace Web.Controllers
         public async Task<IActionResult> GetResidentsForPicker()
         {
             var residents = await _residentRepository.GetAllAsync();
-            return Ok(residents
-                .OrderBy(r => r.GivenName).ThenBy(r => r.Surname)
-                .Select(r => new
-                {
-                    r.Id,
-                    DisplayName = $"{r.GivenName} {r.Surname}".Trim(),
-                    Email = r.EmailAddresses?
-                        .Select(e => e?.Address)
-                        .FirstOrDefault(address => !string.IsNullOrWhiteSpace(address))
-                }));
+            return Ok(
+                residents
+                    .OrderBy(r => r.GivenName)
+                    .ThenBy(r => r.Surname)
+                    .Select(r => new
+                    {
+                        r.Id,
+                        DisplayName = $"{r.GivenName} {r.Surname}".Trim(),
+                        Email = r
+                            .EmailAddresses?.Select(e => e?.Address)
+                            .FirstOrDefault(address => !string.IsNullOrWhiteSpace(address)),
+                    })
+            );
         }
 
         [HttpGet("admin")]
@@ -138,7 +145,8 @@ namespace Web.Controllers
         public async Task<IActionResult> GetAllAdmin()
         {
             var apiUser = await GetApiUserAsync();
-            if (apiUser == null) return Forbid();
+            if (apiUser == null)
+                return Forbid();
 
             var committees = await _committeeRepository.GetAllAsync();
             var manageable = committees.Where(c => CanManageCommittee(apiUser, c)).ToList();
@@ -156,7 +164,8 @@ namespace Web.Controllers
         public async Task<IActionResult> GetByKeyAdmin(string key)
         {
             var apiUser = await GetApiUserAsync();
-            if (apiUser == null) return Forbid();
+            if (apiUser == null)
+                return Forbid();
 
             var committee = await _committeeRepository.GetByIdAsync(key);
             if (committee == null)
@@ -170,11 +179,15 @@ namespace Web.Controllers
 
         [HttpPut("admin/{key}")]
         [Authorize(Policy = "CommitteeEditor")]
-        public async Task<IActionResult> Update(string key, [FromForm] string payload,
-            [FromForm] List<IFormFile> photos)
+        public async Task<IActionResult> Update(
+            string key,
+            [FromForm] string payload,
+            [FromForm] List<IFormFile> photos
+        )
         {
             var apiUser = await GetApiUserAsync();
-            if (apiUser == null) return Forbid();
+            if (apiUser == null)
+                return Forbid();
 
             var committee = await _committeeRepository.GetByIdAsync(key);
             if (committee == null)
@@ -186,7 +199,9 @@ namespace Web.Controllers
             try
             {
                 request = System.Text.Json.JsonSerializer.Deserialize<CommitteeUpdateRequest>(
-                    payload, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+                    payload,
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)
+                );
             }
             catch
             {
@@ -235,20 +250,22 @@ namespace Web.Controllers
                 return BadRequest($"Duplicate photo upload keys: {string.Join(", ", duplicatePhotoKeys)}");
             }
 
-            var photoLookup = uploadedPhotos
-                .ToDictionary(f => Path.GetFileNameWithoutExtension(f.FileName), f => f, StringComparer.OrdinalIgnoreCase);
+            var photoLookup = uploadedPhotos.ToDictionary(
+                f => Path.GetFileNameWithoutExtension(f.FileName),
+                f => f,
+                StringComparer.OrdinalIgnoreCase
+            );
 
             if (request.Members != null)
             {
                 var expectedPhotoKeys = new HashSet<string>(
-                    request.Members
-                        .Where(m => m.Id.HasValue && m.Id.Value != Guid.Empty)
+                    request
+                        .Members.Where(m => m.Id.HasValue && m.Id.Value != Guid.Empty)
                         .Select(m => $"photo-{m.Id.Value:D}"),
-                    StringComparer.OrdinalIgnoreCase);
+                    StringComparer.OrdinalIgnoreCase
+                );
 
-                var unknownPhotoKeys = photoLookup.Keys
-                    .Where(k => !expectedPhotoKeys.Contains(k))
-                    .ToList();
+                var unknownPhotoKeys = photoLookup.Keys.Where(k => !expectedPhotoKeys.Contains(k)).ToList();
 
                 if (unknownPhotoKeys.Count > 0)
                 {
@@ -273,17 +290,17 @@ namespace Web.Controllers
             else
             {
                 // Validate all referenced residents exist
-                var requestedResidentIds = request.Members
-                    .Where(m => m != null)
+                var requestedResidentIds = request
+                    .Members.Where(m => m != null)
                     .Select(m => m.ResidentId)
                     .Where(id => id != Guid.Empty)
                     .Distinct()
                     .ToList();
 
-                resolvedResidents = requestedResidentIds.Count > 0
-                    ? (await _residentRepository.GetByIdsAsync(requestedResidentIds))
-                        .ToDictionary(r => r.Id)
-                    : new Dictionary<Guid, Resident>();
+                resolvedResidents =
+                    requestedResidentIds.Count > 0
+                        ? (await _residentRepository.GetByIdsAsync(requestedResidentIds)).ToDictionary(r => r.Id)
+                        : new Dictionary<Guid, Resident>();
 
                 var missingResidentIds = requestedResidentIds
                     .Where(id => !resolvedResidents.ContainsKey(id))
@@ -302,9 +319,7 @@ namespace Web.Controllers
                         return BadRequest("Each member must reference a valid ResidentId.");
                     }
 
-                    var memberId = (mu.Id.HasValue && mu.Id.Value != Guid.Empty)
-                        ? mu.Id.Value
-                        : Guid.NewGuid();
+                    var memberId = (mu.Id.HasValue && mu.Id.Value != Guid.Empty) ? mu.Id.Value : Guid.NewGuid();
 
                     existingMembers.TryGetValue(memberId, out var existing);
 
@@ -318,7 +333,7 @@ namespace Web.Controllers
                         PhotoOffsetY = Math.Clamp(mu.PhotoOffsetY, 0, 100),
                         DisplayOrder = mu.DisplayOrder,
                         PhotoBlobPath = existing?.PhotoBlobPath,
-                        PhotoContentType = existing?.PhotoContentType
+                        PhotoContentType = existing?.PhotoContentType,
                     };
 
                     // Handle photo upload for this member
@@ -326,11 +341,15 @@ namespace Web.Controllers
                     {
                         if (photoFile.Length > _storageOptions.MaxUploadBytes)
                         {
-                            return BadRequest($"Photo for member {memberId:D} exceeds max allowed size of {_storageOptions.MaxUploadBytes} bytes.");
+                            return BadRequest(
+                                $"Photo for member {memberId:D} exceeds max allowed size of {_storageOptions.MaxUploadBytes} bytes."
+                            );
                         }
 
-                        if (!string.IsNullOrWhiteSpace(photoFile.ContentType)
-                            && !photoFile.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                        if (
+                            !string.IsNullOrWhiteSpace(photoFile.ContentType)
+                            && !photoFile.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+                        )
                         {
                             return BadRequest($"Photo for member {memberId:D} must use an image/* Content-Type.");
                         }
@@ -342,11 +361,17 @@ namespace Web.Controllers
                         }
 
                         var result = await _imageUploadHelper.ConvertAndUploadAsync(
-                            photoFile, ext, $"committees/{key}", memberId.ToString("D"));
+                            photoFile,
+                            ext,
+                            $"committees/{key}",
+                            memberId.ToString("D")
+                        );
 
                         // Collect old blob for cleanup after committee is persisted.
-                        if (!string.IsNullOrWhiteSpace(existing?.PhotoBlobPath)
-                            && existing.PhotoBlobPath != result.BlobPath)
+                        if (
+                            !string.IsNullOrWhiteSpace(existing?.PhotoBlobPath)
+                            && existing.PhotoBlobPath != result.BlobPath
+                        )
                         {
                             staleBlobPaths.Add(existing.PhotoBlobPath);
                         }
@@ -363,8 +388,10 @@ namespace Web.Controllers
             var removedIds = existingMembers.Keys.Except(updatedMembers.Select(m => m.Id)).ToList();
             foreach (var removedId in removedIds)
             {
-                if (existingMembers.TryGetValue(removedId, out var removed)
-                    && !string.IsNullOrWhiteSpace(removed.PhotoBlobPath))
+                if (
+                    existingMembers.TryGetValue(removedId, out var removed)
+                    && !string.IsNullOrWhiteSpace(removed.PhotoBlobPath)
+                )
                 {
                     staleBlobPaths.Add(removed.PhotoBlobPath);
                 }
@@ -399,7 +426,8 @@ namespace Web.Controllers
         public async Task<IActionResult> RemoveMember(string key, Guid memberId)
         {
             var apiUser = await GetApiUserAsync();
-            if (apiUser == null) return Forbid();
+            if (apiUser == null)
+                return Forbid();
 
             var committee = await _committeeRepository.GetByIdAsync(key);
             if (committee == null)
@@ -429,12 +457,16 @@ namespace Web.Controllers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to delete photo blob {BlobPath} for removed member {MemberId}", photoBlobPath, memberId);
+                    _logger.LogWarning(
+                        ex,
+                        "Failed to delete photo blob {BlobPath} for removed member {MemberId}",
+                        photoBlobPath,
+                        memberId
+                    );
                 }
             }
 
-            await AuditAsync(committee.Id, committee.DisplayName,
-                $"Removed member \"{memberName}\".");
+            await AuditAsync(committee.Id, committee.DisplayName, $"Removed member \"{memberName}\".");
 
             return NoContent();
         }
@@ -444,7 +476,8 @@ namespace Web.Controllers
         public async Task<IActionResult> SyncForwarding(string key)
         {
             var apiUser = await GetApiUserAsync();
-            if (apiUser == null) return Forbid();
+            if (apiUser == null)
+                return Forbid();
 
             var committee = await _committeeRepository.GetByIdAsync(key);
             if (committee == null)
@@ -458,41 +491,55 @@ namespace Web.Controllers
                 committee = await _graphMailboxService.SyncForwardingRuleAsync(committee, residents);
                 await _committeeRepository.UpsertAsync(committee);
 
-                var recipientCount = committee.Members?
-                    .Count(m => m.ReceivesForwardedEmail
+                var recipientCount =
+                    committee.Members?.Count(m =>
+                        m.ReceivesForwardedEmail
                         && residents.TryGetValue(m.ResidentId, out var r)
-                        && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true) ?? 0;
+                        && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true
+                    )
+                    ?? 0;
 
                 if (string.Equals(committee.LastSyncStatus, "NotConfigured", StringComparison.OrdinalIgnoreCase))
                 {
-                    _logger.LogWarning(
-                        "Forwarding sync unavailable for {Committee}: Graph API is not configured",
-                        key);
+                    _logger.LogWarning("Forwarding sync unavailable for {Committee}: Graph API is not configured", key);
 
-                    await AuditAsync(committee.Id, committee.DisplayName,
-                        "Email forwarding sync skipped — Graph API is not configured.");
+                    await AuditAsync(
+                        committee.Id,
+                        committee.DisplayName,
+                        "Email forwarding sync skipped — Graph API is not configured."
+                    );
 
-                    return StatusCode(StatusCodes.Status503ServiceUnavailable, new
-                    {
-                        committee.LastSyncedUtc,
-                        committee.LastSyncStatus,
-                        committee.LastSyncError
-                    });
+                    return StatusCode(
+                        StatusCodes.Status503ServiceUnavailable,
+                        new
+                        {
+                            committee.LastSyncedUtc,
+                            committee.LastSyncStatus,
+                            committee.LastSyncError,
+                        }
+                    );
                 }
 
                 _logger.LogInformation(
                     "Forwarding sync succeeded for {Committee}: {RecipientCount} recipients",
-                    key, recipientCount);
+                    key,
+                    recipientCount
+                );
 
-                await AuditAsync(committee.Id, committee.DisplayName,
-                    $"Synced email forwarding ({recipientCount} recipients).");
+                await AuditAsync(
+                    committee.Id,
+                    committee.DisplayName,
+                    $"Synced email forwarding ({recipientCount} recipients)."
+                );
 
-                return Ok(new
-                {
-                    committee.LastSyncedUtc,
-                    committee.LastSyncStatus,
-                    committee.LastSyncError
-                });
+                return Ok(
+                    new
+                    {
+                        committee.LastSyncedUtc,
+                        committee.LastSyncStatus,
+                        committee.LastSyncError,
+                    }
+                );
             }
             catch (Exception ex)
             {
@@ -503,12 +550,15 @@ namespace Web.Controllers
                 committee.LastSyncError = ex.Message;
                 await _committeeRepository.UpsertAsync(committee);
 
-                return StatusCode(StatusCodes.Status502BadGateway, new
-                {
-                    committee.LastSyncedUtc,
-                    committee.LastSyncStatus,
-                    committee.LastSyncError
-                });
+                return StatusCode(
+                    StatusCodes.Status502BadGateway,
+                    new
+                    {
+                        committee.LastSyncedUtc,
+                        committee.LastSyncStatus,
+                        committee.LastSyncError,
+                    }
+                );
             }
         }
 
@@ -517,7 +567,8 @@ namespace Web.Controllers
         public async Task<IActionResult> GetForwardingStatus(string key)
         {
             var apiUser = await GetApiUserAsync();
-            if (apiUser == null) return Forbid();
+            if (apiUser == null)
+                return Forbid();
 
             var committee = await _committeeRepository.GetByIdAsync(key);
             if (committee == null)
@@ -527,27 +578,32 @@ namespace Web.Controllers
 
             var residents = await ResolveResidentsForCommittees(new[] { committee });
 
-            return Ok(new
-            {
-                committee.LastSyncedUtc,
-                committee.LastSyncStatus,
-                committee.LastSyncError,
-                ForwardingRecipients = (committee.Members ?? new List<CommitteeMember>())
-                    .Where(m => m.ReceivesForwardedEmail
-                        && residents.TryGetValue(m.ResidentId, out var r)
-                        && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true)
-                    .Select(m =>
-                    {
-                        var r = residents.GetValueOrDefault(m.ResidentId);
-                        return new
+            return Ok(
+                new
+                {
+                    committee.LastSyncedUtc,
+                    committee.LastSyncStatus,
+                    committee.LastSyncError,
+                    ForwardingRecipients = (committee.Members ?? new List<CommitteeMember>())
+                        .Where(m =>
+                            m.ReceivesForwardedEmail
+                            && residents.TryGetValue(m.ResidentId, out var r)
+                            && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true
+                        )
+                        .Select(m =>
                         {
-                            DisplayName = PresentationModels.CommitteeMemberHelpers.ResidentDisplayName(r),
-                            Email = r?.EmailAddresses?
-                                .FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))?.Address
-                        };
-                    })
-                    .ToList()
-            });
+                            var r = residents.GetValueOrDefault(m.ResidentId);
+                            return new
+                            {
+                                DisplayName = PresentationModels.CommitteeMemberHelpers.ResidentDisplayName(r),
+                                Email = r
+                                    ?.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))
+                                    ?.Address,
+                            };
+                        })
+                        .ToList(),
+                }
+            );
         }
 
         private async Task AuditAsync(string subjectId, string subjectName, string action)
@@ -556,18 +612,21 @@ namespace Web.Controllers
             {
                 var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
                 var apiUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
-                if (apiUser == null) return;
+                if (apiUser == null)
+                    return;
 
-                await _auditLogRepository.AddAsync(new Models.NewAuditLogEntry
-                {
-                    Id = Guid.NewGuid(),
-                    SubjectId = subjectId,
-                    SubjectName = subjectName,
-                    Action = action,
-                    Time = DateTime.UtcNow,
-                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
-                    UserId = apiUser.UniqueId
-                });
+                await _auditLogRepository.AddAsync(
+                    new Models.NewAuditLogEntry
+                    {
+                        Id = Guid.NewGuid(),
+                        SubjectId = subjectId,
+                        SubjectName = subjectName,
+                        Action = action,
+                        Time = DateTime.UtcNow,
+                        UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
+                        UserId = apiUser.UniqueId,
+                    }
+                );
             }
             catch (Exception ex)
             {
@@ -583,14 +642,16 @@ namespace Web.Controllers
 
         private static bool CanManageCommittee(Models.User user, Committee committee)
         {
-            if (user.Roles == null) return false;
-            if (user.Roles.Contains(Models.User.Role.Administrator)) return true;
-            return committee.ManagementRole.HasValue
-                && user.Roles.Contains(committee.ManagementRole.Value);
+            if (user.Roles == null)
+                return false;
+            if (user.Roles.Contains(Models.User.Role.Administrator))
+                return true;
+            return committee.ManagementRole.HasValue && user.Roles.Contains(committee.ManagementRole.Value);
         }
 
         private async Task<IReadOnlyDictionary<Guid, Resident>> ResolveResidentsForCommittees(
-            IEnumerable<Committee> committees)
+            IEnumerable<Committee> committees
+        )
         {
             var residentIds = committees
                 .SelectMany(c => c.Members ?? new List<CommitteeMember>())

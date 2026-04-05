@@ -20,7 +20,12 @@ namespace Web.UnitTests
 
         private UnsubscribeController CreateController()
         {
-            return new UnsubscribeController(_tokenService.Object, _homeRepository.Object, _residentRepository.Object, Mock.Of<ILogger<UnsubscribeController>>());
+            return new UnsubscribeController(
+                _tokenService.Object,
+                _homeRepository.Object,
+                _residentRepository.Object,
+                Mock.Of<ILogger<UnsubscribeController>>()
+            );
         }
 
         private static Resident CreateTestResident(Guid homeId, string email, bool allOptedIn = true)
@@ -40,9 +45,9 @@ namespace Web.UnitTests
                         WelcomeEmailOptedIn = allOptedIn,
                         GardenClubEmailOptedIn = allOptedIn,
                         SocialCommitteeEmailOptedIn = allOptedIn,
-                        SunshineCommitteeEmailOptedIn = allOptedIn
-                    }
-                }
+                        SunshineCommitteeEmailOptedIn = allOptedIn,
+                    },
+                },
             };
         }
 
@@ -60,9 +65,9 @@ namespace Web.UnitTests
                     WelcomeEmailOptedIn = true,
                     GardenClubEmailOptedIn = true,
                     SocialCommitteeEmailOptedIn = true,
-                    SunshineCommitteeEmailOptedIn = true
+                    SunshineCommitteeEmailOptedIn = true,
                 },
-                Residents = new List<Resident>()
+                Residents = new List<Resident>(),
             };
         }
 
@@ -98,7 +103,8 @@ namespace Web.UnitTests
         public async Task OneClickUnsubscribe_UnknownCategory_Returns400()
         {
             var homeId = Guid.NewGuid();
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = "j@x.com" });
 
             var controller = CreateController();
@@ -111,7 +117,8 @@ namespace Web.UnitTests
         public async Task OneClickUnsubscribe_HomeNotFound_Returns404()
         {
             var homeId = Guid.NewGuid();
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = "j@x.com" });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync((Home?)null);
 
@@ -134,7 +141,8 @@ namespace Web.UnitTests
             var home = CreateTestHome(homeId, email, allOptedIn: true);
             var resident = CreateTestResident(homeId, email, allOptedIn: true);
 
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
@@ -149,11 +157,21 @@ namespace Web.UnitTests
             var addr = resident.EmailAddresses[0];
             switch (category)
             {
-                case "board": Assert.False(addr.BoardEmailOptedIn); break;
-                case "welcome": Assert.False(addr.WelcomeEmailOptedIn); break;
-                case "garden": Assert.False(addr.GardenClubEmailOptedIn); break;
-                case "social": Assert.False(addr.SocialCommitteeEmailOptedIn); break;
-                case "sunshine": Assert.False(addr.SunshineCommitteeEmailOptedIn); break;
+                case "board":
+                    Assert.False(addr.BoardEmailOptedIn);
+                    break;
+                case "welcome":
+                    Assert.False(addr.WelcomeEmailOptedIn);
+                    break;
+                case "garden":
+                    Assert.False(addr.GardenClubEmailOptedIn);
+                    break;
+                case "social":
+                    Assert.False(addr.SocialCommitteeEmailOptedIn);
+                    break;
+                case "sunshine":
+                    Assert.False(addr.SunshineCommitteeEmailOptedIn);
+                    break;
             }
         }
 
@@ -164,7 +182,8 @@ namespace Web.UnitTests
             var home = CreateTestHome(homeId, "other@example.com");
             var resident = CreateTestResident(homeId, "other@example.com");
 
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = "missing@example.com" });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             SetupResidentForHome(homeId, resident);
@@ -182,7 +201,8 @@ namespace Web.UnitTests
             var home = CreateTestHome(homeId, "Jane@Example.COM");
             var resident = CreateTestResident(homeId, "Jane@Example.COM");
 
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = "jane@example.com" });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
@@ -216,7 +236,8 @@ namespace Web.UnitTests
             var home = CreateTestHome(homeId, email, allOptedIn: true);
             var resident = CreateTestResident(homeId, email, allOptedIn: true);
 
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             SetupResidentForHome(homeId, resident);
@@ -251,7 +272,8 @@ namespace Web.UnitTests
         [Fact]
         public async Task UpdatePreferences_NullBody_Returns400()
         {
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = Guid.NewGuid(), Email = "x@x.com" });
 
             var controller = CreateController();
@@ -268,7 +290,8 @@ namespace Web.UnitTests
             var home = CreateTestHome(homeId, email, allOptedIn: true);
             var resident = CreateTestResident(homeId, email, allOptedIn: true);
 
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
@@ -281,7 +304,7 @@ namespace Web.UnitTests
                 WelcomeEmailOptedIn = true,
                 GardenClubEmailOptedIn = false,
                 SocialCommitteeEmailOptedIn = true,
-                SunshineCommitteeEmailOptedIn = false
+                SunshineCommitteeEmailOptedIn = false,
             };
             var result = await controller.UpdatePreferences("tok", dto);
 
@@ -313,9 +336,9 @@ namespace Web.UnitTests
                     WelcomeEmailOptedIn = true,
                     GardenClubEmailOptedIn = true,
                     SocialCommitteeEmailOptedIn = true,
-                    SunshineCommitteeEmailOptedIn = true
+                    SunshineCommitteeEmailOptedIn = true,
                 },
-                Residents = new List<Resident>()
+                Residents = new List<Resident>(),
             };
             var resident = new Resident
             {
@@ -332,12 +355,13 @@ namespace Web.UnitTests
                         WelcomeEmailOptedIn = true,
                         GardenClubEmailOptedIn = true,
                         SocialCommitteeEmailOptedIn = true,
-                        SunshineCommitteeEmailOptedIn = true
-                    }
-                }
+                        SunshineCommitteeEmailOptedIn = true,
+                    },
+                },
             };
 
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
@@ -360,7 +384,8 @@ namespace Web.UnitTests
             var homeId = Guid.NewGuid();
             var email = "jane@example.com";
 
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
 
             // First call returns a home, but upsert throws concurrency conflict
@@ -370,16 +395,17 @@ namespace Web.UnitTests
             var resident2 = CreateTestResident(homeId, email, allOptedIn: true);
 
             var getCallCount = 0;
-            _homeRepository.Setup(r => r.GetByIdAsync(homeId))
-                .ReturnsAsync(() => getCallCount++ == 0 ? home1 : home2);
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(() => getCallCount++ == 0 ? home1 : home2);
 
             var residentCallCount = 0;
-            _residentRepository.Setup(r => r.GetByHomeIdAsync(homeId))
+            _residentRepository
+                .Setup(r => r.GetByHomeIdAsync(homeId))
                 .ReturnsAsync(() => new List<Resident> { residentCallCount++ == 0 ? resident1 : resident2 });
             _residentRepository.Setup(r => r.UpsertAsync(It.IsAny<Resident>())).ReturnsAsync((Resident r) => r);
 
             var upsertCallCount = 0;
-            _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>()))
+            _homeRepository
+                .Setup(r => r.UpsertAsync(It.IsAny<Home>()))
                 .Returns<Home>(h =>
                 {
                     if (upsertCallCount++ == 0)
@@ -404,17 +430,21 @@ namespace Web.UnitTests
             var homeId = Guid.NewGuid();
             var email = "jane@example.com";
 
-            _tokenService.Setup(s => s.ValidateToken("tok"))
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
                 .Returns(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });
 
-            _homeRepository.Setup(r => r.GetByIdAsync(homeId))
+            _homeRepository
+                .Setup(r => r.GetByIdAsync(homeId))
                 .ReturnsAsync(() => CreateTestHome(homeId, email, allOptedIn: true));
 
-            _residentRepository.Setup(r => r.GetByHomeIdAsync(homeId))
+            _residentRepository
+                .Setup(r => r.GetByHomeIdAsync(homeId))
                 .ReturnsAsync(() => new List<Resident> { CreateTestResident(homeId, email, allOptedIn: true) });
             _residentRepository.Setup(r => r.UpsertAsync(It.IsAny<Resident>())).ReturnsAsync((Resident r) => r);
 
-            _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>()))
+            _homeRepository
+                .Setup(r => r.UpsertAsync(It.IsAny<Home>()))
                 .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));
 
             var controller = CreateController();

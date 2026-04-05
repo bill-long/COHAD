@@ -71,14 +71,15 @@ namespace Web.Services.Repositories
         public async Task<List<BlogPost>> GetPublishedAsync(DateTime asOfUtc)
         {
             // Project fields needed for listing cards only — avoids loading full Markdown bodies.
-            var query = new CosmosQueryDefinition(@"
+            var query = new CosmosQueryDefinition(
+                @"
 SELECT
   c.id, c.PublicSlug, c.Title, c.Excerpt, c.PublishUtc, c.AuthorDisplayName,
   c.FeaturedImageBlobPath, c.FeaturedImageDisplayName, c.FeaturedImageContentType, c.FeaturedImageSizeBytes
 FROM c
 WHERE c.PublishUtc <= @asOf
-ORDER BY c.PublishUtc DESC")
-                .WithParameter("@asOf", asOfUtc);
+ORDER BY c.PublishUtc DESC"
+            ).WithParameter("@asOf", asOfUtc);
             var iterator = _container.GetItemQueryIterator<JObject>(query);
             var results = new List<BlogPost>();
             while (iterator.HasMoreResults)
@@ -92,10 +93,12 @@ ORDER BY c.PublishUtc DESC")
 
         public async Task<List<BlogPost>> GetSlugCandidatesAsync()
         {
-            var query = new CosmosQueryDefinition(@"
+            var query = new CosmosQueryDefinition(
+                @"
 SELECT
   c.id, c.PublicSlug, c.PreviousSlugs, c.Title, c.PublishUtc
-FROM c");
+FROM c"
+            );
             var iterator = _container.GetItemQueryIterator<JObject>(query);
             var results = new List<BlogPost>();
             while (iterator.HasMoreResults)
@@ -129,8 +132,10 @@ FROM c");
 
             var normalizedSlug = segment.Trim().ToLowerInvariant();
 
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PublicSlug = @slug")
-                .WithParameter("@slug", normalizedSlug);
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PublicSlug = @slug").WithParameter(
+                "@slug",
+                normalizedSlug
+            );
             var iterator = _container.GetItemQueryIterator<BlogPost>(query);
             while (iterator.HasMoreResults)
             {
@@ -142,8 +147,9 @@ FROM c");
                 }
             }
 
-            var aliasQuery = new CosmosQueryDefinition("SELECT * FROM c WHERE ARRAY_CONTAINS(c.PreviousSlugs, @slug)")
-                .WithParameter("@slug", normalizedSlug);
+            var aliasQuery = new CosmosQueryDefinition(
+                "SELECT * FROM c WHERE ARRAY_CONTAINS(c.PreviousSlugs, @slug)"
+            ).WithParameter("@slug", normalizedSlug);
             var aliasIterator = _container.GetItemQueryIterator<BlogPost>(aliasQuery);
             while (aliasIterator.HasMoreResults)
             {
@@ -163,11 +169,7 @@ FROM c");
             try
             {
                 var response = await _container.ReadItemAsync<BlogPost>(id.ToString("D"), CosmosPartitionKey.None);
-                return new BlogPostReadResult
-                {
-                    Post = response.Resource,
-                    ETag = response.ETag
-                };
+                return new BlogPostReadResult { Post = response.Resource, ETag = response.ETag };
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
             {
@@ -193,7 +195,8 @@ FROM c");
                 blogPost,
                 blogPost.Id.ToString("D"),
                 CosmosPartitionKey.None,
-                options);
+                options
+            );
             return response.Resource;
         }
 
@@ -227,7 +230,7 @@ FROM c");
                 FeaturedImageDisplayName = doc.Value<string>("FeaturedImageDisplayName"),
                 FeaturedImageContentType = doc.Value<string>("FeaturedImageContentType"),
                 FeaturedImageSizeBytes = doc["FeaturedImageSizeBytes"]?.ToObject<long?>(),
-                Content = null
+                Content = null,
             };
         }
 
@@ -241,7 +244,7 @@ FROM c");
                 PreviousSlugs = doc["PreviousSlugs"]?.ToObject<List<string>>() ?? new List<string>(),
                 Title = doc.Value<string>("Title"),
                 PublishUtc = doc["PublishUtc"]?.ToObject<DateTime>() ?? default,
-                Content = null
+                Content = null,
             };
         }
     }

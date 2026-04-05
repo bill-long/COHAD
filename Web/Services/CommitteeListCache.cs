@@ -30,7 +30,8 @@ namespace Web.Services
         public CommitteeListCache(
             ICommitteeRepository committeeRepository,
             IMemoryCache cache,
-            JsonSerializerOptions jsonOptions = null)
+            JsonSerializerOptions jsonOptions = null
+        )
         {
             _committeeRepository = committeeRepository;
             _cache = cache;
@@ -61,14 +62,17 @@ namespace Web.Services
         /// a weak ETag derived from the serialized payload. If the client sends a
         /// matching <c>If-None-Match</c> header, a 304 Not Modified is returned.
         /// </summary>
-        public IActionResult OkWithETag<T>(T payload, HttpRequest request, HttpResponse response,
-            string responseCacheKey = null)
+        public IActionResult OkWithETag<T>(
+            T payload,
+            HttpRequest request,
+            HttpResponse response,
+            string responseCacheKey = null
+        )
         {
             byte[] json;
             EntityTagHeaderValue etag;
 
-            if (responseCacheKey != null &&
-                _cache.TryGetValue(responseCacheKey, out CachedResponse cachedResponse))
+            if (responseCacheKey != null && _cache.TryGetValue(responseCacheKey, out CachedResponse cachedResponse))
             {
                 json = cachedResponse.Json;
                 etag = cachedResponse.ETag;
@@ -76,8 +80,7 @@ namespace Web.Services
             else
             {
                 json = JsonSerializer.SerializeToUtf8Bytes(payload, _jsonOptions);
-                etag = new EntityTagHeaderValue(
-                    $"\"{Convert.ToBase64String(SHA256.HashData(json))}\"", isWeak: true);
+                etag = new EntityTagHeaderValue($"\"{Convert.ToBase64String(SHA256.HashData(json))}\"", isWeak: true);
 
                 if (responseCacheKey != null)
                 {
@@ -88,8 +91,7 @@ namespace Web.Services
             response.Headers.CacheControl = "public, no-cache";
             response.Headers.ETag = etag.ToString();
 
-            if (request.GetTypedHeaders().IfNoneMatch
-                    ?.Any(e => e.Compare(etag, useStrongComparison: false)) == true)
+            if (request.GetTypedHeaders().IfNoneMatch?.Any(e => e.Compare(etag, useStrongComparison: false)) == true)
             {
                 return new StatusCodeResult(StatusCodes.Status304NotModified);
             }

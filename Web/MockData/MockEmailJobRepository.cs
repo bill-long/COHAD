@@ -96,8 +96,8 @@ namespace Web.MockData
         {
             lock (_jobs)
             {
-                var list = _jobs.Values
-                    .Where(j => j.Status == EmailJobStatus.Queued || j.Status == EmailJobStatus.InProgress)
+                var list = _jobs
+                    .Values.Where(j => j.Status == EmailJobStatus.Queued || j.Status == EmailJobStatus.InProgress)
                     .OrderBy(j => j.CreatedUtc)
                     .Select(CloneJob)
                     .ToList();
@@ -110,8 +110,8 @@ namespace Web.MockData
             lock (_jobs)
             {
                 var effectiveLimit = Math.Clamp(limit, 1, 100);
-                var list = _jobs.Values
-                    .OrderByDescending(j => j.CreatedUtc)
+                var list = _jobs
+                    .Values.OrderByDescending(j => j.CreatedUtc)
                     .Take(effectiveLimit)
                     .Select(CloneJob)
                     .ToList();
@@ -124,11 +124,12 @@ namespace Web.MockData
             lock (_jobs)
             {
                 var effectiveLimit = Math.Clamp(limit, 1, 250);
-                var list = _jobs.Values
-                    .Where(j =>
-                        j.CreatedUtc < cutoffUtc &&
-                        j.Status != EmailJobStatus.Queued &&
-                        j.Status != EmailJobStatus.InProgress)
+                var list = _jobs
+                    .Values.Where(j =>
+                        j.CreatedUtc < cutoffUtc
+                        && j.Status != EmailJobStatus.Queued
+                        && j.Status != EmailJobStatus.InProgress
+                    )
                     .OrderBy(j => j.CreatedUtc)
                     .Take(effectiveLimit)
                     .Select(CloneJob)
@@ -172,11 +173,10 @@ namespace Web.MockData
                     var job = new EmailJob
                     {
                         Id = d.Id,
-                        Status = d.Failed > 0 && d.Sent == 0
-                            ? EmailJobStatus.Failed
-                            : d.Failed > 0
-                                ? EmailJobStatus.PartiallyCompleted
-                                : EmailJobStatus.Completed,
+                        Status =
+                            d.Failed > 0 && d.Sent == 0 ? EmailJobStatus.Failed
+                            : d.Failed > 0 ? EmailJobStatus.PartiallyCompleted
+                            : EmailJobStatus.Completed,
                         Category = "board",
                         FromEmail = "board@cohad.org",
                         FromDisplay = "COHAD Board",
@@ -223,31 +223,35 @@ namespace Web.MockData
             for (var i = 0; i < sent && idx < emails.Length; i++, idx++)
             {
                 var (email, homeId) = emails[idx];
-                list.Add(new EmailJobRecipient
-                {
-                    Email = email,
-                    HomeId = homeId,
-                    Status = EmailJobRecipientStatus.Sent,
-                    AttemptCount = 1,
-                    LastAttemptUtc = completedUtc.AddSeconds(-30 - i * 5),
-                    SentUtc = completedUtc.AddSeconds(-25 - i * 5),
-                    Error = null
-                });
+                list.Add(
+                    new EmailJobRecipient
+                    {
+                        Email = email,
+                        HomeId = homeId,
+                        Status = EmailJobRecipientStatus.Sent,
+                        AttemptCount = 1,
+                        LastAttemptUtc = completedUtc.AddSeconds(-30 - i * 5),
+                        SentUtc = completedUtc.AddSeconds(-25 - i * 5),
+                        Error = null,
+                    }
+                );
             }
 
             for (var i = 0; i < failed && idx < emails.Length; i++, idx++)
             {
                 var (email, homeId) = emails[idx];
-                list.Add(new EmailJobRecipient
-                {
-                    Email = email,
-                    HomeId = homeId,
-                    Status = EmailJobRecipientStatus.Failed,
-                    AttemptCount = 1,
-                    LastAttemptUtc = completedUtc.AddSeconds(-20),
-                    SentUtc = null,
-                    Error = "Mock send failure (seed data)."
-                });
+                list.Add(
+                    new EmailJobRecipient
+                    {
+                        Email = email,
+                        HomeId = homeId,
+                        Status = EmailJobRecipientStatus.Failed,
+                        AttemptCount = 1,
+                        LastAttemptUtc = completedUtc.AddSeconds(-20),
+                        SentUtc = null,
+                        Error = "Mock send failure (seed data).",
+                    }
+                );
             }
 
             return list;
@@ -276,16 +280,19 @@ namespace Web.MockData
                 FailedCount = job.FailedCount,
                 LastError = job.LastError,
                 ETag = job.ETag,
-                Recipients = job.Recipients?.Select(r => new EmailJobRecipient
-                {
-                    Email = r.Email,
-                    HomeId = r.HomeId,
-                    Status = r.Status,
-                    AttemptCount = r.AttemptCount,
-                    LastAttemptUtc = r.LastAttemptUtc,
-                    Error = r.Error,
-                    SentUtc = r.SentUtc
-                }).ToList() ?? new List<EmailJobRecipient>()
+                Recipients =
+                    job.Recipients?.Select(r => new EmailJobRecipient
+                        {
+                            Email = r.Email,
+                            HomeId = r.HomeId,
+                            Status = r.Status,
+                            AttemptCount = r.AttemptCount,
+                            LastAttemptUtc = r.LastAttemptUtc,
+                            Error = r.Error,
+                            SentUtc = r.SentUtc,
+                        })
+                        .ToList()
+                    ?? new List<EmailJobRecipient>(),
             };
         }
     }

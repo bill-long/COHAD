@@ -22,16 +22,26 @@ namespace Web.Services
         /// unsubscribe headers and footer.
         /// </summary>
         /// <param name="category">Unsubscribe category key (e.g. "board", "welcome").</param>
-        Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo,
+        Task SendEmail(
+            string fromEmail,
+            string fromDisplay,
+            EmailInfo emailInfo,
             Func<EmailAddress, bool> recipientFilter,
-            string category, ClaimsPrincipal user);
+            string category,
+            ClaimsPrincipal user
+        );
 
         /// <summary>
         /// Sends an email to an explicit list of addresses (no unsubscribe headers).
         /// Used for transactional/system emails.
         /// </summary>
-        Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo,
-            List<string> toList, ClaimsPrincipal user);
+        Task SendEmail(
+            string fromEmail,
+            string fromDisplay,
+            EmailInfo emailInfo,
+            List<string> toList,
+            ClaimsPrincipal user
+        );
     }
 
     public class EmailService : IEmailService
@@ -48,7 +58,8 @@ namespace Web.Services
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
             IUnsubscribeTokenService tokenService,
-            IConfiguration config)
+            IConfiguration config
+        )
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
@@ -58,22 +69,31 @@ namespace Web.Services
             {
                 SmtpHost = config["SmtpHost"],
                 SmtpUser = config["SmtpUser"],
-                SmtpPassword = config["SmtpPassword"]
+                SmtpPassword = config["SmtpPassword"],
             };
             _appBaseUrl = (config["AppBaseUrl"] ?? "").TrimEnd('/');
         }
 
-        public async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo,
+        public async Task SendEmail(
+            string fromEmail,
+            string fromDisplay,
+            EmailInfo emailInfo,
             Func<EmailAddress, bool> recipientFilter,
-            string category, ClaimsPrincipal user)
+            string category,
+            ClaimsPrincipal user
+        )
         {
             var recipients = await GetAllEmailsMatchingFilter(recipientFilter);
-            await SendPerRecipientEmails(fromEmail, fromDisplay, emailInfo, recipients,
-                category, user);
+            await SendPerRecipientEmails(fromEmail, fromDisplay, emailInfo, recipients, category, user);
         }
 
-        public async Task SendEmail(string fromEmail, string fromDisplay, EmailInfo emailInfo,
-            List<string> toList, ClaimsPrincipal user)
+        public async Task SendEmail(
+            string fromEmail,
+            string fromDisplay,
+            EmailInfo emailInfo,
+            List<string> toList,
+            ClaimsPrincipal user
+        )
         {
             await SendDirectEmail(fromEmail, fromDisplay, emailInfo, toList, user);
         }
@@ -81,23 +101,25 @@ namespace Web.Services
         /// <summary>
         /// Sends individual emails per recipient with unsubscribe headers and footer.
         /// </summary>
-        private async Task SendPerRecipientEmails(string fromEmail, string fromDisplay,
-            EmailInfo emailInfo, List<EmailRecipient> recipients,
-            string category, ClaimsPrincipal user)
+        private async Task SendPerRecipientEmails(
+            string fromEmail,
+            string fromDisplay,
+            EmailInfo emailInfo,
+            List<EmailRecipient> recipients,
+            string category,
+            ClaimsPrincipal user
+        )
         {
             var subject = emailInfo.Subject;
             List<EmailRecipient> recipientList = recipients;
 
             if (emailInfo.IsTestEmail)
             {
-                var apiUser = await _userRepository.GetByUniqueIdAsync(
-                    Models.User.GetUniqueIdFromClaims(user.Claims));
-                var testHomeId = apiUser.OwnedHomeIds?.Count > 0
-                    ? apiUser.OwnedHomeIds[0]
-                    : Guid.Empty;
+                var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(user.Claims));
+                var testHomeId = apiUser.OwnedHomeIds?.Count > 0 ? apiUser.OwnedHomeIds[0] : Guid.Empty;
                 recipientList = new List<EmailRecipient>
                 {
-                    new EmailRecipient { Email = apiUser.Emails, HomeId = testHomeId }
+                    new EmailRecipient { Email = apiUser.Emails, HomeId = testHomeId },
                 };
                 subject = $"Test: {subject}";
             }
@@ -107,25 +129,26 @@ namespace Web.Services
 
             var htmlBody = emailInfo.HtmlBody ?? string.Empty;
             var imageData = EmailMessageBuilder.ExtractInlineImages(htmlBody);
-            var categoryDisplayName = EmailSubscriptionCategories.DisplayNames
-                .TryGetValue(category ?? "", out var name) ? name : category;
+            var categoryDisplayName = EmailSubscriptionCategories.DisplayNames.TryGetValue(category ?? "", out var name)
+                ? name
+                : category;
 
             var protocolLog = new MemoryStream();
             var logger = new ProtocolLogger(protocolLog);
             try
             {
                 using var smtpClient = new SmtpClient(logger);
-                await smtpClient.ConnectAsync(_options.SmtpHost, 587,
-                    MailKit.Security.SecureSocketOptions.StartTls);
+                await smtpClient.ConnectAsync(_options.SmtpHost, 587, MailKit.Security.SecureSocketOptions.StartTls);
                 await smtpClient.AuthenticateAsync(_options.SmtpUser, _options.SmtpPassword);
 
 #if DEBUG
                 // In DEBUG, send a single representative message to test addresses
                 // instead of one per recipient, to avoid spamming debug inboxes.
                 var debugRecipient = recipientList[0];
-                var debugToken = (debugRecipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
-                    ? _tokenService.GenerateToken(debugRecipient.HomeId, debugRecipient.Email)
-                    : null;
+                var debugToken =
+                    (debugRecipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
+                        ? _tokenService.GenerateToken(debugRecipient.HomeId, debugRecipient.Email)
+                        : null;
                 var debugFooter = BuildUnsubscribeFooter(categoryDisplayName, debugToken);
                 var debugMessage = new MimeMessage();
                 debugMessage.From.Add(new MailboxAddress(fromDisplay, fromEmail));
@@ -134,10 +157,14 @@ namespace Web.Services
                 debugMessage.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
                 debugMessage.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
                 debugMessage.To.Add(new GroupAddress("Private Recipients"));
-                debugMessage.Body = EmailMessageBuilder.BuildBodyWithImages(imageData.ProcessedHtml + debugFooter, imageData.Images);
+                debugMessage.Body = EmailMessageBuilder.BuildBodyWithImages(
+                    imageData.ProcessedHtml + debugFooter,
+                    imageData.Images
+                );
                 if (debugToken != null && !string.IsNullOrEmpty(_appBaseUrl))
                 {
-                    var unsubUrl = $"{_appBaseUrl}/api/email/unsubscribe/{category}?token={Uri.EscapeDataString(debugToken)}";
+                    var unsubUrl =
+                        $"{_appBaseUrl}/api/email/unsubscribe/{category}?token={Uri.EscapeDataString(debugToken)}";
                     debugMessage.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
                     debugMessage.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                 }
@@ -148,9 +175,10 @@ namespace Web.Services
                     // Reset protocol log between messages to bound memory usage
                     protocolLog.SetLength(0);
 
-                    var token = (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
-                        ? _tokenService.GenerateToken(recipient.HomeId, recipient.Email)
-                        : null;
+                    var token =
+                        (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
+                            ? _tokenService.GenerateToken(recipient.HomeId, recipient.Email)
+                            : null;
 
                     var footer = BuildUnsubscribeFooter(categoryDisplayName, token);
                     var htmlWithFooter = imageData.ProcessedHtml + footer;
@@ -165,7 +193,8 @@ namespace Web.Services
 
                     if (token != null && !string.IsNullOrEmpty(_appBaseUrl))
                     {
-                        var unsubUrl = $"{_appBaseUrl}/api/email/unsubscribe/{category}?token={Uri.EscapeDataString(token)}";
+                        var unsubUrl =
+                            $"{_appBaseUrl}/api/email/unsubscribe/{category}?token={Uri.EscapeDataString(token)}";
                         message.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
                         message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                     }
@@ -186,15 +215,19 @@ namespace Web.Services
         /// <summary>
         /// Sends a single email to an explicit To list (no unsubscribe headers).
         /// </summary>
-        private async Task SendDirectEmail(string fromEmail, string fromDisplay,
-            EmailInfo emailInfo, List<string> toList, ClaimsPrincipal user)
+        private async Task SendDirectEmail(
+            string fromEmail,
+            string fromDisplay,
+            EmailInfo emailInfo,
+            List<string> toList,
+            ClaimsPrincipal user
+        )
         {
             var subject = emailInfo.Subject;
 
             if (emailInfo.IsTestEmail)
             {
-                var apiUser = await _userRepository.GetByUniqueIdAsync(
-                    Models.User.GetUniqueIdFromClaims(user.Claims));
+                var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(user.Claims));
                 toList = new List<string> { apiUser.Emails };
                 subject = $"Test: {subject}";
             }
@@ -273,7 +306,8 @@ namespace Web.Services
                 {
                     foreach (var resident in residents)
                     {
-                        if (resident.EmailAddresses == null) continue;
+                        if (resident.EmailAddresses == null)
+                            continue;
                         foreach (var addr in resident.EmailAddresses.Where(filter))
                         {
                             if (!string.IsNullOrWhiteSpace(addr.Address) && !seen.ContainsKey(addr.Address))
@@ -285,7 +319,11 @@ namespace Web.Services
                 if (filter(home.EmailAddress) && !string.IsNullOrWhiteSpace(home.EmailAddress?.Address))
                 {
                     if (!seen.ContainsKey(home.EmailAddress.Address))
-                        seen[home.EmailAddress.Address] = new EmailRecipient { Email = home.EmailAddress.Address, HomeId = home.Id };
+                        seen[home.EmailAddress.Address] = new EmailRecipient
+                        {
+                            Email = home.EmailAddress.Address,
+                            HomeId = home.Id,
+                        };
                 }
             }
 

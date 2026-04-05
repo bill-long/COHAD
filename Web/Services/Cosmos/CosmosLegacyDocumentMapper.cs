@@ -13,11 +13,17 @@ namespace Web.Services.Cosmos
             uniqueId.StartsWith("User|", StringComparison.Ordinal) ? uniqueId : $"User|{uniqueId}";
 
         internal static string ToHomeDocumentId(Guid homeId) => $"Home|{homeId:D}";
+
         internal static string ToPaymentDocumentId(Guid paymentId) => $"Payment|{paymentId:D}";
+
         internal static string ToAuditLogDocumentId(Guid auditLogId) => $"AuditLog|{auditLogId:D}";
+
         internal static string ToResidentDocumentId(Guid documentId) => $"ResidentDocument|{documentId:D}";
+
         internal static string ToDocumentFolderId(Guid folderId) => $"DocumentFolder|{folderId:D}";
+
         internal static string ToCommunityEventId(Guid eventId) => $"CommunityEvent|{eventId:D}";
+
         internal static string ToEmailJobDocumentId(Guid jobId) => $"EmailJob|{jobId:D}";
 
         internal static Guid ParseLegacyGuid(string raw)
@@ -59,9 +65,10 @@ namespace Web.Services.Cosmos
         internal static User ToUser(JObject doc)
         {
             var rawId = doc.Value<string>("id");
-            var uniqueId = rawId != null && rawId.StartsWith("User|", StringComparison.Ordinal)
-                ? rawId.Substring("User|".Length)
-                : doc.Value<string>("UniqueId") ?? rawId;
+            var uniqueId =
+                rawId != null && rawId.StartsWith("User|", StringComparison.Ordinal)
+                    ? rawId.Substring("User|".Length)
+                    : doc.Value<string>("UniqueId") ?? rawId;
 
             return new User
             {
@@ -76,7 +83,7 @@ namespace Web.Services.Cosmos
                 UnassociatedSinceUtc = doc["UnassociatedSinceUtc"]?.ToObject<DateTime?>(),
                 NoRolesSinceUtc = doc["NoRolesSinceUtc"]?.ToObject<DateTime?>(),
                 Roles = DeserializeFlexible<List<User.Role>>(doc["Roles"]) ?? new List<User.Role>(),
-                OwnedHomeIds = DeserializeFlexible<List<Guid>>(doc["OwnedHomeIds"]) ?? new List<Guid>()
+                OwnedHomeIds = DeserializeFlexible<List<Guid>>(doc["OwnedHomeIds"]) ?? new List<Guid>(),
             };
         }
 
@@ -102,13 +109,12 @@ namespace Web.Services.Cosmos
             doc["IdentityProvider"] = user.IdentityProvider;
             doc["Emails"] = user.Emails;
             doc["StreetAddress"] = user.StreetAddress;
-            doc["LastLoggedIn"] = user.LastLoggedIn != null ? JToken.FromObject(user.LastLoggedIn) : JValue.CreateNull();
-            doc["UnassociatedSinceUtc"] = user.UnassociatedSinceUtc != null
-                ? JToken.FromObject(user.UnassociatedSinceUtc)
-                : JValue.CreateNull();
-            doc["NoRolesSinceUtc"] = user.NoRolesSinceUtc != null
-                ? JToken.FromObject(user.NoRolesSinceUtc)
-                : JValue.CreateNull();
+            doc["LastLoggedIn"] =
+                user.LastLoggedIn != null ? JToken.FromObject(user.LastLoggedIn) : JValue.CreateNull();
+            doc["UnassociatedSinceUtc"] =
+                user.UnassociatedSinceUtc != null ? JToken.FromObject(user.UnassociatedSinceUtc) : JValue.CreateNull();
+            doc["NoRolesSinceUtc"] =
+                user.NoRolesSinceUtc != null ? JToken.FromObject(user.NoRolesSinceUtc) : JValue.CreateNull();
             // Keep legacy storage format for backward compatibility.
             doc["Roles"] = JsonConvert.SerializeObject(user.Roles ?? new List<User.Role>());
             doc["OwnedHomeIds"] = JsonConvert.SerializeObject(user.OwnedHomeIds ?? new List<Guid>());
@@ -126,7 +132,7 @@ namespace Web.Services.Cosmos
                 EmailAddress = DeserializeFlexible<EmailAddress>(doc["EmailAddress"]),
                 // Residents are now stored in a separate "Residents" container.
                 // Controllers populate Home.Residents from IResidentRepository when needed.
-                ETag = doc.Value<string>("_etag")
+                ETag = doc.Value<string>("_etag"),
             };
         }
 
@@ -169,7 +175,7 @@ namespace Web.Services.Cosmos
                 PaymentType = doc["PaymentType"]?.ToObject<Payment.Type>() ?? Payment.Type.OneTime,
                 FullDetailsJSON = doc.Value<string>("FullDetailsJSON"),
                 PayPalTransactionId = doc.Value<string>("PayPalTransactionId"),
-                HomeId = ParseNullableGuid(doc["HomeId"])
+                HomeId = ParseNullableGuid(doc["HomeId"]),
             };
         }
 
@@ -185,8 +191,9 @@ namespace Web.Services.Cosmos
                 ["Date"] = payment.Date != null ? JToken.FromObject(payment.Date) : JValue.CreateNull(),
                 ["PaymentType"] = JToken.FromObject(payment.PaymentType),
                 ["FullDetailsJSON"] = payment.FullDetailsJSON,
-                ["PayPalTransactionId"] = payment.PayPalTransactionId != null ? payment.PayPalTransactionId : JValue.CreateNull(),
-                ["HomeId"] = payment.HomeId != null ? payment.HomeId.Value.ToString("D") : JValue.CreateNull()
+                ["PayPalTransactionId"] =
+                    payment.PayPalTransactionId != null ? payment.PayPalTransactionId : JValue.CreateNull(),
+                ["HomeId"] = payment.HomeId != null ? payment.HomeId.Value.ToString("D") : JValue.CreateNull(),
             };
         }
 
@@ -212,7 +219,7 @@ namespace Web.Services.Cosmos
                 UserDisplayName = doc.Value<string>("UserDisplayName"),
                 SubjectId = doc.Value<string>("SubjectId"),
                 SubjectName = doc.Value<string>("SubjectName"),
-                Action = doc.Value<string>("Action")
+                Action = doc.Value<string>("Action"),
             };
         }
 
@@ -226,7 +233,7 @@ namespace Web.Services.Cosmos
                 ["UserDisplayName"] = audit.UserDisplayName,
                 ["SubjectId"] = audit.SubjectId,
                 ["SubjectName"] = audit.SubjectName,
-                ["Action"] = audit.Action
+                ["Action"] = audit.Action,
             };
         }
 
@@ -243,7 +250,7 @@ namespace Web.Services.Cosmos
                 SizeBytes = doc.Value<long?>("SizeBytes") ?? 0,
                 UploadedByUniqueId = doc.Value<string>("UploadedByUniqueId"),
                 CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
-                FolderId = ParseNullableGuid(doc["FolderId"])
+                FolderId = ParseNullableGuid(doc["FolderId"]),
             };
         }
 
@@ -259,7 +266,7 @@ namespace Web.Services.Cosmos
                 ["SizeBytes"] = document.SizeBytes,
                 ["UploadedByUniqueId"] = document.UploadedByUniqueId,
                 ["CreatedUtc"] = JToken.FromObject(document.CreatedUtc),
-                ["FolderId"] = document.FolderId != null ? document.FolderId.Value.ToString("D") : JValue.CreateNull()
+                ["FolderId"] = document.FolderId != null ? document.FolderId.Value.ToString("D") : JValue.CreateNull(),
             };
         }
 
@@ -271,7 +278,7 @@ namespace Web.Services.Cosmos
                 Id = ParseLegacyGuid(rawId),
                 Name = doc.Value<string>("Name"),
                 SortOrder = doc.Value<int?>("SortOrder") ?? 0,
-                CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue
+                CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
             };
         }
 
@@ -282,7 +289,7 @@ namespace Web.Services.Cosmos
                 ["id"] = ToDocumentFolderId(folder.Id),
                 ["Name"] = folder.Name,
                 ["SortOrder"] = folder.SortOrder,
-                ["CreatedUtc"] = JToken.FromObject(folder.CreatedUtc)
+                ["CreatedUtc"] = JToken.FromObject(folder.CreatedUtc),
             };
         }
 
@@ -308,7 +315,7 @@ namespace Web.Services.Cosmos
                 ModifiedByUniqueId = doc.Value<string>("ModifiedByUniqueId"),
                 CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
                 ModifiedUtc = doc["ModifiedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
-                Signups = DeserializeFlexible<List<EventSignup>>(doc["Signups"]) ?? new List<EventSignup>()
+                Signups = DeserializeFlexible<List<EventSignup>>(doc["Signups"]) ?? new List<EventSignup>(),
             };
         }
 
@@ -324,16 +331,29 @@ namespace Web.Services.Cosmos
                 ["StartUtc"] = JToken.FromObject(communityEvent.StartUtc),
                 ["AllowSignups"] = communityEvent.AllowSignups,
                 ["SignupMode"] = JToken.FromObject(communityEvent.SignupMode),
-                ["PromoMediaBlobPath"] = communityEvent.PromoMediaBlobPath != null ? communityEvent.PromoMediaBlobPath : JValue.CreateNull(),
-                ["PromoMediaDisplayName"] = communityEvent.PromoMediaDisplayName != null ? communityEvent.PromoMediaDisplayName : JValue.CreateNull(),
-                ["PromoMediaContentType"] = communityEvent.PromoMediaContentType != null ? communityEvent.PromoMediaContentType : JValue.CreateNull(),
-                ["PromoMediaSizeBytes"] = communityEvent.PromoMediaSizeBytes != null ? JToken.FromObject(communityEvent.PromoMediaSizeBytes) : JValue.CreateNull(),
-                ["PromoMediaThumbBlobPath"] = communityEvent.PromoMediaThumbBlobPath != null ? communityEvent.PromoMediaThumbBlobPath : JValue.CreateNull(),
+                ["PromoMediaBlobPath"] =
+                    communityEvent.PromoMediaBlobPath != null ? communityEvent.PromoMediaBlobPath : JValue.CreateNull(),
+                ["PromoMediaDisplayName"] =
+                    communityEvent.PromoMediaDisplayName != null
+                        ? communityEvent.PromoMediaDisplayName
+                        : JValue.CreateNull(),
+                ["PromoMediaContentType"] =
+                    communityEvent.PromoMediaContentType != null
+                        ? communityEvent.PromoMediaContentType
+                        : JValue.CreateNull(),
+                ["PromoMediaSizeBytes"] =
+                    communityEvent.PromoMediaSizeBytes != null
+                        ? JToken.FromObject(communityEvent.PromoMediaSizeBytes)
+                        : JValue.CreateNull(),
+                ["PromoMediaThumbBlobPath"] =
+                    communityEvent.PromoMediaThumbBlobPath != null
+                        ? communityEvent.PromoMediaThumbBlobPath
+                        : JValue.CreateNull(),
                 ["CreatedByUniqueId"] = communityEvent.CreatedByUniqueId,
                 ["ModifiedByUniqueId"] = communityEvent.ModifiedByUniqueId,
                 ["CreatedUtc"] = JToken.FromObject(communityEvent.CreatedUtc),
                 ["ModifiedUtc"] = JToken.FromObject(communityEvent.ModifiedUtc),
-                ["Signups"] = JsonConvert.SerializeObject(communityEvent.Signups ?? new List<EventSignup>())
+                ["Signups"] = JsonConvert.SerializeObject(communityEvent.Signups ?? new List<EventSignup>()),
             };
         }
 
@@ -362,7 +382,7 @@ namespace Web.Services.Cosmos
                 SentCount = doc.Value<int?>("SentCount") ?? 0,
                 FailedCount = doc.Value<int?>("FailedCount") ?? 0,
                 LastError = doc.Value<string>("LastError"),
-                Recipients = ToEmailJobRecipients(doc["Recipients"])
+                Recipients = ToEmailJobRecipients(doc["Recipients"]),
             };
         }
 
@@ -371,16 +391,19 @@ namespace Web.Services.Cosmos
             var recipientsArray = new JArray();
             foreach (var r in job.Recipients ?? new List<EmailJobRecipient>())
             {
-                recipientsArray.Add(new JObject
-                {
-                    ["Email"] = r.Email,
-                    ["HomeId"] = r.HomeId.ToString("D"),
-                    ["Status"] = r.Status.ToString(),
-                    ["AttemptCount"] = r.AttemptCount,
-                    ["LastAttemptUtc"] = r.LastAttemptUtc != null ? JToken.FromObject(r.LastAttemptUtc) : JValue.CreateNull(),
-                    ["Error"] = r.Error != null ? r.Error : JValue.CreateNull(),
-                    ["SentUtc"] = r.SentUtc != null ? JToken.FromObject(r.SentUtc) : JValue.CreateNull()
-                });
+                recipientsArray.Add(
+                    new JObject
+                    {
+                        ["Email"] = r.Email,
+                        ["HomeId"] = r.HomeId.ToString("D"),
+                        ["Status"] = r.Status.ToString(),
+                        ["AttemptCount"] = r.AttemptCount,
+                        ["LastAttemptUtc"] =
+                            r.LastAttemptUtc != null ? JToken.FromObject(r.LastAttemptUtc) : JValue.CreateNull(),
+                        ["Error"] = r.Error != null ? r.Error : JValue.CreateNull(),
+                        ["SentUtc"] = r.SentUtc != null ? JToken.FromObject(r.SentUtc) : JValue.CreateNull(),
+                    }
+                );
             }
 
             return new JObject
@@ -395,7 +418,8 @@ namespace Web.Services.Cosmos
                 ["CreatedUtc"] = JToken.FromObject(job.CreatedUtc),
                 ["StartedUtc"] = job.StartedUtc != null ? JToken.FromObject(job.StartedUtc) : JValue.CreateNull(),
                 ["CompletedUtc"] = job.CompletedUtc != null ? JToken.FromObject(job.CompletedUtc) : JValue.CreateNull(),
-                ["LastProgressUtc"] = job.LastProgressUtc != null ? JToken.FromObject(job.LastProgressUtc) : JValue.CreateNull(),
+                ["LastProgressUtc"] =
+                    job.LastProgressUtc != null ? JToken.FromObject(job.LastProgressUtc) : JValue.CreateNull(),
                 ["CreatedByUserId"] = job.CreatedByUserId,
                 ["CreatedByDisplayName"] = job.CreatedByDisplayName,
                 ["MaxRecipientAttempts"] = job.MaxRecipientAttempts,
@@ -403,7 +427,7 @@ namespace Web.Services.Cosmos
                 ["SentCount"] = job.SentCount,
                 ["FailedCount"] = job.FailedCount,
                 ["LastError"] = job.LastError != null ? job.LastError : JValue.CreateNull(),
-                ["Recipients"] = recipientsArray
+                ["Recipients"] = recipientsArray,
             };
         }
 
@@ -428,7 +452,7 @@ namespace Web.Services.Cosmos
                         AttemptCount = r.Value<int?>("AttemptCount") ?? 0,
                         LastAttemptUtc = r["LastAttemptUtc"]?.ToObject<DateTime?>(),
                         Error = r.Value<string>("Error"),
-                        SentUtc = r["SentUtc"]?.ToObject<DateTime?>()
+                        SentUtc = r["SentUtc"]?.ToObject<DateTime?>(),
                     })
                     .ToList();
             }
@@ -456,8 +480,9 @@ namespace Web.Services.Cosmos
                 ResidentType = Enum.TryParse<Resident.Type>(doc.Value<string>("ResidentType"), out var rt)
                     ? rt
                     : Resident.Type.Homeowner,
-                EmailAddresses = DeserializeFlexible<List<EmailAddress>>(doc["EmailAddresses"]) ?? new List<EmailAddress>(),
-                PhoneNumbers = DeserializeFlexible<List<PhoneNumber>>(doc["PhoneNumbers"]) ?? new List<PhoneNumber>()
+                EmailAddresses =
+                    DeserializeFlexible<List<EmailAddress>>(doc["EmailAddresses"]) ?? new List<EmailAddress>(),
+                PhoneNumbers = DeserializeFlexible<List<PhoneNumber>>(doc["PhoneNumbers"]) ?? new List<PhoneNumber>(),
             };
         }
 
@@ -473,7 +498,7 @@ namespace Web.Services.Cosmos
                 ["CollegeName"] = resident.CollegeName,
                 ["ResidentType"] = resident.ResidentType.ToString(),
                 ["EmailAddresses"] = JsonConvert.SerializeObject(resident.EmailAddresses ?? new List<EmailAddress>()),
-                ["PhoneNumbers"] = JsonConvert.SerializeObject(resident.PhoneNumbers ?? new List<PhoneNumber>())
+                ["PhoneNumbers"] = JsonConvert.SerializeObject(resident.PhoneNumbers ?? new List<PhoneNumber>()),
             };
         }
 
@@ -493,7 +518,7 @@ namespace Web.Services.Cosmos
                 GraphMessageRuleId = doc.Value<string>("GraphMessageRuleId"),
                 LastSyncedUtc = doc.Value<DateTime?>("LastSyncedUtc"),
                 LastSyncStatus = doc.Value<string>("LastSyncStatus"),
-                LastSyncError = doc.Value<string>("LastSyncError")
+                LastSyncError = doc.Value<string>("LastSyncError"),
             };
         }
 
@@ -511,7 +536,7 @@ namespace Web.Services.Cosmos
                 ["GraphMessageRuleId"] = committee.GraphMessageRuleId,
                 ["LastSyncedUtc"] = committee.LastSyncedUtc,
                 ["LastSyncStatus"] = committee.LastSyncStatus,
-                ["LastSyncError"] = committee.LastSyncError
+                ["LastSyncError"] = committee.LastSyncError,
             };
         }
 
@@ -519,8 +544,7 @@ namespace Web.Services.Cosmos
         {
             if (token is JArray arr)
             {
-                return arr
-                    .Select(t => new CommitteeMember
+                return arr.Select(t => new CommitteeMember
                     {
                         Id = Guid.TryParse(t["Id"]?.ToString(), out var id) ? id : Guid.Empty,
                         ResidentId = Guid.TryParse(t["ResidentId"]?.ToString(), out var rid) ? rid : Guid.Empty,
@@ -530,7 +554,7 @@ namespace Web.Services.Cosmos
                         PhotoContentType = t.Value<string>("PhotoContentType"),
                         ReceivesForwardedEmail = t.Value<bool?>("ReceivesForwardedEmail") ?? false,
                         PhotoOffsetY = t.Value<int?>("PhotoOffsetY") ?? 50,
-                        DisplayOrder = t.Value<int?>("DisplayOrder") ?? 0
+                        DisplayOrder = t.Value<int?>("DisplayOrder") ?? 0,
                     })
                     .ToList();
             }

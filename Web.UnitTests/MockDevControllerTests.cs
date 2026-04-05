@@ -59,13 +59,7 @@ public sealed class MockDevControllerTests
         var httpContext = new DefaultHttpContext();
         httpContext.Connection.RemoteIpAddress = remoteAddress;
 
-        return new MockDevController
-        {
-            ControllerContext = new ControllerContext
-            {
-                HttpContext = httpContext
-            }
-        };
+        return new MockDevController { ControllerContext = new ControllerContext { HttpContext = httpContext } };
     }
 
     private static IWebHostEnvironment CreateEnvironment(string environmentName)
@@ -78,10 +72,7 @@ public sealed class MockDevControllerTests
     private static IConfiguration CreateConfiguration(string signingKey)
     {
         return new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["MockJwt:SigningKey"] = signingKey
-            })
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["MockJwt:SigningKey"] = signingKey })
             .Build();
     }
 

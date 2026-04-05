@@ -37,14 +37,14 @@ describe('normalizeOptionalUsPhoneForStorage', () => {
   it('formats 10-digit numbers', () => {
     expect(normalizeOptionalUsPhoneForStorage('9255551234')).toEqual({
       ok: true,
-      value: '(925) 555-1234'
+      value: '(925) 555-1234',
     });
   });
 
   it('strips leading 1 for 11 digits', () => {
     expect(normalizeOptionalUsPhoneForStorage('19255551234')).toEqual({
       ok: true,
-      value: '(925) 555-1234'
+      value: '(925) 555-1234',
     });
   });
 

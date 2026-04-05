@@ -29,7 +29,7 @@ public sealed class UserPurgeIntegrationTests
             StreetAddress = "1 Test St",
             Roles = new List<User.Role> { User.Role.Resident },
             OwnedHomeIds = new List<Guid>(),
-            LastLoggedIn = DateTime.UtcNow
+            LastLoggedIn = DateTime.UtcNow,
         };
 
     [SkippableFact]
@@ -210,21 +210,21 @@ public sealed class UserPurgeIntegrationTests
             var pre = await userRepo.GetPurgeCandidatesAsync(cutoff, 200).ConfigureAwait(false);
             Skip.If(
                 !pre.Exists(u => u.UniqueId == uniqueId),
-                "Test user was not returned as a purge candidate; use a clean integration DB or increase max scan.");
+                "Test user was not returned as a purge candidate; use a clean integration DB or increase max scan."
+            );
 
-            var runner = new UserPurgeRunner(
-                userRepo,
-                auditRepo,
-                NullLogger<UserPurgeRunner>.Instance);
+            var runner = new UserPurgeRunner(userRepo, auditRepo, NullLogger<UserPurgeRunner>.Instance);
 
-            var result = await runner.RunAsync(
+            var result = await runner
+                .RunAsync(
                     new UserPurgeOptions
                     {
                         Enabled = true,
                         DryRun = true,
                         PurgeAfterDays = 30,
-                        MaxDeletesPerRun = 200
-                    })
+                        MaxDeletesPerRun = 200,
+                    }
+                )
                 .ConfigureAwait(false);
 
             Assert.True(result.WouldDelete >= 1);
@@ -270,21 +270,21 @@ public sealed class UserPurgeIntegrationTests
             var pre = await userRepo.GetPurgeCandidatesAsync(cutoff, 200).ConfigureAwait(false);
             Skip.If(
                 !pre.Exists(u => u.UniqueId == adminId) || !pre.Exists(u => u.UniqueId == residentId),
-                "Both test users must appear in the purge candidate set; use a clean integration DB or increase max scan.");
+                "Both test users must appear in the purge candidate set; use a clean integration DB or increase max scan."
+            );
 
-            var runner = new UserPurgeRunner(
-                userRepo,
-                auditRepo,
-                NullLogger<UserPurgeRunner>.Instance);
+            var runner = new UserPurgeRunner(userRepo, auditRepo, NullLogger<UserPurgeRunner>.Instance);
 
-            var result = await runner.RunAsync(
+            var result = await runner
+                .RunAsync(
                     new UserPurgeOptions
                     {
                         Enabled = true,
                         DryRun = false,
                         PurgeAfterDays = 30,
-                        MaxDeletesPerRun = 200
-                    })
+                        MaxDeletesPerRun = 200,
+                    }
+                )
                 .ConfigureAwait(false);
 
             Assert.True(result.SkippedAdministrator >= 1);

@@ -27,7 +27,8 @@ namespace Web.Controllers
             [FromQuery] int? limit = null,
             [FromQuery] string cursor = null,
             [FromHeader(Name = "X-Audit-Log-Cursor")] string cursorHeader = null,
-            [FromQuery(Name = "q")] string query = null)
+            [FromQuery(Name = "q")] string query = null
+        )
         {
             var pageSize = limit.GetValueOrDefault(50);
             if (pageSize < 1)

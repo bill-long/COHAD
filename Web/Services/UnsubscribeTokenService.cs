@@ -11,8 +11,8 @@ namespace Web.Services
         /// <summary>Maximum token age. Tokens older than this are rejected.</summary>
         internal static readonly TimeSpan MaxTokenAge = TimeSpan.FromDays(365);
 
-        private const int NonceSize = 12;  // AES-GCM standard nonce
-        private const int TagSize = 16;    // AES-GCM auth tag
+        private const int NonceSize = 12; // AES-GCM standard nonce
+        private const int TagSize = 16; // AES-GCM auth tag
 
         private readonly byte[] _encryptionKey;
 
@@ -20,8 +20,7 @@ namespace Web.Services
         {
             var key = options.Value.SigningKey;
             if (string.IsNullOrWhiteSpace(key) || Encoding.UTF8.GetByteCount(key) < 32)
-                throw new InvalidOperationException(
-                    "UnsubscribeToken:SigningKey must be at least 32 UTF-8 bytes.");
+                throw new InvalidOperationException("UnsubscribeToken:SigningKey must be at least 32 UTF-8 bytes.");
 
             // Derive a fixed 256-bit encryption key from the configurable signing key
             _encryptionKey = SHA256.HashData(Encoding.UTF8.GetBytes(key));
@@ -121,16 +120,13 @@ namespace Web.Services
             {
                 HomeId = homeId,
                 Email = emailPart,
-                Issued = issued
+                Issued = issued,
             };
         }
 
         private static string Base64UrlEncode(byte[] data)
         {
-            return Convert.ToBase64String(data)
-                .TrimEnd('=')
-                .Replace('+', '-')
-                .Replace('/', '_');
+            return Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         }
 
         private static byte[] Base64UrlDecode(ReadOnlySpan<char> base64Url)
@@ -138,8 +134,12 @@ namespace Web.Services
             var s = base64Url.ToString().Replace('-', '+').Replace('_', '/');
             switch (s.Length % 4)
             {
-                case 2: s += "=="; break;
-                case 3: s += "="; break;
+                case 2:
+                    s += "==";
+                    break;
+                case 3:
+                    s += "=";
+                    break;
             }
             return Convert.FromBase64String(s);
         }

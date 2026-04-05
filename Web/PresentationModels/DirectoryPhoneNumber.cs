@@ -12,7 +12,12 @@ namespace Web.PresentationModels
                 throw new PhoneNumberHiddenFromDirectoryException();
             }
 
-            return new DirectoryPhoneNumber(storedPhoneNumber.AreaCode, storedPhoneNumber.Prefix, storedPhoneNumber.LineNumber, storedPhoneNumber.Type);
+            return new DirectoryPhoneNumber(
+                storedPhoneNumber.AreaCode,
+                storedPhoneNumber.Prefix,
+                storedPhoneNumber.LineNumber,
+                storedPhoneNumber.Type
+            );
         }
 
         private DirectoryPhoneNumber(int areaCode, int prefix, int lineNumber, string type)
@@ -33,7 +38,8 @@ namespace Web.PresentationModels
 
         public class PhoneNumberHiddenFromDirectoryException : Exception
         {
-            public PhoneNumberHiddenFromDirectoryException() : base("Phone number is not allowed to be shown in directory.") { }
+            public PhoneNumberHiddenFromDirectoryException()
+                : base("Phone number is not allowed to be shown in directory.") { }
         }
     }
 }

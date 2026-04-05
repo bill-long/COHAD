@@ -12,16 +12,15 @@ import { environment } from 'src/environments/environment';
 import { VendorFlagNotificationsService } from 'src/app/services/vendor-flag-notifications.service';
 
 @Component({
-    selector: 'app-navbar',
-    templateUrl: './navbar.component.html',
-    styleUrls: ['./navbar.component.css'],
-    standalone: false
+  selector: 'app-navbar',
+  templateUrl: './navbar.component.html',
+  styleUrls: ['./navbar.component.css'],
+  standalone: false,
 })
 export class NavbarComponent implements OnInit {
-
   disabled = false;
   isNavbarCollapsed = true;
-  isHidden: boolean = false;
+  isHidden = false;
   readonly useMockAuth = environment.useMockAuth;
   readonly mockUsers = [
     { id: 'user-1', label: 'Mock Resident (Admin)' },
@@ -40,12 +39,12 @@ export class NavbarComponent implements OnInit {
     private router: Router,
     private themeService: ThemeService,
     private readonly eventsService: EventsService,
-    private readonly vendorFlagNotificationsService: VendorFlagNotificationsService) {
-
+    private readonly vendorFlagNotificationsService: VendorFlagNotificationsService,
+  ) {
     this.showEventsNav$ = this.eventsService.getUpcoming().pipe(
       map(events => events.length > 0),
       catchError(() => of(false)),
-      shareReplay({ bufferSize: 1, refCount: true })
+      shareReplay({ bufferSize: 1, refCount: true }),
     );
 
     this.vendorFlagNotifications$ = this.vendorFlagNotificationsService.notifications$;
@@ -67,7 +66,9 @@ export class NavbarComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.authUser$.subscribe(() => { this.disabled = false; });
+    this.authUser$.subscribe(() => {
+      this.disabled = false;
+    });
   }
 
   login() {
@@ -96,22 +97,37 @@ export class NavbarComponent implements OnInit {
     return this.appState.pipe(map(s => s.authBootstrapStatus === 'completed'));
   }
 
-  get navVm$(): Observable<{ authUser: AuthUser | null; apiUser: ApiUser | null; authBootstrapCompleted: boolean; showAuthenticatedNav: boolean; showGuestPrivacy: boolean }> {
-    return this.appState.pipe(map(s => {
-      const authBootstrapCompleted = s.authBootstrapStatus === 'completed';
-      const showAuthenticatedNav = authBootstrapCompleted && s.apiUser != null;
-      return {
-        authUser: s.authUser,
-        apiUser: s.apiUser,
-        authBootstrapCompleted,
-        showAuthenticatedNav,
-        showGuestPrivacy: !showAuthenticatedNav
-      };
-    }));
+  get navVm$(): Observable<{
+    authUser: AuthUser | null;
+    apiUser: ApiUser | null;
+    authBootstrapCompleted: boolean;
+    showAuthenticatedNav: boolean;
+    showGuestPrivacy: boolean;
+  }> {
+    return this.appState.pipe(
+      map(s => {
+        const authBootstrapCompleted = s.authBootstrapStatus === 'completed';
+        const showAuthenticatedNav = authBootstrapCompleted && s.apiUser != null;
+        return {
+          authUser: s.authUser,
+          apiUser: s.apiUser,
+          authBootstrapCompleted,
+          showAuthenticatedNav,
+          showGuestPrivacy: !showAuthenticatedNav,
+        };
+      }),
+    );
   }
 
   get manageVisible$(): Observable<boolean> {
-    return this.navVm$.pipe(map(vm => vm.showAuthenticatedNav && vm.apiUser !== null && vm.apiUser.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0))
+    return this.navVm$.pipe(
+      map(
+        vm =>
+          vm.showAuthenticatedNav &&
+          vm.apiUser !== null &&
+          vm.apiUser.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0,
+      ),
+    );
   }
 
   get adminNotificationsVisible$(): Observable<boolean> {
@@ -130,5 +146,4 @@ export class NavbarComponent implements OnInit {
     this.vendorFlagNotificationsService.markAsRead(notification.flagId);
     this.router.navigate(['/residents/vendors', notification.vendorId]);
   }
-
 }

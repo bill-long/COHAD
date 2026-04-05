@@ -31,8 +31,7 @@ namespace Web.Services.Repositories
 
         public async Task<List<Committee>> GetAllAsync()
         {
-            var iterator = _container.GetItemQueryIterator<JObject>(
-                new CosmosQueryDefinition("SELECT * FROM c"));
+            var iterator = _container.GetItemQueryIterator<JObject>(new CosmosQueryDefinition("SELECT * FROM c"));
             var results = new List<Committee>();
             while (iterator.HasMoreResults)
             {
@@ -47,12 +46,10 @@ namespace Web.Services.Repositories
         {
             try
             {
-                var response = await _container.ReadItemAsync<JObject>(
-                    committeeKey, CosmosPartitionKey.None);
+                var response = await _container.ReadItemAsync<JObject>(committeeKey, CosmosPartitionKey.None);
                 return CosmosLegacyDocumentMapper.ToCommittee(response.Resource);
             }
-            catch (Microsoft.Azure.Cosmos.CosmosException ex)
-                when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
             {
                 return null;
             }

@@ -5,10 +5,9 @@ import { EmailJobDetail, EmailJobSummary } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class EmailJobService {
+  constructor(private httpClient: HttpClient) {}
 
-  constructor(private httpClient: HttpClient) { }
-
-  getRecentJobs(limit: number = 50): Observable<EmailJobSummary[]> {
+  getRecentJobs(limit = 50): Observable<EmailJobSummary[]> {
     return this.httpClient.get<EmailJobSummary[]>(`api/email/jobs?limit=${limit}`);
   }
 

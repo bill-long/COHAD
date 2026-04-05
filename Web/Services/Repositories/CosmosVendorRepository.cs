@@ -29,7 +29,9 @@ namespace Web.Services.Repositories
 
         public async Task<List<Vendor>> GetAllAsync()
         {
-            var iterator = _vendorsContainer.GetItemQueryIterator<JObject>(new CosmosQueryDefinition("SELECT * FROM c"));
+            var iterator = _vendorsContainer.GetItemQueryIterator<JObject>(
+                new CosmosQueryDefinition("SELECT * FROM c")
+            );
             var results = new List<Vendor>();
             while (iterator.HasMoreResults)
             {
@@ -42,8 +44,10 @@ namespace Web.Services.Repositories
 
         public async Task<Vendor> GetByIdAsync(Guid id)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id")
-                .WithParameter("@id", ToDocumentId(id));
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id").WithParameter(
+                "@id",
+                ToDocumentId(id)
+            );
             var iterator = _vendorsContainer.GetItemQueryIterator<JObject>(query);
             while (iterator.HasMoreResults)
             {
@@ -103,7 +107,7 @@ namespace Web.Services.Repositories
                 CreatedByUniqueId = doc.Value<string>("CreatedByUniqueId"),
                 ModifiedByUniqueId = doc.Value<string>("ModifiedByUniqueId"),
                 CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
-                ModifiedUtc = doc["ModifiedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue
+                ModifiedUtc = doc["ModifiedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
             };
         }
 
@@ -124,9 +128,8 @@ namespace Web.Services.Repositories
                 ["CreatedByUniqueId"] = vendor.CreatedByUniqueId,
                 ["ModifiedByUniqueId"] = vendor.ModifiedByUniqueId,
                 ["CreatedUtc"] = JToken.FromObject(vendor.CreatedUtc),
-                ["ModifiedUtc"] = JToken.FromObject(vendor.ModifiedUtc)
+                ["ModifiedUtc"] = JToken.FromObject(vendor.ModifiedUtc),
             };
         }
-
     }
 }

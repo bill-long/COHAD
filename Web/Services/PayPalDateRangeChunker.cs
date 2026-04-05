@@ -14,12 +14,16 @@ namespace Web.Services
         public static IEnumerable<(DateTime StartUtc, DateTime EndUtc)> EnumerateWindowsUtc(
             DateTime startUtc,
             DateTime endUtc,
-            int maxDaysPerWindow = 30)
+            int maxDaysPerWindow = 30
+        )
         {
             if (maxDaysPerWindow <= 0)
             {
-                throw new ArgumentOutOfRangeException(nameof(maxDaysPerWindow), maxDaysPerWindow,
-                    "Window size must be positive.");
+                throw new ArgumentOutOfRangeException(
+                    nameof(maxDaysPerWindow),
+                    maxDaysPerWindow,
+                    "Window size must be positive."
+                );
             }
 
             if (endUtc <= startUtc)

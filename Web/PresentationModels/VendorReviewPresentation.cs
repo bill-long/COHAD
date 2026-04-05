@@ -35,7 +35,7 @@ namespace Web.PresentationModels
                 CreatedUtc = review.CreatedUtc,
                 ModifiedUtc = review.ModifiedUtc,
                 ModifiedUtcIsUnknown = VendorReviewTimestamps.IsUnknown(review.ModifiedUtc),
-                CanEdit = canEdit
+                CanEdit = canEdit,
             };
         }
     }

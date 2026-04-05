@@ -10,10 +10,7 @@ describe('GlobalErrorHandler', () => {
     telemetrySpy = jasmine.createSpyObj('ApplicationInsightsService', ['trackException']);
 
     TestBed.configureTestingModule({
-      providers: [
-        GlobalErrorHandler,
-        { provide: ApplicationInsightsService, useValue: telemetrySpy }
-      ]
+      providers: [GlobalErrorHandler, { provide: ApplicationInsightsService, useValue: telemetrySpy }],
     });
 
     handler = TestBed.inject(GlobalErrorHandler);

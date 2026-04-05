@@ -10,7 +10,7 @@ namespace Web.Models
         AdultsAndChildren = 0,
         HouseholdOnly = 1,
         ChildrenOnly = 2,
-        AdultsOnly = 3
+        AdultsOnly = 3,
     }
 
     public class CommunityEvent

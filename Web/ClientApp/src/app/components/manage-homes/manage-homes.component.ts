@@ -9,25 +9,17 @@ import { UntypedFormControl } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 @Component({
-    selector: 'app-manage-homes',
-    templateUrl: './manage-homes.component.html',
-    styleUrls: ['./manage-homes.component.css'],
-    standalone: false
+  selector: 'app-manage-homes',
+  templateUrl: './manage-homes.component.html',
+  styleUrls: ['./manage-homes.component.css'],
+  standalone: false,
 })
 export class ManageHomesComponent implements OnInit, AfterViewInit {
-
   dataSource = new MatTableDataSource<Home>();
 
   @ViewChild(MatSort) sort!: MatSort;
 
-  columnsToDisplay = [
-    'streetNumber',
-    'streetName',
-    'phoneNumber',
-    'emailAddress',
-    'residents',
-    'actions'
-  ];
+  columnsToDisplay = ['streetNumber', 'streetName', 'phoneNumber', 'emailAddress', 'residents', 'actions'];
 
   focusedHome$: Observable<Home | null>;
 
@@ -43,35 +35,35 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
   ) {
     this.allHomes$ = this.appState.pipe(map(s => s.allHomes));
 
-    this.filteredHomes$ = combineLatest([
-      this.homeFilter.valueChanges.pipe(debounceTime(200), startWith('')),
-      this.allHomes$
-    ]).pipe(map(([f, h]) => {
-      if (f.length < 1) {
-        return h;
-      }
+    this.filteredHomes$ = combineLatest([this.homeFilter.valueChanges.pipe(debounceTime(200), startWith('')), this.allHomes$]).pipe(
+      map(([f, h]) => {
+        if (f.length < 1) {
+          return h;
+        }
 
-      f = f.toLowerCase();
+        f = f.toLowerCase();
 
-      return h.filter(home => this.isFilterMatch(f, home));
-    }));
+        return h.filter(home => this.isFilterMatch(f, home));
+      }),
+    );
 
     this.focusedHome$ = combineLatest([this.allHomes$, this.route.paramMap]).pipe(
       map(([homes, pmap]) => {
-        let homeId = pmap.get('id');
+        const homeId = pmap.get('id');
         if (homeId) {
-          let home = homes.find(h => h.id === homeId);
+          const home = homes.find(h => h.id === homeId);
           if (home) {
             return home;
           }
         }
 
         return null;
-      }));
+      }),
+    );
   }
 
   ngOnInit(): void {
@@ -91,13 +83,16 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
   }
 
   isFilterMatch(f: string, home: Home) {
-    return `${home.streetNumber.toString()} ${home.streetName.toLowerCase()}`.includes(f) ||
-      home.residents.filter(r =>
-        r.givenName.toLowerCase().includes(f) ||
-        r.surname.toLowerCase().includes(f) ||
-        r.emailAddresses.filter(e => e.address.toLowerCase().includes(f)).length > 0 ||
-        r.phoneNumbers.filter(p => `(${p.areaCode}) ${p.prefix}-${p.lineNumber} ${p.type}`.toLowerCase().includes(f)).length > 0
-      ).length > 0;
+    return (
+      `${home.streetNumber.toString()} ${home.streetName.toLowerCase()}`.includes(f) ||
+      home.residents.filter(
+        r =>
+          r.givenName.toLowerCase().includes(f) ||
+          r.surname.toLowerCase().includes(f) ||
+          r.emailAddresses.filter(e => e.address.toLowerCase().includes(f)).length > 0 ||
+          r.phoneNumbers.filter(p => `(${p.areaCode}) ${p.prefix}-${p.lineNumber} ${p.type}`.toLowerCase().includes(f)).length > 0,
+      ).length > 0
+    );
   }
 
   focusHome(homeId: string): void {
@@ -108,5 +103,4 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
     this.editEnabled = false;
     this.router.navigate(['/manage/homes']);
   }
-
 }

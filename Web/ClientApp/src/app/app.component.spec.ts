@@ -14,9 +14,7 @@ import { applicationState, initialStateValue } from './state';
 describe('AppComponent', () => {
   beforeEach(waitForAsync(() => {
     TestBed.configureTestingModule({
-      declarations: [
-        AppComponent
-      ],
+      declarations: [AppComponent],
       providers: [
         { provide: AuthService, useValue: {} },
         { provide: MeService, useValue: {} },

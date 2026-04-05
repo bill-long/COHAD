@@ -18,6 +18,7 @@ namespace Web.Services.Repositories
         Task<List<VendorFlag>> GetAllPendingAsync();
         Task<VendorFlag> UpsertAsync(VendorFlag flag);
         Task DeleteAsync(Guid vendorId, Guid flagId);
+
         /// <summary>Deletes by id without an extra read. Use only when ids came from <see cref="GetByVendorIdAsync"/> for <paramref name="vendorId"/> (e.g. vendor cascade delete).</summary>
         Task DeleteByVendorCascadeAsync(Guid vendorId, Guid flagId);
     }
@@ -33,8 +34,10 @@ namespace Web.Services.Repositories
 
         public async Task<List<VendorFlag>> GetByVendorIdAsync(Guid vendorId)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.VendorId = @vendorId")
-                .WithParameter("@vendorId", vendorId.ToString("D"));
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.VendorId = @vendorId").WithParameter(
+                "@vendorId",
+                vendorId.ToString("D")
+            );
             var iterator = _vendorFlagsContainer.GetItemQueryIterator<JObject>(query);
             var results = new List<VendorFlag>();
             while (iterator.HasMoreResults)
@@ -68,7 +71,8 @@ namespace Web.Services.Repositories
         public async Task<VendorFlag> GetPendingByAuthorAsync(Guid vendorId, string authorUniqueId)
         {
             var query = new CosmosQueryDefinition(
-                    "SELECT * FROM c WHERE c.VendorId = @vendorId AND c.AuthorUniqueId = @authorUniqueId AND c.Status = 'Pending'")
+                "SELECT * FROM c WHERE c.VendorId = @vendorId AND c.AuthorUniqueId = @authorUniqueId AND c.Status = 'Pending'"
+            )
                 .WithParameter("@vendorId", vendorId.ToString("D"))
                 .WithParameter("@authorUniqueId", authorUniqueId);
             var iterator = _vendorFlagsContainer.GetItemQueryIterator<JObject>(query);
@@ -160,7 +164,7 @@ namespace Web.Services.Repositories
                 FlagNote = doc.Value<string>("FlagNote"),
                 Status = doc.Value<string>("Status"),
                 CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
-                ResolvedUtc = doc["ResolvedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue
+                ResolvedUtc = doc["ResolvedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
             };
         }
 
@@ -176,7 +180,7 @@ namespace Web.Services.Repositories
                 ["FlagNote"] = flag.FlagNote ?? string.Empty,
                 ["Status"] = flag.Status,
                 ["CreatedUtc"] = JToken.FromObject(flag.CreatedUtc),
-                ["ResolvedUtc"] = JToken.FromObject(flag.ResolvedUtc)
+                ["ResolvedUtc"] = JToken.FromObject(flag.ResolvedUtc),
             };
         }
     }

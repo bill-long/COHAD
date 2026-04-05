@@ -29,7 +29,7 @@ namespace Web.PresentationModels
                 SizeBytes = document.SizeBytes,
                 CreatedUtc = document.CreatedUtc,
                 FolderId = document.FolderId,
-                FolderName = folderName
+                FolderName = folderName,
             };
         }
     }

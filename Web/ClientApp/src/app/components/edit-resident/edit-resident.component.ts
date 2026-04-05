@@ -2,18 +2,17 @@ import { Component, OnInit, Input, Output, EventEmitter } from '@angular/core';
 import { Resident, PhoneNumber, EmailAddress } from 'src/app/models';
 
 @Component({
-    selector: 'app-edit-resident',
-    templateUrl: './edit-resident.component.html',
-    styleUrls: ['./edit-resident.component.css'],
-    standalone: false
+  selector: 'app-edit-resident',
+  templateUrl: './edit-resident.component.html',
+  styleUrls: ['./edit-resident.component.css'],
+  standalone: false,
 })
 export class EditResidentComponent implements OnInit {
-
   @Input() resident!: Resident;
 
   @Input() editEnabled!: boolean;
 
-  @Input() saveInProgress: boolean = false;
+  @Input() saveInProgress = false;
 
   @Output() edit = new EventEmitter<void>();
 
@@ -27,10 +26,9 @@ export class EditResidentComponent implements OnInit {
   confirmRemoveEmailIndex: number | null = null;
   confirmRemovePhoneIndex: number | null = null;
 
-  constructor() { }
+  constructor() {}
 
-  ngOnInit(): void {
-  }
+  ngOnInit(): void {}
 
   private clearInlineConfirms() {
     this.confirmDeleteResident = false;
@@ -148,7 +146,15 @@ export class EditResidentComponent implements OnInit {
       this.resident.emailAddresses = [];
     }
 
-    this.resident.emailAddresses.push({ address: '', visibleInDirectory: true, boardEmailOptedIn: true, welcomeEmailOptedIn: true, gardenClubEmailOptedIn: true, socialCommitteeEmailOptedIn: true, sunshineCommitteeEmailOptedIn: true });
+    this.resident.emailAddresses.push({
+      address: '',
+      visibleInDirectory: true,
+      boardEmailOptedIn: true,
+      welcomeEmailOptedIn: true,
+      gardenClubEmailOptedIn: true,
+      socialCommitteeEmailOptedIn: true,
+      sunshineCommitteeEmailOptedIn: true,
+    });
   }
 
   deleteEmail(email: EmailAddress) {
@@ -199,5 +205,4 @@ export class EditResidentComponent implements OnInit {
       r.collegeName = '';
     }
   }
-
 }

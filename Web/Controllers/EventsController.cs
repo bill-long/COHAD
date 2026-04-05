@@ -32,7 +32,7 @@ namespace Web.Controllers
             ".jpg",
             ".jpeg",
             ".gif",
-            ".webp"
+            ".webp",
         };
 
         /// <summary>
@@ -62,7 +62,8 @@ namespace Web.Controllers
             IOgThumbnailService ogThumbnailService,
             IImageUploadHelper imageUploadHelper,
             IOptions<DocumentStorageOptions> storageOptions,
-            IOptions<JsonOptions> jsonOptions)
+            IOptions<JsonOptions> jsonOptions
+        )
         {
             _userRepository = userRepository;
             _communityEventRepository = communityEventRepository;
@@ -236,13 +237,11 @@ namespace Web.Controllers
 
             var now = DateTime.UtcNow;
             var all = await _communityEventRepository.GetAllAsync();
-            var upcoming = all
-                .Where(e => IsInUpcomingWindow(e, now))
+            var upcoming = all.Where(e => IsInUpcomingWindow(e, now))
                 .OrderBy(e => e.StartUtc)
                 .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, null))
                 .ToList();
-            var past = all
-                .Where(e => !IsInUpcomingWindow(e, now))
+            var past = all.Where(e => !IsInUpcomingWindow(e, now))
                 .OrderByDescending(e => e.StartUtc)
                 .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, null))
                 .ToList();
@@ -295,7 +294,7 @@ namespace Web.Controllers
                     Id = Guid.NewGuid(),
                     CreatedByUniqueId = apiUser.UniqueId,
                     CreatedUtc = now,
-                    Signups = new List<EventSignup>()
+                    Signups = new List<EventSignup>(),
                 };
             }
             else
@@ -322,17 +321,29 @@ namespace Web.Controllers
                     return BadRequest("Promotional media must be an image file (PNG, JPEG, GIF, or WebP).");
                 }
 
-                var safeBaseName = SanitizeFileName(Path.GetFileNameWithoutExtension(request.PromotionalAsset.FileName));
+                var safeBaseName = SanitizeFileName(
+                    Path.GetFileNameWithoutExtension(request.PromotionalAsset.FileName)
+                );
                 if (string.IsNullOrWhiteSpace(safeBaseName))
                 {
                     return BadRequest("Uploaded file name is invalid.");
                 }
 
                 var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
-                    request.PromotionalAsset, extension, $"events/{communityEvent.Id:D}", safeBaseName);
+                    request.PromotionalAsset,
+                    extension,
+                    $"events/{communityEvent.Id:D}",
+                    safeBaseName
+                );
 
-                if (!string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath) &&
-                    !string.Equals(communityEvent.PromoMediaBlobPath, uploadResult.BlobPath, StringComparison.OrdinalIgnoreCase))
+                if (
+                    !string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath)
+                    && !string.Equals(
+                        communityEvent.PromoMediaBlobPath,
+                        uploadResult.BlobPath,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
                 {
                     await _documentFileStore.DeleteAsync(communityEvent.PromoMediaBlobPath);
                 }
@@ -362,9 +373,10 @@ namespace Web.Controllers
                 try
                 {
                     // Use the converted JPEG bytes when available to avoid re-decoding the original PNG.
-                    Stream thumbSourceStream = uploadResult.ConvertedData != null
-                        ? new MemoryStream(uploadResult.ConvertedData)
-                        : request.PromotionalAsset.OpenReadStream();
+                    Stream thumbSourceStream =
+                        uploadResult.ConvertedData != null
+                            ? new MemoryStream(uploadResult.ConvertedData)
+                            : request.PromotionalAsset.OpenReadStream();
                     await using (thumbSourceStream)
                     {
                         var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
@@ -408,17 +420,17 @@ namespace Web.Controllers
 
             var allEvents = await _communityEventRepository.GetAllAsync();
             var oldSlug = communityEvent.PublicSlug;
-            communityEvent.PublicSlug = EventUrlSlug.EnsureUniquePublicSlug(
-                communityEvent.Id,
-                communityEvent.StartUtc,
-                communityEvent.Title,
-                allEvents).ToLowerInvariant();
+            communityEvent.PublicSlug = EventUrlSlug
+                .EnsureUniquePublicSlug(communityEvent.Id, communityEvent.StartUtc, communityEvent.Title, allEvents)
+                .ToLowerInvariant();
 
             var normalizedOldSlug = oldSlug?.Trim().ToLowerInvariant();
 
-            if (!isCreate &&
-                !string.IsNullOrWhiteSpace(normalizedOldSlug) &&
-                !string.Equals(normalizedOldSlug, communityEvent.PublicSlug, StringComparison.OrdinalIgnoreCase))
+            if (
+                !isCreate
+                && !string.IsNullOrWhiteSpace(normalizedOldSlug)
+                && !string.Equals(normalizedOldSlug, communityEvent.PublicSlug, StringComparison.OrdinalIgnoreCase)
+            )
             {
                 communityEvent.PreviousSlugs ??= new List<string>();
                 if (!communityEvent.PreviousSlugs.Contains(normalizedOldSlug, StringComparer.OrdinalIgnoreCase))
@@ -445,21 +457,25 @@ namespace Web.Controllers
                 catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
                 {
                     // Do not retry: a second read could merge signups while other fields stay stale vs that read.
-                    return StatusCode(StatusCodes.Status409Conflict,
-                        "Unable to save event due to concurrent updates. Please refresh and try again.");
+                    return StatusCode(
+                        StatusCodes.Status409Conflict,
+                        "Unable to save event due to concurrent updates. Please refresh and try again."
+                    );
                 }
             }
 
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = saved.Id.ToString("D"),
-                SubjectName = saved.Title,
-                Action = isCreate ? "Created event." : "Updated event.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = saved.Id.ToString("D"),
+                    SubjectName = saved.Title,
+                    Action = isCreate ? "Created event." : "Updated event.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: true, apiUser.UniqueId));
         }
@@ -500,16 +516,18 @@ namespace Web.Controllers
             }
 
             await _communityEventRepository.DeleteAsync(id);
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = stored.Id.ToString("D"),
-                SubjectName = stored.Title,
-                Action = "Deleted event.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = stored.Id.ToString("D"),
+                    SubjectName = stored.Title,
+                    Action = "Deleted event.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             return Ok();
         }
@@ -578,16 +596,20 @@ namespace Web.Controllers
                 {
                     if (attempt == maxAttempts - 1)
                     {
-                        return StatusCode(StatusCodes.Status409Conflict,
-                            "Unable to save your signup due to concurrent updates. Please try again.");
+                        return StatusCode(
+                            StatusCodes.Status409Conflict,
+                            "Unable to save your signup due to concurrent updates. Please try again."
+                        );
                     }
                 }
             }
 
             if (saved == null)
             {
-                return StatusCode(StatusCodes.Status409Conflict,
-                    "Unable to save your signup due to concurrent updates. Please try again.");
+                return StatusCode(
+                    StatusCodes.Status409Conflict,
+                    "Unable to save your signup due to concurrent updates. Please try again."
+                );
             }
 
             var countDetail = saved.SignupMode switch
@@ -595,19 +617,21 @@ namespace Web.Controllers
                 EventSignupMode.HouseholdOnly => string.Empty,
                 EventSignupMode.ChildrenOnly => $" ({request.Children} children)",
                 EventSignupMode.AdultsOnly => $" ({request.Adults} adults)",
-                _ => $" ({request.Adults} adults, {request.Children} children)"
+                _ => $" ({request.Adults} adults, {request.Children} children)",
             };
             var actionPrefix = isNewSignup ? "Signed up for event." : "Updated event signup.";
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = saved.Id.ToString("D"),
-                SubjectName = saved.Title,
-                Action = actionPrefix + countDetail,
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = saved.Id.ToString("D"),
+                    SubjectName = saved.Title,
+                    Action = actionPrefix + countDetail,
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: false, apiUser.UniqueId));
         }
@@ -618,14 +642,12 @@ namespace Web.Controllers
             var existingSignup = stored.Signups.FirstOrDefault(s => s.UserUniqueId == apiUser.UniqueId);
             if (existingSignup == null)
             {
-                existingSignup = new EventSignup
-                {
-                    UserUniqueId = apiUser.UniqueId
-                };
+                existingSignup = new EventSignup { UserUniqueId = apiUser.UniqueId };
                 stored.Signups.Add(existingSignup);
             }
 
-            existingSignup.UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim();
+            existingSignup.UserDisplayName =
+                $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim();
             existingSignup.UserEmail = apiUser.Emails;
 
             switch (stored.SignupMode)
@@ -704,7 +726,10 @@ namespace Web.Controllers
                         return "Please provide at least one attendee.";
                     }
 
-                    if (request.Adults > MaxSignupAdultsPerHousehold || request.Children > MaxSignupChildrenPerHousehold)
+                    if (
+                        request.Adults > MaxSignupAdultsPerHousehold
+                        || request.Children > MaxSignupChildrenPerHousehold
+                    )
                     {
                         return $"Please enter no more than {MaxSignupAdultsPerHousehold} adults and {MaxSignupChildrenPerHousehold} children per household.";
                     }
@@ -745,8 +770,8 @@ namespace Web.Controllers
                 return false;
             }
 
-            return user.Roles.Contains(Models.User.Role.Resident) &&
-                   user.Roles.Any(r => r != Models.User.Role.Resident);
+            return user.Roles.Contains(Models.User.Role.Resident)
+                && user.Roles.Any(r => r != Models.User.Role.Resident);
         }
 
         private static DateTime NormalizeToUtc(DateTime dateTime)
@@ -788,14 +813,12 @@ namespace Web.Controllers
         private IActionResult OkWithETag<T>(T payload)
         {
             var json = JsonSerializer.SerializeToUtf8Bytes(payload, _jsonSerializerOptions);
-            var etag = new EntityTagHeaderValue(
-                $"\"{Convert.ToBase64String(SHA256.HashData(json))}\"", isWeak: true);
+            var etag = new EntityTagHeaderValue($"\"{Convert.ToBase64String(SHA256.HashData(json))}\"", isWeak: true);
 
             Response.Headers.CacheControl = "public, no-cache";
             Response.Headers.ETag = etag.ToString();
 
-            if (Request.GetTypedHeaders().IfNoneMatch
-                    ?.Any(e => e.Compare(etag, useStrongComparison: false)) == true)
+            if (Request.GetTypedHeaders().IfNoneMatch?.Any(e => e.Compare(etag, useStrongComparison: false)) == true)
             {
                 return StatusCode(StatusCodes.Status304NotModified);
             }

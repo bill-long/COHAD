@@ -1,27 +1,26 @@
-import { ChangeDetectionStrategy, Component, ElementRef, Inject, ViewChild } from "@angular/core";
-import { PayPalButtonsComponent } from "@paypal/paypal-js";
-import { loadScript } from "@paypal/paypal-js";
-import { map, Observable, Subject } from "rxjs";
-import { Payment, PaymentSummary } from "src/app/models";
-import { PaymentService } from "src/app/services/payment.service";
-import { Action, ApplicationState, applicationState, dispatcher } from "src/app/state";
+import { ChangeDetectionStrategy, Component, ElementRef, Inject, ViewChild } from '@angular/core';
+import { PayPalButtonsComponent } from '@paypal/paypal-js';
+import { loadScript } from '@paypal/paypal-js';
+import { map, Observable, Subject } from 'rxjs';
+import { Payment, PaymentSummary } from 'src/app/models';
+import { PaymentService } from 'src/app/services/payment.service';
+import { Action, ApplicationState, applicationState, dispatcher } from 'src/app/state';
 
 @Component({
-    selector: "app-dues",
-    templateUrl: "./dues.component.html",
-    styleUrls: ["./dues.component.css"],
-    standalone: false
+  selector: 'app-dues',
+  templateUrl: './dues.component.html',
+  styleUrls: ['./dues.component.css'],
+  standalone: false,
 })
 export class DuesComponent {
+  @ViewChild('paypalOneTime', { static: false }) paypalOneTimeElement!: ElementRef;
+  @ViewChild('paypalAnnual', { static: false }) paypalAnnualElement!: ElementRef;
 
-  @ViewChild("paypalOneTime", { static: false }) paypalOneTimeElement!: ElementRef;
-  @ViewChild("paypalAnnual", { static: false }) paypalAnnualElement!: ElementRef;
-
-  baseDuesAmount = "225";
-  duesWithFeesAmount = "233.65";
-  clientId = "AbTnjH1A_eyuO8iCJxrcuPTO235Gari--scF3nHVoi7NiDqZ63OSg6lwzntN6r7V9iysCa3a8QAcrmAx";
-  subscriptionPlanId = "P-6XG01496BF9038151MLRPUYA";
-  displayedColumns = ["date", "amount", "description", "payerEmail"];
+  baseDuesAmount = '225';
+  duesWithFeesAmount = '233.65';
+  clientId = 'AbTnjH1A_eyuO8iCJxrcuPTO235Gari--scF3nHVoi7NiDqZ63OSg6lwzntN6r7V9iysCa3a8QAcrmAx';
+  subscriptionPlanId = 'P-6XG01496BF9038151MLRPUYA';
+  displayedColumns = ['date', 'amount', 'description', 'payerEmail'];
 
   payOnceButtons: PayPalButtonsComponent | null = null;
   subscribeButtons: PayPalButtonsComponent | null = null;
@@ -30,7 +29,7 @@ export class DuesComponent {
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Subject<Action>,
-    public paymentService: PaymentService
+    public paymentService: PaymentService,
   ) {
     this.loadPayments();
   }
@@ -48,9 +47,9 @@ export class DuesComponent {
   }
 
   async renderOneTimePaymentButtons() {
-    let payOnceNS = await loadScript({
-      "client-id": this.clientId,
-      "disable-funding": "paylater"
+    const payOnceNS = await loadScript({
+      'client-id': this.clientId,
+      'disable-funding': 'paylater',
     });
 
     this.payOnceButtons = payOnceNS!.Buttons!({
@@ -59,18 +58,18 @@ export class DuesComponent {
           purchase_units: [
             {
               amount: {
-                value: this.duesWithFeesAmount
-              }
-            }
-          ]
+                value: this.duesWithFeesAmount,
+              },
+            },
+          ],
         });
       },
       onApprove: (data, actions) => {
         return new Promise((resolve, reject) => {
           actions.order!.capture().then(details => {
-            console.log("Transaction completed", details);
+            console.log('Transaction completed', details);
             const payPalTransactionId = paypalTransactionIdFromOrderCapture(details);
-            let payment: Payment = {
+            const payment: Payment = {
               id: '00000000-0000-0000-0000-000000000000',
               payerUniqueId: '',
               payerEmail: details.payer.email_address || '',
@@ -79,8 +78,8 @@ export class DuesComponent {
               date: details.create_time,
               paymentType: 0, // one time
               fullDetailsJSON: JSON.stringify(details),
-              ...(payPalTransactionId ? { payPalTransactionId } : {})
-            }
+              ...(payPalTransactionId ? { payPalTransactionId } : {}),
+            };
 
             this.paymentService.recordPayment(payment).subscribe({
               next: () => {
@@ -91,15 +90,15 @@ export class DuesComponent {
               error: error => {
                 console.log('Payment recording error', error);
                 reject(error);
-              }
+              },
             });
           });
         });
       },
       onError: err => {
-        console.log("Error", err);
-      }
-    })
+        console.log('Error', err);
+      },
+    });
 
     await this.payOnceButtons.render(this.paypalOneTimeElement.nativeElement);
   }
@@ -112,28 +111,28 @@ export class DuesComponent {
   }
 
   async renderSubscribeButtons() {
-    let subscribeNS = await loadScript({
-      "client-id": this.clientId,
-      "disable-funding": "paylater",
-      "vault": true,
-      "intent": "subscription"
+    const subscribeNS = await loadScript({
+      'client-id': this.clientId,
+      'disable-funding': 'paylater',
+      vault: true,
+      intent: 'subscription',
     });
 
     this.subscribeButtons = await subscribeNS!.Buttons!({
       style: {
-        label: 'subscribe'
+        label: 'subscribe',
       },
       createSubscription: (data, actions) => {
         return actions.subscription.create({
-          plan_id: 'P-6XG01496BF9038151MLRPUYA'
+          plan_id: 'P-6XG01496BF9038151MLRPUYA',
         });
       },
       onApprove: (data, actions) => {
         return new Promise((resolve, reject) => {
           actions.subscription!.get().then((details: any) => {
-            console.log("Subscription created", details);
+            console.log('Subscription created', details);
             const payPalTransactionId = paypalTransactionIdFromSubscription(details);
-            let payment: Payment = {
+            const payment: Payment = {
               id: '00000000-0000-0000-0000-000000000000',
               payerUniqueId: '',
               payerEmail: details.subscriber.email_address || '',
@@ -142,8 +141,8 @@ export class DuesComponent {
               date: details.create_time,
               paymentType: 1, // subscription
               fullDetailsJSON: JSON.stringify(details),
-              ...(payPalTransactionId ? { payPalTransactionId } : {})
-            }
+              ...(payPalTransactionId ? { payPalTransactionId } : {}),
+            };
 
             this.paymentService.recordPayment(payment).subscribe({
               next: () => {
@@ -154,12 +153,12 @@ export class DuesComponent {
               error: error => {
                 console.log('Subscription recording error', payment);
                 reject(error);
-              }
+              },
             });
           });
         });
-      }
-    })
+      },
+    });
 
     await this.subscribeButtons.render(this.paypalAnnualElement.nativeElement);
   }
@@ -175,12 +174,12 @@ export class DuesComponent {
 /** PayPal Orders v2: capture id (matches Transaction Search transaction id for wallet payments). */
 function paypalTransactionIdFromOrderCapture(details: unknown): string | undefined {
   const d = details as {
-    purchase_units?: Array<{
-      payments?: { captures?: Array<{ id?: string }> };
-    }>;
+    purchase_units?: {
+      payments?: { captures?: { id?: string }[] };
+    }[];
   };
   const id = d?.purchase_units?.[0]?.payments?.captures?.[0]?.id;
-  return typeof id === "string" && id.length > 0 ? id : undefined;
+  return typeof id === 'string' && id.length > 0 ? id : undefined;
 }
 
 /** Subscription billing: last payment id when present. */
@@ -192,5 +191,5 @@ function paypalTransactionIdFromSubscription(details: unknown): string | undefin
   };
   const lp = d?.billing_info?.last_payment;
   const id = lp?.id ?? lp?.transaction_id;
-  return typeof id === "string" && id.length > 0 ? id : undefined;
+  return typeof id === 'string' && id.length > 0 ? id : undefined;
 }

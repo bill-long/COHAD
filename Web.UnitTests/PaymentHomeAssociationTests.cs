@@ -27,10 +27,7 @@ public sealed class PaymentHomeAssociationTests
     [Fact]
     public void FindHomeIdsForPayerEmail_matches_resident_email_case_insensitive()
     {
-        var homes = new List<Home>
-        {
-            new Home { Id = HomeA }
-        };
+        var homes = new List<Home> { new Home { Id = HomeA } };
         var residentsByHome = new Dictionary<Guid, List<Resident>>
         {
             [HomeA] = new List<Resident>
@@ -39,12 +36,9 @@ public sealed class PaymentHomeAssociationTests
                 {
                     Id = Guid.NewGuid(),
                     HomeId = HomeA,
-                    EmailAddresses = new List<EmailAddress>
-                    {
-                        new EmailAddress { Address = "Resident@Example.com" }
-                    }
-                }
-            }
+                    EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "Resident@Example.com" } },
+                },
+            },
         };
         var users = new List<User>();
 
@@ -52,7 +46,8 @@ public sealed class PaymentHomeAssociationTests
             UserEmailHelpers.NormalizeEmail("resident@example.com"),
             homes,
             residentsByHome,
-            users);
+            users
+        );
 
         Assert.Equal(new[] { HomeA }, ids);
     }
@@ -60,25 +55,23 @@ public sealed class PaymentHomeAssociationTests
     [Fact]
     public void FindHomeIdsForPayerEmail_matches_user_account_owning_home()
     {
-        var homes = new List<Home>
-        {
-            new Home { Id = HomeA }
-        };
+        var homes = new List<Home> { new Home { Id = HomeA } };
         var residentsByHome = new Dictionary<Guid, List<Resident>>();
         var users = new List<User>
         {
             new User
             {
                 Emails = "owner@test.local",
-                OwnedHomeIds = new List<Guid> { HomeA }
-            }
+                OwnedHomeIds = new List<Guid> { HomeA },
+            },
         };
 
         var ids = PaymentHomeAssociation.FindHomeIdsForPayerEmail(
             UserEmailHelpers.NormalizeEmail("owner@test.local"),
             homes,
             residentsByHome,
-            users);
+            users
+        );
 
         Assert.Equal(new[] { HomeA }, ids);
     }
@@ -93,9 +86,9 @@ public sealed class PaymentHomeAssociationTests
                 Id = HomeA,
                 AssociatedUsers = new List<HomeAssociatedUser>
                 {
-                    new HomeAssociatedUser { Emails = "assoc@cohad.local" }
-                }
-            }
+                    new HomeAssociatedUser { Emails = "assoc@cohad.local" },
+                },
+            },
         };
         var residentsByHome = new Dictionary<Guid, List<Resident>>();
         var users = new List<User>();
@@ -104,7 +97,8 @@ public sealed class PaymentHomeAssociationTests
             UserEmailHelpers.NormalizeEmail("assoc@cohad.local"),
             homes,
             residentsByHome,
-            users);
+            users
+        );
 
         Assert.Equal(new[] { HomeA }, ids);
     }
@@ -117,13 +111,13 @@ public sealed class PaymentHomeAssociationTests
             new Home
             {
                 Id = HomeB,
-                EmailAddress = new EmailAddress { Address = "shared@example.com" }
+                EmailAddress = new EmailAddress { Address = "shared@example.com" },
             },
             new Home
             {
                 Id = HomeA,
-                EmailAddress = new EmailAddress { Address = "shared@example.com" }
-            }
+                EmailAddress = new EmailAddress { Address = "shared@example.com" },
+            },
         };
         var residentsByHome = new Dictionary<Guid, List<Resident>>();
         var users = new List<User>();
@@ -132,7 +126,8 @@ public sealed class PaymentHomeAssociationTests
             UserEmailHelpers.NormalizeEmail("shared@example.com"),
             homes,
             residentsByHome,
-            users);
+            users
+        );
 
         Assert.Equal(new[] { HomeA, HomeB }, ids);
     }
@@ -142,7 +137,7 @@ public sealed class PaymentHomeAssociationTests
     {
         var sets = new Dictionary<Guid, HashSet<string>>
         {
-            [HomeA] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "a@x.com" }
+            [HomeA] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "a@x.com" },
         };
 
         Assert.False(PaymentHomeAssociation.PayerEmailStillOnHome("other@x.com", HomeA, sets));
@@ -153,15 +148,15 @@ public sealed class PaymentHomeAssociationTests
     {
         var sets = new Dictionary<Guid, HashSet<string>>
         {
-            [HomeA] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "onhome@x.com" }
+            [HomeA] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "onhome@x.com" },
         };
         var users = new List<User>
         {
             new User
             {
                 Emails = "owner@x.com",
-                OwnedHomeIds = new List<Guid> { HomeA }
-            }
+                OwnedHomeIds = new List<Guid> { HomeA },
+            },
         };
 
         PaymentHomeAssociation.MergeAccountEmailsFromUsersIntoHomeSets(users, new List<Guid> { HomeA }, sets);
@@ -172,25 +167,23 @@ public sealed class PaymentHomeAssociationTests
     [Fact]
     public void SplitEmails_multiple_addresses_per_user_are_considered_in_FindHomeIds()
     {
-        var homes = new List<Home>
-        {
-            new Home { Id = HomeA }
-        };
+        var homes = new List<Home> { new Home { Id = HomeA } };
         var residentsByHome = new Dictionary<Guid, List<Resident>>();
         var users = new List<User>
         {
             new User
             {
                 Emails = "first@x.com; Second@x.com",
-                OwnedHomeIds = new List<Guid> { HomeA }
-            }
+                OwnedHomeIds = new List<Guid> { HomeA },
+            },
         };
 
         var idsSecond = PaymentHomeAssociation.FindHomeIdsForPayerEmail(
             UserEmailHelpers.NormalizeEmail("second@x.com"),
             homes,
             residentsByHome,
-            users);
+            users
+        );
 
         Assert.Equal(new[] { HomeA }, idsSecond);
     }

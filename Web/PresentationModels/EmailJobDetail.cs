@@ -55,13 +55,16 @@ namespace Web.PresentationModels
                 SentCount = job.SentCount,
                 FailedCount = job.FailedCount,
                 LastError = job.LastError,
-                Recipients = job.Recipients?.Select(r => new EmailJobRecipientDetail
-                {
-                    Email = r.Email,
-                    Status = r.Status,
-                    Error = r.Error,
-                    SentUtc = r.SentUtc
-                }).ToList() ?? new()
+                Recipients =
+                    job.Recipients?.Select(r => new EmailJobRecipientDetail
+                        {
+                            Email = r.Email,
+                            Status = r.Status,
+                            Error = r.Error,
+                            SentUtc = r.SentUtc,
+                        })
+                        .ToList()
+                    ?? new(),
             };
         }
     }

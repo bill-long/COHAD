@@ -18,7 +18,11 @@ namespace Web.Controllers
 
         [HttpGet("mock-auth")]
         [AllowAnonymous]
-        public IActionResult GetMockToken([FromServices] IWebHostEnvironment env, [FromServices] IConfiguration config, [FromQuery] string userId = null)
+        public IActionResult GetMockToken(
+            [FromServices] IWebHostEnvironment env,
+            [FromServices] IConfiguration config,
+            [FromQuery] string userId = null
+        )
         {
             if (!env.IsEnvironment("MockData"))
             {
@@ -30,7 +34,11 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var validUserIds = new[] { MockDataConstants.AdminNameIdentifier, MockDataConstants.SecondaryUserNameIdentifier };
+            var validUserIds = new[]
+            {
+                MockDataConstants.AdminNameIdentifier,
+                MockDataConstants.SecondaryUserNameIdentifier,
+            };
             if (userId != null && Array.IndexOf(validUserIds, userId) < 0)
             {
                 return BadRequest($"Unknown userId '{userId}'. Valid values: {string.Join(", ", validUserIds)}.");

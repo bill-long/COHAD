@@ -27,7 +27,8 @@ namespace Web.Controllers
             IVendorReviewRepository vendorReviewRepository,
             IYouthServiceListingRepository youthServiceListingRepository,
             IUserRepository userRepository,
-            IAuditLogRepository auditLogRepository)
+            IAuditLogRepository auditLogRepository
+        )
         {
             _vendorRepository = vendorRepository;
             _vendorReviewRepository = vendorReviewRepository;
@@ -79,29 +80,27 @@ namespace Web.Controllers
                     AuthorDisplayName = displayName,
                     ReviewText = row.ReviewText.Trim(),
                     CreatedUtc = VendorReviewTimestamps.Unknown,
-                    ModifiedUtc = VendorReviewTimestamps.Unknown
+                    ModifiedUtc = VendorReviewTimestamps.Unknown,
                 };
 
                 await _vendorReviewRepository.UpsertAsync(review);
                 imported++;
             }
 
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = "vendor-reviews-import",
-                SubjectName = "Vendor reviews import",
-                Action = $"Imported {imported} review(s); skipped {skipped}.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = "vendor-reviews-import",
+                    SubjectName = "Vendor reviews import",
+                    Action = $"Imported {imported} review(s); skipped {skipped}.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
-            return Ok(new
-            {
-                imported,
-                skipped
-            });
+            return Ok(new { imported, skipped });
         }
 
         [HttpPost("seed")]
@@ -156,7 +155,7 @@ namespace Web.Controllers
                     CreatedByUniqueId = apiUser.UniqueId,
                     ModifiedByUniqueId = apiUser.UniqueId,
                     CreatedUtc = DateTime.UtcNow,
-                    ModifiedUtc = DateTime.UtcNow
+                    ModifiedUtc = DateTime.UtcNow,
                 };
 
                 var saved = await _vendorRepository.UpsertAsync(vendor);
@@ -166,26 +165,31 @@ namespace Web.Controllers
                 if (!string.IsNullOrWhiteSpace(row.InitialReviewText))
                 {
                     var now = DateTime.UtcNow;
-                    await _vendorReviewRepository.UpsertAsync(new VendorReview
-                    {
-                        Id = Guid.NewGuid(),
-                        VendorId = saved.Id,
-                        AuthorUniqueId = apiUser.UniqueId,
-                        AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
-                        ReviewText = row.InitialReviewText.Trim(),
-                        CreatedUtc = now,
-                        ModifiedUtc = now
-                    });
+                    await _vendorReviewRepository.UpsertAsync(
+                        new VendorReview
+                        {
+                            Id = Guid.NewGuid(),
+                            VendorId = saved.Id,
+                            AuthorUniqueId = apiUser.UniqueId,
+                            AuthorDisplayName =
+                                $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                            ReviewText = row.InitialReviewText.Trim(),
+                            CreatedUtc = now,
+                            ModifiedUtc = now,
+                        }
+                    );
                     importedReviews++;
                 }
             }
 
             foreach (var row in request.Reviews ?? Enumerable.Empty<VendorSeedImportReview>())
             {
-                if (row == null ||
-                    string.IsNullOrWhiteSpace(row.VendorFingerprint) ||
-                    string.IsNullOrWhiteSpace(row.ReviewText) ||
-                    !vendorIdByFingerprint.TryGetValue(row.VendorFingerprint.Trim(), out var vendorId))
+                if (
+                    row == null
+                    || string.IsNullOrWhiteSpace(row.VendorFingerprint)
+                    || string.IsNullOrWhiteSpace(row.ReviewText)
+                    || !vendorIdByFingerprint.TryGetValue(row.VendorFingerprint.Trim(), out var vendorId)
+                )
                 {
                     skippedReviews++;
                     continue;
@@ -195,16 +199,18 @@ namespace Web.Controllers
                     ? "Community Referrer"
                     : row.AuthorDisplayName.Trim();
 
-                await _vendorReviewRepository.UpsertAsync(new VendorReview
-                {
-                    Id = Guid.NewGuid(),
-                    VendorId = vendorId,
-                    AuthorUniqueId = apiUser.UniqueId,
-                    AuthorDisplayName = displayName,
-                    ReviewText = row.ReviewText.Trim(),
-                    CreatedUtc = VendorReviewTimestamps.Unknown,
-                    ModifiedUtc = VendorReviewTimestamps.Unknown
-                });
+                await _vendorReviewRepository.UpsertAsync(
+                    new VendorReview
+                    {
+                        Id = Guid.NewGuid(),
+                        VendorId = vendorId,
+                        AuthorUniqueId = apiUser.UniqueId,
+                        AuthorDisplayName = displayName,
+                        ReviewText = row.ReviewText.Trim(),
+                        CreatedUtc = VendorReviewTimestamps.Unknown,
+                        ModifiedUtc = VendorReviewTimestamps.Unknown,
+                    }
+                );
                 importedReviews++;
             }
 
@@ -222,50 +228,55 @@ namespace Web.Controllers
                     continue;
                 }
 
-                var contactMethod = row.ContactMethod == 0
-                    ? PreferredContactMethod.Call
-                    : PreferredContactMethod.Text;
+                var contactMethod = row.ContactMethod == 0 ? PreferredContactMethod.Call : PreferredContactMethod.Text;
 
                 var now = DateTime.UtcNow;
-                await _youthServiceListingRepository.UpsertAsync(new YouthServiceListing
-                {
-                    Id = Guid.NewGuid(),
-                    Name = row.Name.Trim(),
-                    Services = StringListHelper.NormalizeStringList(row.Services),
-                    BornYear = row.BornYear,
-                    Phone = row.Phone?.Trim(),
-                    ContactMethod = contactMethod,
-                    Email = row.Email?.Trim(),
-                    Address = row.Address?.Trim(),
-                    ParentNote = row.ParentNote?.Trim(),
-                    CreatedByUniqueId = apiUser.UniqueId,
-                    ModifiedByUniqueId = apiUser.UniqueId,
-                    CreatedUtc = now,
-                    ModifiedUtc = now
-                });
+                await _youthServiceListingRepository.UpsertAsync(
+                    new YouthServiceListing
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = row.Name.Trim(),
+                        Services = StringListHelper.NormalizeStringList(row.Services),
+                        BornYear = row.BornYear,
+                        Phone = row.Phone?.Trim(),
+                        ContactMethod = contactMethod,
+                        Email = row.Email?.Trim(),
+                        Address = row.Address?.Trim(),
+                        ParentNote = row.ParentNote?.Trim(),
+                        CreatedByUniqueId = apiUser.UniqueId,
+                        ModifiedByUniqueId = apiUser.UniqueId,
+                        CreatedUtc = now,
+                        ModifiedUtc = now,
+                    }
+                );
                 importedYouthServices++;
             }
 
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = "vendor-seed-import",
-                SubjectName = "Vendor seed import",
-                Action = $"Imported vendors={importedVendors}, skipped vendors={skippedVendors}, imported reviews={importedReviews}, skipped reviews={skippedReviews}, imported youth services={importedYouthServices}, skipped youth services={skippedYouthServices}.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = "vendor-seed-import",
+                    SubjectName = "Vendor seed import",
+                    Action =
+                        $"Imported vendors={importedVendors}, skipped vendors={skippedVendors}, imported reviews={importedReviews}, skipped reviews={skippedReviews}, imported youth services={importedYouthServices}, skipped youth services={skippedYouthServices}.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
-            return Ok(new
-            {
-                importedVendors,
-                skippedVendors,
-                importedReviews,
-                skippedReviews,
-                importedYouthServices,
-                skippedYouthServices
-            });
+            return Ok(
+                new
+                {
+                    importedVendors,
+                    skippedVendors,
+                    importedReviews,
+                    skippedReviews,
+                    importedYouthServices,
+                    skippedYouthServices,
+                }
+            );
         }
 
         private async Task<User> GetApiUserAsync()
@@ -273,6 +284,5 @@ namespace Web.Controllers
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
             return await _userRepository.GetByUniqueIdAsync(uniqueId);
         }
-
     }
 }

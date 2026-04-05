@@ -7,13 +7,12 @@ import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { EditHomeContactDialogComponent } from '../edit-home-contact-dialog/edit-home-contact-dialog.component';
 
 @Component({
-    selector: 'app-edit-home',
-    templateUrl: './edit-home.component.html',
-    styleUrls: ['./edit-home.component.css'],
-    standalone: false
+  selector: 'app-edit-home',
+  templateUrl: './edit-home.component.html',
+  styleUrls: ['./edit-home.component.css'],
+  standalone: false,
 })
 export class EditHomeComponent implements OnInit, OnChanges {
-
   @Input() home!: Home | null;
 
   @Input() startWithEditEnabled: boolean | undefined;
@@ -31,7 +30,7 @@ export class EditHomeComponent implements OnInit, OnChanges {
   editing: { contact: boolean; phone: boolean; residents: boolean } = {
     contact: false,
     phone: false,
-    residents: false
+    residents: false,
   };
 
   private residentEditing = new WeakSet<Resident>();
@@ -46,7 +45,10 @@ export class EditHomeComponent implements OnInit, OnChanges {
     residents?: { ok: boolean; message: string };
   } = {};
 
-  constructor(private homeService: HomeService, private dialog: MatDialog) { }
+  constructor(
+    private homeService: HomeService,
+    private dialog: MatDialog,
+  ) {}
 
   ngOnInit(): void {
     this.refreshHomeCopyFromInput();
@@ -86,7 +88,7 @@ export class EditHomeComponent implements OnInit, OnChanges {
 
   openHomeContactDialog() {
     const ref = this.dialog.open(EditHomeContactDialogComponent, {
-      data: { home: this.homeCopy }
+      data: { home: this.homeCopy },
     });
 
     ref.afterClosed().subscribe(result => {
@@ -114,12 +116,12 @@ export class EditHomeComponent implements OnInit, OnChanges {
     if (this.reloadAllOnSave) {
       this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe({
         next: r => onDone(true),
-        error: e => onDone(false)
+        error: e => onDone(false),
       });
     } else {
       this.homeService.saveHomeAndReloadMine(this.homeCopy).subscribe({
         next: r => onDone(true),
-        error: e => onDone(false)
+        error: e => onDone(false),
       });
     }
   }
@@ -177,12 +179,12 @@ export class EditHomeComponent implements OnInit, OnChanges {
     if (this.reloadAllOnSave) {
       this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe({
         next: r => onDone(true),
-        error: e => onDone(false)
+        error: e => onDone(false),
       });
     } else {
       this.homeService.saveHomeAndReloadMine(this.homeCopy).subscribe({
         next: r => onDone(true),
-        error: e => onDone(false)
+        error: e => onDone(false),
       });
     }
   }
@@ -241,12 +243,12 @@ export class EditHomeComponent implements OnInit, OnChanges {
     if (this.reloadAllOnSave) {
       this.homeService.saveHomeAndReloadAll(this.homeCopy).subscribe({
         next: r => onDone(true),
-        error: e => onDone(false)
+        error: e => onDone(false),
       });
     } else {
       this.homeService.saveHomeAndReloadMine(this.homeCopy).subscribe({
         next: r => onDone(true),
-        error: e => onDone(false)
+        error: e => onDone(false),
       });
     }
   }
@@ -260,8 +262,8 @@ export class EditHomeComponent implements OnInit, OnChanges {
         body: `This will permanently remove ${name} from your home.\n\nYou can’t undo this after saving.`,
         confirmText: 'Delete',
         cancelText: 'Cancel',
-        confirmColor: 'warn'
-      }
+        confirmColor: 'warn',
+      },
     });
 
     ref.afterClosed().subscribe(confirmed => {
@@ -281,8 +283,8 @@ export class EditHomeComponent implements OnInit, OnChanges {
         body: `${accountLabel} ${emailAddress} will no longer be able to modify this home's details.`,
         confirmText: 'Remove',
         cancelText: 'Cancel',
-        confirmColor: 'warn'
-      }
+        confirmColor: 'warn',
+      },
     });
 
     ref.afterClosed().subscribe(confirmed => {
@@ -321,7 +323,7 @@ export class EditHomeComponent implements OnInit, OnChanges {
       },
       error: _ => {
         this.saveInProgress = false;
-      }
+      },
     });
   }
 
@@ -349,7 +351,7 @@ export class EditHomeComponent implements OnInit, OnChanges {
       phoneNumbers: [],
       residentType: 0,
       yearOfBirth: 0,
-      collegeName: ''
+      collegeName: '',
     });
 
     this.residentOrderDirty = !this.isSameResidentOrder();
@@ -361,7 +363,15 @@ export class EditHomeComponent implements OnInit, OnChanges {
   }
 
   addEmail() {
-    this.homeCopy.emailAddress = { address: '', visibleInDirectory: true, boardEmailOptedIn: true, welcomeEmailOptedIn: true, gardenClubEmailOptedIn: true, socialCommitteeEmailOptedIn: true, sunshineCommitteeEmailOptedIn: true };
+    this.homeCopy.emailAddress = {
+      address: '',
+      visibleInDirectory: true,
+      boardEmailOptedIn: true,
+      welcomeEmailOptedIn: true,
+      gardenClubEmailOptedIn: true,
+      socialCommitteeEmailOptedIn: true,
+      sunshineCommitteeEmailOptedIn: true,
+    };
   }
 
   deleteEmail() {
@@ -390,7 +400,7 @@ export class EditHomeComponent implements OnInit, OnChanges {
         error: e => {
           this.saveInProgress = false;
           this.saveStatus[section] = { ok: false, message: 'Could not save. Please try again.' };
-        }
+        },
       });
     } else {
       this.homeService.saveHomeAndReloadMine(this.homeCopy).subscribe({
@@ -403,9 +413,8 @@ export class EditHomeComponent implements OnInit, OnChanges {
         error: e => {
           this.saveInProgress = false;
           this.saveStatus[section] = { ok: false, message: 'Could not save. Please try again.' };
-        }
+        },
       });
     }
   }
-
 }

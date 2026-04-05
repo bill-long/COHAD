@@ -28,7 +28,7 @@ namespace Web.PresentationModels
                 Status = flag.Status,
                 AuthorDisplayName = includeAuthor ? flag.AuthorDisplayName : null,
                 AuthorUniqueId = includeAuthor ? flag.AuthorUniqueId : null,
-                CreatedUtc = flag.CreatedUtc
+                CreatedUtc = flag.CreatedUtc,
             };
         }
     }

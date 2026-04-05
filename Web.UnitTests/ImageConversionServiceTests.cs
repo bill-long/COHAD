@@ -124,10 +124,7 @@ public sealed class ImageConversionServiceTests
         {
             for (var x = 0; x < width; x++)
             {
-                bmp.SetPixel(x, y, new SKColor(
-                    (byte)rng.Next(256),
-                    (byte)rng.Next(256),
-                    (byte)rng.Next(256)));
+                bmp.SetPixel(x, y, new SKColor((byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256)));
             }
         }
 
@@ -144,11 +141,11 @@ public sealed class ImageConversionServiceTests
         {
             for (var x = 0; x < width; x++)
             {
-                bmp.SetPixel(x, y, new SKColor(
-                    (byte)rng.Next(256),
-                    (byte)rng.Next(256),
-                    (byte)rng.Next(256),
-                    (byte)rng.Next(128))); // semi-transparent alpha
+                bmp.SetPixel(
+                    x,
+                    y,
+                    new SKColor((byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(128))
+                ); // semi-transparent alpha
             }
         }
 

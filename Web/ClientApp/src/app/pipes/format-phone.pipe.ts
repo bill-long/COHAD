@@ -3,7 +3,7 @@ import { formatPhoneDisplay } from '../utils/format-phone';
 
 @Pipe({
   name: 'formatPhone',
-  standalone: false
+  standalone: false,
 })
 export class FormatPhonePipe implements PipeTransform {
   transform(value: string | null | undefined): string {

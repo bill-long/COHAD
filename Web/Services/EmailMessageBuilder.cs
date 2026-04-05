@@ -45,12 +45,14 @@ namespace Web.Services
                 var imageBytes = Convert.FromBase64String(base64);
 
                 var contentId = MimeUtils.GenerateMessageId();
-                images.Add(new InlineImage
-                {
-                    FileName = $"image{imageCount++}.{imageExtension}",
-                    ContentId = contentId,
-                    Data = imageBytes
-                });
+                images.Add(
+                    new InlineImage
+                    {
+                        FileName = $"image{imageCount++}.{imageExtension}",
+                        ContentId = contentId,
+                        Data = imageBytes,
+                    }
+                );
                 sb.Append($"<img src=\"cid:{contentId}\">");
 
                 position = base64End + imageEnd.Length;
@@ -78,11 +80,11 @@ namespace Web.Services
 
             var prefsUrl = $"{appBaseUrl}/email-preferences?token={Uri.EscapeDataString(token)}";
 
-            return "\n<hr style=\"margin-top:32px;border:none;border-top:1px solid #ddd\">" +
-                   "<p style=\"font-size:12px;color:#888;font-family:sans-serif;\">" +
-                   $"You received this email because your address is subscribed to COHAD {categoryDisplayName} updates. " +
-                   $"<a href=\"{prefsUrl}\" style=\"color:#1a73e8;\">Manage your email preferences</a>" +
-                   "</p>";
+            return "\n<hr style=\"margin-top:32px;border:none;border-top:1px solid #ddd\">"
+                + "<p style=\"font-size:12px;color:#888;font-family:sans-serif;\">"
+                + $"You received this email because your address is subscribed to COHAD {categoryDisplayName} updates. "
+                + $"<a href=\"{prefsUrl}\" style=\"color:#1a73e8;\">Manage your email preferences</a>"
+                + "</p>";
         }
     }
 

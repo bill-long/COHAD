@@ -32,25 +32,37 @@ public sealed class MeControllerTests
         IEmailService emailService,
         IResidentRepository? residentRepository = null,
         string nameId = "u1",
-        string idp = "google.com")
+        string idp = "google.com"
+    )
     {
         residentRepository ??= CreateDefaultResidentMock();
-        var controller = new MeController(userRepository, homeRepository, residentRepository, emailService, Mock.Of<ILogger<MeController>>())
+        var controller = new MeController(
+            userRepository,
+            homeRepository,
+            residentRepository,
+            emailService,
+            Mock.Of<ILogger<MeController>>()
+        )
         {
             ControllerContext = new ControllerContext
             {
                 HttpContext = new DefaultHttpContext
                 {
-                    User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                    {
-                        new Claim(ClaimTypes.NameIdentifier, nameId),
-                        new Claim(ClaimTypes.GivenName, "Test"),
-                        new Claim(ClaimTypes.Surname, "User"),
-                        new Claim(IdentityProviderClaim, idp),
-                        new Claim("emails", "test@example.com")
-                    }, "Test"))
-                }
-            }
+                    User = new ClaimsPrincipal(
+                        new ClaimsIdentity(
+                            new[]
+                            {
+                                new Claim(ClaimTypes.NameIdentifier, nameId),
+                                new Claim(ClaimTypes.GivenName, "Test"),
+                                new Claim(ClaimTypes.Surname, "User"),
+                                new Claim(IdentityProviderClaim, idp),
+                                new Claim("emails", "test@example.com"),
+                            },
+                            "Test"
+                        )
+                    ),
+                },
+            },
         };
         return controller;
     }
@@ -60,12 +72,16 @@ public sealed class MeControllerTests
     {
         var uniqueId = "google.comu1";
         var users = new Mock<IUserRepository>();
-        users.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident },
-            OwnedHomeIds = new List<Guid>()
-        });
+        users
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
 
         var neverCompletes = new TaskCompletionSource<User>();
         users.Setup(r => r.UpsertAsync(It.IsAny<User>())).Returns(neverCompletes.Task);
@@ -90,12 +106,16 @@ public sealed class MeControllerTests
         var homeId = Guid.NewGuid();
 
         var users = new Mock<IUserRepository>();
-        users.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role>(),
-            OwnedHomeIds = new List<Guid> { homeId }
-        });
+        users
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role>(),
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
         users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
 
         var homes = new Mock<IHomeRepository>();
@@ -117,12 +137,16 @@ public sealed class MeControllerTests
         var homeId = Guid.NewGuid();
 
         var users = new Mock<IUserRepository>();
-        users.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = null,
-            OwnedHomeIds = new List<Guid> { homeId }
-        });
+        users
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = null,
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
         users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
 
         var homes = new Mock<IHomeRepository>();
@@ -145,24 +169,57 @@ public sealed class MeControllerTests
         var homeId = Guid.NewGuid();
 
         var users = new Mock<IUserRepository>();
-        users.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident },
-            OwnedHomeIds = new List<Guid> { homeId }
-        });
+        users
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
         users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
-        users.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<User>
-        {
-            new User { UniqueId = uniqueId, GivenName = "Test", Surname = "User", Emails = "test@example.com", IdentityProvider = "google.com", OwnedHomeIds = new List<Guid> { homeId } },
-            new User { UniqueId = otherUniqueId, GivenName = "Other", Surname = "Owner", Emails = "other@example.com", IdentityProvider = "google.com", OwnedHomeIds = new List<Guid> { homeId } }
-        });
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = uniqueId,
+                        GivenName = "Test",
+                        Surname = "User",
+                        Emails = "test@example.com",
+                        IdentityProvider = "google.com",
+                        OwnedHomeIds = new List<Guid> { homeId },
+                    },
+                    new User
+                    {
+                        UniqueId = otherUniqueId,
+                        GivenName = "Other",
+                        Surname = "Owner",
+                        Emails = "other@example.com",
+                        IdentityProvider = "google.com",
+                        OwnedHomeIds = new List<Guid> { homeId },
+                    },
+                }
+            );
 
         var homes = new Mock<IHomeRepository>();
-        homes.Setup(r => r.GetByIdsAsync(It.Is<List<Guid>>(ids => ids.Contains(homeId)))).ReturnsAsync(new List<Home>
-        {
-            new Home { Id = homeId, StreetNumber = 123, StreetName = "Main St" }
-        });
+        homes
+            .Setup(r => r.GetByIdsAsync(It.Is<List<Guid>>(ids => ids.Contains(homeId))))
+            .ReturnsAsync(
+                new List<Home>
+                {
+                    new Home
+                    {
+                        Id = homeId,
+                        StreetNumber = 123,
+                        StreetName = "Main St",
+                    },
+                }
+            );
 
         var email = new Mock<IEmailService>();
         var controller = CreateController(users.Object, homes.Object, email.Object);
@@ -181,23 +238,48 @@ public sealed class MeControllerTests
         var homeId = Guid.NewGuid();
 
         var users = new Mock<IUserRepository>();
-        users.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Administrator },
-            OwnedHomeIds = new List<Guid> { homeId }
-        });
+        users
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
         users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
-        users.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<User>
-        {
-            new User { UniqueId = uniqueId, GivenName = "Test", Surname = "User", Emails = "test@example.com", IdentityProvider = "google.com", OwnedHomeIds = new List<Guid> { homeId } }
-        });
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = uniqueId,
+                        GivenName = "Test",
+                        Surname = "User",
+                        Emails = "test@example.com",
+                        IdentityProvider = "google.com",
+                        OwnedHomeIds = new List<Guid> { homeId },
+                    },
+                }
+            );
 
         var homes = new Mock<IHomeRepository>();
-        homes.Setup(r => r.GetByIdsAsync(It.Is<List<Guid>>(ids => ids.Contains(homeId)))).ReturnsAsync(new List<Home>
-        {
-            new Home { Id = homeId, StreetNumber = 456, StreetName = "Oak Ave" }
-        });
+        homes
+            .Setup(r => r.GetByIdsAsync(It.Is<List<Guid>>(ids => ids.Contains(homeId))))
+            .ReturnsAsync(
+                new List<Home>
+                {
+                    new Home
+                    {
+                        Id = homeId,
+                        StreetNumber = 456,
+                        StreetName = "Oak Ave",
+                    },
+                }
+            );
 
         var email = new Mock<IEmailService>();
         var controller = CreateController(users.Object, homes.Object, email.Object);

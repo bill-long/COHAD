@@ -32,53 +32,70 @@ public sealed class DocumentFolderControllerTests
         IDocumentRepository documents,
         IAuditLogRepository auditLog,
         string nameId = "u1",
-        string idp = "google.com")
+        string idp = "google.com"
+    )
     {
-        var cache = new DocumentListCache(documents, folders, new MemoryCache(new MemoryCacheOptions()), WebJsonOptions);
+        var cache = new DocumentListCache(
+            documents,
+            folders,
+            new MemoryCache(new MemoryCacheOptions()),
+            WebJsonOptions
+        );
         var c = new DocumentFolderController(users, folders, documents, auditLog, cache);
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, nameId),
-                    new Claim(IdentityProviderClaim, idp)
-                }, "Test"))
-            }
+                User = new ClaimsPrincipal(
+                    new ClaimsIdentity(
+                        new[] { new Claim(ClaimTypes.NameIdentifier, nameId), new Claim(IdentityProviderClaim, idp) },
+                        "Test"
+                    )
+                ),
+            },
         };
         return c;
     }
 
     private static string UniqueId(string nameId, string idp = "google.com") => $"{idp}{nameId}";
 
-    private static User AdminUser(string nameId = "u1", string idp = "google.com") => new()
-    {
-        UniqueId = UniqueId(nameId, idp),
-        GivenName = "Admin",
-        Surname = "User",
-        Roles = new List<User.Role> { User.Role.Administrator }
-    };
+    private static User AdminUser(string nameId = "u1", string idp = "google.com") =>
+        new()
+        {
+            UniqueId = UniqueId(nameId, idp),
+            GivenName = "Admin",
+            Surname = "User",
+            Roles = new List<User.Role> { User.Role.Administrator },
+        };
 
-    private static User ResidentUser(string nameId = "u1", string idp = "google.com") => new()
-    {
-        UniqueId = UniqueId(nameId, idp),
-        Roles = new List<User.Role> { User.Role.Resident }
-    };
+    private static User ResidentUser(string nameId = "u1", string idp = "google.com") =>
+        new()
+        {
+            UniqueId = UniqueId(nameId, idp),
+            Roles = new List<User.Role> { User.Role.Resident },
+        };
 
     [Fact]
     public async Task Get_returns_Forbid_when_user_has_no_resident_or_admin_role()
     {
         var uniqueId = UniqueId("u1");
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.GardenClub }
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.GardenClub },
+                }
+            );
 
-        var c = CreateController(mockUsers.Object, Mock.Of<IDocumentFolderRepository>(),
-            Mock.Of<IDocumentRepository>(), Mock.Of<IAuditLogRepository>());
+        var c = CreateController(
+            mockUsers.Object,
+            Mock.Of<IDocumentFolderRepository>(),
+            Mock.Of<IDocumentRepository>(),
+            Mock.Of<IAuditLogRepository>()
+        );
 
         var result = await c.Get();
 
@@ -96,15 +113,25 @@ public sealed class DocumentFolderControllerTests
         var folder2Id = Guid.NewGuid();
         var folders = new List<DocumentFolder>
         {
-            new() { Id = folder2Id, Name = "Zebra", SortOrder = 1 },
-            new() { Id = folder1Id, Name = "Alpha", SortOrder = 0 }
+            new()
+            {
+                Id = folder2Id,
+                Name = "Zebra",
+                SortOrder = 1,
+            },
+            new()
+            {
+                Id = folder1Id,
+                Name = "Alpha",
+                SortOrder = 0,
+            },
         };
         var docs = new List<ResidentDocument>
         {
             new() { Id = Guid.NewGuid(), FolderId = folder1Id },
             new() { Id = Guid.NewGuid(), FolderId = folder1Id },
             new() { Id = Guid.NewGuid(), FolderId = folder2Id },
-            new() { Id = Guid.NewGuid(), FolderId = null }
+            new() { Id = Guid.NewGuid(), FolderId = null },
         };
 
         var mockFolders = new Mock<IDocumentFolderRepository>();
@@ -135,8 +162,12 @@ public sealed class DocumentFolderControllerTests
         var mockUsers = new Mock<IUserRepository>();
         mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(AdminUser());
 
-        var c = CreateController(mockUsers.Object, Mock.Of<IDocumentFolderRepository>(),
-            Mock.Of<IDocumentRepository>(), Mock.Of<IAuditLogRepository>());
+        var c = CreateController(
+            mockUsers.Object,
+            Mock.Of<IDocumentFolderRepository>(),
+            Mock.Of<IDocumentRepository>(),
+            Mock.Of<IAuditLogRepository>()
+        );
 
         var result = await c.Create(new CreateFolderRequest { Name = "" });
 
@@ -152,13 +183,22 @@ public sealed class DocumentFolderControllerTests
 
         var existing = new List<DocumentFolder>
         {
-            new() { Id = Guid.NewGuid(), Name = "Meeting Minutes", SortOrder = 0 }
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Name = "Meeting Minutes",
+                SortOrder = 0,
+            },
         };
         var mockFolders = new Mock<IDocumentFolderRepository>();
         mockFolders.Setup(r => r.GetAllAsync()).ReturnsAsync(existing);
 
-        var c = CreateController(mockUsers.Object, mockFolders.Object,
-            Mock.Of<IDocumentRepository>(), Mock.Of<IAuditLogRepository>());
+        var c = CreateController(
+            mockUsers.Object,
+            mockFolders.Object,
+            Mock.Of<IDocumentRepository>(),
+            Mock.Of<IAuditLogRepository>()
+        );
 
         var result = await c.Create(new CreateFolderRequest { Name = "meeting minutes" });
 
@@ -174,17 +214,27 @@ public sealed class DocumentFolderControllerTests
 
         var existing = new List<DocumentFolder>
         {
-            new() { Id = Guid.NewGuid(), Name = "Existing", SortOrder = 5 }
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Name = "Existing",
+                SortOrder = 5,
+            },
         };
         DocumentFolder saved = null;
         var mockFolders = new Mock<IDocumentFolderRepository>();
         mockFolders.Setup(r => r.GetAllAsync()).ReturnsAsync(existing);
-        mockFolders.Setup(r => r.UpsertAsync(It.IsAny<DocumentFolder>()))
+        mockFolders
+            .Setup(r => r.UpsertAsync(It.IsAny<DocumentFolder>()))
             .Callback<DocumentFolder>(f => saved = f)
             .ReturnsAsync((DocumentFolder f) => f);
 
-        var c = CreateController(mockUsers.Object, mockFolders.Object,
-            Mock.Of<IDocumentRepository>(), Mock.Of<IAuditLogRepository>());
+        var c = CreateController(
+            mockUsers.Object,
+            mockFolders.Object,
+            Mock.Of<IDocumentRepository>(),
+            Mock.Of<IAuditLogRepository>()
+        );
 
         var result = await c.Create(new CreateFolderRequest { Name = "New Folder" });
 
@@ -203,12 +253,13 @@ public sealed class DocumentFolderControllerTests
         mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(AdminUser());
 
         var mockFolders = new Mock<IDocumentFolderRepository>();
-        mockFolders.Setup(r => r.GetByIdAsync(folderId))
+        mockFolders
+            .Setup(r => r.GetByIdAsync(folderId))
             .ReturnsAsync(new DocumentFolder { Id = folderId, Name = "Test" });
 
         var docs = new List<ResidentDocument>
         {
-            new() { Id = Guid.NewGuid(), FolderId = folderId }
+            new() { Id = Guid.NewGuid(), FolderId = folderId },
         };
         var mockDocs = new Mock<IDocumentRepository>();
         mockDocs.Setup(r => r.GetAllAsync()).ReturnsAsync(docs);
@@ -229,7 +280,8 @@ public sealed class DocumentFolderControllerTests
         mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(AdminUser());
 
         var mockFolders = new Mock<IDocumentFolderRepository>();
-        mockFolders.Setup(r => r.GetByIdAsync(folderId))
+        mockFolders
+            .Setup(r => r.GetByIdAsync(folderId))
             .ReturnsAsync(new DocumentFolder { Id = folderId, Name = "Empty Folder" });
 
         var mockDocs = new Mock<IDocumentRepository>();
@@ -271,20 +323,39 @@ public sealed class DocumentFolderControllerTests
 
         var folderId = Guid.NewGuid();
         var mockFolders = new Mock<IDocumentFolderRepository>();
-        mockFolders.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<DocumentFolder>
-        {
-            new() { Id = folderId, Name = "Folder", SortOrder = 0 }
-        });
+        mockFolders
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<DocumentFolder>
+                {
+                    new()
+                    {
+                        Id = folderId,
+                        Name = "Folder",
+                        SortOrder = 0,
+                    },
+                }
+            );
         var mockDocs = new Mock<IDocumentRepository>();
         mockDocs.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<ResidentDocument>());
 
         // First call: get the ETag
-        var c1 = CreateController(mockUsers.Object, mockFolders.Object, mockDocs.Object, Mock.Of<IAuditLogRepository>());
+        var c1 = CreateController(
+            mockUsers.Object,
+            mockFolders.Object,
+            mockDocs.Object,
+            Mock.Of<IAuditLogRepository>()
+        );
         await c1.Get();
         var etag = c1.Response.Headers.ETag.ToString();
 
         // Second call: send If-None-Match with the same ETag
-        var c2 = CreateController(mockUsers.Object, mockFolders.Object, mockDocs.Object, Mock.Of<IAuditLogRepository>());
+        var c2 = CreateController(
+            mockUsers.Object,
+            mockFolders.Object,
+            mockDocs.Object,
+            Mock.Of<IAuditLogRepository>()
+        );
         c2.Request.Headers["If-None-Match"] = etag;
         var result = await c2.Get();
 

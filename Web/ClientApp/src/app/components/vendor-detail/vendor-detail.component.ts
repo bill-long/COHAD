@@ -16,7 +16,7 @@ import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-e
   selector: 'app-vendor-detail',
   templateUrl: './vendor-detail.component.html',
   styleUrls: ['./vendor-detail.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class VendorDetailComponent implements OnInit, OnDestroy {
   @ViewChild('reviewPanel') reviewPanel?: MatExpansionPanel;
@@ -30,15 +30,15 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
   flagError: string | null = null;
 
   readonly reviewForm = this.formBuilder.group({
-    reviewText: ['']
+    reviewText: [''],
   });
 
   readonly editReviewForm = this.formBuilder.group({
-    reviewText: ['']
+    reviewText: [''],
   });
 
   readonly flagForm = this.formBuilder.group({
-    flagNote: ['']
+    flagNote: [''],
   });
 
   private static readonly minNewReviewLength = 10;
@@ -56,7 +56,8 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
     private readonly dialog: MatDialog,
     private readonly snackBar: MatSnackBar,
     private readonly telemetry: ApplicationInsightsService,
-    @Inject(applicationState) private readonly appState: Observable<ApplicationState>) { }
+    @Inject(applicationState) private readonly appState: Observable<ApplicationState>,
+  ) {}
 
   ngOnInit(): void {
     this.appStateSub = this.appState.subscribe(s => {
@@ -136,7 +137,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
     this.loading = true;
     this.error = null;
     this.vendorsService.getVendor(id).subscribe({
-      next: (vendor) => {
+      next: vendor => {
         this.vendor = vendor;
         this.loading = false;
         this.telemetry.trackEvent('VendorDetailViewed', { vendorName: vendor.name ?? id });
@@ -144,7 +145,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       error: () => {
         this.error = 'Unable to load vendor.';
         this.loading = false;
-      }
+      },
     });
   }
 
@@ -165,21 +166,23 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
 
     this.saving = true;
     this.error = null;
-    this.vendorsService.addReview(this.vendor.id, {
-      reviewText
-    }).subscribe({
-      next: () => {
-        this.telemetry.trackEvent('VendorReviewSubmitted');
-        this.reviewForm.reset({ reviewText: '' });
-        this.reviewPanel?.close();
-        this.saving = false;
-        this.load(this.vendor!.id);
-      },
-      error: () => {
-        this.error = 'Unable to save review.';
-        this.saving = false;
-      }
-    });
+    this.vendorsService
+      .addReview(this.vendor.id, {
+        reviewText,
+      })
+      .subscribe({
+        next: () => {
+          this.telemetry.trackEvent('VendorReviewSubmitted');
+          this.reviewForm.reset({ reviewText: '' });
+          this.reviewPanel?.close();
+          this.saving = false;
+          this.load(this.vendor!.id);
+        },
+        error: () => {
+          this.error = 'Unable to save review.';
+          this.saving = false;
+        },
+      });
   }
 
   startEdit(review: VendorReview): void {
@@ -214,7 +217,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       error: () => {
         this.error = 'Unable to update review.';
         this.saving = false;
-      }
+      },
     });
   }
 
@@ -229,8 +232,8 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
         body: 'This review will be permanently deleted. This action cannot be undone.',
         confirmText: 'Delete',
         cancelText: 'Cancel',
-        confirmColor: 'warn'
-      }
+        confirmColor: 'warn',
+      },
     });
 
     ref.afterClosed().subscribe(confirmed => {
@@ -248,7 +251,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
         error: () => {
           this.error = 'Unable to delete review.';
           this.saving = false;
-        }
+        },
       });
     });
   }
@@ -274,7 +277,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       error: () => {
         this.flagError = 'Unable to submit report. Please try again.';
         this.submittingFlag = false;
-      }
+      },
     });
   }
 
@@ -289,8 +292,8 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
         body: 'This will mark the report as resolved. The resident will see that it has been addressed.',
         confirmText: 'Dismiss',
         cancelText: 'Cancel',
-        confirmColor: 'warn'
-      }
+        confirmColor: 'warn',
+      },
     });
 
     ref.afterClosed().subscribe(confirmed => {
@@ -309,7 +312,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
         error: () => {
           this.error = 'Unable to dismiss report.';
           this.saving = false;
-        }
+        },
       });
     });
   }
@@ -323,7 +326,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       data: { vendor: this.vendor } as VendorEditorDialogData,
       width: '720px',
       maxWidth: 'calc(100vw - 32px)',
-      maxHeight: '90vh'
+      maxHeight: '90vh',
     });
 
     ref.afterClosed().subscribe(updated => {
@@ -347,8 +350,8 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
         body: 'This vendor and all associated reviews/reports will be permanently deleted. This action cannot be undone.',
         confirmText: 'Delete',
         cancelText: 'Cancel',
-        confirmColor: 'warn'
-      }
+        confirmColor: 'warn',
+      },
     });
 
     ref.afterClosed().subscribe(confirmed => {
@@ -368,7 +371,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
         error: () => {
           this.error = 'Unable to delete vendor.';
           this.saving = false;
-        }
+        },
       });
     });
   }

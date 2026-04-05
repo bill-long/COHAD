@@ -39,7 +39,7 @@ namespace Web.PresentationModels
                 Website = vendor.Website,
                 Notes = vendor.Notes,
                 ReviewCount = reviewCount,
-                LastReviewModifiedUtc = lastReviewModifiedUtc
+                LastReviewModifiedUtc = lastReviewModifiedUtc,
             };
         }
     }

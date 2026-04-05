@@ -3,14 +3,20 @@ import { FormBuilder } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { VENDOR_CATEGORY_BUCKETS, VendorSummary, VendorsService, getVendorCategoryBucket, vendorCategoryClass } from 'src/app/services/vendors.service';
+import {
+  VENDOR_CATEGORY_BUCKETS,
+  VendorSummary,
+  VendorsService,
+  getVendorCategoryBucket,
+  vendorCategoryClass,
+} from 'src/app/services/vendors.service';
 import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-editor-dialog/vendor-editor-dialog.component';
 
 @Component({
   selector: 'app-vendors',
   templateUrl: './vendors.component.html',
   styleUrls: ['./vendors.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class VendorsComponent implements OnInit {
   loading = false;
@@ -23,7 +29,7 @@ export class VendorsComponent implements OnInit {
     search: [''],
     category: [''],
     neighborOnly: [false],
-    sortBy: ['recent']
+    sortBy: ['recent'],
   });
 
   constructor(
@@ -31,8 +37,8 @@ export class VendorsComponent implements OnInit {
     private readonly formBuilder: FormBuilder,
     private readonly dialog: MatDialog,
     private readonly snackBar: MatSnackBar,
-    private readonly router: Router
-  ) { }
+    private readonly router: Router,
+  ) {}
 
   ngOnInit(): void {
     this.filterForm.valueChanges.subscribe(() => this.applyFilters());
@@ -43,7 +49,7 @@ export class VendorsComponent implements OnInit {
     this.loading = true;
     this.error = null;
     this.vendorsService.getVendors().subscribe({
-      next: (vendors) => {
+      next: vendors => {
         this.allVendors = vendors;
         this.applyFilters();
         this.loading = false;
@@ -51,7 +57,7 @@ export class VendorsComponent implements OnInit {
       error: () => {
         this.error = 'Unable to load vendors.';
         this.loading = false;
-      }
+      },
     });
   }
 
@@ -75,13 +81,9 @@ export class VendorsComponent implements OnInit {
         return true;
       }
 
-      const haystack = [
-        vendor.name ?? '',
-        ...(vendor.categories ?? []),
-        vendor.email ?? '',
-        vendor.phone ?? '',
-        vendor.notes ?? ''
-      ].join(' ').toLowerCase();
+      const haystack = [vendor.name ?? '', ...(vendor.categories ?? []), vendor.email ?? '', vendor.phone ?? '', vendor.notes ?? '']
+        .join(' ')
+        .toLowerCase();
       return haystack.includes(search);
     });
 
@@ -108,7 +110,7 @@ export class VendorsComponent implements OnInit {
       data: { presetCategory: null } as VendorEditorDialogData,
       width: '720px',
       maxWidth: 'calc(100vw - 32px)',
-      maxHeight: '90vh'
+      maxHeight: '90vh',
     });
 
     ref.afterClosed().subscribe(created => {

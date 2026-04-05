@@ -24,7 +24,8 @@ namespace Web.PresentationModels
 
         public class EmailAddressHiddenFromDirectoryException : Exception
         {
-            public EmailAddressHiddenFromDirectoryException() : base("Email address is not allowed to be shown in directory.") { }
+            public EmailAddressHiddenFromDirectoryException()
+                : base("Email address is not allowed to be shown in directory.") { }
         }
     }
 }

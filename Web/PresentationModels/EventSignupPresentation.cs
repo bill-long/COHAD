@@ -33,9 +33,11 @@ namespace Web.PresentationModels
                 UserEmail = signup.UserEmail,
                 Adults = signup.Adults,
                 Children = signup.Children,
-                AdultNames = signup.AdultNames?.Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>(),
-                ChildNames = signup.ChildNames?.Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>(),
-                SignedUpUtc = signup.SignedUpUtc
+                AdultNames =
+                    signup.AdultNames?.Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>(),
+                ChildNames =
+                    signup.ChildNames?.Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>(),
+                SignedUpUtc = signup.SignedUpUtc,
             };
         }
     }

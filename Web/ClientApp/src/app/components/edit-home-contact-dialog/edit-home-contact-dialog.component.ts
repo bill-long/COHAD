@@ -15,14 +15,14 @@ export interface EditHomeContactDialogResult {
   selector: 'app-edit-home-contact-dialog',
   templateUrl: './edit-home-contact-dialog.component.html',
   styleUrls: ['./edit-home-contact-dialog.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class EditHomeContactDialogComponent {
   homeCopy: Home;
 
   constructor(
     public dialogRef: MatDialogRef<EditHomeContactDialogComponent, EditHomeContactDialogResult | null>,
-    @Inject(MAT_DIALOG_DATA) public data: EditHomeContactDialogData
+    @Inject(MAT_DIALOG_DATA) public data: EditHomeContactDialogData,
   ) {
     this.homeCopy = JSON.parse(JSON.stringify(data.home));
   }
@@ -35,7 +35,7 @@ export class EditHomeContactDialogComponent {
       welcomeEmailOptedIn: true,
       gardenClubEmailOptedIn: true,
       socialCommitteeEmailOptedIn: true,
-      sunshineCommitteeEmailOptedIn: true
+      sunshineCommitteeEmailOptedIn: true,
     };
   }
 
@@ -49,7 +49,7 @@ export class EditHomeContactDialogComponent {
       areaCode: null,
       prefix: null,
       lineNumber: null,
-      visibleInDirectory: true
+      visibleInDirectory: true,
     };
   }
 
@@ -64,8 +64,7 @@ export class EditHomeContactDialogComponent {
   save() {
     this.dialogRef.close({
       emailAddress: this.homeCopy.emailAddress ?? null,
-      phoneNumber: this.homeCopy.phoneNumber ?? null
+      phoneNumber: this.homeCopy.phoneNumber ?? null,
     });
   }
 }
-

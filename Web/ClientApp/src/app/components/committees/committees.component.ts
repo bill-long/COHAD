@@ -7,7 +7,7 @@ import { MemberBioDialogComponent } from '../member-bio-dialog/member-bio-dialog
   selector: 'app-committees',
   templateUrl: './committees.component.html',
   styleUrls: ['./committees.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class CommitteesComponent implements OnInit {
   committees: CommitteeCard[] = [];
@@ -16,8 +16,8 @@ export class CommitteesComponent implements OnInit {
 
   constructor(
     private readonly committeeService: CommitteeService,
-    private readonly dialog: MatDialog
-  ) { }
+    private readonly dialog: MatDialog,
+  ) {}
 
   ngOnInit(): void {
     this.loadCommittees();
@@ -26,7 +26,7 @@ export class CommitteesComponent implements OnInit {
   openBio(committee: CommitteeCard, member: CommitteeMemberCard): void {
     this.dialog.open(MemberBioDialogComponent, {
       data: { member, committeeName: committee.displayName },
-      autoFocus: false
+      autoFocus: false,
     });
   }
 
@@ -41,7 +41,7 @@ export class CommitteesComponent implements OnInit {
         this.committees = [];
         this.loading = false;
         this.error = 'Failed to load committees.';
-      }
+      },
     });
   }
 }

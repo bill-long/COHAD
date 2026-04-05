@@ -11,10 +11,7 @@ public sealed class PurgeTimerFunction
     private readonly IConfiguration _configuration;
     private readonly ILogger<PurgeTimerFunction> _logger;
 
-    public PurgeTimerFunction(
-        UserPurgeRunner runner,
-        IConfiguration configuration,
-        ILogger<PurgeTimerFunction> logger)
+    public PurgeTimerFunction(UserPurgeRunner runner, IConfiguration configuration, ILogger<PurgeTimerFunction> logger)
     {
         _runner = runner;
         _configuration = configuration;
@@ -28,14 +25,15 @@ public sealed class PurgeTimerFunction
     [Function("UserPurgeTimer")]
     public async Task RunAsync(
         [TimerTrigger("%UserPurgeSchedule%")] TimerInfo timerInfo,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var options = new UserPurgeOptions
         {
             Enabled = _configuration.GetValue("UserPurge:Enabled", false),
             DryRun = _configuration.GetValue("UserPurge:DryRun", true),
             PurgeAfterDays = _configuration.GetValue("UserPurge:PurgeAfterDays", 30),
-            MaxDeletesPerRun = _configuration.GetValue("UserPurge:MaxDeletesPerRun", 100)
+            MaxDeletesPerRun = _configuration.GetValue("UserPurge:MaxDeletesPerRun", 100),
         };
 
         var result = await _runner.RunAsync(options, cancellationToken).ConfigureAwait(false);
@@ -46,6 +44,7 @@ public sealed class PurgeTimerFunction
             result.WouldDelete,
             result.Deleted,
             result.SkippedAdministrator,
-            result.Errors);
+            result.Errors
+        );
     }
 }

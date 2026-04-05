@@ -51,8 +51,9 @@ namespace Web.Services.Repositories
 
         public async Task<List<Home>> GetByIdsAsync(List<Guid> ids)
         {
-            var candidates = ids
-                .SelectMany(id => new[] { CosmosLegacyDocumentMapper.ToHomeDocumentId(id), id.ToString("D") })
+            var candidates = ids.SelectMany(id =>
+                    new[] { CosmosLegacyDocumentMapper.ToHomeDocumentId(id), id.ToString("D") }
+                )
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
@@ -103,7 +104,9 @@ namespace Web.Services.Repositories
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
             {
                 throw new ConcurrencyConflictException(
-                    $"Home {home.Id} was modified by another request. Retry the operation.", ex);
+                    $"Home {home.Id} was modified by another request. Retry the operation.",
+                    ex
+                );
             }
 
             return home;

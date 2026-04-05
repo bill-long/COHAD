@@ -70,22 +70,22 @@ namespace Web.MockData
                     Id = GoverningDocsFolderId,
                     Name = "CC&Rs & Governing Docs",
                     SortOrder = 0,
-                    CreatedUtc = new DateTime(2025, 1, 15, 0, 0, 0, DateTimeKind.Utc)
+                    CreatedUtc = new DateTime(2025, 1, 15, 0, 0, 0, DateTimeKind.Utc),
                 },
                 new DocumentFolder
                 {
                     Id = MeetingMinutesFolderId,
                     Name = "Meeting Minutes",
                     SortOrder = 1,
-                    CreatedUtc = new DateTime(2025, 2, 1, 0, 0, 0, DateTimeKind.Utc)
+                    CreatedUtc = new DateTime(2025, 2, 1, 0, 0, 0, DateTimeKind.Utc),
                 },
                 new DocumentFolder
                 {
                     Id = FinancialReportsFolderId,
                     Name = "Financial Reports",
                     SortOrder = 2,
-                    CreatedUtc = new DateTime(2025, 3, 10, 0, 0, 0, DateTimeKind.Utc)
-                }
+                    CreatedUtc = new DateTime(2025, 3, 10, 0, 0, 0, DateTimeKind.Utc),
+                },
             };
 
             foreach (var folder in folders)
@@ -106,7 +106,7 @@ namespace Web.MockData
                 Id = folder.Id,
                 Name = folder.Name,
                 SortOrder = folder.SortOrder,
-                CreatedUtc = folder.CreatedUtc
+                CreatedUtc = folder.CreatedUtc,
             };
         }
     }

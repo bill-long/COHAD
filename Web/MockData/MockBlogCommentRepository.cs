@@ -23,7 +23,7 @@ namespace Web.MockData
                 AuthorUniqueId = MockDataConstants.AdminUniqueId,
                 AuthorDisplayName = "Mock Resident",
                 Content = "Great tips! I can't wait to get started on my **flower beds** this weekend.",
-                CreatedUtc = now.AddDays(-2)
+                CreatedUtc = now.AddDays(-2),
             };
 
             var c2 = new BlogComment
@@ -33,7 +33,7 @@ namespace Web.MockData
                 AuthorUniqueId = MockDataConstants.SecondaryUserUniqueId,
                 AuthorDisplayName = "Taylor Resident",
                 Content = "Does anyone know a good *local nursery* for native plants?",
-                CreatedUtc = now.AddDays(-1)
+                CreatedUtc = now.AddDays(-1),
             };
 
             _comments[c1.Id] = c1;
@@ -44,8 +44,8 @@ namespace Web.MockData
         {
             lock (_comments)
             {
-                var results = _comments.Values
-                    .Where(c => c.BlogPostId == blogPostId)
+                var results = _comments
+                    .Values.Where(c => c.BlogPostId == blogPostId)
                     .OrderBy(c => c.CreatedUtc)
                     .Select(Clone)
                     .ToList();
@@ -95,10 +95,7 @@ namespace Web.MockData
         {
             lock (_comments)
             {
-                var toRemove = _comments.Values
-                    .Where(c => c.BlogPostId == blogPostId)
-                    .Select(c => c.Id)
-                    .ToList();
+                var toRemove = _comments.Values.Where(c => c.BlogPostId == blogPostId).Select(c => c.Id).ToList();
 
                 foreach (var id in toRemove)
                 {
@@ -123,7 +120,7 @@ namespace Web.MockData
                 AuthorUniqueId = comment.AuthorUniqueId,
                 AuthorDisplayName = comment.AuthorDisplayName,
                 Content = comment.Content,
-                CreatedUtc = comment.CreatedUtc
+                CreatedUtc = comment.CreatedUtc,
             };
         }
     }

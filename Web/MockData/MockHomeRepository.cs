@@ -25,7 +25,7 @@ namespace Web.MockData
                     Prefix = 123,
                     LineNumber = 4567,
                     Type = "Home",
-                    VisibleInDirectory = true
+                    VisibleInDirectory = true,
                 },
                 EmailAddress = new EmailAddress
                 {
@@ -35,10 +35,10 @@ namespace Web.MockData
                     WelcomeEmailOptedIn = false,
                     GardenClubEmailOptedIn = false,
                     SocialCommitteeEmailOptedIn = false,
-                    SunshineCommitteeEmailOptedIn = false
+                    SunshineCommitteeEmailOptedIn = false,
                 },
                 // Residents are stored in the separate MockResidentRepository.
-                AssociatedUsers = new List<HomeAssociatedUser>()
+                AssociatedUsers = new List<HomeAssociatedUser>(),
             };
             _homes[primaryHome.Id] = CloneHome(primaryHome);
             _versions[primaryHome.Id] = 1;
@@ -54,7 +54,7 @@ namespace Web.MockData
                     Prefix = 987,
                     LineNumber = 6543,
                     Type = "Home",
-                    VisibleInDirectory = true
+                    VisibleInDirectory = true,
                 },
                 EmailAddress = new EmailAddress
                 {
@@ -64,10 +64,10 @@ namespace Web.MockData
                     WelcomeEmailOptedIn = false,
                     GardenClubEmailOptedIn = false,
                     SocialCommitteeEmailOptedIn = false,
-                    SunshineCommitteeEmailOptedIn = false
+                    SunshineCommitteeEmailOptedIn = false,
                 },
                 // Residents are stored in the separate MockResidentRepository.
-                AssociatedUsers = new List<HomeAssociatedUser>()
+                AssociatedUsers = new List<HomeAssociatedUser>(),
             };
             _homes[secondaryHome.Id] = CloneHome(secondaryHome);
             _versions[secondaryHome.Id] = 1;
@@ -122,7 +122,8 @@ namespace Web.MockData
                     {
                         throw new ConcurrencyConflictException(
                             $"Home {home.Id} was modified by another request. Retry the operation.",
-                            new InvalidOperationException("ETag mismatch"));
+                            new InvalidOperationException("ETag mismatch")
+                        );
                     }
                 }
 
@@ -144,7 +145,8 @@ namespace Web.MockData
                 PhoneNumber = ClonePhoneNumber(h.PhoneNumber),
                 EmailAddress = CloneEmailAddress(h.EmailAddress),
                 // Residents are not stored on the Home — they live in IResidentRepository.
-                AssociatedUsers = h.AssociatedUsers?.Select(CloneAssociatedUser).ToList() ?? new List<HomeAssociatedUser>()
+                AssociatedUsers =
+                    h.AssociatedUsers?.Select(CloneAssociatedUser).ToList() ?? new List<HomeAssociatedUser>(),
             };
         }
 
@@ -161,7 +163,7 @@ namespace Web.MockData
                 Prefix = p.Prefix,
                 LineNumber = p.LineNumber,
                 Type = p.Type,
-                VisibleInDirectory = p.VisibleInDirectory
+                VisibleInDirectory = p.VisibleInDirectory,
             };
         }
 
@@ -180,7 +182,7 @@ namespace Web.MockData
                 WelcomeEmailOptedIn = e.WelcomeEmailOptedIn,
                 GardenClubEmailOptedIn = e.GardenClubEmailOptedIn,
                 SocialCommitteeEmailOptedIn = e.SocialCommitteeEmailOptedIn,
-                SunshineCommitteeEmailOptedIn = e.SunshineCommitteeEmailOptedIn
+                SunshineCommitteeEmailOptedIn = e.SunshineCommitteeEmailOptedIn,
             };
         }
 
@@ -197,7 +199,7 @@ namespace Web.MockData
                 GivenName = u.GivenName,
                 Surname = u.Surname,
                 Emails = u.Emails,
-                IdentityProvider = u.IdentityProvider
+                IdentityProvider = u.IdentityProvider,
             };
         }
     }

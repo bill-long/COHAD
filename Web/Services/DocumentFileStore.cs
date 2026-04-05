@@ -41,7 +41,8 @@ namespace Web.Services
 
         public AzureBlobDocumentFileStore(IOptions<DocumentStorageOptions> options)
         {
-            var value = options?.Value ?? throw new InvalidOperationException("DocumentStorage configuration is missing.");
+            var value =
+                options?.Value ?? throw new InvalidOperationException("DocumentStorage configuration is missing.");
             if (string.IsNullOrWhiteSpace(value.ConnectionString))
             {
                 throw new InvalidOperationException("DocumentStorage:ConnectionString must be configured.");
@@ -84,14 +85,17 @@ namespace Web.Services
         {
             await EnsureContainerAsync().ConfigureAwait(false);
             var blob = _containerClient.GetBlobClient(blobPath);
-            await blob.UploadAsync(stream, new BlobUploadOptions
-            {
-                HttpHeaders = new BlobHttpHeaders
+            await blob.UploadAsync(
+                stream,
+                new BlobUploadOptions
                 {
-                    ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
-                    CacheControl = "public, no-cache"
+                    HttpHeaders = new BlobHttpHeaders
+                    {
+                        ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+                        CacheControl = "public, no-cache",
+                    },
                 }
-            });
+            );
         }
 
         public async Task<DocumentFileResult> DownloadAsync(string blobPath)
@@ -113,7 +117,7 @@ namespace Web.Services
                 ContentType = response.Value.Details.ContentType,
                 EntityTag = entityTag,
                 LastModified = response.Value.Details.LastModified,
-                ContentLength = response.Value.Details.ContentLength
+                ContentLength = response.Value.Details.ContentLength,
             };
         }
 

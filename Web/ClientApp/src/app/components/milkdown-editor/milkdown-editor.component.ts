@@ -9,7 +9,7 @@ import {
   OnDestroy,
   Output,
   SimpleChanges,
-  ViewChild
+  ViewChild,
 } from '@angular/core';
 import { Crepe } from '@milkdown/crepe';
 import { BlogService } from 'src/app/services/blog.service';
@@ -19,7 +19,7 @@ import { firstValueFrom } from 'rxjs';
   selector: 'app-milkdown-editor',
   templateUrl: './milkdown-editor.component.html',
   styleUrls: ['./milkdown-editor.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDestroy {
   @ViewChild('editorContainer', { static: true }) container!: ElementRef<HTMLDivElement>;
@@ -34,8 +34,8 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
 
   constructor(
     private readonly ngZone: NgZone,
-    private readonly blogService: BlogService
-  ) { }
+    private readonly blogService: BlogService,
+  ) {}
 
   ngAfterViewInit(): void {
     this.ngZone.runOutsideAngular(() => {
@@ -59,7 +59,7 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
 
   ngOnDestroy(): void {
     if (this.crepe) {
-      this.crepe.destroy().catch(() => { });
+      this.crepe.destroy().catch(() => {});
       this.crepe = null;
     }
     this.ready = false;
@@ -78,15 +78,15 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
         [Crepe.Feature.ImageBlock]: {
           onUpload: uploadFn,
           inlineOnUpload: uploadFn,
-          blockOnUpload: uploadFn
+          blockOnUpload: uploadFn,
         },
         [Crepe.Feature.Placeholder]: {
-          text: 'Write your post…'
-        }
-      }
+          text: 'Write your post…',
+        },
+      },
     });
 
-    this.crepe.on((listener) => {
+    this.crepe.on(listener => {
       listener.markdownUpdated((_ctx, markdown, prevMarkdown) => {
         if (markdown !== prevMarkdown) {
           if (this.suppressNextEmit) {
@@ -106,7 +106,7 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
 
   private async recreateEditor(newValue: string): Promise<void> {
     if (this.crepe) {
-      await this.crepe.destroy().catch(() => { });
+      await this.crepe.destroy().catch(() => {});
     }
     this.ready = false;
 
@@ -122,15 +122,15 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
         [Crepe.Feature.ImageBlock]: {
           onUpload: uploadFn,
           inlineOnUpload: uploadFn,
-          blockOnUpload: uploadFn
+          blockOnUpload: uploadFn,
         },
         [Crepe.Feature.Placeholder]: {
-          text: 'Write your post…'
-        }
-      }
+          text: 'Write your post…',
+        },
+      },
     });
 
-    this.crepe.on((listener) => {
+    this.crepe.on(listener => {
       listener.markdownUpdated((_ctx, markdown, prevMarkdown) => {
         if (markdown !== prevMarkdown) {
           if (this.suppressNextEmit) {

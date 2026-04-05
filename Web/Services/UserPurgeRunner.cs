@@ -43,7 +43,8 @@ public sealed class UserPurgeRunner
     public UserPurgeRunner(
         IUserRepository userRepository,
         IAuditLogRepository auditLogRepository,
-        ILogger<UserPurgeRunner> logger)
+        ILogger<UserPurgeRunner> logger
+    )
     {
         _userRepository = userRepository;
         _auditLogRepository = auditLogRepository;
@@ -84,16 +85,20 @@ public sealed class UserPurgeRunner
 
             try
             {
-                await _auditLogRepository.AddAsync(new NewAuditLogEntry
-                {
-                    Id = Guid.NewGuid(),
-                    SubjectId = user.UniqueId,
-                    SubjectName = user.Emails,
-                    Action = $"Purged inactive user (no homes or no roles for {options.PurgeAfterDays}+ days).",
-                    Time = DateTime.UtcNow,
-                    UserDisplayName = "System",
-                    UserId = "user-purge"
-                }).ConfigureAwait(false);
+                await _auditLogRepository
+                    .AddAsync(
+                        new NewAuditLogEntry
+                        {
+                            Id = Guid.NewGuid(),
+                            SubjectId = user.UniqueId,
+                            SubjectName = user.Emails,
+                            Action = $"Purged inactive user (no homes or no roles for {options.PurgeAfterDays}+ days).",
+                            Time = DateTime.UtcNow,
+                            UserDisplayName = "System",
+                            UserId = "user-purge",
+                        }
+                    )
+                    .ConfigureAwait(false);
 
                 await _userRepository.DeleteAsync(user.UniqueId).ConfigureAwait(false);
                 result.Deleted++;

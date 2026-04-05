@@ -19,14 +19,19 @@ namespace Web.PresentationModels
         /// <summary>The current user's most recent flag on this vendor (any status), or null if none.</summary>
         public VendorFlagPresentation MyFlag { get; set; }
 
-        public static VendorDetail FromStorageModel(Vendor vendor, List<VendorReview> reviews, List<VendorFlag> flags, string currentUserUniqueId, bool isAdmin)
+        public static VendorDetail FromStorageModel(
+            Vendor vendor,
+            List<VendorReview> reviews,
+            List<VendorFlag> flags,
+            string currentUserUniqueId,
+            bool isAdmin
+        )
         {
             var safeReviews = reviews ?? new List<VendorReview>();
             var safeFlags = flags ?? new List<VendorFlag>();
             var reviewCount = safeReviews.Count;
-            var latestReviewModifiedUtc = safeReviews.Count > 0
-                ? safeReviews.Max(r => r.ModifiedUtc)
-                : (System.DateTime?)null;
+            var latestReviewModifiedUtc =
+                safeReviews.Count > 0 ? safeReviews.Max(r => r.ModifiedUtc) : (System.DateTime?)null;
             var summary = FromStorageModel(vendor, reviewCount, latestReviewModifiedUtc);
 
             List<VendorFlagPresentation> pendingFlags = null;
@@ -35,8 +40,10 @@ namespace Web.PresentationModels
             // Look up the current user's own flag regardless of role so admins
             // can also report issues (they just happen to notify themselves).
             var ownFlag = safeFlags
-                .Where(f => !string.IsNullOrWhiteSpace(currentUserUniqueId) &&
-                            string.Equals(f.AuthorUniqueId, currentUserUniqueId, System.StringComparison.OrdinalIgnoreCase))
+                .Where(f =>
+                    !string.IsNullOrWhiteSpace(currentUserUniqueId)
+                    && string.Equals(f.AuthorUniqueId, currentUserUniqueId, System.StringComparison.OrdinalIgnoreCase)
+                )
                 .OrderByDescending(f => f.CreatedUtc)
                 .FirstOrDefault();
             if (ownFlag != null)
@@ -69,13 +76,23 @@ namespace Web.PresentationModels
                 Address = vendor.Address,
                 Reviews = safeReviews
                     .OrderByDescending(r => r.ModifiedUtc)
-                    .Select(r => VendorReviewPresentation.FromStorageModel(
-                        r,
-                        isAdmin || (!string.IsNullOrWhiteSpace(currentUserUniqueId) &&
-                                    string.Equals(r.AuthorUniqueId, currentUserUniqueId, System.StringComparison.OrdinalIgnoreCase))))
+                    .Select(r =>
+                        VendorReviewPresentation.FromStorageModel(
+                            r,
+                            isAdmin
+                                || (
+                                    !string.IsNullOrWhiteSpace(currentUserUniqueId)
+                                    && string.Equals(
+                                        r.AuthorUniqueId,
+                                        currentUserUniqueId,
+                                        System.StringComparison.OrdinalIgnoreCase
+                                    )
+                                )
+                        )
+                    )
                     .ToList(),
                 PendingFlags = pendingFlags,
-                MyFlag = myFlag
+                MyFlag = myFlag,
             };
         }
     }

@@ -13,9 +13,16 @@ namespace Web.PresentationModels
             {
                 StreetName = storedHome.StreetName,
                 StreetNumber = storedHome.StreetNumber,
-                PhoneNumber = (storedHome.PhoneNumber?.VisibleInDirectory ?? false) ? DirectoryPhoneNumber.FromStorageModel(storedHome.PhoneNumber) : null,
-                EmailAddress = (storedHome.EmailAddress?.VisibleInDirectory ?? false) ? DirectoryEmailAddress.FromStorageModel(storedHome.EmailAddress) : null,
-                Residents = residents?.Select(DirectoryResident.FromStorageModel).ToList() ?? new List<DirectoryResident>()
+                PhoneNumber =
+                    (storedHome.PhoneNumber?.VisibleInDirectory ?? false)
+                        ? DirectoryPhoneNumber.FromStorageModel(storedHome.PhoneNumber)
+                        : null,
+                EmailAddress =
+                    (storedHome.EmailAddress?.VisibleInDirectory ?? false)
+                        ? DirectoryEmailAddress.FromStorageModel(storedHome.EmailAddress)
+                        : null,
+                Residents =
+                    residents?.Select(DirectoryResident.FromStorageModel).ToList() ?? new List<DirectoryResident>(),
             };
         }
 

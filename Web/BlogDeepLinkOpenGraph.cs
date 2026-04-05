@@ -21,7 +21,10 @@ namespace Web;
 /// </summary>
 public static class BlogDeepLinkOpenGraphEndpointExtensions
 {
-    public static IEndpointRouteBuilder MapBlogDeepLinkOpenGraph(this IEndpointRouteBuilder endpoints, IWebHostEnvironment env)
+    public static IEndpointRouteBuilder MapBlogDeepLinkOpenGraph(
+        this IEndpointRouteBuilder endpoints,
+        IWebHostEnvironment env
+    )
     {
         var distIndex = Path.Combine(env.ContentRootPath, "ClientApp", "dist", "cohad-app", "index.html");
         if (!File.Exists(distIndex))
@@ -29,7 +32,10 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
             return endpoints;
         }
 
-        endpoints.MapGet("/news/{segment}", (HttpContext http, string segment) => WriteBlogPageAsync(http, env, segment));
+        endpoints.MapGet(
+            "/news/{segment}",
+            (HttpContext http, string segment) => WriteBlogPageAsync(http, env, segment)
+        );
         return endpoints;
     }
 
@@ -66,7 +72,8 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
                 HtmlEncoder.Default.Encode(ogTitle),
                 HtmlEncoder.Default.Encode(ogDescription),
                 HtmlEncoder.Default.Encode(canonical),
-                HtmlEncoder.Default.Encode(imageUrl));
+                HtmlEncoder.Default.Encode(imageUrl)
+            );
 
             html = InsertAfterOpenHead(html, metaBlock);
             html = ReplaceDocumentTitle(html, WebUtility.HtmlEncode(ogTitle) + " · COHAD");
@@ -114,7 +121,8 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
         cache.Set(
             cacheKey,
             new SpaIndexHtmlCacheEntry(ticks, html),
-            new MemoryCacheEntryOptions { SlidingExpiration = TimeSpan.FromHours(12) });
+            new MemoryCacheEntryOptions { SlidingExpiration = TimeSpan.FromHours(12) }
+        );
         return html;
     }
 
@@ -127,9 +135,11 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
     {
         var root = baseUrl.TrimEnd('/');
         var segment = Uri.EscapeDataString(BlogUrlSlug.ResolveUrlSegment(post));
-        if (!string.IsNullOrWhiteSpace(post.FeaturedImageBlobPath) &&
-            !string.IsNullOrWhiteSpace(post.FeaturedImageContentType) &&
-            post.FeaturedImageContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        if (
+            !string.IsNullOrWhiteSpace(post.FeaturedImageBlobPath)
+            && !string.IsNullOrWhiteSpace(post.FeaturedImageContentType)
+            && post.FeaturedImageContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+        )
         {
             return $"{root}/api/blog/{segment}/image";
         }
@@ -140,12 +150,15 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
     private static string BuildOgDescription(string rawText)
     {
         var result = MarkdownPlainText.ToPlainText(rawText);
-        return string.IsNullOrEmpty(result)
-            ? "Blog post — Canyon Oaks Homeowners Association"
-            : result;
+        return string.IsNullOrEmpty(result) ? "Blog post — Canyon Oaks Homeowners Association" : result;
     }
 
-    private static string BuildMetaBlock(string encodedTitle, string encodedDescription, string encodedCanonical, string encodedImageUrl)
+    private static string BuildMetaBlock(
+        string encodedTitle,
+        string encodedDescription,
+        string encodedCanonical,
+        string encodedImageUrl
+    )
     {
         var sb = new StringBuilder();
         sb.AppendLine($"    <meta property=\"og:type\" content=\"article\" />");

@@ -69,8 +69,10 @@ namespace Web.Services.Repositories
 
         public async Task<List<CommunityEvent>> GetWithStartUtcOnOrAfterAsync(DateTime minStartUtcInclusive)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.StartUtc >= @min")
-                .WithParameter("@min", minStartUtcInclusive);
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.StartUtc >= @min").WithParameter(
+                "@min",
+                minStartUtcInclusive
+            );
             var iterator = _eventsContainer.GetItemQueryIterator<JObject>(query);
             var results = new List<CommunityEvent>();
             while (iterator.HasMoreResults)
@@ -84,8 +86,10 @@ namespace Web.Services.Repositories
 
         public async Task<CommunityEvent> GetByIdAsync(Guid id)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id")
-                .WithParameter("@id", CosmosLegacyDocumentMapper.ToCommunityEventId(id));
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id").WithParameter(
+                "@id",
+                CosmosLegacyDocumentMapper.ToCommunityEventId(id)
+            );
             var iterator = _eventsContainer.GetItemQueryIterator<JObject>(query);
             while (iterator.HasMoreResults)
             {
@@ -109,8 +113,10 @@ namespace Web.Services.Repositories
 
             var normalizedSlug = segment.Trim().ToLowerInvariant();
 
-            var slugQuery = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PublicSlug = @slug")
-                .WithParameter("@slug", normalizedSlug);
+            var slugQuery = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PublicSlug = @slug").WithParameter(
+                "@slug",
+                normalizedSlug
+            );
             var slugIterator = _eventsContainer.GetItemQueryIterator<JObject>(slugQuery);
             while (slugIterator.HasMoreResults)
             {
@@ -122,8 +128,9 @@ namespace Web.Services.Repositories
                 }
             }
 
-            var aliasQuery = new CosmosQueryDefinition("SELECT * FROM c WHERE ARRAY_CONTAINS(c.PreviousSlugs, @slug)")
-                .WithParameter("@slug", normalizedSlug);
+            var aliasQuery = new CosmosQueryDefinition(
+                "SELECT * FROM c WHERE ARRAY_CONTAINS(c.PreviousSlugs, @slug)"
+            ).WithParameter("@slug", normalizedSlug);
             var aliasIterator = _eventsContainer.GetItemQueryIterator<JObject>(aliasQuery);
             while (aliasIterator.HasMoreResults)
             {
@@ -147,7 +154,7 @@ namespace Web.Services.Repositories
                 return new CommunityEventReadResult
                 {
                     Event = CosmosLegacyDocumentMapper.ToCommunityEvent(response.Resource),
-                    ETag = response.ETag
+                    ETag = response.ETag,
                 };
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
@@ -173,11 +180,7 @@ namespace Web.Services.Repositories
             var doc = CosmosLegacyDocumentMapper.ToCommunityEventDocument(communityEvent);
             var documentId = doc.Value<string>("id");
             var options = new ItemRequestOptions { IfMatchEtag = ifMatchEtag };
-            var response = await _eventsContainer.ReplaceItemAsync(
-                doc,
-                documentId,
-                CosmosPartitionKey.None,
-                options);
+            var response = await _eventsContainer.ReplaceItemAsync(doc, documentId, CosmosPartitionKey.None, options);
             return CosmosLegacyDocumentMapper.ToCommunityEvent(response.Resource);
         }
 

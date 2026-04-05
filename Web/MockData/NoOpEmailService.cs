@@ -9,15 +9,25 @@ namespace Web.MockData
 {
     public sealed class NoOpEmailService : IEmailService
     {
-        public Task SendEmail(string fromEmail, string fromDisplay, Web.UpdateModels.EmailInfo emailInfo,
+        public Task SendEmail(
+            string fromEmail,
+            string fromDisplay,
+            Web.UpdateModels.EmailInfo emailInfo,
             Func<EmailAddress, bool> recipientFilter,
-            string category, ClaimsPrincipal user)
+            string category,
+            ClaimsPrincipal user
+        )
         {
             return Task.CompletedTask;
         }
 
-        public Task SendEmail(string fromEmail, string fromDisplay, Web.UpdateModels.EmailInfo emailInfo,
-            List<string> toList, ClaimsPrincipal user)
+        public Task SendEmail(
+            string fromEmail,
+            string fromDisplay,
+            Web.UpdateModels.EmailInfo emailInfo,
+            List<string> toList,
+            ClaimsPrincipal user
+        )
         {
             return Task.CompletedTask;
         }

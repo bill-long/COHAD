@@ -30,7 +30,8 @@ namespace Web.Controllers
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
             IEmailService emailService,
-            ILogger<MeController> logger)
+            ILogger<MeController> logger
+        )
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
@@ -69,30 +70,39 @@ namespace Web.Controllers
 
             var newUser = new User
             {
-                NameIdentifier = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? string.Empty,
+                NameIdentifier =
+                    User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? string.Empty,
                 GivenName = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.GivenName)?.Value,
                 Surname = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Surname)?.Value,
-                IdentityProvider = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")?.Value ?? string.Empty,
+                IdentityProvider =
+                    User.Claims.FirstOrDefault(c =>
+                        c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider"
+                    )?.Value
+                    ?? string.Empty,
                 Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value,
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
                 Roles = new List<User.Role>(),
                 OwnedHomeIds = new List<System.Guid>(),
                 UniqueId = uniqueId,
-                LastLoggedIn = DateTime.UtcNow
+                LastLoggedIn = DateTime.UtcNow,
             };
 
             await _userRepository.UpsertAsync(newUser);
 
-            FireAndForget(() => _emailService.SendEmail(
-                "webservice@cohad.org",
-                "COHAD Web",
-                new EmailInfo
-                {
-                    Subject = "New User Registered",
-                    HtmlBody = $"<div>Name: {newUser.GivenName} {newUser.Surname}</div><div>Email: {newUser.Emails}</div><div>Address: {newUser.StreetAddress}</div>"
-                },
-                new List<string> { "directory@cohad.org" },
-                User));
+            FireAndForget(() =>
+                _emailService.SendEmail(
+                    "webservice@cohad.org",
+                    "COHAD Web",
+                    new EmailInfo
+                    {
+                        Subject = "New User Registered",
+                        HtmlBody =
+                            $"<div>Name: {newUser.GivenName} {newUser.Surname}</div><div>Email: {newUser.Emails}</div><div>Address: {newUser.StreetAddress}</div>",
+                    },
+                    new List<string> { "directory@cohad.org" },
+                    User
+                )
+            );
 
             return PresentationUser.FromStorageModel(newUser, new List<Home>());
         }
@@ -124,7 +134,7 @@ namespace Web.Controllers
                         GivenName = u.GivenName,
                         Surname = u.Surname,
                         Emails = u.Emails,
-                        IdentityProvider = u.IdentityProvider
+                        IdentityProvider = u.IdentityProvider,
                     })
                     .ToList();
             }

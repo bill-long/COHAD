@@ -24,16 +24,15 @@ public sealed class CosmosIntegrationFixture : IAsyncLifetime
 
     public string DatabaseId => Settings.DatabaseName;
 
-    public IUserRepository CreateUserRepository() =>
-        new CosmosUserRepository(Client.GetContainer(DatabaseId, "Users"));
+    public IUserRepository CreateUserRepository() => new CosmosUserRepository(Client.GetContainer(DatabaseId, "Users"));
 
-    public IHomeRepository CreateHomeRepository() =>
-        new CosmosHomeRepository(Client.GetContainer(DatabaseId, "Homes"));
+    public IHomeRepository CreateHomeRepository() => new CosmosHomeRepository(Client.GetContainer(DatabaseId, "Homes"));
 
     public IAuditLogRepository CreateAuditLogRepository() =>
         new CosmosAuditLogRepository(
             Client.GetContainer(DatabaseId, "AuditLog"),
-            NullLogger<CosmosAuditLogRepository>.Instance);
+            NullLogger<CosmosAuditLogRepository>.Instance
+        );
 
     public IResidentRepository CreateResidentRepository() =>
         new CosmosResidentRepository(Client.GetContainer(DatabaseId, "Residents"));
@@ -43,7 +42,8 @@ public sealed class CosmosIntegrationFixture : IAsyncLifetime
             Client.GetContainer(DatabaseId, "Payments"),
             CreateHomeRepository(),
             CreateResidentRepository(),
-            CreateUserRepository());
+            CreateUserRepository()
+        );
 
     public async Task InitializeAsync()
     {
@@ -65,8 +65,8 @@ public sealed class CosmosIntegrationFixture : IAsyncLifetime
         {
             IsAvailable = false;
             UnavailableReason =
-                "Cosmos integration tests are disabled. Set RUN_COSMOS_INTEGRATION_TESTS=1 (forces enable) " +
-                "or set CosmosTests:Enabled to true in appsettings / CosmosTests__Enabled environment variable.";
+                "Cosmos integration tests are disabled. Set RUN_COSMOS_INTEGRATION_TESTS=1 (forces enable) "
+                + "or set CosmosTests:Enabled to true in appsettings / CosmosTests__Enabled environment variable.";
             return;
         }
 
@@ -76,8 +76,8 @@ public sealed class CosmosIntegrationFixture : IAsyncLifetime
             {
                 IsAvailable = false;
                 UnavailableReason =
-                    "CosmosTests:Mode is Account but AccountUri / AccountKey are empty. Set CosmosTests__AccountUri and " +
-                    "CosmosTests__AccountKey, or use Mode=Emulator.";
+                    "CosmosTests:Mode is Account but AccountUri / AccountKey are empty. Set CosmosTests__AccountUri and "
+                    + "CosmosTests__AccountKey, or use Mode=Emulator.";
                 return;
             }
         }
@@ -115,9 +115,8 @@ public sealed class CosmosIntegrationFixture : IAsyncLifetime
         Database database;
         if (Settings.DatabaseThroughputRu is int ru && ru > 0)
         {
-            database = await _client.CreateDatabaseIfNotExistsAsync(
-                    Settings.DatabaseName,
-                    ThroughputProperties.CreateManualThroughput(ru))
+            database = await _client
+                .CreateDatabaseIfNotExistsAsync(Settings.DatabaseName, ThroughputProperties.CreateManualThroughput(ru))
                 .ConfigureAwait(false);
         }
         else
@@ -148,10 +147,10 @@ public sealed class CosmosIntegrationFixture : IAsyncLifetime
                 var handler = new HttpClientHandler
                 {
                     ServerCertificateCustomValidationCallback =
-                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
                 };
                 return new HttpClient(handler);
-            }
+            },
         };
     }
 

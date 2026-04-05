@@ -25,16 +25,18 @@ public sealed class PayPalPaymentSyncRunnerTests
         var payments = new MockPaymentRepository(homes, residents, users);
 
         var paymentId = Guid.NewGuid();
-        await payments.AddAsync(new Payment
-        {
-            Id = paymentId,
-            PayerEmail = "mock@cohad.local",
-            PayerUniqueId = null,
-            HomeId = null,
-            Amount = "50.00",
-            PaymentType = Payment.Type.PayPalSync,
-            PayPalTransactionId = "TX-EXISTING-UNLINKED"
-        });
+        await payments.AddAsync(
+            new Payment
+            {
+                Id = paymentId,
+                PayerEmail = "mock@cohad.local",
+                PayerUniqueId = null,
+                HomeId = null,
+                Amount = "50.00",
+                PaymentType = Payment.Type.PayPalSync,
+                PayPalTransactionId = "TX-EXISTING-UNLINKED",
+            }
+        );
 
         var runner = CreateRunner(payments, users, homes, residents, syncLookbackDays: 1);
         var result = await runner.RunAsync();
@@ -57,16 +59,18 @@ public sealed class PayPalPaymentSyncRunnerTests
         var users = new MockUserRepository();
         var payments = new MockPaymentRepository(homes, residents, users);
 
-        await payments.AddAsync(new Payment
-        {
-            Id = Guid.NewGuid(),
-            PayerEmail = "nobody@example.com",
-            PayerUniqueId = null,
-            HomeId = null,
-            Amount = "10.00",
-            PaymentType = Payment.Type.PayPalSync,
-            PayPalTransactionId = "TX-ORPHAN"
-        });
+        await payments.AddAsync(
+            new Payment
+            {
+                Id = Guid.NewGuid(),
+                PayerEmail = "nobody@example.com",
+                PayerUniqueId = null,
+                HomeId = null,
+                Amount = "10.00",
+                PaymentType = Payment.Type.PayPalSync,
+                PayPalTransactionId = "TX-ORPHAN",
+            }
+        );
 
         var runner = CreateRunner(payments, users, homes, residents, syncLookbackDays: 1);
         var result = await runner.RunAsync();
@@ -79,23 +83,27 @@ public sealed class PayPalPaymentSyncRunnerTests
         MockUserRepository users,
         MockHomeRepository homes,
         MockResidentRepository residents,
-        int syncLookbackDays)
+        int syncLookbackDays
+    )
     {
         var handler = new PayPalStubHandler();
         var http = new HttpClient(handler, disposeHandler: true);
 
-        var payPalOptions = Options.Create(new PayPalOptions
-        {
-            ClientId = "unit-test-client",
-            ClientSecret = "unit-test-secret",
-            ApiBaseUrl = "https://api-m.paypal.com",
-            SyncLookbackDays = syncLookbackDays
-        });
+        var payPalOptions = Options.Create(
+            new PayPalOptions
+            {
+                ClientId = "unit-test-client",
+                ClientSecret = "unit-test-secret",
+                ApiBaseUrl = "https://api-m.paypal.com",
+                SyncLookbackDays = syncLookbackDays,
+            }
+        );
 
         var payPalClient = new PayPalTransactionSearchClient(
             http,
             payPalOptions,
-            NullLogger<PayPalTransactionSearchClient>.Instance);
+            NullLogger<PayPalTransactionSearchClient>.Instance
+        );
 
         return new PayPalPaymentSyncRunner(
             payPalClient,
@@ -104,7 +112,8 @@ public sealed class PayPalPaymentSyncRunnerTests
             homes,
             residents,
             payPalOptions,
-            NullLogger<PayPalPaymentSyncRunner>.Instance);
+            NullLogger<PayPalPaymentSyncRunner>.Instance
+        );
     }
 
     /// <summary>Returns OAuth token and empty Transaction Search pages (no new inserts).
@@ -113,26 +122,31 @@ public sealed class PayPalPaymentSyncRunnerTests
     {
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken
+        )
         {
             var path = request.RequestUri?.AbsolutePath ?? "";
 
             if (path.Contains("oauth2/token", StringComparison.OrdinalIgnoreCase))
             {
                 var body = "{\"access_token\":\"stub\",\"token_type\":\"Bearer\",\"expires_in\":3600}";
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent(body, Encoding.UTF8, "application/json")
-                });
+                return Task.FromResult(
+                    new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(body, Encoding.UTF8, "application/json"),
+                    }
+                );
             }
 
             if (path.Contains("reporting/transactions", StringComparison.OrdinalIgnoreCase))
             {
                 var body = "{\"total_pages\":1,\"transaction_details\":[]}";
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent(body, Encoding.UTF8, "application/json")
-                });
+                return Task.FromResult(
+                    new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(body, Encoding.UTF8, "application/json"),
+                    }
+                );
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));

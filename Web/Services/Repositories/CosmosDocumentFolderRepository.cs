@@ -44,8 +44,10 @@ namespace Web.Services.Repositories
 
         public async Task<DocumentFolder> GetByIdAsync(Guid id)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id")
-                .WithParameter("@id", CosmosLegacyDocumentMapper.ToDocumentFolderId(id));
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id").WithParameter(
+                "@id",
+                CosmosLegacyDocumentMapper.ToDocumentFolderId(id)
+            );
             var iterator = _container.GetItemQueryIterator<JObject>(query);
             while (iterator.HasMoreResults)
             {

@@ -27,7 +27,9 @@ using Newtonsoft.Json.Linq;
 
 // ── Parse arguments ──────────────────────────────────────────────
 
-string cosmosUri = null, cosmosKey = null, cosmosDatabase = null;
+string cosmosUri = null,
+    cosmosKey = null,
+    cosmosDatabase = null;
 bool dryRun = false;
 
 var args = Args;
@@ -35,16 +37,26 @@ for (int i = 0; i < args.Count; i++)
 {
     switch (args[i])
     {
-        case "--uri":      cosmosUri      = args[++i]; break;
-        case "--key":      cosmosKey      = args[++i]; break;
-        case "--database": cosmosDatabase = args[++i]; break;
-        case "--dry-run":  dryRun  = true; break;
+        case "--uri":
+            cosmosUri = args[++i];
+            break;
+        case "--key":
+            cosmosKey = args[++i];
+            break;
+        case "--database":
+            cosmosDatabase = args[++i];
+            break;
+        case "--dry-run":
+            dryRun = true;
+            break;
     }
 }
 
 if (string.IsNullOrEmpty(cosmosUri) || string.IsNullOrEmpty(cosmosKey) || string.IsNullOrEmpty(cosmosDatabase))
 {
-    Console.Error.WriteLine("Usage: dotnet script scripts/seed-committees.csx -- --uri <uri> --key <key> --database <db> [--dry-run]");
+    Console.Error.WriteLine(
+        "Usage: dotnet script scripts/seed-committees.csx -- --uri <uri> --key <key> --database <db> [--dry-run]"
+    );
     Environment.Exit(1);
 }
 
@@ -61,7 +73,7 @@ var committees = new List<JObject>
         ["Description"] = "Oversees COHAD operations, finances, and community standards.",
         ["DisplayOrder"] = 1,
         ["ManagementRole"] = "Board",
-        ["Members"] = new JArray()
+        ["Members"] = new JArray(),
     },
     new JObject
     {
@@ -71,7 +83,7 @@ var committees = new List<JObject>
         ["Description"] = "Greets new residents and helps them settle into the neighborhood.",
         ["DisplayOrder"] = 2,
         ["ManagementRole"] = "WelcomeCommittee",
-        ["Members"] = new JArray()
+        ["Members"] = new JArray(),
     },
     new JObject
     {
@@ -81,7 +93,7 @@ var committees = new List<JObject>
         ["Description"] = "Organizes neighborhood beautification, garden tours, and plant swaps.",
         ["DisplayOrder"] = 3,
         ["ManagementRole"] = "GardenClub",
-        ["Members"] = new JArray()
+        ["Members"] = new JArray(),
     },
     new JObject
     {
@@ -91,7 +103,7 @@ var committees = new List<JObject>
         ["Description"] = "Plans community events, holiday celebrations, and neighborhood gatherings.",
         ["DisplayOrder"] = 4,
         ["ManagementRole"] = "SocialCommittee",
-        ["Members"] = new JArray()
+        ["Members"] = new JArray(),
     },
     new JObject
     {
@@ -101,18 +113,19 @@ var committees = new List<JObject>
         ["Description"] = "Sends cards and well-wishes to neighbors during milestones and difficult times.",
         ["DisplayOrder"] = 5,
         ["ManagementRole"] = "SunshineCommittee",
-        ["Members"] = new JArray()
+        ["Members"] = new JArray(),
     },
     new JObject
     {
         ["id"] = "architectural",
         ["CommitteeEmail"] = "ac@cohad.org",
         ["DisplayName"] = "Architectural Committee",
-        ["Description"] = "Reviews and approves plans for new structures and modifications to ensure compliance with community covenants.",
+        ["Description"] =
+            "Reviews and approves plans for new structures and modifications to ensure compliance with community covenants.",
         ["DisplayOrder"] = 6,
         ["ManagementRole"] = "ArchitecturalCommittee",
-        ["Members"] = new JArray()
-    }
+        ["Members"] = new JArray(),
+    },
 };
 
 // ── Seed ─────────────────────────────────────────────────────────
@@ -126,7 +139,8 @@ Console.WriteLine();
 var client = new CosmosClient(cosmosUri, cosmosKey);
 var container = client.GetContainer(cosmosDatabase, "Committees");
 
-int created = 0, skipped = 0;
+int created = 0,
+    skipped = 0;
 
 foreach (var doc in committees)
 {

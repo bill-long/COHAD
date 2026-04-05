@@ -35,20 +35,21 @@ namespace Web.MockData
             var pageSize = Math.Clamp(limit, 1, 200);
             if (!TryGetContinuationOffset(continuationToken, out var offset))
             {
-                return Task.FromResult(new AuditLogPage
-                {
-                    Items = new List<NewAuditLogEntry>(),
-                    ContinuationToken = null,
-                    HasMore = false
-                });
+                return Task.FromResult(
+                    new AuditLogPage
+                    {
+                        Items = new List<NewAuditLogEntry>(),
+                        ContinuationToken = null,
+                        HasMore = false,
+                    }
+                );
             }
 
             var normalizedSearch = searchQuery?.Trim();
 
             lock (_entries)
             {
-                IEnumerable<NewAuditLogEntry> query = _entries
-                    .OrderByDescending(e => e.Time);
+                IEnumerable<NewAuditLogEntry> query = _entries.OrderByDescending(e => e.Time);
 
                 if (!string.IsNullOrWhiteSpace(normalizedSearch))
                 {
@@ -60,12 +61,14 @@ namespace Web.MockData
                 var nextOffset = offset + pageItems.Count;
                 var hasMore = nextOffset < filtered.Count;
 
-                return Task.FromResult(new AuditLogPage
-                {
-                    Items = pageItems,
-                    ContinuationToken = hasMore ? nextOffset.ToString() : null,
-                    HasMore = hasMore
-                });
+                return Task.FromResult(
+                    new AuditLogPage
+                    {
+                        Items = pageItems,
+                        ContinuationToken = hasMore ? nextOffset.ToString() : null,
+                        HasMore = hasMore,
+                    }
+                );
             }
         }
 
@@ -121,7 +124,7 @@ namespace Web.MockData
                 UserDisplayName = e.UserDisplayName,
                 SubjectId = e.SubjectId,
                 SubjectName = e.SubjectName,
-                Action = e.Action
+                Action = e.Action,
             };
         }
     }

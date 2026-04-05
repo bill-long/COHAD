@@ -15,7 +15,8 @@ namespace Web.Services
         /// </summary>
         public static Dictionary<Guid, HashSet<string>> BuildEmailSetsByHome(
             IEnumerable<Home> homes,
-            IReadOnlyDictionary<Guid, List<Resident>> residentsByHome)
+            IReadOnlyDictionary<Guid, List<Resident>> residentsByHome
+        )
         {
             var map = new Dictionary<Guid, HashSet<string>>();
             foreach (var home in homes)
@@ -56,7 +57,8 @@ namespace Web.Services
         public static void MergeAccountEmailsFromUsersIntoHomeSets(
             IEnumerable<User> users,
             IReadOnlyCollection<Guid> homeIds,
-            Dictionary<Guid, HashSet<string>> emailSetsByHome)
+            Dictionary<Guid, HashSet<string>> emailSetsByHome
+        )
         {
             if (users == null || homeIds == null || homeIds.Count == 0)
             {
@@ -95,7 +97,8 @@ namespace Web.Services
             string normalizedEmail,
             IReadOnlyList<Home> homes,
             IReadOnlyDictionary<Guid, List<Resident>> residentsByHome,
-            IReadOnlyList<User> users)
+            IReadOnlyList<User> users
+        )
         {
             if (string.IsNullOrEmpty(normalizedEmail))
             {
@@ -140,7 +143,8 @@ namespace Web.Services
         public static bool PayerEmailStillOnHome(
             string payerEmail,
             Guid homeId,
-            IReadOnlyDictionary<Guid, HashSet<string>> emailSetsByHome)
+            IReadOnlyDictionary<Guid, HashSet<string>> emailSetsByHome
+        )
         {
             var n = UserEmailHelpers.NormalizeEmail(payerEmail);
             if (n.Length == 0)

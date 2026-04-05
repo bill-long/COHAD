@@ -15,8 +15,9 @@ namespace Web.Data
         {
             var homes = new List<Home>();
 
-            var dataFromFile =
-                JsonSerializer.Deserialize<dynamic>(File.ReadAllText(@"C:\Users\bill\Downloads\Neighborhood.json"));
+            var dataFromFile = JsonSerializer.Deserialize<dynamic>(
+                File.ReadAllText(@"C:\Users\bill\Downloads\Neighborhood.json")
+            );
 
             foreach (var row in dataFromFile.EnumerateArray())
             {
@@ -26,19 +27,25 @@ namespace Web.Data
                     StreetName = row.GetProperty("Street Name").GetString(),
                     PhoneNumber = GetPhoneNumberFromString(row.GetProperty("HomePhone").GetString(), "Home"),
                     Residents = new List<Resident>(),
-                    Id = Guid.NewGuid()
+                    Id = Guid.NewGuid(),
                 };
 
-                var resident1 = GetResident(row.GetProperty("Resident1Name").GetString(),
-                    row.GetProperty("Resident1Email").GetString(), row.GetProperty("Resident1Phone").GetString());
+                var resident1 = GetResident(
+                    row.GetProperty("Resident1Name").GetString(),
+                    row.GetProperty("Resident1Email").GetString(),
+                    row.GetProperty("Resident1Phone").GetString()
+                );
 
                 if (resident1 != null)
                 {
                     h.Residents.Add(resident1);
                 }
 
-                var resident2 = GetResident(row.GetProperty("Resident2Name").GetString(),
-                    row.GetProperty("Resident2Email").GetString(), row.GetProperty("Resident2Phone").GetString());
+                var resident2 = GetResident(
+                    row.GetProperty("Resident2Name").GetString(),
+                    row.GetProperty("Resident2Email").GetString(),
+                    row.GetProperty("Resident2Phone").GetString()
+                );
 
                 if (resident2 != null)
                 {
@@ -68,7 +75,14 @@ namespace Web.Data
 
             if (!string.IsNullOrEmpty(email))
             {
-                emails.Add(new EmailAddress {Address = email, BoardEmailOptedIn = true, VisibleInDirectory = true});
+                emails.Add(
+                    new EmailAddress
+                    {
+                        Address = email,
+                        BoardEmailOptedIn = true,
+                        VisibleInDirectory = true,
+                    }
+                );
             }
 
             var phoneNumbers = new List<PhoneNumber>();
@@ -80,7 +94,10 @@ namespace Web.Data
 
             return new Resident
             {
-                EmailAddresses = emails, GivenName = given, PhoneNumbers = phoneNumbers, Surname = sur
+                EmailAddresses = emails,
+                GivenName = given,
+                PhoneNumbers = phoneNumbers,
+                Surname = sur,
             };
         }
 
@@ -99,7 +116,7 @@ namespace Web.Data
                 Prefix = int.Parse(matches[0].Groups[2].Value),
                 LineNumber = int.Parse(matches[0].Groups[3].Value),
                 VisibleInDirectory = true,
-                Type = type
+                Type = type,
             };
         }
     }

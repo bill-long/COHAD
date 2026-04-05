@@ -11,13 +11,13 @@ export interface MemberBioDialogData {
   selector: 'app-member-bio-dialog',
   templateUrl: './member-bio-dialog.component.html',
   styleUrls: ['./member-bio-dialog.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class MemberBioDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<MemberBioDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: MemberBioDialogData
-  ) { }
+    @Inject(MAT_DIALOG_DATA) public data: MemberBioDialogData,
+  ) {}
 
   close(): void {
     this.dialogRef.close();

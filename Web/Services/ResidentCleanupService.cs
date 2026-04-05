@@ -23,7 +23,8 @@ namespace Web.Services
             ICommitteeRepository committeeRepository,
             CommitteeListCache listCache,
             IDocumentFileStore documentFileStore,
-            ILogger<ResidentCleanupService> logger)
+            ILogger<ResidentCleanupService> logger
+        )
         {
             _committeeRepository = committeeRepository;
             _listCache = listCache;
@@ -49,9 +50,7 @@ namespace Web.Services
                 if (committee.Members == null || committee.Members.Count == 0)
                     continue;
 
-                var toRemove = committee.Members
-                    .Where(m => removedSet.Contains(m.ResidentId))
-                    .ToList();
+                var toRemove = committee.Members.Where(m => removedSet.Contains(m.ResidentId)).ToList();
 
                 if (toRemove.Count == 0)
                     continue;
@@ -66,7 +65,10 @@ namespace Web.Services
                     committee.Members.Remove(member);
                     _logger.LogInformation(
                         "Removed committee member {MemberId} (ResidentId {ResidentId}) from {Committee} due to resident deletion",
-                        member.Id, member.ResidentId, committee.Id);
+                        member.Id,
+                        member.ResidentId,
+                        committee.Id
+                    );
                 }
 
                 // Persist the committee change first, then delete blobs.
@@ -77,9 +79,11 @@ namespace Web.Services
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex,
+                    _logger.LogError(
+                        ex,
                         "Failed to persist committee {CommitteeId} after removing members; skipping blob cleanup for this committee",
-                        committee.Id);
+                        committee.Id
+                    );
                     continue;
                 }
 
@@ -91,9 +95,11 @@ namespace Web.Services
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex,
+                        _logger.LogWarning(
+                            ex,
                             "Failed to delete photo blob {BlobPath} after committee member removal",
-                            blobPath);
+                            blobPath
+                        );
                     }
                 }
             }

@@ -28,7 +28,10 @@ namespace Web;
 /// </remarks>
 public static class EventDeepLinkOpenGraphEndpointExtensions
 {
-    public static IEndpointRouteBuilder MapEventDeepLinkOpenGraph(this IEndpointRouteBuilder endpoints, IWebHostEnvironment env)
+    public static IEndpointRouteBuilder MapEventDeepLinkOpenGraph(
+        this IEndpointRouteBuilder endpoints,
+        IWebHostEnvironment env
+    )
     {
         var distIndex = Path.Combine(env.ContentRootPath, "ClientApp", "dist", "cohad-app", "index.html");
         if (!File.Exists(distIndex))
@@ -36,7 +39,10 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
             return endpoints;
         }
 
-        endpoints.MapGet("/events/{segment}", (HttpContext http, string segment) => WriteEventPageAsync(http, env, segment));
+        endpoints.MapGet(
+            "/events/{segment}",
+            (HttpContext http, string segment) => WriteEventPageAsync(http, env, segment)
+        );
         return endpoints;
     }
 
@@ -50,9 +56,11 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
         }
 
         // Redirect old slug aliases to the canonical URL so crawlers and bookmarks update.
-        if (ev != null &&
-            !string.IsNullOrWhiteSpace(ev.PublicSlug) &&
-            !string.Equals(segment, ev.PublicSlug, StringComparison.OrdinalIgnoreCase))
+        if (
+            ev != null
+            && !string.IsNullOrWhiteSpace(ev.PublicSlug)
+            && !string.Equals(segment, ev.PublicSlug, StringComparison.OrdinalIgnoreCase)
+        )
         {
             var canonicalPath = $"/events/{Uri.EscapeDataString(ev.PublicSlug)}";
             var queryString = context.Request.QueryString.HasValue ? context.Request.QueryString.Value : string.Empty;
@@ -86,7 +94,8 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
                 HtmlEncoder.Default.Encode(ogDescription),
                 HtmlEncoder.Default.Encode(canonical),
                 HtmlEncoder.Default.Encode(imageUrl),
-                hasOgThumb);
+                hasOgThumb
+            );
 
             html = InsertAfterOpenHead(html, metaBlock);
             html = ReplaceDocumentTitle(html, WebUtility.HtmlEncode(ogTitle) + " · COHAD");
@@ -137,7 +146,8 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
         cache.Set(
             cacheKey,
             new SpaIndexHtmlCacheEntry(ticks, html),
-            new MemoryCacheEntryOptions { SlidingExpiration = TimeSpan.FromHours(12) });
+            new MemoryCacheEntryOptions { SlidingExpiration = TimeSpan.FromHours(12) }
+        );
         return html;
     }
 
@@ -158,9 +168,11 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
     {
         var root = baseUrl.TrimEnd('/');
         var segment = Uri.EscapeDataString(EventUrlSlug.ResolveUrlSegment(ev));
-        if (!string.IsNullOrWhiteSpace(ev.PromoMediaBlobPath) &&
-            !string.IsNullOrWhiteSpace(ev.PromoMediaContentType) &&
-            ev.PromoMediaContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        if (
+            !string.IsNullOrWhiteSpace(ev.PromoMediaBlobPath)
+            && !string.IsNullOrWhiteSpace(ev.PromoMediaContentType)
+            && ev.PromoMediaContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+        )
         {
             hasOgThumb = true;
             return $"{root}/api/events/{segment}/promo/og-thumb";
@@ -187,7 +199,13 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
         return collapsed[..(maxLen - 1)].TrimEnd() + "…";
     }
 
-    private static string BuildMetaBlock(string encodedTitle, string encodedDescription, string encodedCanonical, string encodedImageUrl, bool includeImageDimensions)
+    private static string BuildMetaBlock(
+        string encodedTitle,
+        string encodedDescription,
+        string encodedCanonical,
+        string encodedImageUrl,
+        bool includeImageDimensions
+    )
     {
         var sb = new StringBuilder();
         sb.AppendLine($"    <meta property=\"og:type\" content=\"website\" />");
@@ -198,8 +216,12 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
         sb.AppendLine($"    <meta property=\"og:image\" content=\"{encodedImageUrl}\" />");
         if (includeImageDimensions)
         {
-            sb.AppendLine($"    <meta property=\"og:image:width\" content=\"{SkiaSharpOgThumbnailService.TargetWidth}\" />");
-            sb.AppendLine($"    <meta property=\"og:image:height\" content=\"{SkiaSharpOgThumbnailService.TargetHeight}\" />");
+            sb.AppendLine(
+                $"    <meta property=\"og:image:width\" content=\"{SkiaSharpOgThumbnailService.TargetWidth}\" />"
+            );
+            sb.AppendLine(
+                $"    <meta property=\"og:image:height\" content=\"{SkiaSharpOgThumbnailService.TargetHeight}\" />"
+            );
         }
 
         sb.AppendLine($"    <meta name=\"twitter:card\" content=\"summary_large_image\" />");

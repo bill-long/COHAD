@@ -17,16 +17,19 @@ public sealed class AuditLogRepositoryIntegrationTests
 
         var repo = _fixture.CreateAuditLogRepository();
         var marker = Guid.NewGuid().ToString();
-        await repo.AddAsync(new NewAuditLogEntry
-        {
-            Id = Guid.NewGuid(),
-            Time = DateTime.UtcNow,
-            UserId = "user-1",
-            UserDisplayName = "Tester",
-            SubjectId = "subject",
-            SubjectName = "Subject",
-            Action = $"Integration test audit {marker}"
-        }).ConfigureAwait(false);
+        await repo.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    Time = DateTime.UtcNow,
+                    UserId = "user-1",
+                    UserDisplayName = "Tester",
+                    SubjectId = "subject",
+                    SubjectName = "Subject",
+                    Action = $"Integration test audit {marker}",
+                }
+            )
+            .ConfigureAwait(false);
 
         var all = await repo.GetAllAsync().ConfigureAwait(false);
         Assert.Contains(all, e => e.Action != null && e.Action.Contains(marker, StringComparison.Ordinal));
@@ -41,38 +44,47 @@ public sealed class AuditLogRepositoryIntegrationTests
         var marker = $"PagedSearch-{Guid.NewGuid():N}";
         var baseTime = DateTime.UtcNow;
 
-        await repo.AddAsync(new NewAuditLogEntry
-        {
-            Id = Guid.NewGuid(),
-            Time = baseTime.AddMinutes(-3),
-            UserId = "user-1",
-            UserDisplayName = "Tester",
-            SubjectId = "subject-1",
-            SubjectName = "Subject",
-            Action = $"{marker} first"
-        }).ConfigureAwait(false);
+        await repo.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    Time = baseTime.AddMinutes(-3),
+                    UserId = "user-1",
+                    UserDisplayName = "Tester",
+                    SubjectId = "subject-1",
+                    SubjectName = "Subject",
+                    Action = $"{marker} first",
+                }
+            )
+            .ConfigureAwait(false);
 
-        await repo.AddAsync(new NewAuditLogEntry
-        {
-            Id = Guid.NewGuid(),
-            Time = baseTime.AddMinutes(-2),
-            UserId = "user-2",
-            UserDisplayName = "Tester",
-            SubjectId = "subject-2",
-            SubjectName = "Subject",
-            Action = $"{marker} second"
-        }).ConfigureAwait(false);
+        await repo.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    Time = baseTime.AddMinutes(-2),
+                    UserId = "user-2",
+                    UserDisplayName = "Tester",
+                    SubjectId = "subject-2",
+                    SubjectName = "Subject",
+                    Action = $"{marker} second",
+                }
+            )
+            .ConfigureAwait(false);
 
-        await repo.AddAsync(new NewAuditLogEntry
-        {
-            Id = Guid.NewGuid(),
-            Time = baseTime.AddMinutes(-1),
-            UserId = "user-3",
-            UserDisplayName = "Tester",
-            SubjectId = "subject-3",
-            SubjectName = "Subject",
-            Action = $"{marker} third"
-        }).ConfigureAwait(false);
+        await repo.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    Time = baseTime.AddMinutes(-1),
+                    UserId = "user-3",
+                    UserDisplayName = "Tester",
+                    SubjectId = "subject-3",
+                    SubjectName = "Subject",
+                    Action = $"{marker} third",
+                }
+            )
+            .ConfigureAwait(false);
 
         var firstPage = await repo.GetPageAsync(2, null, marker).ConfigureAwait(false);
 

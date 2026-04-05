@@ -5,14 +5,14 @@ import { EventCard, EventsService } from 'src/app/services/events.service';
   selector: 'app-events',
   templateUrl: './events.component.html',
   styleUrls: ['./events.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class EventsComponent implements OnInit {
   events: EventCard[] = [];
   loading = false;
   error = '';
 
-  constructor(private readonly eventsService: EventsService) { }
+  constructor(private readonly eventsService: EventsService) {}
 
   ngOnInit(): void {
     this.loadEvents();
@@ -29,7 +29,7 @@ export class EventsComponent implements OnInit {
         this.events = [];
         this.loading = false;
         this.error = 'Failed to load events.';
-      }
+      },
     });
   }
 }

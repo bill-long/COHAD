@@ -22,7 +22,8 @@ public sealed class UserControllerTests
         IHomeRepository homes,
         IAuditLogRepository audit,
         string nameId = "nid-1",
-        string idp = "google.com")
+        string idp = "google.com"
+    )
     {
         var c = new UserController(users, homes, audit)
         {
@@ -30,13 +31,18 @@ public sealed class UserControllerTests
             {
                 HttpContext = new DefaultHttpContext
                 {
-                    User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                    {
-                        new Claim(ClaimTypes.NameIdentifier, nameId),
-                        new Claim(IdentityProviderClaim, idp)
-                    }, "Test"))
-                }
-            }
+                    User = new ClaimsPrincipal(
+                        new ClaimsIdentity(
+                            new[]
+                            {
+                                new Claim(ClaimTypes.NameIdentifier, nameId),
+                                new Claim(IdentityProviderClaim, idp),
+                            },
+                            "Test"
+                        )
+                    ),
+                },
+            },
         };
         return c;
     }
@@ -63,41 +69,63 @@ public sealed class UserControllerTests
         var homeId = Guid.NewGuid();
 
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(apiUniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = apiUniqueId,
-            GivenName = "Admin",
-            Surname = "User",
-            Roles = new List<User.Role> { User.Role.Administrator }
-        });
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(targetUniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = targetUniqueId,
-            Emails = "target@example.com",
-            Roles = new List<User.Role>(),
-            OwnedHomeIds = new List<Guid>()
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(apiUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = apiUniqueId,
+                    GivenName = "Admin",
+                    Surname = "User",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(targetUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = targetUniqueId,
+                    Emails = "target@example.com",
+                    Roles = new List<User.Role>(),
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
 
         User? upserted = null;
-        mockUsers.Setup(r => r.UpsertAsync(It.IsAny<User>()))
+        mockUsers
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
             .Callback<User>(u => upserted = u)
             .ReturnsAsync((User u) => u);
 
         var mockHomes = new Mock<IHomeRepository>();
-        mockHomes.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync(new List<Home>
-        {
-            new Home { Id = homeId, StreetNumber = 1, StreetName = "Main", Residents = new List<Resident>() }
-        });
+        mockHomes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(
+                new List<Home>
+                {
+                    new Home
+                    {
+                        Id = homeId,
+                        StreetNumber = 1,
+                        StreetName = "Main",
+                        Residents = new List<Resident>(),
+                    },
+                }
+            );
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, nameId: "admin");
-        var result = await c.UpdateUserAssociations(targetUniqueId, new UpdatedUserAssociations
-        {
-            RoleNames = new List<string> { "Resident" },
-            OwnedHomeIds = new List<Guid> { homeId }
-        });
+        var result = await c.UpdateUserAssociations(
+            targetUniqueId,
+            new UpdatedUserAssociations
+            {
+                RoleNames = new List<string> { "Resident" },
+                OwnedHomeIds = new List<Guid> { homeId },
+            }
+        );
 
         Assert.IsType<OkResult>(result);
         Assert.NotNull(upserted);
@@ -112,24 +140,40 @@ public sealed class UserControllerTests
         var targetUniqueId = "target-user";
 
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(apiUniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = apiUniqueId,
-            Roles = new List<User.Role> { User.Role.Administrator }
-        });
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(targetUniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = targetUniqueId,
-            Roles = new List<User.Role>(),
-            OwnedHomeIds = new List<Guid>()
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(apiUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = apiUniqueId,
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(targetUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = targetUniqueId,
+                    Roles = new List<User.Role>(),
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
 
-        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>(), nameId: "admin");
-        var result = await c.UpdateUserAssociations(targetUniqueId, new UpdatedUserAssociations
-        {
-            RoleNames = new List<string> { "NotARole" },
-            OwnedHomeIds = new List<Guid>()
-        });
+        var c = CreateController(
+            mockUsers.Object,
+            Mock.Of<IHomeRepository>(),
+            Mock.Of<IAuditLogRepository>(),
+            nameId: "admin"
+        );
+        var result = await c.UpdateUserAssociations(
+            targetUniqueId,
+            new UpdatedUserAssociations
+            {
+                RoleNames = new List<string> { "NotARole" },
+                OwnedHomeIds = new List<Guid>(),
+            }
+        );
 
         Assert.IsType<BadRequestObjectResult>(result);
     }

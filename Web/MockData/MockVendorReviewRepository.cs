@@ -15,10 +15,7 @@ namespace Web.MockData
         {
             lock (_reviews)
             {
-                var results = _reviews.Values
-                    .Where(r => r.VendorId == vendorId)
-                    .Select(Clone)
-                    .ToList();
+                var results = _reviews.Values.Where(r => r.VendorId == vendorId).Select(Clone).ToList();
                 return Task.FromResult(results);
             }
         }
@@ -70,9 +67,7 @@ namespace Web.MockData
         {
             lock (_reviews)
             {
-                var counts = _reviews.Values
-                    .GroupBy(r => r.VendorId)
-                    .ToDictionary(g => g.Key, g => g.Count());
+                var counts = _reviews.Values.GroupBy(r => r.VendorId).ToDictionary(g => g.Key, g => g.Count());
                 return Task.FromResult<IReadOnlyDictionary<Guid, int>>(counts);
             }
         }
@@ -81,8 +76,8 @@ namespace Web.MockData
         {
             lock (_reviews)
             {
-                var latest = _reviews.Values
-                    .GroupBy(r => r.VendorId)
+                var latest = _reviews
+                    .Values.GroupBy(r => r.VendorId)
                     .ToDictionary(g => g.Key, g => g.Max(r => r.ModifiedUtc));
                 return Task.FromResult<IReadOnlyDictionary<Guid, DateTime>>(latest);
             }
@@ -103,7 +98,7 @@ namespace Web.MockData
                 AuthorDisplayName = review.AuthorDisplayName,
                 ReviewText = review.ReviewText,
                 CreatedUtc = review.CreatedUtc,
-                ModifiedUtc = review.ModifiedUtc
+                ModifiedUtc = review.ModifiedUtc,
             };
         }
     }

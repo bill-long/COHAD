@@ -11,13 +11,12 @@ const PURGE_AFTER_DAYS = 30;
 const MANAGE_USERS_COLUMN_WIDTHS_STORAGE_KEY = 'manageUsers.columnWidths';
 
 @Component({
-    selector: 'app-manage-users',
-    templateUrl: './manage-users.component.html',
-    styleUrls: ['./manage-users.component.css'],
-    standalone: false
+  selector: 'app-manage-users',
+  templateUrl: './manage-users.component.html',
+  styleUrls: ['./manage-users.component.css'],
+  standalone: false,
 })
 export class ManageUsersComponent implements AfterViewInit, OnDestroy {
-
   dataSource = new MatTableDataSource<ApiUser>();
 
   @ViewChild(MatSort) sort!: MatSort;
@@ -32,7 +31,7 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
     'streetAddress',
     'roles',
     'ownedHomes',
-    'actions'
+    'actions',
   ];
 
   focusedUser: ApiUser | null = null;
@@ -46,7 +45,8 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    @Inject(dispatcher) private dispatcher: Observer<Action>) {
+    @Inject(dispatcher) private dispatcher: Observer<Action>,
+  ) {
     this.columnWidths = this.getStoredColumnWidths();
 
     const allUsers$ = this.appState.pipe(map(s => s.allUsers));
@@ -56,7 +56,7 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
       }
     });
 
-    allUsers$.subscribe(u => this.dataSource.data = u);
+    allUsers$.subscribe(u => (this.dataSource.data = u));
 
     this.allHomes$ = this.appState.pipe(map(s => s.allHomes));
     this.allHomes$.pipe(take(1)).subscribe(h => {
@@ -104,7 +104,7 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
     this.activeResize = {
       columnName,
       startX: event.clientX,
-      startWidth: headerCell.getBoundingClientRect().width
+      startWidth: headerCell.getBoundingClientRect().width,
     };
 
     document.addEventListener('mousemove', this.onResizeMouseMove);
@@ -128,7 +128,7 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
     const now = Date.now();
     const remainingDays = [
       this.getDaysRemainingFromSince(user.unassociatedSinceUtc, now),
-      this.getDaysRemainingFromSince(user.noRolesSinceUtc, now)
+      this.getDaysRemainingFromSince(user.noRolesSinceUtc, now),
     ].filter((value): value is number => value !== null);
 
     if (remainingDays.length < 1) {
@@ -158,15 +158,9 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
     }
 
     const ownedHomes = user.ownedHomes.map(home => `${home.streetNumber} ${home.streetName}`).join(' ');
-    const combined = [
-      user.givenName,
-      user.surname,
-      user.email,
-      user.identityProvider,
-      user.streetAddress,
-      user.roles.join(' '),
-      ownedHomes
-    ].join(' ').toLowerCase();
+    const combined = [user.givenName, user.surname, user.email, user.identityProvider, user.streetAddress, user.roles.join(' '), ownedHomes]
+      .join(' ')
+      .toLowerCase();
 
     return combined.includes(filter);
   }
@@ -181,7 +175,7 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
     const nextWidth = Math.max(minWidth, Math.round(this.activeResize.startWidth + delta));
     this.columnWidths = {
       ...this.columnWidths,
-      [this.activeResize.columnName]: nextWidth
+      [this.activeResize.columnName]: nextWidth,
     };
     this.storeColumnWidths();
   }
@@ -221,5 +215,4 @@ export class ManageUsersComponent implements AfterViewInit, OnDestroy {
       // Ignore storage write failures (private mode/quota).
     }
   }
-
 }

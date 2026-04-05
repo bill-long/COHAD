@@ -26,7 +26,7 @@ public sealed class UserPurgeRunnerTests
             UniqueId = uniqueId,
             Emails = $"{uniqueId}@test",
             Roles = roles,
-            OwnedHomeIds = new List<Guid>()
+            OwnedHomeIds = new List<Guid>(),
         };
     }
 
@@ -40,9 +40,7 @@ public sealed class UserPurgeRunnerTests
         var result = await runner.RunAsync(new UserPurgeOptions { Enabled = false }, CancellationToken.None);
 
         Assert.Equal(0, result.CandidatesFound);
-        users.Verify(
-            r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()),
-            Times.Never);
+        users.Verify(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -50,15 +48,20 @@ public sealed class UserPurgeRunnerTests
     {
         var list = new List<User> { MakeUser("u1"), MakeUser("u2") };
         var users = new Mock<IUserRepository>();
-        users
-            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
-            .ReturnsAsync(list);
+        users.Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>())).ReturnsAsync(list);
         var audit = new Mock<IAuditLogRepository>(MockBehavior.Strict);
         var runner = new UserPurgeRunner(users.Object, audit.Object, NullLogger<UserPurgeRunner>.Instance);
 
         var result = await runner.RunAsync(
-            new UserPurgeOptions { Enabled = true, DryRun = true, PurgeAfterDays = 30, MaxDeletesPerRun = 50 },
-            CancellationToken.None);
+            new UserPurgeOptions
+            {
+                Enabled = true,
+                DryRun = true,
+                PurgeAfterDays = 30,
+                MaxDeletesPerRun = 50,
+            },
+            CancellationToken.None
+        );
 
         Assert.Equal(2, result.CandidatesFound);
         Assert.Equal(2, result.WouldDelete);
@@ -72,15 +75,20 @@ public sealed class UserPurgeRunnerTests
     {
         var list = new List<User> { MakeUser("admin", administrator: true), MakeUser("resident") };
         var users = new Mock<IUserRepository>();
-        users
-            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
-            .ReturnsAsync(list);
+        users.Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>())).ReturnsAsync(list);
         var audit = new Mock<IAuditLogRepository>();
         var runner = new UserPurgeRunner(users.Object, audit.Object, NullLogger<UserPurgeRunner>.Instance);
 
         var result = await runner.RunAsync(
-            new UserPurgeOptions { Enabled = true, DryRun = false, PurgeAfterDays = 14, MaxDeletesPerRun = 10 },
-            CancellationToken.None);
+            new UserPurgeOptions
+            {
+                Enabled = true,
+                DryRun = false,
+                PurgeAfterDays = 14,
+                MaxDeletesPerRun = 10,
+            },
+            CancellationToken.None
+        );
 
         Assert.Equal(2, result.CandidatesFound);
         Assert.Equal(1, result.SkippedAdministrator);
@@ -88,10 +96,15 @@ public sealed class UserPurgeRunnerTests
         users.Verify(r => r.DeleteAsync("resident"), Times.Once);
         users.Verify(r => r.DeleteAsync("admin"), Times.Never);
         audit.Verify(
-            a => a.AddAsync(It.Is<NewAuditLogEntry>(
-                e => e.SubjectId == "resident" &&
-                     e.Action.Contains("no homes or no roles", StringComparison.OrdinalIgnoreCase))),
-            Times.Once);
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e =>
+                        e.SubjectId == "resident"
+                        && e.Action.Contains("no homes or no roles", StringComparison.OrdinalIgnoreCase)
+                    )
+                ),
+            Times.Once
+        );
     }
 
     [Fact]
@@ -108,16 +121,25 @@ public sealed class UserPurgeRunnerTests
         int? capturedMax = null;
         users
             .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
-            .Callback<DateTime, int>((c, m) =>
-            {
-                capturedCutoff = c;
-                capturedMax = m;
-            })
+            .Callback<DateTime, int>(
+                (c, m) =>
+                {
+                    capturedCutoff = c;
+                    capturedMax = m;
+                }
+            )
             .ReturnsAsync(new List<User>());
 
         await runner.RunAsync(
-            new UserPurgeOptions { Enabled = true, DryRun = true, PurgeAfterDays = 7, MaxDeletesPerRun = 42 },
-            CancellationToken.None);
+            new UserPurgeOptions
+            {
+                Enabled = true,
+                DryRun = true,
+                PurgeAfterDays = 7,
+                MaxDeletesPerRun = 42,
+            },
+            CancellationToken.None
+        );
 
         Assert.NotNull(capturedCutoff);
         Assert.Equal(42, capturedMax);

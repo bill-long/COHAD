@@ -8,7 +8,7 @@ import { EmailPreferences } from '../../models';
   selector: 'app-email-preferences',
   templateUrl: './email-preferences.component.html',
   styleUrls: ['./email-preferences.component.scss'],
-  standalone: false
+  standalone: false,
 })
 export class EmailPreferencesComponent implements OnInit {
   token = '';
@@ -23,14 +23,14 @@ export class EmailPreferencesComponent implements OnInit {
     { key: 'welcomeEmailOptedIn' as const, label: 'Welcome Committee', tooltip: 'New arrivals in the neighborhood' },
     { key: 'gardenClubEmailOptedIn' as const, label: 'Garden Club', tooltip: 'Garden Club meetings and events' },
     { key: 'socialCommitteeEmailOptedIn' as const, label: 'Social Committee', tooltip: 'Social Committee events' },
-    { key: 'sunshineCommitteeEmailOptedIn' as const, label: 'Sunshine Committee', tooltip: 'Sunshine Committee events' }
+    { key: 'sunshineCommitteeEmailOptedIn' as const, label: 'Sunshine Committee', tooltip: 'Sunshine Committee events' },
   ];
 
   constructor(
     private route: ActivatedRoute,
     private location: Location,
-    private prefsService: EmailPreferencesService
-  ) { }
+    private prefsService: EmailPreferencesService,
+  ) {}
 
   ngOnInit(): void {
     this.token = this.route.snapshot.queryParamMap.get('token') ?? '';
@@ -45,14 +45,14 @@ export class EmailPreferencesComponent implements OnInit {
     this.location.replaceState('/email-preferences');
 
     this.prefsService.getPreferences(this.token).subscribe({
-      next: (data) => {
+      next: data => {
         this.prefs = data;
         this.loading = false;
       },
       error: () => {
         this.loading = false;
         this.errorMessage = 'Unable to load your email preferences. The link may be invalid or expired.';
-      }
+      },
     });
   }
 
@@ -70,7 +70,7 @@ export class EmailPreferencesComponent implements OnInit {
       error: () => {
         this.saving = false;
         this.errorMessage = 'Unable to save your preferences. Please try again.';
-      }
+      },
     });
   }
 }

@@ -15,7 +15,10 @@ namespace Web.MockData
         public static string CreateAccessToken(string signingKey, TimeSpan lifetime, string userId = null)
         {
             string nameIdentifier;
-            string givenName, surname, email, streetAddress;
+            string givenName,
+                surname,
+                email,
+                streetAddress;
 
             if (userId == MockDataConstants.SecondaryUserNameIdentifier)
             {
@@ -40,7 +43,10 @@ namespace Web.MockData
             {
                 new Claim(JwtRegisteredClaimNames.Sub, nameIdentifier),
                 new Claim(System.Security.Claims.ClaimTypes.NameIdentifier, nameIdentifier),
-                new Claim("http://schemas.microsoft.com/identity/claims/identityprovider", MockDataConstants.IdentityProvider),
+                new Claim(
+                    "http://schemas.microsoft.com/identity/claims/identityprovider",
+                    MockDataConstants.IdentityProvider
+                ),
                 new Claim("http://schemas.microsoft.com/identity/claims/scope", "API"),
                 new Claim(System.Security.Claims.ClaimTypes.GivenName, givenName),
                 new Claim(System.Security.Claims.ClaimTypes.Surname, surname),
@@ -53,7 +59,8 @@ namespace Web.MockData
                 audience: Audience,
                 claims: claims,
                 expires: DateTime.UtcNow.Add(lifetime),
-                signingCredentials: creds);
+                signingCredentials: creds
+            );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }

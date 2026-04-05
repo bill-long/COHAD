@@ -15,10 +15,7 @@ namespace Web.MockData
         {
             lock (_flags)
             {
-                var results = _flags.Values
-                    .Where(f => f.VendorId == vendorId)
-                    .Select(Clone)
-                    .ToList();
+                var results = _flags.Values.Where(f => f.VendorId == vendorId).Select(Clone).ToList();
                 return Task.FromResult(results);
             }
         }
@@ -40,11 +37,11 @@ namespace Web.MockData
         {
             lock (_flags)
             {
-                var flag = _flags.Values
-                    .FirstOrDefault(f =>
-                        f.VendorId == vendorId &&
-                        string.Equals(f.AuthorUniqueId, authorUniqueId, StringComparison.OrdinalIgnoreCase) &&
-                        f.Status == "Pending");
+                var flag = _flags.Values.FirstOrDefault(f =>
+                    f.VendorId == vendorId
+                    && string.Equals(f.AuthorUniqueId, authorUniqueId, StringComparison.OrdinalIgnoreCase)
+                    && f.Status == "Pending"
+                );
                 return Task.FromResult(Clone(flag));
             }
         }
@@ -103,7 +100,7 @@ namespace Web.MockData
                 FlagNote = flag.FlagNote,
                 Status = flag.Status,
                 CreatedUtc = flag.CreatedUtc,
-                ResolvedUtc = flag.ResolvedUtc
+                ResolvedUtc = flag.ResolvedUtc,
             };
         }
     }

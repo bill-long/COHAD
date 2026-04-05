@@ -73,7 +73,7 @@ namespace Web.MockData
                 CreatedByUniqueId = vendor.CreatedByUniqueId,
                 ModifiedByUniqueId = vendor.ModifiedByUniqueId,
                 CreatedUtc = vendor.CreatedUtc,
-                ModifiedUtc = vendor.ModifiedUtc
+                ModifiedUtc = vendor.ModifiedUtc,
             };
         }
     }

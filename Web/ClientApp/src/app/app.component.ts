@@ -12,13 +12,12 @@ import { ApplicationInsightsService } from './services/application-insights.serv
 import { applicationState, ApplicationState } from './state';
 
 @Component({
-    selector: 'app-root',
-    templateUrl: './app.component.html',
-    styleUrls: ['./app.component.css'],
-    standalone: false
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.css'],
+  standalone: false,
 })
 export class AppComponent implements OnInit {
-
   constructor(
     private authService: AuthService,
     private meService: MeService,
@@ -27,7 +26,8 @@ export class AppComponent implements OnInit {
     private homeService: HomeService,
     private themeService: ThemeService,
     private telemetry: ApplicationInsightsService,
-    @Inject(applicationState) private appState: Observable<ApplicationState>) { }
+    @Inject(applicationState) private appState: Observable<ApplicationState>,
+  ) {}
 
   ngOnInit(): void {
     this.themeService.initializeTheme();

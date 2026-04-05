@@ -16,7 +16,7 @@ namespace Web.Services
             ["welcome"] = "Welcome Committee",
             ["garden"] = "Garden Club",
             ["social"] = "Social Committee",
-            ["sunshine"] = "Sunshine Committee"
+            ["sunshine"] = "Sunshine Committee",
         };
 
         public static readonly IReadOnlyDictionary<string, string> DisplayNames = DisplayNamesMap;

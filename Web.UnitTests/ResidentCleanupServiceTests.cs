@@ -25,14 +25,13 @@ public class ResidentCleanupServiceTests
 
     public ResidentCleanupServiceTests()
     {
-        _listCache = new CommitteeListCache(
-            _committeeRepo.Object,
-            new MemoryCache(new MemoryCacheOptions()));
+        _listCache = new CommitteeListCache(_committeeRepo.Object, new MemoryCache(new MemoryCacheOptions()));
         _service = new ResidentCleanupService(
             _committeeRepo.Object,
             _listCache,
             _fileStore.Object,
-            Mock.Of<ILogger<ResidentCleanupService>>());
+            Mock.Of<ILogger<ResidentCleanupService>>()
+        );
     }
 
     [Fact]
@@ -87,9 +86,7 @@ public class ResidentCleanupServiceTests
     [Fact]
     public async Task DeletesPhotoBlobForRemovedMember()
     {
-        var committee = MakeCommittee("board",
-            (ResidentA, "committees/board/photo-aaa.webp"),
-            (ResidentB, null));
+        var committee = MakeCommittee("board", (ResidentA, "committees/board/photo-aaa.webp"), (ResidentB, null));
         _committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
         _committeeRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
@@ -104,7 +101,9 @@ public class ResidentCleanupServiceTests
         var committee = MakeCommittee("board", (ResidentA, "bad-blob-path"));
         _committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
         _committeeRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
-        _fileStore.Setup(f => f.DeleteAsync("bad-blob-path")).ThrowsAsync(new InvalidOperationException("Storage error"));
+        _fileStore
+            .Setup(f => f.DeleteAsync("bad-blob-path"))
+            .ThrowsAsync(new InvalidOperationException("Storage error"));
 
         await _service.RemoveFromCommitteesAsync(new[] { ResidentA });
 
@@ -127,8 +126,7 @@ public class ResidentCleanupServiceTests
     [Fact]
     public async Task MultipleResidentsRemovedAtOnce()
     {
-        var committee = MakeCommittee("board",
-            (ResidentA, null), (ResidentB, null), (ResidentC, null));
+        var committee = MakeCommittee("board", (ResidentA, null), (ResidentB, null), (ResidentC, null));
         _committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
         _committeeRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
@@ -138,16 +136,22 @@ public class ResidentCleanupServiceTests
         Assert.Equal(ResidentB, committee.Members[0].ResidentId);
     }
 
-    private static Committee MakeCommittee(string id, params (Guid residentId, string? photoBlobPath)[] members) => new()
-    {
-        Id = id,
-        DisplayName = id,
-        Members = members.Select((m, i) => new CommitteeMember
+    private static Committee MakeCommittee(string id, params (Guid residentId, string? photoBlobPath)[] members) =>
+        new()
         {
-            Id = Guid.NewGuid(),
-            ResidentId = m.residentId,
-            PhotoBlobPath = m.photoBlobPath,
-            DisplayOrder = i
-        }).ToList()
-    };
+            Id = id,
+            DisplayName = id,
+            Members = members
+                .Select(
+                    (m, i) =>
+                        new CommitteeMember
+                        {
+                            Id = Guid.NewGuid(),
+                            ResidentId = m.residentId,
+                            PhotoBlobPath = m.photoBlobPath,
+                            DisplayOrder = i,
+                        }
+                )
+                .ToList(),
+        };
 }

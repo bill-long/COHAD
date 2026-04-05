@@ -16,6 +16,7 @@ namespace Web.Services.Repositories
         Task<VendorReview> GetByIdAsync(Guid vendorId, Guid reviewId);
         Task<VendorReview> UpsertAsync(VendorReview review);
         Task DeleteAsync(Guid vendorId, Guid reviewId);
+
         /// <summary>Deletes by id without an extra read. Use only when ids came from <see cref="GetByVendorIdAsync"/> for <paramref name="vendorId"/> (e.g. vendor cascade delete).</summary>
         Task DeleteByVendorCascadeAsync(Guid vendorId, Guid reviewId);
         Task<IReadOnlyDictionary<Guid, int>> GetReviewCountsByVendorAsync();
@@ -33,8 +34,10 @@ namespace Web.Services.Repositories
 
         public async Task<List<VendorReview>> GetByVendorIdAsync(Guid vendorId)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.VendorId = @vendorId")
-                .WithParameter("@vendorId", vendorId.ToString("D"));
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.VendorId = @vendorId").WithParameter(
+                "@vendorId",
+                vendorId.ToString("D")
+            );
             var iterator = _vendorReviewsContainer.GetItemQueryIterator<JObject>(query);
             var results = new List<VendorReview>();
             while (iterator.HasMoreResults)
@@ -109,8 +112,7 @@ namespace Web.Services.Repositories
 
         public async Task<IReadOnlyDictionary<Guid, int>> GetReviewCountsByVendorAsync()
         {
-            var query = new CosmosQueryDefinition(
-                "SELECT c.VendorId, COUNT(1) AS cnt FROM c GROUP BY c.VendorId");
+            var query = new CosmosQueryDefinition("SELECT c.VendorId, COUNT(1) AS cnt FROM c GROUP BY c.VendorId");
             var iterator = _vendorReviewsContainer.GetItemQueryIterator<JObject>(query);
             var counts = new Dictionary<Guid, int>();
             while (iterator.HasMoreResults)
@@ -125,9 +127,8 @@ namespace Web.Services.Repositories
                     }
 
                     var cntToken = row["cnt"];
-                    var count = cntToken?.Type == JTokenType.Integer
-                        ? cntToken.Value<int>()
-                        : cntToken?.Value<int?>() ?? 0;
+                    var count =
+                        cntToken?.Type == JTokenType.Integer ? cntToken.Value<int>() : cntToken?.Value<int?>() ?? 0;
                     counts[vendorId] = count;
                 }
             }
@@ -138,7 +139,8 @@ namespace Web.Services.Repositories
         public async Task<IReadOnlyDictionary<Guid, DateTime>> GetLatestReviewModifiedUtcByVendorAsync()
         {
             var query = new CosmosQueryDefinition(
-                "SELECT c.VendorId, MAX(c.ModifiedUtc) AS latestModifiedUtc FROM c GROUP BY c.VendorId");
+                "SELECT c.VendorId, MAX(c.ModifiedUtc) AS latestModifiedUtc FROM c GROUP BY c.VendorId"
+            );
             var iterator = _vendorReviewsContainer.GetItemQueryIterator<JObject>(query);
             var latestByVendor = new Dictionary<Guid, DateTime>();
             while (iterator.HasMoreResults)
@@ -181,7 +183,7 @@ namespace Web.Services.Repositories
                 AuthorDisplayName = doc.Value<string>("AuthorDisplayName"),
                 ReviewText = doc.Value<string>("ReviewText"),
                 CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
-                ModifiedUtc = doc["ModifiedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue
+                ModifiedUtc = doc["ModifiedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
             };
         }
 
@@ -196,7 +198,7 @@ namespace Web.Services.Repositories
                 ["AuthorDisplayName"] = review.AuthorDisplayName,
                 ["ReviewText"] = review.ReviewText ?? string.Empty,
                 ["CreatedUtc"] = JToken.FromObject(review.CreatedUtc),
-                ["ModifiedUtc"] = JToken.FromObject(review.ModifiedUtc)
+                ["ModifiedUtc"] = JToken.FromObject(review.ModifiedUtc),
             };
         }
     }

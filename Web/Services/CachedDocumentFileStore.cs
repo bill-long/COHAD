@@ -19,7 +19,7 @@ namespace Web.Services
         private readonly MemoryCache _cache;
 
         private const long MaxCachedFileSizeBytes = 10 * 1024 * 1024; // 10 MB per file
-        private const long CacheSizeLimitBytes = 50 * 1024 * 1024;    // 50 MB total
+        private const long CacheSizeLimitBytes = 50 * 1024 * 1024; // 50 MB total
         private static readonly TimeSpan SlidingExpiration = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan AbsoluteExpiration = TimeSpan.FromMinutes(60);
 
@@ -45,7 +45,7 @@ namespace Web.Services
                     ContentType = cached.ContentType,
                     EntityTag = cached.EntityTag,
                     LastModified = cached.LastModified,
-                    ContentLength = cached.Bytes.Length
+                    ContentLength = cached.Bytes.Length,
                 };
             }
 
@@ -76,7 +76,7 @@ namespace Web.Services
                     Bytes = bytes,
                     ContentType = result.ContentType,
                     EntityTag = result.EntityTag,
-                    LastModified = result.LastModified
+                    LastModified = result.LastModified,
                 };
 
                 var options = new MemoryCacheEntryOptions()
@@ -93,7 +93,7 @@ namespace Web.Services
                 ContentType = result.ContentType,
                 EntityTag = result.EntityTag,
                 LastModified = result.LastModified,
-                ContentLength = bytes.Length
+                ContentLength = bytes.Length,
             };
         }
 

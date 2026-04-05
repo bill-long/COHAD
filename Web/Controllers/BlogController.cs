@@ -28,7 +28,7 @@ namespace Web.Controllers
             ".jpg",
             ".jpeg",
             ".gif",
-            ".webp"
+            ".webp",
         };
 
         private readonly IUserRepository _userRepository;
@@ -46,7 +46,8 @@ namespace Web.Controllers
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
             IImageUploadHelper imageUploadHelper,
-            IOptions<DocumentStorageOptions> storageOptions)
+            IOptions<DocumentStorageOptions> storageOptions
+        )
         {
             _userRepository = userRepository;
             _blogPostRepository = blogPostRepository;
@@ -62,9 +63,7 @@ namespace Web.Controllers
         public async Task<IActionResult> GetPublished()
         {
             var posts = await _blogPostRepository.GetPublishedAsync(DateTime.UtcNow);
-            var payload = posts
-                .Select(BlogPostCard.FromStorageModel)
-                .ToList();
+            var payload = posts.Select(BlogPostCard.FromStorageModel).ToList();
             Response.Headers["Cache-Control"] = "public, max-age=300";
             return Ok(payload);
         }
@@ -121,10 +120,7 @@ namespace Web.Controllers
             }
 
             var all = await _blogPostRepository.GetAllAsync();
-            var posts = all
-                .OrderByDescending(p => p.PublishUtc)
-                .Select(BlogPostDetail.FromStorageModel)
-                .ToList();
+            var posts = all.OrderByDescending(p => p.PublishUtc).Select(BlogPostDetail.FromStorageModel).ToList();
             return Ok(posts);
         }
 
@@ -172,7 +168,7 @@ namespace Web.Controllers
                 {
                     Id = Guid.NewGuid(),
                     CreatedByUniqueId = apiUser.UniqueId,
-                    CreatedUtc = now
+                    CreatedUtc = now,
                 };
             }
             else
@@ -202,7 +198,9 @@ namespace Web.Controllers
                     return BadRequest("Featured image must be an image file (PNG, JPEG, GIF, or WebP).");
                 }
 
-                var safeBaseName = ToUrlSafeFileNameBase(SanitizeFileName(Path.GetFileNameWithoutExtension(request.FeaturedImage.FileName)));
+                var safeBaseName = ToUrlSafeFileNameBase(
+                    SanitizeFileName(Path.GetFileNameWithoutExtension(request.FeaturedImage.FileName))
+                );
                 if (string.IsNullOrWhiteSpace(safeBaseName))
                 {
                     return BadRequest("Uploaded file name is invalid.");
@@ -214,12 +212,20 @@ namespace Web.Controllers
                 }
 
                 var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
-                    request.FeaturedImage, extension, $"blog/{post.Id:D}", safeBaseName);
+                    request.FeaturedImage,
+                    extension,
+                    $"blog/{post.Id:D}",
+                    safeBaseName
+                );
 
                 uploadedFeaturedImageBlobPath = uploadResult.BlobPath;
                 shouldDeletePreviousFeaturedImageOnSuccess =
-                    !string.IsNullOrWhiteSpace(previousFeaturedImageBlobPath) &&
-                    !string.Equals(previousFeaturedImageBlobPath, uploadResult.BlobPath, StringComparison.OrdinalIgnoreCase);
+                    !string.IsNullOrWhiteSpace(previousFeaturedImageBlobPath)
+                    && !string.Equals(
+                        previousFeaturedImageBlobPath,
+                        uploadResult.BlobPath,
+                        StringComparison.OrdinalIgnoreCase
+                    );
 
                 post.FeaturedImageBlobPath = uploadResult.BlobPath;
                 post.FeaturedImageDisplayName = uploadResult.FinalDisplayName;
@@ -240,26 +246,24 @@ namespace Web.Controllers
             post.Excerpt = string.IsNullOrWhiteSpace(request.Excerpt)
                 ? GenerateExcerpt(request.Content)
                 : request.Excerpt.Trim();
-            post.PublishUtc = request.PublishUtc.HasValue
-                ? NormalizeToUtc(request.PublishUtc.Value)
-                : now;
+            post.PublishUtc = request.PublishUtc.HasValue ? NormalizeToUtc(request.PublishUtc.Value) : now;
             post.AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim();
             post.ModifiedByUniqueId = apiUser.UniqueId;
             post.ModifiedUtc = now;
 
             var allPosts = await _blogPostRepository.GetSlugCandidatesAsync();
             var oldSlug = post.PublicSlug;
-            post.PublicSlug = BlogUrlSlug.EnsureUniquePublicSlug(
-                post.Id,
-                post.PublishUtc,
-                post.Title,
-                allPosts).ToLowerInvariant();
+            post.PublicSlug = BlogUrlSlug
+                .EnsureUniquePublicSlug(post.Id, post.PublishUtc, post.Title, allPosts)
+                .ToLowerInvariant();
 
             var normalizedOldSlug = oldSlug?.Trim().ToLowerInvariant();
 
-            if (!isCreate &&
-                !string.IsNullOrWhiteSpace(normalizedOldSlug) &&
-                !string.Equals(normalizedOldSlug, post.PublicSlug, StringComparison.OrdinalIgnoreCase))
+            if (
+                !isCreate
+                && !string.IsNullOrWhiteSpace(normalizedOldSlug)
+                && !string.Equals(normalizedOldSlug, post.PublicSlug, StringComparison.OrdinalIgnoreCase)
+            )
             {
                 post.PreviousSlugs ??= new List<string>();
                 if (!post.PreviousSlugs.Contains(normalizedOldSlug, StringComparer.OrdinalIgnoreCase))
@@ -282,18 +286,29 @@ namespace Web.Controllers
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
             {
-                await DeleteUploadedFeaturedImageOnSaveFailureAsync(uploadedFeaturedImageBlobPath, previousFeaturedImageBlobPath);
+                await DeleteUploadedFeaturedImageOnSaveFailureAsync(
+                    uploadedFeaturedImageBlobPath,
+                    previousFeaturedImageBlobPath
+                );
                 return NotFound();
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
             {
-                await DeleteUploadedFeaturedImageOnSaveFailureAsync(uploadedFeaturedImageBlobPath, previousFeaturedImageBlobPath);
-                return StatusCode(StatusCodes.Status409Conflict,
-                    "Unable to save post due to concurrent updates. Please refresh and try again.");
+                await DeleteUploadedFeaturedImageOnSaveFailureAsync(
+                    uploadedFeaturedImageBlobPath,
+                    previousFeaturedImageBlobPath
+                );
+                return StatusCode(
+                    StatusCodes.Status409Conflict,
+                    "Unable to save post due to concurrent updates. Please refresh and try again."
+                );
             }
             catch
             {
-                await DeleteUploadedFeaturedImageOnSaveFailureAsync(uploadedFeaturedImageBlobPath, previousFeaturedImageBlobPath);
+                await DeleteUploadedFeaturedImageOnSaveFailureAsync(
+                    uploadedFeaturedImageBlobPath,
+                    previousFeaturedImageBlobPath
+                );
                 throw;
             }
 
@@ -302,16 +317,18 @@ namespace Web.Controllers
                 await _documentFileStore.DeleteAsync(previousFeaturedImageBlobPath);
             }
 
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = saved.Id.ToString("D"),
-                SubjectName = saved.Title,
-                Action = isCreate ? "Created blog post." : "Updated blog post.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = saved.Id.ToString("D"),
+                    SubjectName = saved.Title,
+                    Action = isCreate ? "Created blog post." : "Updated blog post.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             return Ok(BlogPostDetail.FromStorageModel(saved));
         }
@@ -360,7 +377,11 @@ namespace Web.Controllers
 
             var inlineFolder = $"{Guid.NewGuid():D}";
             var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
-                file, extension, $"blog/images/{inlineFolder}", safeBaseName);
+                file,
+                extension,
+                $"blog/images/{inlineFolder}",
+                safeBaseName
+            );
 
             var encodedFinalName = Uri.EscapeDataString(uploadResult.FinalDisplayName);
             return Ok(new { url = $"/api/blog/images/{inlineFolder}/{encodedFinalName}" });
@@ -370,9 +391,7 @@ namespace Web.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> ServeInlineImage(string blobPath)
         {
-            if (string.IsNullOrWhiteSpace(blobPath) ||
-                blobPath.Contains("..") ||
-                Path.IsPathRooted(blobPath))
+            if (string.IsNullOrWhiteSpace(blobPath) || blobPath.Contains("..") || Path.IsPathRooted(blobPath))
             {
                 return NotFound();
             }
@@ -424,16 +443,18 @@ namespace Web.Controllers
 
             await _blogCommentRepository.DeleteByBlogPostCascadeAsync(id);
             await _blogPostRepository.DeleteAsync(id);
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = stored.Id.ToString("D"),
-                SubjectName = stored.Title,
-                Action = "Deleted blog post.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = stored.Id.ToString("D"),
+                    SubjectName = stored.Title,
+                    Action = "Deleted blog post.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             return Ok();
         }
@@ -459,8 +480,12 @@ namespace Web.Controllers
             var isAdmin = apiUser?.Roles?.Contains(Models.User.Role.Administrator) == true;
 
             var payload = comments
-                .Select(c => BlogCommentPresentation.FromStorageModel(c,
-                    canDelete: isAdmin || (apiUser != null && c.AuthorUniqueId == apiUser.UniqueId)))
+                .Select(c =>
+                    BlogCommentPresentation.FromStorageModel(
+                        c,
+                        canDelete: isAdmin || (apiUser != null && c.AuthorUniqueId == apiUser.UniqueId)
+                    )
+                )
                 .ToList();
 
             return Ok(payload);
@@ -499,7 +524,7 @@ namespace Web.Controllers
                 AuthorUniqueId = apiUser.UniqueId,
                 AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
                 Content = request.Content.Trim(),
-                CreatedUtc = DateTime.UtcNow
+                CreatedUtc = DateTime.UtcNow,
             };
 
             var saved = await _blogCommentRepository.UpsertAsync(comment);
@@ -567,8 +592,8 @@ namespace Web.Controllers
                 return false;
             }
 
-            return user.Roles.Contains(Models.User.Role.Resident) &&
-                   user.Roles.Any(r => r != Models.User.Role.Resident);
+            return user.Roles.Contains(Models.User.Role.Resident)
+                && user.Roles.Any(r => r != Models.User.Role.Resident);
         }
 
         /// <summary>
@@ -611,15 +636,18 @@ namespace Web.Controllers
                 return string.Empty;
             }
 
-            var chars = value.Trim().Select(ch =>
-            {
-                if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '_')
+            var chars = value
+                .Trim()
+                .Select(ch =>
                 {
-                    return ch;
-                }
+                    if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '_')
+                    {
+                        return ch;
+                    }
 
-                return '-';
-            }).ToArray();
+                    return '-';
+                })
+                .ToArray();
 
             var collapsed = new string(chars);
             while (collapsed.Contains("--", StringComparison.Ordinal))
@@ -641,7 +669,10 @@ namespace Web.Controllers
             return contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
         }
 
-        private async Task DeleteUploadedFeaturedImageOnSaveFailureAsync(string uploadedBlobPath, string previousBlobPath)
+        private async Task DeleteUploadedFeaturedImageOnSaveFailureAsync(
+            string uploadedBlobPath,
+            string previousBlobPath
+        )
         {
             if (string.IsNullOrWhiteSpace(uploadedBlobPath))
             {

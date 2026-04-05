@@ -33,25 +33,40 @@ using Newtonsoft.Json.Linq;
 
 // ── Parse arguments ──────────────────────────────────────────────
 
-string cosmosUri = null, cosmosKey = null, cosmosDatabase = null;
-bool dryRun = false, cleanup = false;
+string cosmosUri = null,
+    cosmosKey = null,
+    cosmosDatabase = null;
+bool dryRun = false,
+    cleanup = false;
 
 var args = Args; // dotnet-script injects Args
 for (int i = 0; i < args.Count; i++)
 {
     switch (args[i])
     {
-        case "--uri":      cosmosUri      = args[++i]; break;
-        case "--key":      cosmosKey      = args[++i]; break;
-        case "--database": cosmosDatabase = args[++i]; break;
-        case "--dry-run":  dryRun  = true; break;
-        case "--cleanup":  cleanup = true; break;
+        case "--uri":
+            cosmosUri = args[++i];
+            break;
+        case "--key":
+            cosmosKey = args[++i];
+            break;
+        case "--database":
+            cosmosDatabase = args[++i];
+            break;
+        case "--dry-run":
+            dryRun = true;
+            break;
+        case "--cleanup":
+            cleanup = true;
+            break;
     }
 }
 
 if (string.IsNullOrEmpty(cosmosUri) || string.IsNullOrEmpty(cosmosKey) || string.IsNullOrEmpty(cosmosDatabase))
 {
-    Console.Error.WriteLine("Usage: dotnet script migrate-residents.csx -- --uri <URI> --key <KEY> --database <DB> [--dry-run] [--cleanup]");
+    Console.Error.WriteLine(
+        "Usage: dotnet script migrate-residents.csx -- --uri <URI> --key <KEY> --database <DB> [--dry-run] [--cleanup]"
+    );
     return;
 }
 
@@ -63,10 +78,17 @@ Console.WriteLine();
 
 // ── Connect ──────────────────────────────────────────────────────
 
-var client = new CosmosClient(cosmosUri, cosmosKey, new CosmosClientOptions
-{
-    SerializerOptions = new CosmosSerializationOptions { PropertyNamingPolicy = CosmosPropertyNamingPolicy.Default }
-});
+var client = new CosmosClient(
+    cosmosUri,
+    cosmosKey,
+    new CosmosClientOptions
+    {
+        SerializerOptions = new CosmosSerializationOptions
+        {
+            PropertyNamingPolicy = CosmosPropertyNamingPolicy.Default,
+        },
+    }
+);
 
 var database = client.GetDatabase(cosmosDatabase);
 var homesContainer = database.GetContainer("Homes");
@@ -95,7 +117,8 @@ catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
 Console.WriteLine("Reading Home documents...");
 var homes = new List<JObject>();
 var homeIterator = homesContainer.GetItemQueryIterator<JObject>(
-    new QueryDefinition("SELECT * FROM c WHERE STARTSWITH(c.id, 'Home|')"));
+    new QueryDefinition("SELECT * FROM c WHERE STARTSWITH(c.id, 'Home|')")
+);
 while (homeIterator.HasMoreResults)
 {
     var response = await homeIterator.ReadNextAsync();
@@ -105,11 +128,13 @@ Console.WriteLine($"Found {homes.Count} Home documents.");
 
 // ── Process each Home ────────────────────────────────────────────
 
-int totalResidents = 0, skippedHomes = 0, migratedResidents = 0;
+int totalResidents = 0,
+    skippedHomes = 0,
+    migratedResidents = 0;
 
 foreach (var homeDoc in homes)
 {
-    var rawId = homeDoc.Value<string>("id");  // "Home|<guid>"
+    var rawId = homeDoc.Value<string>("id"); // "Home|<guid>"
     Guid homeId;
     {
         var parts = rawId.Split('|');
@@ -149,8 +174,10 @@ foreach (var homeDoc in homes)
     }
 
     // Check if already migrated (any resident doc with this HomeId exists).
-    var checkQuery = new QueryDefinition("SELECT VALUE COUNT(1) FROM c WHERE c.HomeId = @hid")
-        .WithParameter("@hid", homeId.ToString("D"));
+    var checkQuery = new QueryDefinition("SELECT VALUE COUNT(1) FROM c WHERE c.HomeId = @hid").WithParameter(
+        "@hid",
+        homeId.ToString("D")
+    );
     var checkIterator = residentsContainer.GetItemQueryIterator<int>(checkQuery);
     int existingCount = 0;
     while (checkIterator.HasMoreResults)
@@ -161,7 +188,9 @@ foreach (var homeDoc in homes)
 
     if (existingCount > 0)
     {
-        Console.WriteLine($"  Home {homeId:D} ({embeddedResidents.Count} residents) — already migrated ({existingCount} in Residents container), skipping.");
+        Console.WriteLine(
+            $"  Home {homeId:D} ({embeddedResidents.Count} residents) — already migrated ({existingCount} in Residents container), skipping."
+        );
         skippedHomes++;
         continue;
     }
@@ -214,12 +243,16 @@ foreach (var homeDoc in homes)
 
         if (dryRun)
         {
-            Console.WriteLine($"    [DRY RUN] Would create {docId} — {residentObj.Value<string>("GivenName")} {residentObj.Value<string>("Surname")}");
+            Console.WriteLine(
+                $"    [DRY RUN] Would create {docId} — {residentObj.Value<string>("GivenName")} {residentObj.Value<string>("Surname")}"
+            );
         }
         else
         {
             await residentsContainer.CreateItemAsync(newDoc, PartitionKey.None);
-            Console.WriteLine($"    Created {docId} — {residentObj.Value<string>("GivenName")} {residentObj.Value<string>("Surname")}");
+            Console.WriteLine(
+                $"    Created {docId} — {residentObj.Value<string>("GivenName")} {residentObj.Value<string>("Surname")}"
+            );
         }
 
         migratedResidents++;

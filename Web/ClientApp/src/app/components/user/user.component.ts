@@ -12,14 +12,13 @@ import { UserService } from 'src/app/services/user.service';
 import { applicationState, ApplicationState } from 'src/app/state';
 
 @Component({
-    selector: 'app-user',
-    templateUrl: './user.component.html',
-    styleUrls: ['./user.component.css'],
-    encapsulation: ViewEncapsulation.None,
-    standalone: false
+  selector: 'app-user',
+  templateUrl: './user.component.html',
+  styleUrls: ['./user.component.css'],
+  encapsulation: ViewEncapsulation.None,
+  standalone: false,
 })
 export class UserComponent implements OnInit {
-
   @Input() apiUser!: ApiUser;
 
   @Input() allHomes!: Home[];
@@ -55,7 +54,8 @@ export class UserComponent implements OnInit {
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     private userService: UserService,
-    private readonly dialog: MatDialog) { }
+    private readonly dialog: MatDialog,
+  ) {}
 
   ngOnInit(): void {
     this.filteredHomes = this.homeControl.valueChanges.pipe(
@@ -67,14 +67,14 @@ export class UserComponent implements OnInit {
           f = f.toLowerCase();
           return this.allHomes.filter(h => `${h.streetNumber} ${h.streetName}`.toLowerCase().includes(f));
         }
-      })
+      }),
     );
 
     this.appState.pipe(map(s => s.apiUser)).subscribe(u => {
       if (u?.roles.includes(this.administratorRole) && !this.allRoles.includes(this.administratorRole)) {
         this.allRoles.push(this.administratorRole);
       }
-    })
+    });
 
     this.apiUserCopy = JSON.parse(JSON.stringify(this.apiUser));
     this.apiUserCopy.roles ??= [];
@@ -100,7 +100,7 @@ export class UserComponent implements OnInit {
       if (firstSpace > 0) {
         const streetNumberAsString = value.substring(0, firstSpace);
         const streetName = value.substring(firstSpace + 1);
-        let home = this.allHomes.find(h => h.streetName === streetName && h.streetNumber.toString() === streetNumberAsString);
+        const home = this.allHomes.find(h => h.streetName === streetName && h.streetNumber.toString() === streetNumberAsString);
         if (home) {
           this.ensureHomeEditRole();
           this.apiUserCopy.ownedHomes.push(home);
@@ -198,8 +198,8 @@ export class UserComponent implements OnInit {
           body: 'This user has no roles and no homes. They will be eligible for purge after 30 days.',
           confirmText: 'Save',
           cancelText: 'Cancel',
-          confirmColor: 'primary'
-        }
+          confirmColor: 'primary',
+        },
       });
       ref.afterClosed().subscribe(confirmed => {
         if (confirmed === true) {
@@ -252,5 +252,4 @@ export class UserComponent implements OnInit {
       this.apiUserCopy.roles.push('Resident');
     }
   }
-
 }

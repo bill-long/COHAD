@@ -5,13 +5,22 @@ import { Observable, Subject } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
 import { IdentityClaims } from '../models';
-import { ApplicationState, dispatcher, Action, applicationState, AuthenticatedUserChanged, AuthSessionResolved, Login, MockLogin, Logout } from '../state';
+import {
+  ApplicationState,
+  dispatcher,
+  Action,
+  applicationState,
+  AuthenticatedUserChanged,
+  AuthSessionResolved,
+  Login,
+  MockLogin,
+  Logout,
+} from '../state';
 import { MockAuthTokenService } from './mock-auth-token.service';
 import { ApplicationInsightsService } from './application-insights.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-
   private authSessionResolvedDispatched = false;
   private static readonly postLoginRedirectKey = 'auth.postLoginRedirect';
   private static readonly defaultPostLoginPath = '/residents';
@@ -35,11 +44,10 @@ export class AuthService {
     private router: Router,
     private telemetry: ApplicationInsightsService,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    @Inject(dispatcher) private dispatcher: Subject<Action>) {
-
+    @Inject(dispatcher) private dispatcher: Subject<Action>,
+  ) {
     if (!environment.useMockAuth) {
       const authCodeFlowConfig: AuthConfig = {
-
         issuer: 'https://cohadorgb2c.b2clogin.com/a7e9006b-c606-4670-960c-3998b35ea5ee/v2.0/',
 
         tokenEndpoint: 'https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/oauth2/v2.0/token',
@@ -60,22 +68,21 @@ export class AuthService {
 
         scope: 'openid profile email offline_access https://cohadorgb2c.onmicrosoft.com/5803d9fa-a62f-401c-b0f4-269b3cb468eb/API',
 
-        showDebugInformation: (environment.production ? false : true)
+        showDebugInformation: environment.production ? false : true,
       };
 
       this.oauthService.configure(authCodeFlowConfig);
 
       this.oauthService.setupAutomaticSilentRefresh();
 
-      this.oauthService.events
-        .subscribe(async e => {
-          if (!environment.production) {
-            console.log('OAuthService event', e);
-          }
-          if (this.updateState()) {
-            this.markAuthSessionResolvedOnce();
-          }
-        });
+      this.oauthService.events.subscribe(async e => {
+        if (!environment.production) {
+          console.log('OAuthService event', e);
+        }
+        if (this.updateState()) {
+          this.markAuthSessionResolvedOnce();
+        }
+      });
     }
 
     this.dispatcher.subscribe(a => {
@@ -102,14 +109,17 @@ export class AuthService {
     });
 
     if (!environment.useMockAuth) {
-      this.oauthService.tryLogin().then(() => {
-        if (this.updateState()) {
+      this.oauthService
+        .tryLogin()
+        .then(() => {
+          if (this.updateState()) {
+            this.markAuthSessionResolvedOnce();
+          }
+        })
+        .catch(() => {
+          this.updateState();
           this.markAuthSessionResolvedOnce();
-        }
-      }).catch(() => {
-        this.updateState();
-        this.markAuthSessionResolvedOnce();
-      });
+        });
     } else {
       // In mock mode, don't auto-login — wait for the user to select a mock user.
       this.markAuthSessionResolvedOnce();
@@ -126,12 +136,18 @@ export class AuthService {
 
   private readonly mockUserClaims: Record<string, Omit<IdentityClaims, 'idp'>> = {
     'user-1': { sub: 'user-1', given_name: 'Mock', family_name: 'Resident', emails: ['mock@cohad.local'], streetAddress: '123 Mock Lane' },
-    'user-2': { sub: 'user-2', given_name: 'Taylor', family_name: 'Neighbor', emails: ['taylor@cohad.local'], streetAddress: '456 Test Court' },
+    'user-2': {
+      sub: 'user-2',
+      given_name: 'Taylor',
+      family_name: 'Neighbor',
+      emails: ['taylor@cohad.local'],
+      streetAddress: '456 Test Court',
+    },
   };
 
   private initMockAuth(userId: string): void {
     this.http.get<{ accessToken: string }>(`api/dev/mock-auth?userId=${encodeURIComponent(userId)}`).subscribe({
-      next: (r) => {
+      next: r => {
         this.mockTokens.setToken(r.accessToken);
         const claims = this.mockUserClaims[userId] ?? this.mockUserClaims['user-1'];
         const identityClaims: IdentityClaims = { ...claims, idp: 'https://cohad.mock/' };
@@ -140,16 +156,16 @@ export class AuthService {
         this.redirectAfterLoginIfRequested(r.accessToken);
         this.markAuthSessionResolvedOnce();
       },
-      error: (err) => {
+      error: err => {
         console.error('Mock auth unavailable (is the API running with ASPNETCORE_ENVIRONMENT=MockData?)', err);
         this.markAuthSessionResolvedOnce();
-      }
+      },
     });
   }
 
   /** @returns true if AuthenticatedUserChanged was dispatched (false when refresh was started and dispatch is deferred). */
   private updateState(): boolean {
-    let accessToken = this.oauthService.getAccessToken();
+    const accessToken = this.oauthService.getAccessToken();
     if (accessToken != null && this.oauthService.getAccessTokenExpiration() < Date.now()) {
       if (!environment.production) {
         console.log('Found expired token. Refreshing.');
@@ -173,7 +189,7 @@ export class AuthService {
     }
 
     if (accessToken) {
-      let identityClaims = this.oauthService.getIdentityClaims() as IdentityClaims;
+      const identityClaims = this.oauthService.getIdentityClaims() as IdentityClaims;
       this.dispatcher.next(new AuthenticatedUserChanged({ identityClaims, accessToken }));
       this.telemetry.setAuthenticatedUser(identityClaims.sub);
       this.redirectAfterLoginIfRequested(accessToken);

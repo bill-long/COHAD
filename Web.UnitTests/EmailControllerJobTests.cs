@@ -5,8 +5,8 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
@@ -44,15 +44,18 @@ public sealed class EmailControllerJobTests
         _residents.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Resident>());
 
         // Default cleanup query returns empty so tests exercise the non-exception path.
-        _jobRepo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+        _jobRepo
+            .Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
             .ReturnsAsync(new List<EmailJob>());
 
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["EmailJobs:RetentionDays"] = "30",
-                ["EmailJobs:CleanupBatchSize"] = "25"
-            })
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["EmailJobs:RetentionDays"] = "30",
+                    ["EmailJobs:CleanupBatchSize"] = "25",
+                }
+            )
             .Build();
 
         // Use a real cleanup service wired to our mocks. The controller treats cleanup as best-effort.
@@ -60,7 +63,8 @@ public sealed class EmailControllerJobTests
             _jobRepo.Object,
             _fileStore.Object,
             config,
-            NullLogger<EmailJobCleanupService>.Instance);
+            NullLogger<EmailJobCleanupService>.Instance
+        );
     }
 
     private EmailJobProcessor CreateProcessor()
@@ -83,14 +87,16 @@ public sealed class EmailControllerJobTests
         env.Setup(e => e.EnvironmentName).Returns("MockData");
 
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["SmtpHost"] = "localhost",
-                ["SmtpUser"] = "user",
-                ["SmtpPassword"] = "pass",
-                ["AppBaseUrl"] = "https://test.cohad.org",
-                ["EmailJobs:Mock:DelayMilliseconds"] = "0"
-            })
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["SmtpHost"] = "localhost",
+                    ["SmtpUser"] = "user",
+                    ["SmtpPassword"] = "pass",
+                    ["AppBaseUrl"] = "https://test.cohad.org",
+                    ["EmailJobs:Mock:DelayMilliseconds"] = "0",
+                }
+            )
             .Build();
 
         var tokenService = new Mock<IUnsubscribeTokenService>();
@@ -102,7 +108,8 @@ public sealed class EmailControllerJobTests
             hubContext.Object,
             config,
             env.Object,
-            NullLogger<EmailJobProcessor>.Instance);
+            NullLogger<EmailJobProcessor>.Instance
+        );
     }
 
     private EmailController CreateController(EmailJobProcessor? processor = null)
@@ -120,53 +127,66 @@ public sealed class EmailControllerJobTests
             processor,
             _emailService.Object,
             _cleanup,
-            NullLogger<EmailController>.Instance)
+            NullLogger<EmailController>.Instance
+        )
         {
             ControllerContext = new ControllerContext
             {
                 HttpContext = new DefaultHttpContext
                 {
-                    User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                    {
-                        new Claim(ClaimTypes.NameIdentifier, "u1"),
-                        new Claim(IdentityProviderClaim, "google.com"),
-                        new Claim("emails", "test@example.com")
-                    }, "Test"))
-                }
-            }
+                    User = new ClaimsPrincipal(
+                        new ClaimsIdentity(
+                            new[]
+                            {
+                                new Claim(ClaimTypes.NameIdentifier, "u1"),
+                                new Claim(IdentityProviderClaim, "google.com"),
+                                new Claim("emails", "test@example.com"),
+                            },
+                            "Test"
+                        )
+                    ),
+                },
+            },
         };
         return controller;
     }
 
     private void SetupMockUser()
     {
-        _users.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>())).ReturnsAsync(new User
-        {
-            UniqueId = "google.comu1",
-            GivenName = "Test",
-            Surname = "User",
-            Emails = "test@example.com",
-            Roles = new List<User.Role> { User.Role.Board },
-            OwnedHomeIds = new List<Guid> { Guid.NewGuid() }
-        });
+        _users
+            .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "google.comu1",
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "test@example.com",
+                    Roles = new List<User.Role> { User.Role.Board },
+                    OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+                }
+            );
     }
 
     private void SetupHomesWithRecipients(int count = 2)
     {
-        var homes = Enumerable.Range(1, count).Select(i => new Home
-        {
-            Id = Guid.NewGuid(),
-            EmailAddress = new EmailAddress
+        var homes = Enumerable
+            .Range(1, count)
+            .Select(i => new Home
             {
-                Address = $"home{i}@test.com",
-                BoardEmailOptedIn = true,
-                WelcomeEmailOptedIn = true,
-                GardenClubEmailOptedIn = true,
-                SocialCommitteeEmailOptedIn = true,
-                SunshineCommitteeEmailOptedIn = true
-            },
-            Residents = new List<Resident>()
-        }).ToList();
+                Id = Guid.NewGuid(),
+                EmailAddress = new EmailAddress
+                {
+                    Address = $"home{i}@test.com",
+                    BoardEmailOptedIn = true,
+                    WelcomeEmailOptedIn = true,
+                    GardenClubEmailOptedIn = true,
+                    SocialCommitteeEmailOptedIn = true,
+                    SunshineCommitteeEmailOptedIn = true,
+                },
+                Residents = new List<Resident>(),
+            })
+            .ToList();
 
         _homes.Setup(r => r.GetAllAsync()).ReturnsAsync(homes);
     }
@@ -179,16 +199,29 @@ public sealed class EmailControllerJobTests
     public async Task SendEmailFromBoard_TestEmail_ReturnsSynchronousOk()
     {
         SetupMockUser();
-        var emailInfo = new EmailInfo { Subject = "Test", HtmlBody = "<p>hi</p>", IsTestEmail = true };
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Test",
+            HtmlBody = "<p>hi</p>",
+            IsTestEmail = true,
+        };
 
         var controller = CreateController();
         var result = await controller.SendEmailFromBoard(emailInfo);
 
         var ok = Assert.IsType<OkResult>(result);
-        _emailService.Verify(s => s.SendEmail(
-            "board@cohad.org", "COHAD Board", emailInfo,
-            It.IsAny<Func<EmailAddress, bool>>(), "board",
-            It.IsAny<ClaimsPrincipal>()), Times.Once);
+        _emailService.Verify(
+            s =>
+                s.SendEmail(
+                    "board@cohad.org",
+                    "COHAD Board",
+                    emailInfo,
+                    It.IsAny<Func<EmailAddress, bool>>(),
+                    "board",
+                    It.IsAny<ClaimsPrincipal>()
+                ),
+            Times.Once
+        );
         _jobRepo.Verify(r => r.AddAsync(It.IsAny<EmailJob>()), Times.Never);
     }
 
@@ -198,11 +231,17 @@ public sealed class EmailControllerJobTests
         SetupMockUser();
         SetupHomesWithRecipients(3);
 
-        _fileStore.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
             .Returns(Task.CompletedTask);
         _jobRepo.Setup(r => r.AddAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
 
-        var emailInfo = new EmailInfo { Subject = "Newsletter", HtmlBody = "<p>content</p>", IsTestEmail = false };
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Newsletter",
+            HtmlBody = "<p>content</p>",
+            IsTestEmail = false,
+        };
 
         var controller = CreateController();
         var result = await controller.SendEmailFromBoard(emailInfo);
@@ -214,17 +253,24 @@ public sealed class EmailControllerJobTests
         Assert.Equal(3, summary.TotalRecipients);
         Assert.Equal(EmailJobStatus.Queued, summary.Status);
 
-        _jobRepo.Verify(r => r.AddAsync(It.Is<EmailJob>(j =>
-            j.Category == "board" &&
-            j.Subject == "Newsletter" &&
-            j.TotalRecipients == 3 &&
-            j.Status == EmailJobStatus.Queued &&
-            j.ContentBlobPath.StartsWith("email-jobs/"))), Times.Once);
+        _jobRepo.Verify(
+            r =>
+                r.AddAsync(
+                    It.Is<EmailJob>(j =>
+                        j.Category == "board"
+                        && j.Subject == "Newsletter"
+                        && j.TotalRecipients == 3
+                        && j.Status == EmailJobStatus.Queued
+                        && j.ContentBlobPath.StartsWith("email-jobs/")
+                    )
+                ),
+            Times.Once
+        );
 
-        _fileStore.Verify(f => f.UploadAsync(
-            It.Is<string>(p => p.StartsWith("email-jobs/")),
-            It.IsAny<Stream>(),
-            "text/html"), Times.Once);
+        _fileStore.Verify(
+            f => f.UploadAsync(It.Is<string>(p => p.StartsWith("email-jobs/")), It.IsAny<Stream>(), "text/html"),
+            Times.Once
+        );
 
         _audit.Verify(a => a.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Once);
     }
@@ -235,7 +281,12 @@ public sealed class EmailControllerJobTests
         SetupMockUser();
         _homes.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Home>());
 
-        var emailInfo = new EmailInfo { Subject = "Test", HtmlBody = "<p>hi</p>", IsTestEmail = false };
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Test",
+            HtmlBody = "<p>hi</p>",
+            IsTestEmail = false,
+        };
 
         var controller = CreateController();
         var result = await controller.SendEmailFromBoard(emailInfo);
@@ -257,21 +308,27 @@ public sealed class EmailControllerJobTests
             {
                 Id = Guid.NewGuid(),
                 EmailAddress = new EmailAddress { Address = "shared@test.com", BoardEmailOptedIn = true },
-                Residents = new List<Resident>()
+                Residents = new List<Resident>(),
             },
             new Home
             {
                 Id = Guid.NewGuid(),
                 EmailAddress = new EmailAddress { Address = "shared@test.com", BoardEmailOptedIn = true },
-                Residents = new List<Resident>()
-            }
+                Residents = new List<Resident>(),
+            },
         };
         _homes.Setup(r => r.GetAllAsync()).ReturnsAsync(homes);
-        _fileStore.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
             .Returns(Task.CompletedTask);
         _jobRepo.Setup(r => r.AddAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
 
-        var emailInfo = new EmailInfo { Subject = "Dup test", HtmlBody = "<p>hi</p>", IsTestEmail = false };
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Dup test",
+            HtmlBody = "<p>hi</p>",
+            IsTestEmail = false,
+        };
         var controller = CreateController();
         var result = await controller.SendEmailFromBoard(emailInfo);
 
@@ -291,21 +348,27 @@ public sealed class EmailControllerJobTests
             {
                 Id = Guid.NewGuid(),
                 EmailAddress = new EmailAddress { Address = "optedIn@test.com", BoardEmailOptedIn = true },
-                Residents = new List<Resident>()
+                Residents = new List<Resident>(),
             },
             new Home
             {
                 Id = Guid.NewGuid(),
                 EmailAddress = new EmailAddress { Address = "optedOut@test.com", BoardEmailOptedIn = false },
-                Residents = new List<Resident>()
-            }
+                Residents = new List<Resident>(),
+            },
         };
         _homes.Setup(r => r.GetAllAsync()).ReturnsAsync(homes);
-        _fileStore.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
             .Returns(Task.CompletedTask);
         _jobRepo.Setup(r => r.AddAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
 
-        var emailInfo = new EmailInfo { Subject = "Filter", HtmlBody = "<p>hi</p>", IsTestEmail = false };
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Filter",
+            HtmlBody = "<p>hi</p>",
+            IsTestEmail = false,
+        };
         var controller = CreateController();
         var result = await controller.SendEmailFromBoard(emailInfo);
 
@@ -332,7 +395,7 @@ public sealed class EmailControllerJobTests
                 CreatedUtc = DateTime.UtcNow.AddHours(-2),
                 TotalRecipients = 10,
                 SentCount = 10,
-                Recipients = new List<EmailJobRecipient>()
+                Recipients = new List<EmailJobRecipient>(),
             },
             new EmailJob
             {
@@ -343,8 +406,8 @@ public sealed class EmailControllerJobTests
                 CreatedUtc = DateTime.UtcNow.AddHours(-1),
                 TotalRecipients = 5,
                 SentCount = 3,
-                Recipients = new List<EmailJobRecipient>()
-            }
+                Recipients = new List<EmailJobRecipient>(),
+            },
         };
         _jobRepo.Setup(r => r.GetRecentJobsAsync(50)).ReturnsAsync(jobs);
 
@@ -372,8 +435,8 @@ public sealed class EmailControllerJobTests
             Recipients = new List<EmailJobRecipient>
             {
                 new EmailJobRecipient { Email = "a@test.com", Status = EmailJobRecipientStatus.Sent },
-                new EmailJobRecipient { Email = "b@test.com", Status = EmailJobRecipientStatus.Sent }
-            }
+                new EmailJobRecipient { Email = "b@test.com", Status = EmailJobRecipientStatus.Sent },
+            },
         };
         _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
 
@@ -419,9 +482,19 @@ public sealed class EmailControllerJobTests
             Recipients = new List<EmailJobRecipient>
             {
                 new EmailJobRecipient { Email = "a@test.com", Status = EmailJobRecipientStatus.Sent },
-                new EmailJobRecipient { Email = "b@test.com", Status = EmailJobRecipientStatus.Failed, Error = "timeout" },
-                new EmailJobRecipient { Email = "c@test.com", Status = EmailJobRecipientStatus.Failed, Error = "refused" }
-            }
+                new EmailJobRecipient
+                {
+                    Email = "b@test.com",
+                    Status = EmailJobRecipientStatus.Failed,
+                    Error = "timeout",
+                },
+                new EmailJobRecipient
+                {
+                    Email = "c@test.com",
+                    Status = EmailJobRecipientStatus.Failed,
+                    Error = "refused",
+                },
+            },
         };
         _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
         _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
@@ -462,8 +535,13 @@ public sealed class EmailControllerJobTests
             Status = status,
             Recipients = new List<EmailJobRecipient>
             {
-                new EmailJobRecipient { Email = "a@test.com", Status = EmailJobRecipientStatus.Failed, Error = "err" }
-            }
+                new EmailJobRecipient
+                {
+                    Email = "a@test.com",
+                    Status = EmailJobRecipientStatus.Failed,
+                    Error = "err",
+                },
+            },
         };
         _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
         _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
@@ -486,7 +564,7 @@ public sealed class EmailControllerJobTests
         {
             Id = jobId,
             Status = status,
-            Recipients = new List<EmailJobRecipient>()
+            Recipients = new List<EmailJobRecipient>(),
         };
         _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
 
@@ -517,11 +595,10 @@ public sealed class EmailControllerJobTests
             Id = jobId,
             Status = EmailJobStatus.Failed,
             Recipients = new List<EmailJobRecipient>(),
-            TotalRecipients = 0
+            TotalRecipients = 0,
         };
         _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
-        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
-            .ThrowsAsync(new EmailJobConcurrencyException());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).ThrowsAsync(new EmailJobConcurrencyException());
 
         var controller = CreateController();
         var result = await controller.RetryJob(jobId);
@@ -541,7 +618,7 @@ public sealed class EmailControllerJobTests
         {
             Id = jobId,
             Status = EmailJobStatus.InProgress,
-            Recipients = new List<EmailJobRecipient>()
+            Recipients = new List<EmailJobRecipient>(),
         };
         _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
         _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
@@ -564,7 +641,7 @@ public sealed class EmailControllerJobTests
         {
             Id = jobId,
             Status = EmailJobStatus.Queued,
-            Recipients = new List<EmailJobRecipient>()
+            Recipients = new List<EmailJobRecipient>(),
         };
         _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
         _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
@@ -585,7 +662,7 @@ public sealed class EmailControllerJobTests
             Id = jobId,
             Status = EmailJobStatus.Queued,
             CreatedUtc = DateTime.UtcNow,
-            Recipients = new List<EmailJobRecipient>()
+            Recipients = new List<EmailJobRecipient>(),
         };
         var completedElsewhere = new EmailJob
         {
@@ -593,14 +670,14 @@ public sealed class EmailControllerJobTests
             Status = EmailJobStatus.Completed,
             CreatedUtc = queued.CreatedUtc,
             CompletedUtc = DateTime.UtcNow,
-            Recipients = new List<EmailJobRecipient>()
+            Recipients = new List<EmailJobRecipient>(),
         };
-        _jobRepo.SetupSequence(r => r.GetByIdAsync(jobId))
+        _jobRepo
+            .SetupSequence(r => r.GetByIdAsync(jobId))
             .ReturnsAsync(queued)
             .ReturnsAsync(queued)
             .ReturnsAsync(completedElsewhere);
-        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
-            .ThrowsAsync(new EmailJobConcurrencyException());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).ThrowsAsync(new EmailJobConcurrencyException());
 
         var controller = CreateController();
         var result = await controller.CancelJob(jobId);
@@ -620,7 +697,7 @@ public sealed class EmailControllerJobTests
         {
             Id = jobId,
             Status = status,
-            Recipients = new List<EmailJobRecipient>()
+            Recipients = new List<EmailJobRecipient>(),
         };
         _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
 

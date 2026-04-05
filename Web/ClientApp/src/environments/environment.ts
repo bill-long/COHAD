@@ -7,7 +7,7 @@ export const environment = {
   /** When true, use MockData backend + dev JWT instead of Azure AD B2C. */
   useMockAuth: false,
   /** Application Insights connection string. Empty string disables telemetry. */
-  appInsightsConnectionString: ''
+  appInsightsConnectionString: '',
 };
 
 /*

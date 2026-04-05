@@ -32,26 +32,35 @@ public sealed class CommitteeControllerTests
     private static readonly Guid NewPersonResidentId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid SampleHomeId = Guid.Parse("99999999-9999-9999-9999-999999999999");
 
-    private static Resident AliceResident() => new Resident
-    {
-        Id = AliceResidentId, HomeId = SampleHomeId,
-        GivenName = "Alice", Surname = "",
-        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "alice@example.com" } }
-    };
+    private static Resident AliceResident() =>
+        new Resident
+        {
+            Id = AliceResidentId,
+            HomeId = SampleHomeId,
+            GivenName = "Alice",
+            Surname = "",
+            EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "alice@example.com" } },
+        };
 
-    private static Resident BobResident() => new Resident
-    {
-        Id = BobResidentId, HomeId = SampleHomeId,
-        GivenName = "Bob", Surname = "",
-        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "bob@example.com" } }
-    };
+    private static Resident BobResident() =>
+        new Resident
+        {
+            Id = BobResidentId,
+            HomeId = SampleHomeId,
+            GivenName = "Bob",
+            Surname = "",
+            EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "bob@example.com" } },
+        };
 
-    private static Resident NewPersonResident() => new Resident
-    {
-        Id = NewPersonResidentId, HomeId = SampleHomeId,
-        GivenName = "New", Surname = "Person",
-        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "new@example.com" } }
-    };
+    private static Resident NewPersonResident() =>
+        new Resident
+        {
+            Id = NewPersonResidentId,
+            HomeId = SampleHomeId,
+            GivenName = "New",
+            Surname = "Person",
+            EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "new@example.com" } },
+        };
 
     private static Mock<IResidentRepository> DefaultResidentRepoMock()
     {
@@ -64,12 +73,11 @@ public sealed class CommitteeControllerTests
 
         var mock = new Mock<IResidentRepository>();
         mock.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>()))
-            .ReturnsAsync((IEnumerable<Guid> ids) =>
-                ids.Where(id => allResidents.ContainsKey(id))
-                   .Select(id => allResidents[id])
-                   .ToList());
-        mock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
-            .ReturnsAsync((Guid id) => allResidents.GetValueOrDefault(id));
+            .ReturnsAsync(
+                (IEnumerable<Guid> ids) =>
+                    ids.Where(id => allResidents.ContainsKey(id)).Select(id => allResidents[id]).ToList()
+            );
+        mock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Guid id) => allResidents.GetValueOrDefault(id));
         return mock;
     }
 
@@ -83,7 +91,8 @@ public sealed class CommitteeControllerTests
         IAuditLogRepository? auditLogRepo = null,
         CommitteeListCache? cache = null,
         string nameId = "u1",
-        string idp = "google.com")
+        string idp = "google.com"
+    )
     {
         committeeRepo ??= Mock.Of<ICommitteeRepository>();
         residentRepo ??= DefaultResidentRepoMock().Object;
@@ -104,18 +113,20 @@ public sealed class CommitteeControllerTests
             imageUploadHelper,
             graphMailboxService,
             Options.Create(new DocumentStorageOptions()),
-            Mock.Of<ILogger<CommitteeController>>());
+            Mock.Of<ILogger<CommitteeController>>()
+        );
 
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, nameId),
-                    new Claim(IdentityProviderClaim, idp)
-                }, "Test"))
-            }
+                User = new ClaimsPrincipal(
+                    new ClaimsIdentity(
+                        new[] { new Claim(ClaimTypes.NameIdentifier, nameId), new Claim(IdentityProviderClaim, idp) },
+                        "Test"
+                    )
+                ),
+            },
         };
         return c;
     }
@@ -125,58 +136,74 @@ public sealed class CommitteeControllerTests
     private static IImageUploadHelper DefaultImageUploadHelper()
     {
         var mock = new Mock<IImageUploadHelper>();
-        mock.Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((IFormFile f, string ext, string prefix, string baseName) =>
-                new ImageUploadResult($"{prefix}/{baseName}{ext.ToLowerInvariant()}", $"{baseName}{ext.ToLowerInvariant()}",
-                    ImageContentTypes.FromExtension(ext), f.Length));
+        mock.Setup(h =>
+                h.ConvertAndUploadAsync(
+                    It.IsAny<IFormFile>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>()
+                )
+            )
+            .ReturnsAsync(
+                (IFormFile f, string ext, string prefix, string baseName) =>
+                    new ImageUploadResult(
+                        $"{prefix}/{baseName}{ext.ToLowerInvariant()}",
+                        $"{baseName}{ext.ToLowerInvariant()}",
+                        ImageContentTypes.FromExtension(ext),
+                        f.Length
+                    )
+            );
         return mock.Object;
     }
 
-    private static Committee SampleCommittee(string id = "board") => new Committee
-    {
-        Id = id,
-        DisplayName = "Board",
-        Description = "Oversees COHAD operations.",
-        CommitteeEmail = "board@cohad.org",
-        DisplayOrder = 1,
-        ManagementRole = User.Role.Board,
-        Members = new List<CommitteeMember>
+    private static Committee SampleCommittee(string id = "board") =>
+        new Committee
         {
-            new CommitteeMember
+            Id = id,
+            DisplayName = "Board",
+            Description = "Oversees COHAD operations.",
+            CommitteeEmail = "board@cohad.org",
+            DisplayOrder = 1,
+            ManagementRole = User.Role.Board,
+            Members = new List<CommitteeMember>
             {
-                Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-                ResidentId = AliceResidentId,
-                Title = "President",
-                Bio = "Longtime resident.",
-                ReceivesForwardedEmail = true,
-                DisplayOrder = 1
+                new CommitteeMember
+                {
+                    Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                    ResidentId = AliceResidentId,
+                    Title = "President",
+                    Bio = "Longtime resident.",
+                    ReceivesForwardedEmail = true,
+                    DisplayOrder = 1,
+                },
+                new CommitteeMember
+                {
+                    Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                    ResidentId = BobResidentId,
+                    Title = "Treasurer",
+                    Bio = "Manages budget.",
+                    ReceivesForwardedEmail = true,
+                    DisplayOrder = 2,
+                },
             },
-            new CommitteeMember
-            {
-                Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-                ResidentId = BobResidentId,
-                Title = "Treasurer",
-                Bio = "Manages budget.",
-                ReceivesForwardedEmail = true,
-                DisplayOrder = 2
-            }
-        }
-    };
+        };
 
     private static IUserRepository AdminUserRepo(string nameId = "u1", string idp = "google.com")
     {
         var uniqueId = idp + nameId;
         var mock = new Mock<IUserRepository>();
         mock.Setup(r => r.GetByUniqueIdAsync(uniqueId))
-            .ReturnsAsync(new User
-            {
-                UniqueId = uniqueId,
-                NameIdentifier = nameId,
-                IdentityProvider = idp,
-                GivenName = "Admin",
-                Surname = "User",
-                Roles = new List<User.Role> { User.Role.Administrator }
-            });
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    NameIdentifier = nameId,
+                    IdentityProvider = idp,
+                    GivenName = "Admin",
+                    Surname = "User",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
         return mock.Object;
     }
 
@@ -185,15 +212,17 @@ public sealed class CommitteeControllerTests
         var uniqueId = idp + nameId;
         var mock = new Mock<IUserRepository>();
         mock.Setup(r => r.GetByUniqueIdAsync(uniqueId))
-            .ReturnsAsync(new User
-            {
-                UniqueId = uniqueId,
-                NameIdentifier = nameId,
-                IdentityProvider = idp,
-                GivenName = "Role",
-                Surname = "User",
-                Roles = new List<User.Role> { role }
-            });
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    NameIdentifier = nameId,
+                    IdentityProvider = idp,
+                    GivenName = "Role",
+                    Surname = "User",
+                    Roles = new List<User.Role> { role },
+                }
+            );
         return mock.Object;
     }
 
@@ -204,7 +233,7 @@ public sealed class CommitteeControllerTests
         return new FormFile(ms, 0, ms.Length, fieldName, fileName)
         {
             Headers = new HeaderDictionary(),
-            ContentType = "image/jpeg"
+            ContentType = "image/jpeg",
         };
     }
 
@@ -217,8 +246,20 @@ public sealed class CommitteeControllerTests
     {
         var committees = new List<Committee>
         {
-            new Committee { Id = "social", DisplayName = "Social", DisplayOrder = 3, Members = new() },
-            new Committee { Id = "board", DisplayName = "Board", DisplayOrder = 1, Members = new() }
+            new Committee
+            {
+                Id = "social",
+                DisplayName = "Social",
+                DisplayOrder = 3,
+                Members = new(),
+            },
+            new Committee
+            {
+                Id = "board",
+                DisplayName = "Board",
+                DisplayOrder = 1,
+                Members = new(),
+            },
         };
         var mockRepo = new Mock<ICommitteeRepository>();
         mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(committees);
@@ -313,16 +354,29 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = "Updated description",
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 },
-                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), ResidentId = BobResidentId, DisplayOrder = 2 }
-            }
-        }, WebJsonOptions);
+                Description = "Updated description",
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        ResidentId = AliceResidentId,
+                        DisplayOrder = 1,
+                    },
+                    new()
+                    {
+                        Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                        ResidentId = BobResidentId,
+                        DisplayOrder = 2,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
         var c = CreateController(committeeRepo: mockRepo.Object);
         var result = await c.Update("board", payload, new List<IFormFile>());
@@ -342,16 +396,29 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = committee.Description,
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 },
-                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), ResidentId = BobResidentId, DisplayOrder = 2 }
-            }
-        }, WebJsonOptions);
+                Description = committee.Description,
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        ResidentId = AliceResidentId,
+                        DisplayOrder = 1,
+                    },
+                    new()
+                    {
+                        Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                        ResidentId = BobResidentId,
+                        DisplayOrder = 2,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
         // Simulates the frontend: form field name is "photos", file name is "photo-{memberId}.jpg"
         var photo = CreateFormFile("photos", "photo-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.jpg");
@@ -372,16 +439,29 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = committee.Description,
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 },
-                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), ResidentId = BobResidentId, DisplayOrder = 2 }
-            }
-        }, WebJsonOptions);
+                Description = committee.Description,
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        ResidentId = AliceResidentId,
+                        DisplayOrder = 1,
+                    },
+                    new()
+                    {
+                        Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                        ResidentId = BobResidentId,
+                        DisplayOrder = 2,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
         // Both photos use the same form field name "photos" — this was the original bug
         var photo1 = CreateFormFile("photos", "photo-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.jpg");
@@ -403,15 +483,23 @@ public sealed class CommitteeControllerTests
         var mockRepo = new Mock<ICommitteeRepository>();
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = committee.Description,
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 }
-            }
-        }, WebJsonOptions);
+                Description = committee.Description,
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        ResidentId = AliceResidentId,
+                        DisplayOrder = 1,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
         // No extension on filename — the second bug we fixed
         var photo = CreateFormFile("photos", "photo-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -430,15 +518,23 @@ public sealed class CommitteeControllerTests
         var mockRepo = new Mock<ICommitteeRepository>();
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = committee.Description,
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 }
-            }
-        }, WebJsonOptions);
+                Description = committee.Description,
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        ResidentId = AliceResidentId,
+                        DisplayOrder = 1,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
         var photo = CreateFormFile("photos", "photo-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.gif");
 
@@ -455,11 +551,10 @@ public sealed class CommitteeControllerTests
         var mockRepo = new Mock<ICommitteeRepository>();
         mockRepo.Setup(r => r.GetByIdAsync("missing")).ReturnsAsync((Committee)null);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = "test",
-            Members = new()
-        }, WebJsonOptions);
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest { Description = "test", Members = new() },
+            WebJsonOptions
+        );
 
         var c = CreateController(committeeRepo: mockRepo.Object);
         var result = await c.Update("missing", payload, new List<IFormFile>());
@@ -500,15 +595,23 @@ public sealed class CommitteeControllerTests
 
         // Update the committee (modifies description)
         committee.Description = "Changed";
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = "Changed",
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 }
-            }
-        }, WebJsonOptions);
+                Description = "Changed",
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        ResidentId = AliceResidentId,
+                        DisplayOrder = 1,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
         var c2 = CreateController(committeeRepo: mockRepo.Object, cache: cache);
         await c2.Update("board", payload, new List<IFormFile>());
@@ -557,15 +660,23 @@ public sealed class CommitteeControllerTests
         mockFileStore.Setup(s => s.DeleteAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
         // Only include Alice in update — Bob is removed
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = committee.Description,
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 }
-            }
-        }, WebJsonOptions);
+                Description = committee.Description,
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        ResidentId = AliceResidentId,
+                        DisplayOrder = 1,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
         var c = CreateController(committeeRepo: mockRepo.Object, fileStore: mockFileStore.Object);
         await c.Update("board", payload, new List<IFormFile>());
@@ -590,23 +701,50 @@ public sealed class CommitteeControllerTests
 
         // Upload helper returns a .png path (different from existing .jpg)
         var mockUpload = new Mock<IImageUploadHelper>();
-        mockUpload.Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(new ImageUploadResult($"committees/board/{memberId:D}.png", $"{memberId:D}.png", "image/png", 1234));
+        mockUpload
+            .Setup(h =>
+                h.ConvertAndUploadAsync(
+                    It.IsAny<IFormFile>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>()
+                )
+            )
+            .ReturnsAsync(
+                new ImageUploadResult($"committees/board/{memberId:D}.png", $"{memberId:D}.png", "image/png", 1234)
+            );
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = committee.Description,
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = memberId, ResidentId = AliceResidentId, DisplayOrder = 1 },
-                new() { Id = committee.Members[1].Id, ResidentId = BobResidentId, DisplayOrder = 2 }
-            }
-        }, WebJsonOptions);
+                Description = committee.Description,
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = memberId,
+                        ResidentId = AliceResidentId,
+                        DisplayOrder = 1,
+                    },
+                    new()
+                    {
+                        Id = committee.Members[1].Id,
+                        ResidentId = BobResidentId,
+                        DisplayOrder = 2,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
         var photo = CreateFormFile("photos", $"photo-{memberId:D}.png");
 
-        var c = CreateController(committeeRepo: mockRepo.Object, fileStore: mockFileStore.Object, imageUploadHelper: mockUpload.Object);
+        var c = CreateController(
+            committeeRepo: mockRepo.Object,
+            fileStore: mockFileStore.Object,
+            imageUploadHelper: mockUpload.Object
+        );
         var result = await c.Update("board", payload, new List<IFormFile> { photo });
 
         Assert.IsType<OkObjectResult>(result);
@@ -621,21 +759,35 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
 
         Committee saved = null;
-        mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>()))
+        mockRepo
+            .Setup(r => r.UpsertAsync(It.IsAny<Committee>()))
             .Callback<Committee>(c => saved = c)
             .ReturnsAsync((Committee c) => c);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = committee.Description,
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 },
-                // New member — Id is empty Guid, should get a generated ID
-                new() { Id = Guid.Empty, ResidentId = NewPersonResidentId, DisplayOrder = 3 }
-            }
-        }, WebJsonOptions);
+                Description = committee.Description,
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        ResidentId = AliceResidentId,
+                        DisplayOrder = 1,
+                    },
+                    // New member — Id is empty Guid, should get a generated ID
+                    new()
+                    {
+                        Id = Guid.Empty,
+                        ResidentId = NewPersonResidentId,
+                        DisplayOrder = 3,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
         var c = CreateController(committeeRepo: mockRepo.Object);
         await c.Update("board", payload, new List<IFormFile>());
@@ -656,29 +808,29 @@ public sealed class CommitteeControllerTests
 
         // Simulates what the frontend sends: full CommitteeAdmin JSON with a new member
         var json = $$"""
-        {
-            "id": "board",
-            "displayName": "Board",
-            "description": "Oversees COHAD operations.",
-            "committeeEmail": "board@cohad.org",
-            "displayOrder": 1,
-            "members": [
-                {
-                    "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-                    "residentId": "{{AliceResidentId:D}}",
-                    "receivesForwardedEmail": true,
-                    "photoOffsetY": 50,
-                    "displayOrder": 1
-                },
-                {
-                    "residentId": "{{NewPersonResidentId:D}}",
-                    "receivesForwardedEmail": true,
-                    "photoOffsetY": 50,
-                    "displayOrder": 3
-                }
-            ]
-        }
-        """;
+            {
+                "id": "board",
+                "displayName": "Board",
+                "description": "Oversees COHAD operations.",
+                "committeeEmail": "board@cohad.org",
+                "displayOrder": 1,
+                "members": [
+                    {
+                        "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "residentId": "{{AliceResidentId:D}}",
+                        "receivesForwardedEmail": true,
+                        "photoOffsetY": 50,
+                        "displayOrder": 1
+                    },
+                    {
+                        "residentId": "{{NewPersonResidentId:D}}",
+                        "receivesForwardedEmail": true,
+                        "photoOffsetY": 50,
+                        "displayOrder": 3
+                    }
+                ]
+            }
+            """;
 
         var c = CreateController(committeeRepo: mockRepo.Object);
         var result = await c.Update("board", json, new List<IFormFile>());
@@ -709,8 +861,13 @@ public sealed class CommitteeControllerTests
 
         Assert.IsType<NoContentResult>(result);
         mockFileStore.Verify(s => s.DeleteAsync("committees/board/aaaaaaaa.jpg"), Times.Once);
-        mockRepo.Verify(r => r.UpsertAsync(It.Is<Committee>(
-            comm => comm.Members.Count == 1 && comm.Members[0].ResidentId == BobResidentId)), Times.Once);
+        mockRepo.Verify(
+            r =>
+                r.UpsertAsync(
+                    It.Is<Committee>(comm => comm.Members.Count == 1 && comm.Members[0].ResidentId == BobResidentId)
+                ),
+            Times.Once
+        );
     }
 
     [Fact]
@@ -738,7 +895,7 @@ public sealed class CommitteeControllerTests
             Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             ResidentId = AliceResidentId,
             PhotoBlobPath = "committees/board/aaaaaaaa.jpg",
-            PhotoContentType = "image/jpeg"
+            PhotoContentType = "image/jpeg",
         };
 
         var card = CommitteeMemberCard.FromStorageModel(member, "board", AliceResident());
@@ -755,7 +912,7 @@ public sealed class CommitteeControllerTests
         {
             Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             ResidentId = AliceResidentId,
-            PhotoBlobPath = "committees/board/aaaaaaaa.jpg"
+            PhotoBlobPath = "committees/board/aaaaaaaa.jpg",
         };
 
         // Default is 50
@@ -782,27 +939,43 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
 
         Committee saved = null;
-        mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>()))
+        mockRepo
+            .Setup(r => r.UpsertAsync(It.IsAny<Committee>()))
             .Callback<Committee>(c => saved = c)
             .ReturnsAsync((Committee c) => c);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = committee.Description,
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, PhotoOffsetY = -10, DisplayOrder = 1 },
-                new() { Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), ResidentId = BobResidentId, PhotoOffsetY = 200, DisplayOrder = 2 }
-            }
-        }, WebJsonOptions);
+                Description = committee.Description,
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        ResidentId = AliceResidentId,
+                        PhotoOffsetY = -10,
+                        DisplayOrder = 1,
+                    },
+                    new()
+                    {
+                        Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                        ResidentId = BobResidentId,
+                        PhotoOffsetY = 200,
+                        DisplayOrder = 2,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
         var c = CreateController(committeeRepo: mockRepo.Object);
         await c.Update("board", payload, new List<IFormFile>());
 
         Assert.NotNull(saved);
-        Assert.Equal(0, saved.Members[0].PhotoOffsetY);    // clamped from -10
-        Assert.Equal(100, saved.Members[1].PhotoOffsetY);  // clamped from 200
+        Assert.Equal(0, saved.Members[0].PhotoOffsetY); // clamped from -10
+        Assert.Equal(100, saved.Members[1].PhotoOffsetY); // clamped from 200
     }
 
     [Fact]
@@ -812,7 +985,7 @@ public sealed class CommitteeControllerTests
         {
             Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             ResidentId = AliceResidentId,
-            PhotoBlobPath = null
+            PhotoBlobPath = null,
         };
 
         var card = CommitteeMemberCard.FromStorageModel(member, "board", AliceResident());
@@ -839,7 +1012,10 @@ public sealed class CommitteeControllerTests
         var memberWithPhoto = card.Members.First(m => m.Id == Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         Assert.True(memberWithPhoto.HasPhoto);
         // The URL must be routable to the controller's [HttpGet("{key}/members/{memberId:guid}/photo")] endpoint
-        Assert.Equal("/api/committee/board/members/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/photo", memberWithPhoto.PhotoDownloadUrl);
+        Assert.Equal(
+            "/api/committee/board/members/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/photo",
+            memberWithPhoto.PhotoDownloadUrl
+        );
     }
 
     // ──────────────────────────────────────────────
@@ -870,14 +1046,17 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
 
         var mockFileStore = new Mock<IDocumentFileStore>();
-        mockFileStore.Setup(s => s.DownloadAsync("committees/board/aaaaaaaa.jpg"))
-            .ReturnsAsync(new DocumentFileResult
-            {
-                Stream = new MemoryStream(Encoding.UTF8.GetBytes("fake-image")),
-                ContentType = "image/jpeg",
-                EntityTag = new Microsoft.Net.Http.Headers.EntityTagHeaderValue("\"abc123\""),
-                LastModified = DateTimeOffset.UtcNow
-            });
+        mockFileStore
+            .Setup(s => s.DownloadAsync("committees/board/aaaaaaaa.jpg"))
+            .ReturnsAsync(
+                new DocumentFileResult
+                {
+                    Stream = new MemoryStream(Encoding.UTF8.GetBytes("fake-image")),
+                    ContentType = "image/jpeg",
+                    EntityTag = new Microsoft.Net.Http.Headers.EntityTagHeaderValue("\"abc123\""),
+                    LastModified = DateTimeOffset.UtcNow,
+                }
+            );
 
         var c = CreateController(committeeRepo: mockRepo.Object, fileStore: mockFileStore.Object);
         var result = await c.DownloadMemberPhoto("board", Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
@@ -909,8 +1088,7 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
 
         var mockFileStore = new Mock<IDocumentFileStore>();
-        mockFileStore.Setup(s => s.DownloadAsync(It.IsAny<string>()))
-            .ReturnsAsync((DocumentFileResult)null);
+        mockFileStore.Setup(s => s.DownloadAsync(It.IsAny<string>())).ReturnsAsync((DocumentFileResult)null);
 
         var c = CreateController(committeeRepo: mockRepo.Object, fileStore: mockFileStore.Object);
         var result = await c.DownloadMemberPhoto("board", Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
@@ -931,13 +1109,18 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
         var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph.Setup(g => g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>()))
-            .ReturnsAsync((Committee c, IReadOnlyDictionary<Guid, Resident> r) =>
-            {
-                c.LastSyncedUtc = DateTime.UtcNow;
-                c.LastSyncStatus = "Success";
-                return c;
-            });
+        mockGraph
+            .Setup(g =>
+                g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>())
+            )
+            .ReturnsAsync(
+                (Committee c, IReadOnlyDictionary<Guid, Resident> r) =>
+                {
+                    c.LastSyncedUtc = DateTime.UtcNow;
+                    c.LastSyncStatus = "Success";
+                    return c;
+                }
+            );
 
         var c = CreateController(committeeRepo: mockRepo.Object, graphMailboxService: mockGraph.Object);
         var result = await c.SyncForwarding("board");
@@ -954,7 +1137,10 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
         var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph.Setup(g => g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>()))
+        mockGraph
+            .Setup(g =>
+                g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>())
+            )
             .ThrowsAsync(new Exception("Graph API timeout"));
 
         var c = CreateController(committeeRepo: mockRepo.Object, graphMailboxService: mockGraph.Object);
@@ -963,8 +1149,15 @@ public sealed class CommitteeControllerTests
         var status = Assert.IsType<ObjectResult>(result);
         Assert.Equal(502, status.StatusCode);
         // Verify error was persisted
-        mockRepo.Verify(r => r.UpsertAsync(It.Is<Committee>(
-            comm => comm.LastSyncStatus == "Failed" && comm.LastSyncError == "Graph API timeout")), Times.Once);
+        mockRepo.Verify(
+            r =>
+                r.UpsertAsync(
+                    It.Is<Committee>(comm =>
+                        comm.LastSyncStatus == "Failed" && comm.LastSyncError == "Graph API timeout"
+                    )
+                ),
+            Times.Once
+        );
     }
 
     // ──────────────────────────────────────────────
@@ -982,35 +1175,58 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            GivenName = "Mock",
-            Surname = "Admin",
-            Roles = new List<User.Role> { User.Role.Administrator }
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Admin",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = "Updated",
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
             {
-                new() { Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), ResidentId = AliceResidentId, DisplayOrder = 1 }
-            }
-        }, WebJsonOptions);
+                Description = "Updated",
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new()
+                    {
+                        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        ResidentId = AliceResidentId,
+                        DisplayOrder = 1,
+                    },
+                },
+            },
+            WebJsonOptions
+        );
 
-        var c = CreateController(committeeRepo: mockRepo.Object, userRepo: mockUsers.Object, auditLogRepo: mockAudit.Object);
+        var c = CreateController(
+            committeeRepo: mockRepo.Object,
+            userRepo: mockUsers.Object,
+            auditLogRepo: mockAudit.Object
+        );
         await c.Update("board", payload, new List<IFormFile>());
 
-        mockAudit.Verify(a => a.AddAsync(It.Is<NewAuditLogEntry>(e =>
-            e.SubjectId == "board" &&
-            e.SubjectName == "Board" &&
-            e.Action == "Updated committee." &&
-            e.UserId == uniqueId)), Times.Once);
+        mockAudit.Verify(
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e =>
+                        e.SubjectId == "board"
+                        && e.SubjectName == "Board"
+                        && e.Action == "Updated committee."
+                        && e.UserId == uniqueId
+                    )
+                ),
+            Times.Once
+        );
     }
 
     [Fact]
@@ -1024,24 +1240,37 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            GivenName = "Mock",
-            Surname = "Admin",
-            Roles = new List<User.Role> { User.Role.Administrator }
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Admin",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(committeeRepo: mockRepo.Object, userRepo: mockUsers.Object, auditLogRepo: mockAudit.Object);
+        var c = CreateController(
+            committeeRepo: mockRepo.Object,
+            userRepo: mockUsers.Object,
+            auditLogRepo: mockAudit.Object
+        );
         await c.RemoveMember("board", Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
 
-        mockAudit.Verify(a => a.AddAsync(It.Is<NewAuditLogEntry>(e =>
-            e.SubjectId == "board" &&
-            e.Action.Contains("Alice") &&
-            e.Action.Contains("Removed member"))), Times.Once);
+        mockAudit.Verify(
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e =>
+                        e.SubjectId == "board" && e.Action.Contains("Alice") && e.Action.Contains("Removed member")
+                    )
+                ),
+            Times.Once
+        );
     }
 
     [Fact]
@@ -1055,30 +1284,49 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId, GivenName = "Mock", Surname = "Admin",
-            Roles = new List<User.Role> { User.Role.Administrator }
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Admin",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
 
         var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph.Setup(g => g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>()))
-            .ReturnsAsync((Committee c, IReadOnlyDictionary<Guid, Resident> r) =>
-            {
-                c.LastSyncedUtc = DateTime.UtcNow;
-                c.LastSyncStatus = "Success";
-                return c;
-            });
+        mockGraph
+            .Setup(g =>
+                g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>())
+            )
+            .ReturnsAsync(
+                (Committee c, IReadOnlyDictionary<Guid, Resident> r) =>
+                {
+                    c.LastSyncedUtc = DateTime.UtcNow;
+                    c.LastSyncStatus = "Success";
+                    return c;
+                }
+            );
 
         var mockAudit = new Mock<IAuditLogRepository>();
 
-        var c = CreateController(committeeRepo: mockRepo.Object, userRepo: mockUsers.Object,
-            auditLogRepo: mockAudit.Object, graphMailboxService: mockGraph.Object);
+        var c = CreateController(
+            committeeRepo: mockRepo.Object,
+            userRepo: mockUsers.Object,
+            auditLogRepo: mockAudit.Object,
+            graphMailboxService: mockGraph.Object
+        );
         await c.SyncForwarding("board");
 
-        mockAudit.Verify(a => a.AddAsync(It.Is<NewAuditLogEntry>(e =>
-            e.SubjectId == "board" &&
-            e.Action.Contains("Synced email forwarding"))), Times.Once);
+        mockAudit.Verify(
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e => e.SubjectId == "board" && e.Action.Contains("Synced email forwarding"))
+                ),
+            Times.Once
+        );
     }
 
     // ──────────────────────────────────────────────
@@ -1134,12 +1382,15 @@ public sealed class CommitteeControllerTests
         mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
         mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = "Updated",
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>()
-        }, WebJsonOptions);
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
+            {
+                Description = "Updated",
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>(),
+            },
+            WebJsonOptions
+        );
 
         var c = CreateController(committeeRepo: mockRepo.Object, userRepo: RoleUserRepo(User.Role.Board));
         var result = await c.Update("board", payload, new List<IFormFile>());
@@ -1156,12 +1407,15 @@ public sealed class CommitteeControllerTests
         var mockRepo = new Mock<ICommitteeRepository>();
         mockRepo.Setup(r => r.GetByIdAsync("social")).ReturnsAsync(social);
 
-        var payload = JsonSerializer.Serialize(new CommitteeUpdateRequest
-        {
-            Description = "Attempted",
-            DisplayOrder = 1,
-            Members = new List<CommitteeMemberUpdate>()
-        }, WebJsonOptions);
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
+            {
+                Description = "Attempted",
+                DisplayOrder = 1,
+                Members = new List<CommitteeMemberUpdate>(),
+            },
+            WebJsonOptions
+        );
 
         var c = CreateController(committeeRepo: mockRepo.Object, userRepo: RoleUserRepo(User.Role.Board));
         var result = await c.Update("social", payload, new List<IFormFile>());

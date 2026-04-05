@@ -68,7 +68,12 @@ namespace Web.Services.Repositories
 
             try
             {
-                var response = await _emailJobContainer.ReplaceItemAsync(doc, documentId, CosmosPartitionKey.None, requestOptions);
+                var response = await _emailJobContainer.ReplaceItemAsync(
+                    doc,
+                    documentId,
+                    CosmosPartitionKey.None,
+                    requestOptions
+                );
                 job.ETag = response.Headers.ETag;
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
@@ -89,7 +94,12 @@ namespace Web.Services.Repositories
 
             try
             {
-                var response = await _emailJobContainer.ReplaceItemAsync(doc, documentId, CosmosPartitionKey.None, requestOptions);
+                var response = await _emailJobContainer.ReplaceItemAsync(
+                    doc,
+                    documentId,
+                    CosmosPartitionKey.None,
+                    requestOptions
+                );
                 job.ETag = response.Headers.ETag;
                 return true;
             }
@@ -102,7 +112,8 @@ namespace Web.Services.Repositories
         public async Task<List<EmailJob>> GetIncompleteJobsAsync()
         {
             var query = new CosmosQueryDefinition(
-                "SELECT * FROM c WHERE c.Status IN (@queued, @inProgress) ORDER BY c.CreatedUtc ASC")
+                "SELECT * FROM c WHERE c.Status IN (@queued, @inProgress) ORDER BY c.CreatedUtc ASC"
+            )
                 .WithParameter("@queued", nameof(EmailJobStatus.Queued))
                 .WithParameter("@inProgress", nameof(EmailJobStatus.InProgress));
 
@@ -120,8 +131,7 @@ namespace Web.Services.Repositories
         public async Task<List<EmailJob>> GetRecentJobsAsync(int limit)
         {
             var clampedLimit = Math.Clamp(limit, 1, 100);
-            var query = new CosmosQueryDefinition(
-                $"SELECT TOP {clampedLimit} * FROM c ORDER BY c.CreatedUtc DESC");
+            var query = new CosmosQueryDefinition($"SELECT TOP {clampedLimit} * FROM c ORDER BY c.CreatedUtc DESC");
 
             var iterator = _emailJobContainer.GetItemQueryIterator<JObject>(query);
             var results = new List<EmailJob>();
@@ -140,9 +150,10 @@ namespace Web.Services.Repositories
 
             // Cosmos stores status as strings; use explicit terminal statuses so we never delete active work.
             var query = new CosmosQueryDefinition(
-                $"SELECT TOP {clampedLimit} * FROM c " +
-                "WHERE c.CreatedUtc < @cutoffUtc AND c.Status IN (@completed, @partial, @failed, @cancelled) " +
-                "ORDER BY c.CreatedUtc ASC")
+                $"SELECT TOP {clampedLimit} * FROM c "
+                    + "WHERE c.CreatedUtc < @cutoffUtc AND c.Status IN (@completed, @partial, @failed, @cancelled) "
+                    + "ORDER BY c.CreatedUtc ASC"
+            )
                 .WithParameter("@cutoffUtc", cutoffUtc)
                 .WithParameter("@completed", nameof(EmailJobStatus.Completed))
                 .WithParameter("@partial", nameof(EmailJobStatus.PartiallyCompleted))

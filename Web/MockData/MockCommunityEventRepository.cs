@@ -40,9 +40,9 @@ namespace Web.MockData
                         Children = 1,
                         AdultNames = new List<string> { "Mock Resident", "Guest One" },
                         ChildNames = new List<string> { "Kid One" },
-                        SignedUpUtc = now.AddHours(-12)
-                    }
-                }
+                        SignedUpUtc = now.AddHours(-12),
+                    },
+                },
             };
 
             var garageSaleId = Guid.Parse("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d");
@@ -51,7 +51,8 @@ namespace Web.MockData
                 Id = garageSaleId,
                 PublicSlug = $"{now.Year}-community-garage-sale",
                 Title = "Community Garage Sale",
-                Description = "Set up in your driveway and sell your stuff! Sign up so we know which households are participating.",
+                Description =
+                    "Set up in your driveway and sell your stuff! Sign up so we know which households are participating.",
                 StartUtc = now.Date.AddDays(10).AddHours(8),
                 AllowSignups = true,
                 SignupMode = EventSignupMode.HouseholdOnly,
@@ -68,9 +69,9 @@ namespace Web.MockData
                         UserEmail = "mock@cohad.local",
                         Adults = 0,
                         Children = 0,
-                        SignedUpUtc = now.AddHours(-6)
-                    }
-                }
+                        SignedUpUtc = now.AddHours(-6),
+                    },
+                },
             };
 
             var eggHuntId = Guid.Parse("b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e");
@@ -79,7 +80,8 @@ namespace Web.MockData
                 Id = eggHuntId,
                 PublicSlug = $"{now.Year}-easter-egg-hunt",
                 Title = "Easter Egg Hunt",
-                Description = "Bring the kids for a neighborhood egg hunt at the clubhouse! Sign up with the number of children attending.",
+                Description =
+                    "Bring the kids for a neighborhood egg hunt at the clubhouse! Sign up with the number of children attending.",
                 StartUtc = now.Date.AddDays(20).AddHours(10),
                 AllowSignups = true,
                 SignupMode = EventSignupMode.ChildrenOnly,
@@ -97,9 +99,9 @@ namespace Web.MockData
                         Adults = 0,
                         Children = 3,
                         ChildNames = new List<string> { "Emma", "Liam", "Sophia" },
-                        SignedUpUtc = now.AddHours(-3)
-                    }
-                }
+                        SignedUpUtc = now.AddHours(-3),
+                    },
+                },
             };
 
             var boardId = Guid.Parse("f9ec5d08-cf7e-4e77-9583-57f0a56f380b");
@@ -114,7 +116,7 @@ namespace Web.MockData
                 ModifiedByUniqueId = MockDataConstants.AdminUniqueId,
                 CreatedUtc = now.AddDays(-2),
                 ModifiedUtc = now.AddDays(-2),
-                Signups = new List<EventSignup>()
+                Signups = new List<EventSignup>(),
             };
         }
 
@@ -138,10 +140,7 @@ namespace Web.MockData
         {
             lock (_events)
             {
-                var list = _events.Values
-                    .Where(e => e.StartUtc >= minStartUtcInclusive)
-                    .Select(CloneEvent)
-                    .ToList();
+                var list = _events.Values.Where(e => e.StartUtc >= minStartUtcInclusive).Select(CloneEvent).ToList();
                 return Task.FromResult(list);
             }
         }
@@ -168,14 +167,15 @@ namespace Web.MockData
                 var match = _events.Values.FirstOrDefault(e =>
                 {
                     var currentSlug = EventUrlSlug.ResolveUrlSegment(e);
-                    return !string.IsNullOrWhiteSpace(currentSlug) &&
-                           currentSlug.Trim().ToLowerInvariant() == normalizedSegment;
+                    return !string.IsNullOrWhiteSpace(currentSlug)
+                        && currentSlug.Trim().ToLowerInvariant() == normalizedSegment;
                 });
 
                 match ??= _events.Values.FirstOrDefault(e =>
                     e.PreviousSlugs?.Any(s =>
-                        !string.IsNullOrWhiteSpace(s) &&
-                        s.Trim().ToLowerInvariant() == normalizedSegment) == true);
+                        !string.IsNullOrWhiteSpace(s) && s.Trim().ToLowerInvariant() == normalizedSegment
+                    ) == true
+                );
 
                 return Task.FromResult(match == null ? null : CloneEvent(match));
             }
@@ -191,11 +191,7 @@ namespace Web.MockData
                 }
 
                 EnsureEtag(id);
-                return Task.FromResult(new CommunityEventReadResult
-                {
-                    Event = CloneEvent(e),
-                    ETag = _etags[id]
-                });
+                return Task.FromResult(new CommunityEventReadResult { Event = CloneEvent(e), ETag = _etags[id] });
             }
         }
 
@@ -228,7 +224,13 @@ namespace Web.MockData
                 EnsureEtag(id);
                 if (_etags[id] != ifMatchEtag)
                 {
-                    throw new CosmosException("Precondition failed", HttpStatusCode.PreconditionFailed, 0, string.Empty, 0);
+                    throw new CosmosException(
+                        "Precondition failed",
+                        HttpStatusCode.PreconditionFailed,
+                        0,
+                        string.Empty,
+                        0
+                    );
                 }
 
                 var copy = CloneEvent(communityEvent);
@@ -275,17 +277,21 @@ namespace Web.MockData
                 ModifiedByUniqueId = communityEvent.ModifiedByUniqueId,
                 CreatedUtc = communityEvent.CreatedUtc,
                 ModifiedUtc = communityEvent.ModifiedUtc,
-                Signups = communityEvent.Signups?.Select(s => new EventSignup
-                {
-                    UserUniqueId = s.UserUniqueId,
-                    UserDisplayName = s.UserDisplayName,
-                    UserEmail = s.UserEmail,
-                    Adults = s.Adults,
-                    Children = s.Children,
-                    AdultNames = s.AdultNames?.ToList() ?? new List<string>(),
-                    ChildNames = s.ChildNames?.ToList() ?? new List<string>(),
-                    SignedUpUtc = s.SignedUpUtc
-                }).ToList() ?? new List<EventSignup>()
+                Signups =
+                    communityEvent
+                        .Signups?.Select(s => new EventSignup
+                        {
+                            UserUniqueId = s.UserUniqueId,
+                            UserDisplayName = s.UserDisplayName,
+                            UserEmail = s.UserEmail,
+                            Adults = s.Adults,
+                            Children = s.Children,
+                            AdultNames = s.AdultNames?.ToList() ?? new List<string>(),
+                            ChildNames = s.ChildNames?.ToList() ?? new List<string>(),
+                            SignedUpUtc = s.SignedUpUtc,
+                        })
+                        .ToList()
+                    ?? new List<EventSignup>(),
             };
         }
     }

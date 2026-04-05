@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
-using Azure.Identity;
 using Web.Models;
 
 namespace Web.Services
@@ -29,12 +29,13 @@ namespace Web.Services
             var clientSecret = config["Graph:ClientSecret"];
 
             var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-            _graphClient = new GraphServiceClient(credential,
-                new[] { "https://graph.microsoft.com/.default" });
+            _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
         }
 
-        public async Task<Committee> SyncForwardingRuleAsync(Committee committee,
-            IReadOnlyDictionary<Guid, Resident> residents)
+        public async Task<Committee> SyncForwardingRuleAsync(
+            Committee committee,
+            IReadOnlyDictionary<Guid, Resident> residents
+        )
         {
             var recipients = (committee.Members ?? new List<CommitteeMember>())
                 .Where(m => m.ReceivesForwardedEmail)
@@ -45,8 +46,8 @@ namespace Web.Services
                     EmailAddress = new Microsoft.Graph.Models.EmailAddress
                     {
                         Address = r.EmailAddresses.First(e => !string.IsNullOrWhiteSpace(e?.Address)).Address,
-                        Name = $"{r.GivenName} {r.Surname}".Trim()
-                    }
+                        Name = $"{r.GivenName} {r.Surname}".Trim(),
+                    },
                 })
                 .ToList();
 
@@ -55,10 +56,7 @@ namespace Web.Services
                 DisplayName = "COHAD Forwarding",
                 IsEnabled = true,
                 Sequence = 1,
-                Actions = new MessageRuleActions
-                {
-                    ForwardTo = recipients
-                }
+                Actions = new MessageRuleActions { ForwardTo = recipients },
             };
 
             try
@@ -66,28 +64,35 @@ namespace Web.Services
                 if (!string.IsNullOrEmpty(committee.GraphMessageRuleId))
                 {
                     // Update existing rule
-                    await _graphClient.Users[committee.CommitteeEmail]
+                    await _graphClient
+                        .Users[committee.CommitteeEmail]
                         .MailFolders["inbox"]
                         .MessageRules[committee.GraphMessageRuleId]
                         .PatchAsync(rule);
 
                     _logger.LogInformation(
                         "Updated forwarding rule {RuleId} on {Mailbox}: {Count} recipients",
-                        committee.GraphMessageRuleId, committee.CommitteeEmail, recipients.Count);
+                        committee.GraphMessageRuleId,
+                        committee.CommitteeEmail,
+                        recipients.Count
+                    );
                 }
                 else
                 {
                     // Create new rule
-                    var created = await _graphClient.Users[committee.CommitteeEmail]
+                    var created = await _graphClient
+                        .Users[committee.CommitteeEmail]
                         .MailFolders["inbox"]
-                        .MessageRules
-                        .PostAsync(rule);
+                        .MessageRules.PostAsync(rule);
 
                     committee.GraphMessageRuleId = created?.Id;
 
                     _logger.LogInformation(
                         "Created forwarding rule {RuleId} on {Mailbox}: {Count} recipients",
-                        committee.GraphMessageRuleId, committee.CommitteeEmail, recipients.Count);
+                        committee.GraphMessageRuleId,
+                        committee.CommitteeEmail,
+                        recipients.Count
+                    );
                 }
 
                 committee.LastSyncedUtc = DateTime.UtcNow;

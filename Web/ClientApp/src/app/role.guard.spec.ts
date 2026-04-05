@@ -19,7 +19,7 @@ function makeApiUser(roles: string[]): ApiUser {
     email: 'test@example.com',
     streetAddress: '',
     roles,
-    ownedHomes: []
+    ownedHomes: [],
   };
 }
 
@@ -28,7 +28,7 @@ function completedState(apiUser: ApiUser | null): ApplicationState {
     ...initialStateValue,
     authSessionResolved: true,
     authBootstrapStatus: 'completed',
-    apiUser
+    apiUser,
   };
 }
 
@@ -43,11 +43,7 @@ describe('RoleGuard', () => {
     router.navigate.and.resolveTo(true);
 
     TestBed.configureTestingModule({
-      providers: [
-        RoleGuard,
-        { provide: applicationState, useValue: appState$ },
-        { provide: Router, useValue: router }
-      ]
+      providers: [RoleGuard, { provide: applicationState, useValue: appState$ }, { provide: Router, useValue: router }],
     });
 
     guard = TestBed.inject(RoleGuard);
@@ -57,10 +53,7 @@ describe('RoleGuard', () => {
     appState$.next(completedState(makeApiUser(['Resident'])));
 
     let result: boolean | undefined;
-    guard.canActivate(
-      { data: { allowedRoles: ['Resident', 'Administrator'] } } as any,
-      {} as any
-    ).subscribe(v => (result = v));
+    guard.canActivate({ data: { allowedRoles: ['Resident', 'Administrator'] } } as any, {} as any).subscribe(v => (result = v));
 
     expect(result).toBeTrue();
     expect(router.navigate).not.toHaveBeenCalled();
@@ -70,10 +63,7 @@ describe('RoleGuard', () => {
     appState$.next(completedState(makeApiUser(['WelcomeCommittee'])));
 
     let result: boolean | undefined;
-    guard.canActivate(
-      { data: { allowedRoles: ['Resident', 'Administrator'] } } as any,
-      {} as any
-    ).subscribe(v => (result = v));
+    guard.canActivate({ data: { allowedRoles: ['Resident', 'Administrator'] } } as any, {} as any).subscribe(v => (result = v));
 
     expect(result).toBeFalse();
     expect(router.navigate).toHaveBeenCalledOnceWith(['/']);
@@ -83,10 +73,7 @@ describe('RoleGuard', () => {
     appState$.next(completedState(null));
 
     let result: boolean | undefined;
-    guard.canActivate(
-      { data: { allowedRoles: ['Resident'] } } as any,
-      {} as any
-    ).subscribe(v => (result = v));
+    guard.canActivate({ data: { allowedRoles: ['Resident'] } } as any, {} as any).subscribe(v => (result = v));
 
     expect(result).toBeFalse();
     expect(router.navigate).toHaveBeenCalledOnceWith(['/']);
@@ -98,14 +85,11 @@ describe('RoleGuard', () => {
       ...initialStateValue,
       authSessionResolved: true,
       authBootstrapStatus: 'inProgress',
-      apiUser: null
+      apiUser: null,
     });
 
     let result: boolean | undefined;
-    guard.canActivate(
-      { data: { allowedRoles: ['Resident'] } } as any,
-      {} as any
-    ).subscribe(v => (result = v));
+    guard.canActivate({ data: { allowedRoles: ['Resident'] } } as any, {} as any).subscribe(v => (result = v));
 
     expect(result).toBeUndefined();
 
@@ -117,10 +101,7 @@ describe('RoleGuard', () => {
 
   it('denies activation after timeout if bootstrap never completes', fakeAsync(() => {
     let result: boolean | undefined;
-    guard.canActivate(
-      { data: { allowedRoles: ['Resident'] } } as any,
-      {} as any
-    ).subscribe(v => (result = v));
+    guard.canActivate({ data: { allowedRoles: ['Resident'] } } as any, {} as any).subscribe(v => (result = v));
 
     tick(ROLE_RESOLVE_TIMEOUT_MS - 1);
     expect(result).toBeUndefined();
@@ -135,14 +116,11 @@ describe('RoleGuard', () => {
       ...initialStateValue,
       authSessionResolved: true,
       authBootstrapStatus: 'idle',
-      apiUser: null
+      apiUser: null,
     });
 
     let result: boolean | undefined;
-    guard.canActivate(
-      { data: { allowedRoles: ['Resident'] } } as any,
-      {} as any
-    ).subscribe(v => (result = v));
+    guard.canActivate({ data: { allowedRoles: ['Resident'] } } as any, {} as any).subscribe(v => (result = v));
 
     expect(result).toBeFalse();
     expect(router.navigate).toHaveBeenCalledOnceWith(['/']);
@@ -152,10 +130,9 @@ describe('RoleGuard', () => {
     appState$.next(completedState(makeApiUser(['Administrator'])));
 
     let result: boolean | undefined;
-    guard.canActivate(
-      { data: { allowedRoles: ['Administrator'], requireResidentRole: true } } as any,
-      {} as any
-    ).subscribe(v => (result = v));
+    guard
+      .canActivate({ data: { allowedRoles: ['Administrator'], requireResidentRole: true } } as any, {} as any)
+      .subscribe(v => (result = v));
 
     expect(result).toBeFalse();
     expect(router.navigate).toHaveBeenCalledOnceWith(['/unauthorized']);

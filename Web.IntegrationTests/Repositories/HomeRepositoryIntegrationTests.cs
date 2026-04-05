@@ -24,7 +24,7 @@ public sealed class HomeRepositoryIntegrationTests
             StreetName = "Integration Test Lane",
             PhoneNumber = null,
             EmailAddress = null,
-            Residents = new List<Resident>()
+            Residents = new List<Resident>(),
         };
 
         await repo.UpsertAsync(home).ConfigureAwait(false);
@@ -50,7 +50,7 @@ public sealed class HomeRepositoryIntegrationTests
             StreetName = "Merge St",
             PhoneNumber = null,
             EmailAddress = null,
-            Residents = new List<Resident>()
+            Residents = new List<Resident>(),
         };
 
         await repo.UpsertAsync(home).ConfigureAwait(false);
