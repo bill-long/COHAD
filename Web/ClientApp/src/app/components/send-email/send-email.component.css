@@ -1,104 +1,152 @@
 .send-email-page {
-    max-width: 960px;
-    margin: 24px auto 56px;
-    padding: 0 20px;
+  max-width: 960px;
+  margin: 24px auto 56px;
+  padding: 0 20px;
 }
 
 /* Anchor target + scroll-into-view: clear sticky app toolbar */
 #email-jobs {
-    scroll-margin-top: 80px;
+  scroll-margin-top: 80px;
 }
 
 .page-title {
-    margin: 0 0 1.25rem;
-    font-size: var(--heading-page);
-    font-weight: var(--heading-page-weight);
-    letter-spacing: var(--heading-page-tracking);
+  margin: 0 0 1.25rem;
+  font-size: var(--heading-page);
+  font-weight: var(--heading-page-weight);
+  letter-spacing: var(--heading-page-tracking);
 }
 
 .full-width {
-    width: 100%;
+  width: 100%;
 }
 
 .editor-wrapper {
-    margin-bottom: 1.25rem;
-    min-height: 200px;
+  margin-bottom: 1.25rem;
+  min-height: 200px;
 }
 
 .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 1rem;
 }
 
 .error-detail {
-    margin: 0.5rem 0 0;
-    white-space: pre-wrap;
-    font-size: 0.85rem;
+  margin: 0.5rem 0 0;
+  white-space: pre-wrap;
+  font-size: 0.85rem;
 }
 
 /* Email job progress (inline) */
 .job-progress-section {
-    margin-top: 1rem;
+  margin-top: 1rem;
 }
 
 .job-progress-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 0.35rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
 }
 
 .job-status-label {
-    font-weight: 600;
-    font-size: 0.9rem;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .job-progress-text {
-    color: var(--text-secondary);
-    font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
 }
 
 .job-progress-bar-container {
-    width: 100%;
-    height: 8px;
-    background: var(--surface-subtle);
-    border-radius: 4px;
-    overflow: hidden;
-    margin-bottom: 0.5rem;
+  width: 100%;
+  height: 8px;
+  background: var(--surface-subtle);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
 }
 
 .job-progress-bar-fill {
-    height: 100%;
-    background: var(--primary-sage);
-    border-radius: 4px;
-    transition: width 300ms ease;
+  height: 100%;
+  background: var(--primary-sage);
+  border-radius: 4px;
+  transition: width 300ms ease;
 }
 
 .job-progress-counts {
-    display: flex;
-    gap: 16px;
-    font-size: 0.85rem;
-    margin-bottom: 0.5rem;
+  display: flex;
+  gap: 16px;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
 }
 
-.count-sent { color: var(--success); font-weight: 600; }
-.count-failed { color: var(--error); font-weight: 600; }
+.count-sent {
+  color: var(--success);
+  font-weight: 600;
+}
+.count-failed {
+  color: var(--error);
+  font-weight: 600;
+}
 
 .job-final-status {
-    margin-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .job-detail-link {
-    display: inline-block;
-    margin-top: 0.5rem;
-    color: var(--primary-sage);
-    font-size: 0.9rem;
-    cursor: pointer;
-    text-decoration: none;
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: var(--primary-sage);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: none;
 }
 
 .job-detail-link:hover {
-    text-decoration: underline;
+  text-decoration: underline;
+}
+
+/* ── Mobile: large phones (≤600px) ── */
+@media (max-width: 600px) {
+  .send-email-page {
+    margin-top: 16px;
+    margin-bottom: 40px;
+    padding: 0 12px;
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions button {
+    white-space: normal;
+    min-width: 0;
+    min-height: 44px;
+    line-height: 1.3;
+  }
+
+  .editor-wrapper {
+    min-height: 160px;
+  }
+}
+
+/* ── Mobile: small phones (≤480px) ── */
+@media (max-width: 480px) {
+  .send-email-page {
+    padding: 0 8px;
+  }
+
+  .error-detail {
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+  }
+
+  .job-progress-header {
+    flex-direction: column;
+    gap: 2px;
+  }
 }
