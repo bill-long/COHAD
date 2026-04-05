@@ -32,16 +32,19 @@ namespace Web.Services
             _graphClient = new GraphServiceClient(credential);
         }
 
-        public async Task<Committee> SyncForwardingRuleAsync(Committee committee)
+        public async Task<Committee> SyncForwardingRuleAsync(Committee committee,
+            IReadOnlyDictionary<Guid, Resident> residents)
         {
             var recipients = (committee.Members ?? new List<CommitteeMember>())
-                .Where(m => m.ReceivesForwardedEmail && !string.IsNullOrWhiteSpace(m.Email))
-                .Select(m => new Recipient
+                .Where(m => m.ReceivesForwardedEmail)
+                .Select(m => residents.GetValueOrDefault(m.ResidentId))
+                .Where(r => r?.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e.Address)) == true)
+                .Select(r => new Recipient
                 {
                     EmailAddress = new Microsoft.Graph.Models.EmailAddress
                     {
-                        Address = m.Email,
-                        Name = m.DisplayName
+                        Address = r.EmailAddresses.First(e => !string.IsNullOrWhiteSpace(e.Address)).Address,
+                        Name = $"{r.GivenName} {r.Surname}".Trim()
                     }
                 })
                 .ToList();

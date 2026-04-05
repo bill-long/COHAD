@@ -20,13 +20,15 @@ namespace Web.UpdateModels
         /// </summary>
         public Guid? Id { get; set; }
 
-        public string DisplayName { get; set; }
+        /// <summary>
+        /// Reference to an existing Resident. The resident's display name and email
+        /// are resolved automatically — callers should not send name or email.
+        /// </summary>
+        public Guid ResidentId { get; set; }
 
         public string Title { get; set; }
 
         public string Bio { get; set; }
-
-        public string Email { get; set; }
 
         public bool ReceivesForwardedEmail { get; set; }
 

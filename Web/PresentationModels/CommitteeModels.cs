@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Web.Models;
+using static Web.PresentationModels.CommitteeMemberHelpers;
 
 namespace Web.PresentationModels
 {
@@ -22,7 +23,8 @@ namespace Web.PresentationModels
 
         public List<CommitteeMemberCard> Members { get; set; }
 
-        public static CommitteeCard FromStorageModel(Committee c) => new()
+        public static CommitteeCard FromStorageModel(Committee c,
+            IReadOnlyDictionary<Guid, Resident> residents) => new()
         {
             Id = c.Id,
             DisplayName = c.DisplayName,
@@ -32,7 +34,8 @@ namespace Web.PresentationModels
             MemberCount = c.Members?.Count ?? 0,
             Members = (c.Members ?? new List<CommitteeMember>())
                 .OrderBy(m => m.DisplayOrder)
-                .Select(m => CommitteeMemberCard.FromStorageModel(m, c.Id))
+                .Select(m => CommitteeMemberCard.FromStorageModel(m, c.Id,
+                    residents.GetValueOrDefault(m.ResidentId)))
                 .ToList()
         };
     }
@@ -56,10 +59,11 @@ namespace Web.PresentationModels
 
         public int DisplayOrder { get; set; }
 
-        internal static CommitteeMemberCard FromStorageModel(CommitteeMember m, string committeeKey) => new()
+        internal static CommitteeMemberCard FromStorageModel(
+            CommitteeMember m, string committeeKey, Resident resident) => new()
         {
             Id = m.Id,
-            DisplayName = m.DisplayName,
+            DisplayName = ResidentDisplayName(resident),
             Title = m.Title,
             Bio = m.Bio,
             HasPhoto = !string.IsNullOrWhiteSpace(m.PhotoBlobPath),
@@ -92,7 +96,8 @@ namespace Web.PresentationModels
 
         public string LastSyncError { get; set; }
 
-        public static CommitteeAdmin FromStorageModel(Committee c) => new()
+        public static CommitteeAdmin FromStorageModel(Committee c,
+            IReadOnlyDictionary<Guid, Resident> residents) => new()
         {
             Id = c.Id,
             DisplayName = c.DisplayName,
@@ -101,7 +106,8 @@ namespace Web.PresentationModels
             DisplayOrder = c.DisplayOrder,
             Members = (c.Members ?? new List<CommitteeMember>())
                 .OrderBy(m => m.DisplayOrder)
-                .Select(CommitteeMemberAdmin.FromStorageModel)
+                .Select(m => CommitteeMemberAdmin.FromStorageModel(m,
+                    residents.GetValueOrDefault(m.ResidentId)))
                 .ToList(),
             LastSyncedUtc = c.LastSyncedUtc,
             LastSyncStatus = c.LastSyncStatus,
@@ -109,10 +115,12 @@ namespace Web.PresentationModels
         };
     }
 
-    /// <summary>Admin view of a committee member (includes email, homeId, forwarding).</summary>
+    /// <summary>Admin view of a committee member (includes email, residentId, forwarding).</summary>
     public class CommitteeMemberAdmin
     {
         public Guid Id { get; set; }
+
+        public Guid ResidentId { get; set; }
 
         public string DisplayName { get; set; }
 
@@ -130,17 +138,28 @@ namespace Web.PresentationModels
 
         public int DisplayOrder { get; set; }
 
-        internal static CommitteeMemberAdmin FromStorageModel(CommitteeMember m) => new()
+        internal static CommitteeMemberAdmin FromStorageModel(
+            CommitteeMember m, Resident resident) => new()
         {
             Id = m.Id,
-            DisplayName = m.DisplayName,
+            ResidentId = m.ResidentId,
+            DisplayName = ResidentDisplayName(resident),
             Title = m.Title,
             Bio = m.Bio,
             HasPhoto = !string.IsNullOrWhiteSpace(m.PhotoBlobPath),
-            Email = m.Email,
+            Email = resident?.EmailAddresses?.FirstOrDefault()?.Address,
             ReceivesForwardedEmail = m.ReceivesForwardedEmail,
             PhotoOffsetY = m.PhotoOffsetY,
             DisplayOrder = m.DisplayOrder
         };
+    }
+
+    internal static class CommitteeMemberHelpers
+    {
+        internal static string ResidentDisplayName(Resident resident)
+        {
+            if (resident == null) return "Unknown";
+            return $"{resident.GivenName} {resident.Surname}".Trim();
+        }
     }
 }

@@ -522,12 +522,11 @@ namespace Web.Services.Cosmos
                     .Select(t => new CommitteeMember
                     {
                         Id = t.Value<Guid?>("Id") ?? Guid.Empty,
-                        DisplayName = t.Value<string>("DisplayName"),
+                        ResidentId = t.Value<Guid?>("ResidentId") ?? Guid.Empty,
                         Title = t.Value<string>("Title"),
                         Bio = t.Value<string>("Bio"),
                         PhotoBlobPath = t.Value<string>("PhotoBlobPath"),
                         PhotoContentType = t.Value<string>("PhotoContentType"),
-                        Email = t.Value<string>("Email"),
                         ReceivesForwardedEmail = t.Value<bool?>("ReceivesForwardedEmail") ?? false,
                         PhotoOffsetY = t.Value<int?>("PhotoOffsetY") ?? 50,
                         DisplayOrder = t.Value<int?>("DisplayOrder") ?? 0

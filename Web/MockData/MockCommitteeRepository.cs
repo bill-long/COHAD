@@ -61,20 +61,18 @@ namespace Web.MockData
                         new CommitteeMember
                         {
                             Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-                            DisplayName = "Mock Resident",
+                            ResidentId = MockDataConstants.MockResident1Id,
                             Title = "President",
                             Bio = "Longtime Canyon Oaks resident and community volunteer.",
-                            Email = "mock@cohad.local",
                             ReceivesForwardedEmail = true,
                             DisplayOrder = 1
                         },
                         new CommitteeMember
                         {
                             Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-                            DisplayName = "Taylor Doe",
+                            ResidentId = MockDataConstants.TaylorResident1Id,
                             Title = "Treasurer",
                             Bio = "Manages the HOA budget and financial reports.",
-                            Email = "taylor@cohad.local",
                             ReceivesForwardedEmail = true,
                             DisplayOrder = 2
                         }
@@ -93,9 +91,8 @@ namespace Web.MockData
                         new CommitteeMember
                         {
                             Id = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
-                            DisplayName = "Mock Resident",
+                            ResidentId = MockDataConstants.MockResident1Id,
                             Bio = "Enjoys meeting new neighbors and organizing welcome events.",
-                            Email = "mock@cohad.local",
                             ReceivesForwardedEmail = true,
                             DisplayOrder = 1
                         }
@@ -124,9 +121,8 @@ namespace Web.MockData
                         new CommitteeMember
                         {
                             Id = Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd"),
-                            DisplayName = "Taylor Doe",
+                            ResidentId = MockDataConstants.TaylorResident1Id,
                             Title = "Chair",
-                            Email = "taylor@cohad.local",
                             ReceivesForwardedEmail = true,
                             DisplayOrder = 1
                         }
@@ -155,10 +151,9 @@ namespace Web.MockData
                         new CommitteeMember
                         {
                             Id = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
-                            DisplayName = "Mock Resident",
+                            ResidentId = MockDataConstants.MockResident1Id,
                             Title = "Chair",
                             Bio = "Helps maintain the architectural standards of Canyon Oaks.",
-                            Email = "mock@cohad.local",
                             ReceivesForwardedEmail = true,
                             DisplayOrder = 1
                         }
@@ -188,12 +183,11 @@ namespace Web.MockData
         private static CommitteeMember CloneMember(CommitteeMember m) => new()
         {
             Id = m.Id,
-            DisplayName = m.DisplayName,
+            ResidentId = m.ResidentId,
             Title = m.Title,
             Bio = m.Bio,
             PhotoBlobPath = m.PhotoBlobPath,
             PhotoContentType = m.PhotoContentType,
-            Email = m.Email,
             ReceivesForwardedEmail = m.ReceivesForwardedEmail,
             PhotoOffsetY = m.PhotoOffsetY,
             DisplayOrder = m.DisplayOrder

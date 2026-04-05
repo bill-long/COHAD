@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -19,11 +20,15 @@ namespace Web.MockData
             _logger = logger;
         }
 
-        public Task<Committee> SyncForwardingRuleAsync(Committee committee)
+        public Task<Committee> SyncForwardingRuleAsync(Committee committee,
+            IReadOnlyDictionary<Guid, Resident> residents)
         {
             var recipients = committee.Members?
                 .Where(m => m.ReceivesForwardedEmail)
-                .Select(m => m.Email)
+                .Select(m => residents.GetValueOrDefault(m.ResidentId))
+                .Where(r => r != null)
+                .Select(r => r.EmailAddresses?.FirstOrDefault()?.Address)
+                .Where(e => !string.IsNullOrWhiteSpace(e))
                 .ToList() ?? new();
 
             _logger.LogInformation(

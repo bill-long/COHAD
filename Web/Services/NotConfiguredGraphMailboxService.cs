@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Web.Models;
@@ -18,7 +19,8 @@ namespace Web.Services
             _logger = logger;
         }
 
-        public Task<Committee> SyncForwardingRuleAsync(Committee committee)
+        public Task<Committee> SyncForwardingRuleAsync(Committee committee,
+            IReadOnlyDictionary<Guid, Resident> residents)
         {
             _logger.LogWarning(
                 "Graph API credentials are not configured. Forwarding sync for {Email} skipped.",

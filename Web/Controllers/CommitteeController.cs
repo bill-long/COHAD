@@ -27,6 +27,7 @@ namespace Web.Controllers
         };
 
         private readonly ICommitteeRepository _committeeRepository;
+        private readonly IResidentRepository _residentRepository;
         private readonly IUserRepository _userRepository;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly CommitteeListCache _listCache;
@@ -38,6 +39,7 @@ namespace Web.Controllers
 
         public CommitteeController(
             ICommitteeRepository committeeRepository,
+            IResidentRepository residentRepository,
             IUserRepository userRepository,
             IAuditLogRepository auditLogRepository,
             CommitteeListCache listCache,
@@ -48,6 +50,7 @@ namespace Web.Controllers
             ILogger<CommitteeController> logger)
         {
             _committeeRepository = committeeRepository;
+            _residentRepository = residentRepository;
             _userRepository = userRepository;
             _auditLogRepository = auditLogRepository;
             _listCache = listCache;
@@ -67,9 +70,10 @@ namespace Web.Controllers
         public async Task<IActionResult> GetAll()
         {
             var committees = await _listCache.GetAllAsync();
+            var residents = await ResolveResidentsForCommittees(committees);
             var payload = committees
                 .OrderBy(c => c.DisplayOrder)
-                .Select(CommitteeCard.FromStorageModel)
+                .Select(c => CommitteeCard.FromStorageModel(c, residents))
                 .ToList();
 
             return _listCache.OkWithETag(payload, Request, Response,
@@ -84,7 +88,8 @@ namespace Web.Controllers
             if (committee == null)
                 return NotFound();
 
-            return Ok(CommitteeCard.FromStorageModel(committee));
+            var residents = await ResolveResidentsForCommittees(new[] { committee });
+            return Ok(CommitteeCard.FromStorageModel(committee, residents));
         }
 
         [HttpGet("{key}/members/{memberId:guid}/photo")]
@@ -120,10 +125,11 @@ namespace Web.Controllers
             if (apiUser == null) return Forbid();
 
             var committees = await _committeeRepository.GetAllAsync();
-            var payload = committees
-                .Where(c => CanManageCommittee(apiUser, c))
+            var manageable = committees.Where(c => CanManageCommittee(apiUser, c)).ToList();
+            var residents = await ResolveResidentsForCommittees(manageable);
+            var payload = manageable
                 .OrderBy(c => c.DisplayOrder)
-                .Select(CommitteeAdmin.FromStorageModel)
+                .Select(c => CommitteeAdmin.FromStorageModel(c, residents))
                 .ToList();
 
             return Ok(payload);
@@ -142,7 +148,8 @@ namespace Web.Controllers
             if (!CanManageCommittee(apiUser, committee))
                 return Forbid();
 
-            return Ok(CommitteeAdmin.FromStorageModel(committee));
+            var residents = await ResolveResidentsForCommittees(new[] { committee });
+            return Ok(CommitteeAdmin.FromStorageModel(committee, residents));
         }
 
         [HttpPut("admin/{key}")]
@@ -245,8 +252,35 @@ namespace Web.Controllers
             }
             else
             {
+                // Validate all referenced residents exist
+                var requestedResidentIds = request.Members
+                    .Select(m => m.ResidentId)
+                    .Where(id => id != Guid.Empty)
+                    .Distinct()
+                    .ToList();
+
+                var resolvedResidents = requestedResidentIds.Count > 0
+                    ? (await _residentRepository.GetByIdsAsync(requestedResidentIds))
+                        .ToDictionary(r => r.Id)
+                    : new Dictionary<Guid, Resident>();
+
+                var missingResidentIds = requestedResidentIds
+                    .Where(id => !resolvedResidents.ContainsKey(id))
+                    .Select(id => id.ToString("D"))
+                    .ToList();
+
+                if (missingResidentIds.Count > 0)
+                {
+                    return BadRequest($"Unknown resident IDs: {string.Join(", ", missingResidentIds)}");
+                }
+
                 foreach (var mu in request.Members)
                 {
+                    if (mu.ResidentId == Guid.Empty)
+                    {
+                        return BadRequest("Each member must reference a valid ResidentId.");
+                    }
+
                     var memberId = (mu.Id.HasValue && mu.Id.Value != Guid.Empty)
                         ? mu.Id.Value
                         : Guid.NewGuid();
@@ -256,10 +290,9 @@ namespace Web.Controllers
                     var member = new CommitteeMember
                     {
                         Id = memberId,
-                        DisplayName = mu.DisplayName,
+                        ResidentId = mu.ResidentId,
                         Title = mu.Title,
                         Bio = mu.Bio,
-                        Email = mu.Email,
                         ReceivesForwardedEmail = mu.ReceivesForwardedEmail,
                         PhotoOffsetY = Math.Clamp(mu.PhotoOffsetY, 0, 100),
                         DisplayOrder = mu.DisplayOrder,
@@ -322,7 +355,8 @@ namespace Web.Controllers
 
             await AuditAsync(committee.Id, committee.DisplayName, "Updated committee.");
 
-            return Ok(CommitteeAdmin.FromStorageModel(committee));
+            var residents = await ResolveResidentsForCommittees(new[] { committee });
+            return Ok(CommitteeAdmin.FromStorageModel(committee, residents));
         }
 
         [HttpDelete("admin/{key}/members/{memberId:guid}")]
@@ -347,12 +381,15 @@ namespace Web.Controllers
                 await _documentFileStore.DeleteAsync(member.PhotoBlobPath);
             }
 
+            var resident = await _residentRepository.GetByIdAsync(member.ResidentId);
+            var memberName = PresentationModels.CommitteeMemberHelpers.ResidentDisplayName(resident);
+
             committee.Members.Remove(member);
             await _committeeRepository.UpsertAsync(committee);
             _listCache.Invalidate();
 
             await AuditAsync(committee.Id, committee.DisplayName,
-                $"Removed member \"{member.DisplayName}\".");
+                $"Removed member \"{memberName}\".");
 
             return NoContent();
         }
@@ -372,10 +409,14 @@ namespace Web.Controllers
 
             try
             {
-                committee = await _graphMailboxService.SyncForwardingRuleAsync(committee);
+                var residents = await ResolveResidentsForCommittees(new[] { committee });
+                committee = await _graphMailboxService.SyncForwardingRuleAsync(committee, residents);
                 await _committeeRepository.UpsertAsync(committee);
 
-                var recipientCount = committee.Members?.Count(m => m.ReceivesForwardedEmail && !string.IsNullOrWhiteSpace(m.Email)) ?? 0;
+                var recipientCount = committee.Members?
+                    .Count(m => m.ReceivesForwardedEmail
+                        && residents.TryGetValue(m.ResidentId, out var r)
+                        && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e.Address)) == true) ?? 0;
 
                 if (string.Equals(committee.LastSyncStatus, "NotConfigured", StringComparison.OrdinalIgnoreCase))
                 {
@@ -439,14 +480,26 @@ namespace Web.Controllers
             if (!CanManageCommittee(apiUser, committee))
                 return Forbid();
 
+            var residents = await ResolveResidentsForCommittees(new[] { committee });
+
             return Ok(new
             {
                 committee.LastSyncedUtc,
                 committee.LastSyncStatus,
                 committee.LastSyncError,
                 ForwardingRecipients = (committee.Members ?? new List<CommitteeMember>())
-                    .Where(m => m.ReceivesForwardedEmail && !string.IsNullOrWhiteSpace(m.Email))
-                    .Select(m => new { m.DisplayName, m.Email })
+                    .Where(m => m.ReceivesForwardedEmail
+                        && residents.TryGetValue(m.ResidentId, out var r)
+                        && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e.Address)) == true)
+                    .Select(m =>
+                    {
+                        var r = residents.GetValueOrDefault(m.ResidentId);
+                        return new
+                        {
+                            DisplayName = PresentationModels.CommitteeMemberHelpers.ResidentDisplayName(r),
+                            Email = r?.EmailAddresses?.FirstOrDefault()?.Address
+                        };
+                    })
                     .ToList()
             });
         }
@@ -488,6 +541,23 @@ namespace Web.Controllers
             if (user.Roles.Contains(Models.User.Role.Administrator)) return true;
             return committee.ManagementRole.HasValue
                 && user.Roles.Contains(committee.ManagementRole.Value);
+        }
+
+        private async Task<IReadOnlyDictionary<Guid, Resident>> ResolveResidentsForCommittees(
+            IEnumerable<Committee> committees)
+        {
+            var residentIds = committees
+                .SelectMany(c => c.Members ?? new List<CommitteeMember>())
+                .Select(m => m.ResidentId)
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToList();
+
+            if (residentIds.Count == 0)
+                return new Dictionary<Guid, Resident>();
+
+            var residents = await _residentRepository.GetByIdsAsync(residentIds);
+            return residents.ToDictionary(r => r.Id);
         }
     }
 }
