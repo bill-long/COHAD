@@ -84,6 +84,7 @@ import { BlogComponent } from './components/blog/blog.component';
 import { BlogDetailComponent } from './components/blog-detail/blog-detail.component';
 import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
 import { BlogEditorDialogComponent } from './components/blog-editor-dialog/blog-editor-dialog.component';
+import { MemberBioDialogComponent } from './components/member-bio-dialog/member-bio-dialog.component';
 import { MilkdownEditorComponent } from './components/milkdown-editor/milkdown-editor.component';
 import { EmailPreferencesComponent } from './components/email-preferences/email-preferences.component';
 import { EmailJobListComponent } from './components/email-job-list/email-job-list.component';
@@ -135,6 +136,7 @@ import { ManageCommitteesComponent } from './components/manage-committees/manage
         BlogDetailComponent,
         ManageBlogComponent,
         BlogEditorDialogComponent,
+        MemberBioDialogComponent,
         MilkdownEditorComponent,
         EmailPreferencesComponent,
         EmailJobListComponent,

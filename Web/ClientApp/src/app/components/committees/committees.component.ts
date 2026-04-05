@@ -1,5 +1,7 @@
 import { Component, OnInit } from '@angular/core';
-import { CommitteeCard, CommitteeService } from 'src/app/services/committee.service';
+import { MatDialog } from '@angular/material/dialog';
+import { CommitteeCard, CommitteeMemberCard, CommitteeService } from 'src/app/services/committee.service';
+import { MemberBioDialogComponent } from '../member-bio-dialog/member-bio-dialog.component';
 
 @Component({
   selector: 'app-committees',
@@ -12,31 +14,23 @@ export class CommitteesComponent implements OnInit {
   loading = false;
   error = '';
 
-  expandedBios = new Set<string>();
-
-  constructor(private readonly committeeService: CommitteeService) { }
+  constructor(
+    private readonly committeeService: CommitteeService,
+    private readonly dialog: MatDialog
+  ) { }
 
   ngOnInit(): void {
     this.loadCommittees();
   }
 
-  bioKey(committee: CommitteeCard, member: { displayName: string }): string {
-    return `${committee.displayName}:${member.displayName}`;
+  openBio(committee: CommitteeCard, member: CommitteeMemberCard): void {
+    this.dialog.open(MemberBioDialogComponent, {
+      data: { member, committeeName: committee.displayName },
+      autoFocus: false
+    });
   }
 
-  toggleBio(committee: CommitteeCard, member: { displayName: string }): void {
-    const key = this.bioKey(committee, member);
-    if (this.expandedBios.has(key)) {
-      this.expandedBios.delete(key);
-    } else {
-      this.expandedBios.add(key);
-    }
-  }
-
-  isBioClamped(el: HTMLElement, committee: CommitteeCard, member: { displayName: string }): boolean {
-    if (this.expandedBios.has(this.bioKey(committee, member))) {
-      return true; // show "Show less" when expanded
-    }
+  isBioOverflowing(el: HTMLElement): boolean {
     return el.scrollHeight > el.clientHeight + 1;
   }
 
