@@ -76,8 +76,7 @@ namespace Web.Controllers
                 .Select(c => CommitteeCard.FromStorageModel(c, residents))
                 .ToList();
 
-            return _listCache.OkWithETag(payload, Request, Response,
-                CommitteeListCache.CommitteesResponseKey);
+            return _listCache.OkWithETag(payload, Request, Response);
         }
 
         [HttpGet("{key}")]

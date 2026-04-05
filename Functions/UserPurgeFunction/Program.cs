@@ -40,6 +40,8 @@ var host = new HostBuilder()
             new CosmosUserRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Users")));
         services.AddSingleton<IHomeRepository>(sp =>
             new CosmosHomeRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Homes")));
+        services.AddSingleton<IResidentRepository>(sp =>
+            new CosmosResidentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Residents")));
         services.AddSingleton<IAuditLogRepository>(sp =>
             new CosmosAuditLogRepository(
                 sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog"),
@@ -48,6 +50,7 @@ var host = new HostBuilder()
             new CosmosPaymentRepository(
                 sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments"),
                 sp.GetRequiredService<IHomeRepository>(),
+                sp.GetRequiredService<IResidentRepository>(),
                 sp.GetRequiredService<IUserRepository>()));
         services.AddSingleton<UserPurgeRunner>();
     })

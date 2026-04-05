@@ -24,7 +24,6 @@ namespace Web.Services
         private readonly JsonSerializerOptions _jsonOptions;
 
         private const string CommitteesCacheKey = "CommitteeListCache:Committees";
-        internal const string CommitteesResponseKey = "CommitteeListCache:Response:Committees";
         private static readonly TimeSpan SlidingExpiration = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan AbsoluteExpiration = TimeSpan.FromMinutes(30);
 
@@ -55,7 +54,6 @@ namespace Web.Services
         public void Invalidate()
         {
             _cache.Remove(CommitteesCacheKey);
-            _cache.Remove(CommitteesResponseKey);
         }
 
         /// <summary>
