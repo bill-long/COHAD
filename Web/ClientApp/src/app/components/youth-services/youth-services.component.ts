@@ -87,12 +87,16 @@ export class YouthServicesComponent implements OnInit {
       maxHeight: '90vh',
     });
 
-    ref.afterClosed().subscribe(updated => {
-      if (!updated) {
+    ref.afterClosed().subscribe(result => {
+      if (!result) {
         return;
       }
 
-      this.snackBar.open('Listing updated.', undefined, { duration: 4000 });
+      if (result === 'deleted') {
+        this.snackBar.open('Listing deleted.', undefined, { duration: 4000 });
+      } else {
+        this.snackBar.open('Listing updated.', undefined, { duration: 4000 });
+      }
       this.load();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });

@@ -1,6 +1,6 @@
 import { Component, Inject } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
-import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { applicationState, ApplicationState } from 'src/app/state';
 import { YouthServiceListing, YouthServiceUpsertPayload, VendorsService } from 'src/app/services/vendors.service';
@@ -8,6 +8,7 @@ import { ApiUser } from 'src/app/models';
 import { normalizeOptionalUsPhoneForStorage } from 'src/app/utils/format-phone';
 import { Observable, of } from 'rxjs';
 import { switchMap, take } from 'rxjs/operators';
+import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 
 export interface YouthServiceEditorDialogData {
   /** Pre-fill services when opening from a filtered list (e.g. "Babysit") */
@@ -44,8 +45,9 @@ export class YouthServiceEditorDialogComponent {
   constructor(
     private readonly formBuilder: FormBuilder,
     private readonly vendorsService: VendorsService,
+    private readonly dialog: MatDialog,
     @Inject(applicationState) private readonly appState: Observable<ApplicationState>,
-    public readonly dialogRef: MatDialogRef<YouthServiceEditorDialogComponent, YouthServiceListing | null>,
+    public readonly dialogRef: MatDialogRef<YouthServiceEditorDialogComponent, YouthServiceListing | 'deleted' | null>,
     @Inject(MAT_DIALOG_DATA) public readonly data: YouthServiceEditorDialogData,
   ) {
     if (data?.listing) {
@@ -214,6 +216,41 @@ export class YouthServiceEditorDialogComponent {
     const name = owner.displayName?.trim() || `${owner.givenName ?? ''} ${owner.surname ?? ''}`.trim() || '(no name)';
     const email = (owner.email ?? '').trim();
     return email.length > 0 ? `${name} (${email})` : name;
+  }
+
+  deleteListing(): void {
+    if (!this.isEditMode || !this.data.listing) {
+      return;
+    }
+
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete listing?',
+        body: `"${this.data.listing.name}" will be permanently deleted. This action cannot be undone.`,
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        confirmColor: 'warn',
+      },
+    });
+
+    ref.afterClosed().subscribe(confirmed => {
+      if (!confirmed) {
+        return;
+      }
+
+      this.saving = true;
+      this.error = null;
+      this.vendorsService.deleteYouthService(this.data.listing!.id).subscribe({
+        next: () => {
+          this.saving = false;
+          this.dialogRef.close('deleted');
+        },
+        error: () => {
+          this.error = 'Unable to delete listing.';
+          this.saving = false;
+        },
+      });
+    });
   }
 
   private syncOwnerSearchFromOwnerId(): void {

@@ -30,7 +30,8 @@
         mask="(000) 000-0000"
         [showMaskTyped]="true"
         [dropSpecialCharacters]="true"
-        placeholder="(555) 555-5555" />
+        placeholder="(555) 555-5555"
+      />
       <mat-hint>Optional — 10-digit US number</mat-hint>
     </mat-form-field>
 
@@ -59,15 +60,8 @@
 
     <mat-form-field class="span-2" *ngIf="isEditMode && isAdmin">
       <mat-label>Owner</mat-label>
-      <input
-        matInput
-        formControlName="ownerSearch"
-        [matAutocomplete]="ownerAutocomplete"
-        placeholder="Search by name or email" />
-      <mat-autocomplete
-        #ownerAutocomplete="matAutocomplete"
-        [displayWith]="displayOwnerOption"
-        (optionSelected)="onOwnerSelected($event)">
+      <input matInput formControlName="ownerSearch" [matAutocomplete]="ownerAutocomplete" placeholder="Search by name or email" />
+      <mat-autocomplete #ownerAutocomplete="matAutocomplete" [displayWith]="displayOwnerOption" (optionSelected)="onOwnerSelected($event)">
         <mat-option *ngFor="let owner of filteredOwners" [value]="owner.uniqueId">
           {{ ownerLabel(owner) }}
         </mat-option>
@@ -78,8 +72,10 @@
 </div>
 
 <div mat-dialog-actions align="end">
+  <button mat-button color="warn" type="button" *ngIf="isEditMode" (click)="deleteListing()" [disabled]="saving">Delete</button>
+  <span class="action-spacer"></span>
   <button mat-button type="button" (click)="cancel()" [disabled]="saving">Cancel</button>
   <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="saving">
-    {{ saving ? 'Saving…' : (isEditMode ? 'Save changes' : 'Add listing') }}
+    {{ saving ? 'Saving…' : isEditMode ? 'Save changes' : 'Add listing' }}
   </button>
 </div>
