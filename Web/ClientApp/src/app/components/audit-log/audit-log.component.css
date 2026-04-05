@@ -93,6 +93,13 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  .table-scroll-wrapper .mat-mdc-header-row,
+  .table-scroll-wrapper .mat-mdc-header-cell {
+    position: static !important;
+    top: auto !important;
+    inset-block-start: auto !important;
+  }
+
   .audit-log-page .col-time {
     width: 140px;
   }

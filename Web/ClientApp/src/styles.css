@@ -349,7 +349,7 @@ body.dark-theme .ql-editor.ql-blank::before {
 
 /* Global mobile dialog constraint — prevent dialogs from exceeding viewport */
 @media (max-width: 480px) {
-  .cdk-overlay-pane {
+  .cdk-overlay-pane.mat-mdc-dialog-panel {
     max-width: calc(100vw - 16px) !important;
   }
 }
