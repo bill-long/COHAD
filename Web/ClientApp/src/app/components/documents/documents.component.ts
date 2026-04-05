@@ -2,11 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { DocumentsService, ResidentDocument } from 'src/app/services/documents.service';
 import { DocumentFolderService, DocumentFolder } from 'src/app/services/document-folder.service';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
-import {
-  formatFileSize,
-  getFileIconName,
-  getFileTypeChipLabel
-} from 'src/app/utils/document-display.utils';
+import { formatFileSize, getFileIconName, getFileTypeChipLabel } from 'src/app/utils/document-display.utils';
 
 interface FolderGroup {
   folder: DocumentFolder;
@@ -18,7 +14,7 @@ interface FolderGroup {
   selector: 'app-documents',
   templateUrl: './documents.component.html',
   styleUrls: ['./documents.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class DocumentsComponent implements OnInit {
   folderGroups: FolderGroup[] = [];
@@ -29,7 +25,8 @@ export class DocumentsComponent implements OnInit {
   constructor(
     private readonly documentsService: DocumentsService,
     private readonly folderService: DocumentFolderService,
-    private readonly telemetry: ApplicationInsightsService) { }
+    private readonly telemetry: ApplicationInsightsService,
+  ) {}
 
   ngOnInit(): void {
     this.loadDocuments();
@@ -81,13 +78,13 @@ export class DocumentsComponent implements OnInit {
           error: () => {
             this.loading = false;
             this.error = 'Failed to load documents.';
-          }
+          },
         });
       },
       error: () => {
         this.loading = false;
         this.error = 'Failed to load documents.';
-      }
+      },
     });
   }
 
@@ -110,7 +107,7 @@ export class DocumentsComponent implements OnInit {
       .map(f => ({
         folder: f,
         documents: byFolder.get(f.id) ?? [],
-        collapsed: false
+        collapsed: false,
       }));
 
     this.unfiledDocuments = unfiled;

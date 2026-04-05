@@ -5,14 +5,14 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { chipClassForString, YouthServiceListing, VendorsService } from 'src/app/services/vendors.service';
 import {
   YouthServiceEditorDialogComponent,
-  YouthServiceEditorDialogData
+  YouthServiceEditorDialogData,
 } from '../youth-service-editor-dialog/youth-service-editor-dialog.component';
 
 @Component({
   selector: 'app-youth-services',
   templateUrl: './youth-services.component.html',
   styleUrls: ['./youth-services.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class YouthServicesComponent implements OnInit {
   loading = false;
@@ -22,15 +22,15 @@ export class YouthServicesComponent implements OnInit {
 
   readonly filterForm = this.formBuilder.group({
     search: [''],
-    service: ['']
+    service: [''],
   });
 
   constructor(
     private readonly vendorsService: VendorsService,
     private readonly formBuilder: FormBuilder,
     private readonly dialog: MatDialog,
-    private readonly snackBar: MatSnackBar
-  ) { }
+    private readonly snackBar: MatSnackBar,
+  ) {}
 
   ngOnInit(): void {
     this.load();
@@ -41,7 +41,7 @@ export class YouthServicesComponent implements OnInit {
     this.error = null;
     const filter = this.filterForm.getRawValue();
     this.vendorsService.getYouthServices(filter.search ?? '', filter.service ?? '').subscribe({
-      next: (items) => {
+      next: items => {
         this.listings = items;
         const serviceSet = new Set<string>();
         items.forEach(item => (item.services ?? []).forEach(service => serviceSet.add(service)));
@@ -51,7 +51,7 @@ export class YouthServicesComponent implements OnInit {
       error: () => {
         this.error = 'Unable to load youth services.';
         this.loading = false;
-      }
+      },
     });
   }
 
@@ -61,7 +61,7 @@ export class YouthServicesComponent implements OnInit {
       data: { presetService: presetService || null } as YouthServiceEditorDialogData,
       width: '720px',
       maxWidth: 'calc(100vw - 32px)',
-      maxHeight: '90vh'
+      maxHeight: '90vh',
     });
 
     ref.afterClosed().subscribe(created => {
@@ -84,7 +84,7 @@ export class YouthServicesComponent implements OnInit {
       data: { listing } as YouthServiceEditorDialogData,
       width: '720px',
       maxWidth: 'calc(100vw - 32px)',
-      maxHeight: '90vh'
+      maxHeight: '90vh',
     });
 
     ref.afterClosed().subscribe(updated => {

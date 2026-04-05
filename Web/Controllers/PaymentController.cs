@@ -44,17 +44,21 @@ namespace Web.Controllers
         [HttpPost]
         public async Task<IActionResult> Add([FromBody] Payment payment)
         {
-            if (string.IsNullOrWhiteSpace(payment.Amount) ||
-                !decimal.TryParse(payment.Amount,
+            if (
+                string.IsNullOrWhiteSpace(payment.Amount)
+                || !decimal.TryParse(
+                    payment.Amount,
                     NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
-                    CultureInfo.InvariantCulture, out var amount) ||
-                amount <= 0)
+                    CultureInfo.InvariantCulture,
+                    out var amount
+                )
+                || amount <= 0
+            )
             {
                 return BadRequest("A positive numeric Amount is required.");
             }
 
-            if (payment.PaymentType != Payment.Type.OneTime &&
-                payment.PaymentType != Payment.Type.SubscriptionCreated)
+            if (payment.PaymentType != Payment.Type.OneTime && payment.PaymentType != Payment.Type.SubscriptionCreated)
             {
                 return BadRequest("PaymentType must be OneTime or SubscriptionCreated for client-recorded payments.");
             }

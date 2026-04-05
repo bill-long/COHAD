@@ -9,7 +9,8 @@ namespace Web.Services
         string FinalDisplayName,
         string ContentType,
         long SizeBytes,
-        byte[] ConvertedData = null);
+        byte[] ConvertedData = null
+    );
 
     public interface IImageUploadHelper
     {
@@ -21,7 +22,8 @@ namespace Web.Services
             IFormFile file,
             string extension,
             string blobPathPrefix,
-            string safeBaseName);
+            string safeBaseName
+        );
     }
 
     public class ImageUploadHelper : IImageUploadHelper
@@ -39,7 +41,8 @@ namespace Web.Services
             IFormFile file,
             string extension,
             string blobPathPrefix,
-            string safeBaseName)
+            string safeBaseName
+        )
         {
             ImageConversionResult? converted = null;
 
@@ -70,8 +73,13 @@ namespace Web.Services
                 await _fileStore.UploadAsync(blobPath, stream, trustedContentType);
             }
 
-            return new ImageUploadResult(blobPath, finalDisplayName, trustedContentType,
-                converted?.Data.Length ?? file.Length, converted?.Data);
+            return new ImageUploadResult(
+                blobPath,
+                finalDisplayName,
+                trustedContentType,
+                converted?.Data.Length ?? file.Length,
+                converted?.Data
+            );
         }
     }
 }

@@ -22,7 +22,7 @@ describe('EmailJobNotificationsService', () => {
     hubConnection = {
       on: jasmine.createSpy('hubOn'),
       start: jasmine.createSpy('hubStart').and.returnValue(Promise.resolve()),
-      stop: jasmine.createSpy('hubStop').and.returnValue(Promise.resolve())
+      stop: jasmine.createSpy('hubStop').and.returnValue(Promise.resolve()),
     };
     spyOn(hubProto, 'withUrl').and.callFake(function (this: SignalR.HubConnectionBuilder) {
       return this;
@@ -49,11 +49,7 @@ describe('EmailJobNotificationsService', () => {
     oauthSpy.getAccessToken.and.returnValue('test-token');
 
     TestBed.configureTestingModule({
-      providers: [
-        EmailJobNotificationsService,
-        { provide: OAuthService, useValue: oauthSpy },
-        MockAuthTokenService
-      ]
+      providers: [EmailJobNotificationsService, { provide: OAuthService, useValue: oauthSpy }, MockAuthTokenService],
     });
   });
 
@@ -79,11 +75,16 @@ describe('EmailJobNotificationsService', () => {
     const service = TestBed.inject(EmailJobNotificationsService);
     service.connect();
 
-    const progressHandler = hubConnection.on.calls.allArgs()
-      .find((args: any[]) => args[0] === 'EmailJobProgress')![1] as (e: EmailJobProgress) => void;
+    const progressHandler = hubConnection.on.calls.allArgs().find((args: any[]) => args[0] === 'EmailJobProgress')![1] as (
+      e: EmailJobProgress,
+    ) => void;
 
     const event: EmailJobProgress = {
-      jobId: 'j1', status: 'InProgress', sentCount: 5, failedCount: 0, totalRecipients: 10
+      jobId: 'j1',
+      status: 'InProgress',
+      sentCount: 5,
+      failedCount: 0,
+      totalRecipients: 10,
     };
 
     let received: EmailJobProgress | undefined;
@@ -97,11 +98,17 @@ describe('EmailJobNotificationsService', () => {
     const service = TestBed.inject(EmailJobNotificationsService);
     service.connect();
 
-    const completedHandler = hubConnection.on.calls.allArgs()
-      .find((args: any[]) => args[0] === 'EmailJobCompleted')![1] as (e: EmailJobCompleted) => void;
+    const completedHandler = hubConnection.on.calls.allArgs().find((args: any[]) => args[0] === 'EmailJobCompleted')![1] as (
+      e: EmailJobCompleted,
+    ) => void;
 
     const event: EmailJobCompleted = {
-      jobId: 'j1', status: 'Completed', sentCount: 10, failedCount: 0, totalRecipients: 10, lastError: null
+      jobId: 'j1',
+      status: 'Completed',
+      sentCount: 10,
+      failedCount: 0,
+      totalRecipients: 10,
+      lastError: null,
     };
 
     let received: EmailJobCompleted | undefined;

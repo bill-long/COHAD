@@ -37,10 +37,10 @@ export interface BlogPostUpsertPayload {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class BlogService {
-  constructor(private readonly httpClient: HttpClient) { }
+  constructor(private readonly httpClient: HttpClient) {}
 
   getPublished(): Observable<BlogPostCard[]> {
     return this.httpClient.get<BlogPostCard[]>('api/blog');

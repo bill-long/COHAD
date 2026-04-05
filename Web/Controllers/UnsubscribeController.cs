@@ -28,7 +28,8 @@ namespace Web.Controllers
             IUnsubscribeTokenService tokenService,
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
-            ILogger<UnsubscribeController> logger)
+            ILogger<UnsubscribeController> logger
+        )
         {
             _tokenService = tokenService;
             _homeRepository = homeRepository;
@@ -45,7 +46,8 @@ namespace Web.Controllers
         public async Task<IActionResult> OneClickUnsubscribe(
             string category,
             [FromQuery] string token,
-            [FromForm(Name = "List-Unsubscribe")] string listUnsubscribe)
+            [FromForm(Name = "List-Unsubscribe")] string listUnsubscribe
+        )
         {
             if (!string.Equals(listUnsubscribe, "One-Click", StringComparison.Ordinal))
                 return BadRequest(new { error = "Invalid or missing List-Unsubscribe confirmation." });
@@ -57,13 +59,21 @@ namespace Web.Controllers
             if (!EmailSubscriptionCategories.TryGetCategorySetter(category, out var setter))
                 return BadRequest(new { error = $"Unknown category: {category}" });
 
-            return await WithOptimisticRetry(payload, (home, matchingAddresses) =>
-            {
-                foreach (var addr in matchingAddresses)
-                    setter(addr, false);
+            return await WithOptimisticRetry(
+                payload,
+                (home, matchingAddresses) =>
+                {
+                    foreach (var addr in matchingAddresses)
+                        setter(addr, false);
 
-                return Ok(new { message = $"Successfully unsubscribed from {EmailSubscriptionCategories.DisplayNames.GetValueOrDefault(category, category)} emails." });
-            });
+                    return Ok(
+                        new
+                        {
+                            message = $"Successfully unsubscribed from {EmailSubscriptionCategories.DisplayNames.GetValueOrDefault(category, category)} emails.",
+                        }
+                    );
+                }
+            );
         }
 
         /// <summary>
@@ -94,7 +104,7 @@ namespace Web.Controllers
                 WelcomeEmailOptedIn = matchingAddresses.Any(a => a.WelcomeEmailOptedIn),
                 GardenClubEmailOptedIn = matchingAddresses.Any(a => a.GardenClubEmailOptedIn),
                 SocialCommitteeEmailOptedIn = matchingAddresses.Any(a => a.SocialCommitteeEmailOptedIn),
-                SunshineCommitteeEmailOptedIn = matchingAddresses.Any(a => a.SunshineCommitteeEmailOptedIn)
+                SunshineCommitteeEmailOptedIn = matchingAddresses.Any(a => a.SunshineCommitteeEmailOptedIn),
             };
 
             return Ok(dto);
@@ -105,7 +115,10 @@ namespace Web.Controllers
         /// Only fields present in the request body are updated; omitted fields are left unchanged.
         /// </summary>
         [HttpPut("preferences")]
-        public async Task<IActionResult> UpdatePreferences([FromQuery] string token, [FromBody] UpdateEmailPreferencesDto dto)
+        public async Task<IActionResult> UpdatePreferences(
+            [FromQuery] string token,
+            [FromBody] UpdateEmailPreferencesDto dto
+        )
         {
             var payload = _tokenService.ValidateToken(token);
             if (payload == null)
@@ -114,24 +127,27 @@ namespace Web.Controllers
             if (dto == null)
                 return BadRequest(new { error = "Request body is required." });
 
-            return await WithOptimisticRetry(payload, (home, matchingAddresses) =>
-            {
-                foreach (var addr in matchingAddresses)
+            return await WithOptimisticRetry(
+                payload,
+                (home, matchingAddresses) =>
                 {
-                    if (dto.BoardEmailOptedIn.HasValue)
-                        addr.BoardEmailOptedIn = dto.BoardEmailOptedIn.Value;
-                    if (dto.WelcomeEmailOptedIn.HasValue)
-                        addr.WelcomeEmailOptedIn = dto.WelcomeEmailOptedIn.Value;
-                    if (dto.GardenClubEmailOptedIn.HasValue)
-                        addr.GardenClubEmailOptedIn = dto.GardenClubEmailOptedIn.Value;
-                    if (dto.SocialCommitteeEmailOptedIn.HasValue)
-                        addr.SocialCommitteeEmailOptedIn = dto.SocialCommitteeEmailOptedIn.Value;
-                    if (dto.SunshineCommitteeEmailOptedIn.HasValue)
-                        addr.SunshineCommitteeEmailOptedIn = dto.SunshineCommitteeEmailOptedIn.Value;
-                }
+                    foreach (var addr in matchingAddresses)
+                    {
+                        if (dto.BoardEmailOptedIn.HasValue)
+                            addr.BoardEmailOptedIn = dto.BoardEmailOptedIn.Value;
+                        if (dto.WelcomeEmailOptedIn.HasValue)
+                            addr.WelcomeEmailOptedIn = dto.WelcomeEmailOptedIn.Value;
+                        if (dto.GardenClubEmailOptedIn.HasValue)
+                            addr.GardenClubEmailOptedIn = dto.GardenClubEmailOptedIn.Value;
+                        if (dto.SocialCommitteeEmailOptedIn.HasValue)
+                            addr.SocialCommitteeEmailOptedIn = dto.SocialCommitteeEmailOptedIn.Value;
+                        if (dto.SunshineCommitteeEmailOptedIn.HasValue)
+                            addr.SunshineCommitteeEmailOptedIn = dto.SunshineCommitteeEmailOptedIn.Value;
+                    }
 
-                return Ok(new { message = "Preferences updated." });
-            });
+                    return Ok(new { message = "Preferences updated." });
+                }
+            );
         }
 
         /// <summary>
@@ -142,7 +158,8 @@ namespace Web.Controllers
         /// </summary>
         private async Task<IActionResult> WithOptimisticRetry(
             UnsubscribeTokenPayload payload,
-            Func<Home, List<EmailAddress>, IActionResult> modifyAndRespond)
+            Func<Home, List<EmailAddress>, IActionResult> modifyAndRespond
+        )
         {
             for (int attempt = 0; attempt < MaxRetries; attempt++)
             {
@@ -168,7 +185,11 @@ namespace Web.Controllers
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to persist resident preference updates for home {HomeId} after home save succeeded", payload.HomeId);
+                        _logger.LogError(
+                            ex,
+                            "Failed to persist resident preference updates for home {HomeId} after home save succeeded",
+                            payload.HomeId
+                        );
                     }
 
                     return result;
@@ -176,7 +197,9 @@ namespace Web.Controllers
                 catch (ConcurrencyConflictException)
                 {
                     if (attempt >= MaxRetries - 1)
-                        return Conflict(new { error = "Unable to save preferences due to concurrent updates. Please try again." });
+                        return Conflict(
+                            new { error = "Unable to save preferences due to concurrent updates. Please try again." }
+                        );
                     // Otherwise retry with fresh data
                 }
             }
@@ -185,7 +208,10 @@ namespace Web.Controllers
         }
 
         private static (List<EmailAddress> Addresses, HashSet<Resident> Residents) FindMatchingEmailAddresses(
-            Home home, List<Resident> residents, string email)
+            Home home,
+            List<Resident> residents,
+            string email
+        )
         {
             var matches = new List<EmailAddress>();
             var affectedResidents = new HashSet<Resident>();
@@ -200,8 +226,7 @@ namespace Web.Controllers
 
                     foreach (var addr in resident.EmailAddresses)
                     {
-                        if (addr?.Address != null &&
-                            addr.Address.Trim().ToLowerInvariant() == normalizedEmail)
+                        if (addr?.Address != null && addr.Address.Trim().ToLowerInvariant() == normalizedEmail)
                         {
                             matches.Add(addr);
                             affectedResidents.Add(resident);
@@ -210,8 +235,10 @@ namespace Web.Controllers
                 }
             }
 
-            if (home.EmailAddress?.Address != null &&
-                home.EmailAddress.Address.Trim().ToLowerInvariant() == normalizedEmail)
+            if (
+                home.EmailAddress?.Address != null
+                && home.EmailAddress.Address.Trim().ToLowerInvariant() == normalizedEmail
+            )
             {
                 matches.Add(home.EmailAddress);
             }

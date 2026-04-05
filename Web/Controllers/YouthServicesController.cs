@@ -24,7 +24,8 @@ namespace Web.Controllers
         public YouthServicesController(
             IYouthServiceListingRepository youthServiceListingRepository,
             IUserRepository userRepository,
-            IAuditLogRepository auditLogRepository)
+            IAuditLogRepository auditLogRepository
+        )
         {
             _youthServiceListingRepository = youthServiceListingRepository;
             _userRepository = userRepository;
@@ -46,14 +47,17 @@ namespace Web.Controllers
             {
                 var trimmed = q.Trim();
                 query = query.Where(l =>
-                    (l.Name?.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                    (l.ParentNote?.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ?? false));
+                    (l.Name?.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (l.ParentNote?.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ?? false)
+                );
             }
 
             if (!string.IsNullOrWhiteSpace(service))
             {
                 var trimmedService = service.Trim();
-                query = query.Where(l => l.Services?.Any(s => s.Equals(trimmedService, StringComparison.OrdinalIgnoreCase)) == true);
+                query = query.Where(l =>
+                    l.Services?.Any(s => s.Equals(trimmedService, StringComparison.OrdinalIgnoreCase)) == true
+                );
             }
 
             var payload = query
@@ -78,7 +82,9 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            return Ok(YouthServiceListingPresentation.FromStorageModel(listing, CanEdit(apiUser, listing.CreatedByUniqueId)));
+            return Ok(
+                YouthServiceListingPresentation.FromStorageModel(listing, CanEdit(apiUser, listing.CreatedByUniqueId))
+            );
         }
 
         [HttpPost]
@@ -115,12 +121,14 @@ namespace Web.Controllers
                 CreatedByUniqueId = apiUser.UniqueId,
                 ModifiedByUniqueId = apiUser.UniqueId,
                 CreatedUtc = now,
-                ModifiedUtc = now
+                ModifiedUtc = now,
             };
 
             var saved = await _youthServiceListingRepository.UpsertAsync(listing);
             await WriteAudit(apiUser, saved.Id.ToString("D"), saved.Name, "Created youth service listing.");
-            return Ok(YouthServiceListingPresentation.FromStorageModel(saved, CanEdit(apiUser, saved.CreatedByUniqueId)));
+            return Ok(
+                YouthServiceListingPresentation.FromStorageModel(saved, CanEdit(apiUser, saved.CreatedByUniqueId))
+            );
         }
 
         [HttpPut("{id:guid}")]
@@ -166,7 +174,9 @@ namespace Web.Controllers
 
             var saved = await _youthServiceListingRepository.UpsertAsync(stored);
             await WriteAudit(apiUser, saved.Id.ToString("D"), saved.Name, "Updated youth service listing.");
-            return Ok(YouthServiceListingPresentation.FromStorageModel(saved, CanEdit(apiUser, saved.CreatedByUniqueId)));
+            return Ok(
+                YouthServiceListingPresentation.FromStorageModel(saved, CanEdit(apiUser, saved.CreatedByUniqueId))
+            );
         }
 
         [HttpDelete("{id:guid}")]
@@ -228,7 +238,9 @@ namespace Web.Controllers
 
             var saved = await _youthServiceListingRepository.UpsertAsync(stored);
             await WriteAudit(apiUser, saved.Id.ToString("D"), saved.Name, "Reassigned youth service listing owner.");
-            return Ok(YouthServiceListingPresentation.FromStorageModel(saved, CanEdit(apiUser, saved.CreatedByUniqueId)));
+            return Ok(
+                YouthServiceListingPresentation.FromStorageModel(saved, CanEdit(apiUser, saved.CreatedByUniqueId))
+            );
         }
 
         private static bool CanEdit(User user, string creatorUniqueId)
@@ -254,16 +266,18 @@ namespace Web.Controllers
 
         private async Task WriteAudit(User apiUser, string subjectId, string subjectName, string action)
         {
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = subjectId,
-                SubjectName = subjectName,
-                Action = action,
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = subjectId,
+                    SubjectName = subjectName,
+                    Action = action,
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                    UserId = apiUser.UniqueId,
+                }
+            );
         }
     }
 }

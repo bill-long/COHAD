@@ -28,8 +28,7 @@ namespace Web.MockData
         {
             lock (_residents)
             {
-                return Task.FromResult(
-                    _residents.TryGetValue(id, out var r) ? Clone(r) : null);
+                return Task.FromResult(_residents.TryGetValue(id, out var r) ? Clone(r) : null);
             }
         }
 
@@ -38,8 +37,7 @@ namespace Web.MockData
             lock (_residents)
             {
                 var set = new HashSet<Guid>(ids);
-                return Task.FromResult(
-                    _residents.Values.Where(r => set.Contains(r.Id)).Select(Clone).ToList());
+                return Task.FromResult(_residents.Values.Where(r => set.Contains(r.Id)).Select(Clone).ToList());
             }
         }
 
@@ -47,8 +45,7 @@ namespace Web.MockData
         {
             lock (_residents)
             {
-                return Task.FromResult(
-                    _residents.Values.Where(r => r.HomeId == homeId).Select(Clone).ToList());
+                return Task.FromResult(_residents.Values.Where(r => r.HomeId == homeId).Select(Clone).ToList());
             }
         }
 
@@ -57,8 +54,7 @@ namespace Web.MockData
             var idSet = homeIds?.ToHashSet() ?? new HashSet<Guid>();
             lock (_residents)
             {
-                return Task.FromResult(
-                    _residents.Values.Where(r => idSet.Contains(r.HomeId)).Select(Clone).ToList());
+                return Task.FromResult(_residents.Values.Where(r => idSet.Contains(r.HomeId)).Select(Clone).ToList());
             }
         }
 
@@ -118,10 +114,10 @@ namespace Web.MockData
                             WelcomeEmailOptedIn = false,
                             GardenClubEmailOptedIn = false,
                             SocialCommitteeEmailOptedIn = false,
-                            SunshineCommitteeEmailOptedIn = false
-                        }
+                            SunshineCommitteeEmailOptedIn = false,
+                        },
                     },
-                    PhoneNumbers = new List<PhoneNumber>()
+                    PhoneNumbers = new List<PhoneNumber>(),
                 },
                 new Resident
                 {
@@ -142,11 +138,11 @@ namespace Web.MockData
                             WelcomeEmailOptedIn = false,
                             GardenClubEmailOptedIn = false,
                             SocialCommitteeEmailOptedIn = false,
-                            SunshineCommitteeEmailOptedIn = false
-                        }
+                            SunshineCommitteeEmailOptedIn = false,
+                        },
                     },
-                    PhoneNumbers = new List<PhoneNumber>()
-                }
+                    PhoneNumbers = new List<PhoneNumber>(),
+                },
             };
 
             foreach (var r in residents)
@@ -155,7 +151,8 @@ namespace Web.MockData
 
         private static Resident Clone(Resident r)
         {
-            if (r == null) return null;
+            if (r == null)
+                return null;
             return new Resident
             {
                 Id = r.Id,
@@ -166,13 +163,14 @@ namespace Web.MockData
                 CollegeName = r.CollegeName,
                 ResidentType = r.ResidentType,
                 EmailAddresses = r.EmailAddresses?.Select(CloneEmail).ToList() ?? new List<EmailAddress>(),
-                PhoneNumbers = r.PhoneNumbers?.Select(ClonePhone).ToList() ?? new List<PhoneNumber>()
+                PhoneNumbers = r.PhoneNumbers?.Select(ClonePhone).ToList() ?? new List<PhoneNumber>(),
             };
         }
 
         private static EmailAddress CloneEmail(EmailAddress e)
         {
-            if (e == null) return null;
+            if (e == null)
+                return null;
             return new EmailAddress
             {
                 Address = e.Address,
@@ -181,20 +179,21 @@ namespace Web.MockData
                 WelcomeEmailOptedIn = e.WelcomeEmailOptedIn,
                 GardenClubEmailOptedIn = e.GardenClubEmailOptedIn,
                 SocialCommitteeEmailOptedIn = e.SocialCommitteeEmailOptedIn,
-                SunshineCommitteeEmailOptedIn = e.SunshineCommitteeEmailOptedIn
+                SunshineCommitteeEmailOptedIn = e.SunshineCommitteeEmailOptedIn,
             };
         }
 
         private static PhoneNumber ClonePhone(PhoneNumber p)
         {
-            if (p == null) return null;
+            if (p == null)
+                return null;
             return new PhoneNumber
             {
                 AreaCode = p.AreaCode,
                 Prefix = p.Prefix,
                 LineNumber = p.LineNumber,
                 Type = p.Type,
-                VisibleInDirectory = p.VisibleInDirectory
+                VisibleInDirectory = p.VisibleInDirectory,
             };
         }
     }

@@ -122,33 +122,80 @@ export const VENDOR_CATEGORY_BUCKETS: readonly VendorCategoryBucket[] = [
   'Outdoor & Property',
   'Home Services & Household',
   'Personal, Health & Professional',
-  'Auto, Pet & Community'
+  'Auto, Pet & Community',
 ];
 
 const vendorCategoryKeywordsByBucket: Readonly<Record<VendorCategoryBucket, readonly string[]>> = {
   'Home Construction & Repair': [
-    'roofer', 'contractor', 'construction', 'carpenter', 'builder', 'concrete',
-    'foundation repair', 'electrician', 'plumber', 'handy man', 'garage doors',
-    'fence', 'fences', 'gutters', 'chimney', 'septic', 'shower doors', 'skylight',
-    'window replacement', 'window treatments', 'window cleaning', 'reupholster',
-    'upholstery', 'tailor'
+    'roofer',
+    'contractor',
+    'construction',
+    'carpenter',
+    'builder',
+    'concrete',
+    'foundation repair',
+    'electrician',
+    'plumber',
+    'handy man',
+    'garage doors',
+    'fence',
+    'fences',
+    'gutters',
+    'chimney',
+    'septic',
+    'shower doors',
+    'skylight',
+    'window replacement',
+    'window treatments',
+    'window cleaning',
+    'reupholster',
+    'upholstery',
+    'tailor',
   ],
   'Outdoor & Property': [
-    'landscape', 'lawn', 'tree service', 'tree trimming', 'sprinklers',
-    'debris removal', 'mulch', 'dyno dirt', 'wells', 'pool', 'pool maintenance',
-    'outdoor kitchen', 'stone', 'french drains'
+    'landscape',
+    'lawn',
+    'tree service',
+    'tree trimming',
+    'sprinklers',
+    'debris removal',
+    'mulch',
+    'dyno dirt',
+    'wells',
+    'pool',
+    'pool maintenance',
+    'outdoor kitchen',
+    'stone',
+    'french drains',
   ],
-  'Home Services & Household': [
-    'housekeeper', 'pest control', 'animal control', 'security systems', 'appliance repair'
-  ],
+  'Home Services & Household': ['housekeeper', 'pest control', 'animal control', 'security systems', 'appliance repair'],
   'Personal, Health & Professional': [
-    'beautician', 'barber', 'chiropractor', 'dentist', 'doctor', 'acupuncturist',
-    'optometrist', 'ophthalmologist', 'orthopedic', 'financial planning', 'insurance', 'lawyer'
+    'beautician',
+    'barber',
+    'chiropractor',
+    'dentist',
+    'doctor',
+    'acupuncturist',
+    'optometrist',
+    'ophthalmologist',
+    'orthopedic',
+    'financial planning',
+    'insurance',
+    'lawyer',
   ],
   'Auto, Pet & Community': [
-    'mechanic', 'towing', 'detailer', 'veterinarians', 'library',
-    'music instruction', 'piano teacher', 'catering', 'conference', 'restaurant', 'desserts'
-  ]
+    'mechanic',
+    'towing',
+    'detailer',
+    'veterinarians',
+    'library',
+    'music instruction',
+    'piano teacher',
+    'catering',
+    'conference',
+    'restaurant',
+    'desserts',
+  ],
 };
 
 function normalizeCategory(value: string): string {
@@ -167,17 +214,14 @@ export function getVendorCategoryBucket(category: string): VendorCategoryBucket 
   return 'Auto, Pet & Community';
 }
 
-const categoryChipClasses = [
-  'chip-blue', 'chip-green', 'chip-amber', 'chip-purple',
-  'chip-rose', 'chip-cyan', 'chip-teal', 'chip-slate'
-];
+const categoryChipClasses = ['chip-blue', 'chip-green', 'chip-amber', 'chip-purple', 'chip-rose', 'chip-cyan', 'chip-teal', 'chip-slate'];
 
 /** Stable CSS chip class from a string (vendor categories, youth service labels, etc.). */
 export function chipClassForString(value: string): string {
   const normalized = (value ?? '').toLowerCase().trim();
   let hash = 0;
   for (let i = 0; i < normalized.length; i++) {
-    hash = ((hash << 5) - hash) + normalized.charCodeAt(i);
+    hash = (hash << 5) - hash + normalized.charCodeAt(i);
     hash |= 0;
   }
   return categoryChipClasses[Math.abs(hash) % categoryChipClasses.length];
@@ -189,7 +233,7 @@ export function vendorCategoryClass(category: string): string {
 
 @Injectable({ providedIn: 'root' })
 export class VendorsService {
-  constructor(private readonly httpClient: HttpClient) { }
+  constructor(private readonly httpClient: HttpClient) {}
 
   getVendors(search?: string, category?: string, neighborOnly?: boolean): Observable<VendorSummary[]> {
     const params: string[] = [];

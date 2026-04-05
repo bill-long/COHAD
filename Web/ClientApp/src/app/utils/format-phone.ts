@@ -43,7 +43,7 @@ export function phoneDigitsOnly(input: string | null | undefined): string {
  * Returns formatted display string for API storage.
  */
 export function normalizeOptionalUsPhoneForStorage(
-  input: string | null | undefined
+  input: string | null | undefined,
 ): { ok: true; value: string } | { ok: false; message: string } {
   let digits = phoneDigitsOnly(input);
   if (digits.length === 0) {
@@ -57,6 +57,6 @@ export function normalizeOptionalUsPhoneForStorage(
   }
   return {
     ok: false,
-    message: 'Enter a complete phone number (10 digits), or leave blank.'
+    message: 'Enter a complete phone number (10 digits), or leave blank.',
   };
 }

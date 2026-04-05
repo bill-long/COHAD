@@ -21,7 +21,7 @@ namespace Web.MockData
                 {
                     ContentType = contentType,
                     Bytes = ms.ToArray(),
-                    LastModified = DateTimeOffset.UtcNow
+                    LastModified = DateTimeOffset.UtcNow,
                 };
             }
 
@@ -37,14 +37,16 @@ namespace Web.MockData
                     return Task.FromResult<DocumentFileResult>(null);
                 }
 
-                return Task.FromResult(new DocumentFileResult
-                {
-                    ContentType = found.ContentType,
-                    Stream = new MemoryStream(found.Bytes, writable: false),
-                    EntityTag = new EntityTagHeaderValue($"\"{found.LastModified.Ticks:x}\""),
-                    LastModified = found.LastModified,
-                    ContentLength = found.Bytes.Length
-                });
+                return Task.FromResult(
+                    new DocumentFileResult
+                    {
+                        ContentType = found.ContentType,
+                        Stream = new MemoryStream(found.Bytes, writable: false),
+                        EntityTag = new EntityTagHeaderValue($"\"{found.LastModified.Ticks:x}\""),
+                        LastModified = found.LastModified,
+                        ContentLength = found.Bytes.Length,
+                    }
+                );
             }
         }
 

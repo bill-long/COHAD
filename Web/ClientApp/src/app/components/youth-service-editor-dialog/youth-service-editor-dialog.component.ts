@@ -3,11 +3,7 @@ import { FormBuilder } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { applicationState, ApplicationState } from 'src/app/state';
-import {
-  YouthServiceListing,
-  YouthServiceUpsertPayload,
-  VendorsService
-} from 'src/app/services/vendors.service';
+import { YouthServiceListing, YouthServiceUpsertPayload, VendorsService } from 'src/app/services/vendors.service';
 import { ApiUser } from 'src/app/models';
 import { normalizeOptionalUsPhoneForStorage } from 'src/app/utils/format-phone';
 import { Observable, of } from 'rxjs';
@@ -23,7 +19,7 @@ export interface YouthServiceEditorDialogData {
   selector: 'app-youth-service-editor-dialog',
   templateUrl: './youth-service-editor-dialog.component.html',
   styleUrls: ['./youth-service-editor-dialog.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class YouthServiceEditorDialogComponent {
   saving = false;
@@ -42,18 +38,15 @@ export class YouthServiceEditorDialogComponent {
     address: [''],
     parentNote: [''],
     ownerSearch: [''],
-    ownerUniqueId: ['']
+    ownerUniqueId: [''],
   });
 
   constructor(
     private readonly formBuilder: FormBuilder,
     private readonly vendorsService: VendorsService,
     @Inject(applicationState) private readonly appState: Observable<ApplicationState>,
-    public readonly dialogRef: MatDialogRef<
-      YouthServiceEditorDialogComponent,
-      YouthServiceListing | null
-    >,
-    @Inject(MAT_DIALOG_DATA) public readonly data: YouthServiceEditorDialogData
+    public readonly dialogRef: MatDialogRef<YouthServiceEditorDialogComponent, YouthServiceListing | null>,
+    @Inject(MAT_DIALOG_DATA) public readonly data: YouthServiceEditorDialogData,
   ) {
     if (data?.listing) {
       this.form.patchValue({
@@ -66,7 +59,7 @@ export class YouthServiceEditorDialogComponent {
         address: data.listing.address ?? '',
         parentNote: data.listing.parentNote ?? '',
         ownerSearch: '',
-        ownerUniqueId: data.listing.ownerUniqueId ?? ''
+        ownerUniqueId: data.listing.ownerUniqueId ?? '',
       });
     } else if (data?.presetService?.trim()) {
       this.form.patchValue({ services: data.presetService.trim() });
@@ -78,7 +71,8 @@ export class YouthServiceEditorDialogComponent {
         this.vendorsService.getUsers().subscribe({
           next: users => {
             this.owners = [...users].sort((a, b) =>
-              (a.displayName ?? '').localeCompare(b.displayName ?? '', undefined, { sensitivity: 'base' }));
+              (a.displayName ?? '').localeCompare(b.displayName ?? '', undefined, { sensitivity: 'base' }),
+            );
             this.filteredOwners = this.owners.slice(0, 8);
             if (!(this.form.controls.ownerUniqueId.value ?? '').trim()) {
               this.form.patchValue({ ownerUniqueId: this.data.listing?.ownerUniqueId ?? '' });
@@ -91,7 +85,7 @@ export class YouthServiceEditorDialogComponent {
           error: () => {
             this.owners = [];
             this.filteredOwners = [];
-          }
+          },
         });
       }
     });
@@ -110,9 +104,7 @@ export class YouthServiceEditorDialogComponent {
         return;
       }
 
-      this.filteredOwners = this.owners
-        .filter(owner => this.ownerMatchesQuery(owner, query))
-        .slice(0, 8);
+      this.filteredOwners = this.owners.filter(owner => this.ownerMatchesQuery(owner, query)).slice(0, 8);
     });
   }
 
@@ -133,12 +125,7 @@ export class YouthServiceEditorDialogComponent {
     const email = (owner.email ?? '').toLowerCase();
     const given = (owner.givenName ?? '').toLowerCase();
     const surname = (owner.surname ?? '').toLowerCase();
-    return (
-      name.includes(query) ||
-      email.includes(query) ||
-      given.includes(query) ||
-      surname.includes(query)
-    );
+    return name.includes(query) || email.includes(query) || given.includes(query) || surname.includes(query);
   }
 
   get isEditMode(): boolean {
@@ -174,37 +161,37 @@ export class YouthServiceEditorDialogComponent {
       contactMethod: raw.contactMethod === 'Call' ? 'Call' : 'Text',
       email: (raw.email ?? '').trim(),
       address: (raw.address ?? '').trim(),
-      parentNote: (raw.parentNote ?? '').trim()
+      parentNote: (raw.parentNote ?? '').trim(),
     };
     const requestedOwnerUniqueId = (raw.ownerUniqueId ?? '').trim();
     const currentOwnerUniqueId = (this.data?.listing?.ownerUniqueId ?? '').trim();
-    const shouldReassignOwner = this.isEditMode &&
-      this.isAdmin &&
-      requestedOwnerUniqueId.length > 0 &&
-      requestedOwnerUniqueId !== currentOwnerUniqueId;
+    const shouldReassignOwner =
+      this.isEditMode && this.isAdmin && requestedOwnerUniqueId.length > 0 && requestedOwnerUniqueId !== currentOwnerUniqueId;
 
     this.saving = true;
     this.error = null;
     const save$ = this.isEditMode
       ? this.vendorsService.updateYouthService(this.data.listing!.id, payload)
       : this.vendorsService.createYouthService(payload);
-    save$.pipe(
-      switchMap(saved => {
-        if (!shouldReassignOwner) {
-          return of(saved);
-        }
-        return this.vendorsService.reassignYouthServiceOwner(saved.id, requestedOwnerUniqueId);
-      })
-    ).subscribe({
-      next: (created) => {
-        this.saving = false;
-        this.dialogRef.close(created);
-      },
-      error: () => {
-        this.error = this.isEditMode ? 'Unable to update listing.' : 'Unable to create listing.';
-        this.saving = false;
-      }
-    });
+    save$
+      .pipe(
+        switchMap(saved => {
+          if (!shouldReassignOwner) {
+            return of(saved);
+          }
+          return this.vendorsService.reassignYouthServiceOwner(saved.id, requestedOwnerUniqueId);
+        }),
+      )
+      .subscribe({
+        next: created => {
+          this.saving = false;
+          this.dialogRef.close(created);
+        },
+        error: () => {
+          this.error = this.isEditMode ? 'Unable to update listing.' : 'Unable to create listing.';
+          this.saving = false;
+        },
+      });
   }
 
   onOwnerSelected(event: MatAutocompleteSelectedEvent): void {
@@ -214,15 +201,17 @@ export class YouthServiceEditorDialogComponent {
       return;
     }
 
-    this.form.patchValue({
-      ownerUniqueId: selectedOwner.uniqueId,
-      ownerSearch: this.ownerLabel(selectedOwner)
-    }, { emitEvent: false });
+    this.form.patchValue(
+      {
+        ownerUniqueId: selectedOwner.uniqueId,
+        ownerSearch: this.ownerLabel(selectedOwner),
+      },
+      { emitEvent: false },
+    );
   }
 
   ownerLabel(owner: ApiUser): string {
-    const name =
-      (owner.displayName?.trim() || `${owner.givenName ?? ''} ${owner.surname ?? ''}`.trim()) || '(no name)';
+    const name = owner.displayName?.trim() || `${owner.givenName ?? ''} ${owner.surname ?? ''}`.trim() || '(no name)';
     const email = (owner.email ?? '').trim();
     return email.length > 0 ? `${name} (${email})` : name;
   }
@@ -238,8 +227,11 @@ export class YouthServiceEditorDialogComponent {
       return;
     }
 
-    this.form.patchValue({
-      ownerSearch: this.ownerLabel(owner)
-    }, { emitEvent: false });
+    this.form.patchValue(
+      {
+        ownerSearch: this.ownerLabel(owner),
+      },
+      { emitEvent: false },
+    );
   }
 }

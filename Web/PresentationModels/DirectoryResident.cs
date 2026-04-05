@@ -13,14 +13,22 @@ namespace Web.PresentationModels
 
             if (storedResident.EmailAddresses != null)
             {
-                visibleEmails.AddRange(storedResident.EmailAddresses.Where(e => e.VisibleInDirectory).Select(DirectoryEmailAddress.FromStorageModel));
+                visibleEmails.AddRange(
+                    storedResident
+                        .EmailAddresses.Where(e => e.VisibleInDirectory)
+                        .Select(DirectoryEmailAddress.FromStorageModel)
+                );
             }
 
             var visiblePhones = new List<DirectoryPhoneNumber>();
 
             if (storedResident.PhoneNumbers != null)
             {
-                visiblePhones.AddRange(storedResident.PhoneNumbers.Where(p => p.VisibleInDirectory).Select(DirectoryPhoneNumber.FromStorageModel));
+                visiblePhones.AddRange(
+                    storedResident
+                        .PhoneNumbers.Where(p => p.VisibleInDirectory)
+                        .Select(DirectoryPhoneNumber.FromStorageModel)
+                );
             }
 
             return new DirectoryResident
@@ -31,7 +39,7 @@ namespace Web.PresentationModels
                 CollegeName = storedResident.CollegeName,
                 EmailAddresses = visibleEmails,
                 PhoneNumbers = visiblePhones,
-                ResidentType = storedResident.ResidentType
+                ResidentType = storedResident.ResidentType,
             };
         }
 

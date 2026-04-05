@@ -21,7 +21,8 @@ public sealed class PaymentControllerTests
         IUserRepository users,
         IPaymentRepository payments,
         string nameId = "u1",
-        string idp = "google.com")
+        string idp = "google.com"
+    )
     {
         var c = new PaymentController(users, payments)
         {
@@ -29,13 +30,18 @@ public sealed class PaymentControllerTests
             {
                 HttpContext = new DefaultHttpContext
                 {
-                    User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                    {
-                        new Claim(ClaimTypes.NameIdentifier, nameId),
-                        new Claim(IdentityProviderClaim, idp)
-                    }, "Test"))
-                }
-            }
+                    User = new ClaimsPrincipal(
+                        new ClaimsIdentity(
+                            new[]
+                            {
+                                new Claim(ClaimTypes.NameIdentifier, nameId),
+                                new Claim(IdentityProviderClaim, idp),
+                            },
+                            "Test"
+                        )
+                    ),
+                },
+            },
         };
         return c;
     }
@@ -51,7 +57,12 @@ public sealed class PaymentControllerTests
         var user = new User { UniqueId = uniqueId };
         var expected = new List<Payment>
         {
-            new Payment { Id = Guid.NewGuid(), PayerUniqueId = uniqueId, Amount = "100.00" }
+            new Payment
+            {
+                Id = Guid.NewGuid(),
+                PayerUniqueId = uniqueId,
+                Amount = "100.00",
+            },
         };
 
         var mockUsers = new Mock<IUserRepository>();
@@ -252,7 +263,7 @@ public sealed class PaymentControllerTests
             Id = Guid.NewGuid(),
             PayerUniqueId = uniqueId,
             PayPalTransactionId = txId,
-            Amount = "75.50"
+            Amount = "75.50",
         };
 
         var mockUsers = new Mock<IUserRepository>();
@@ -282,7 +293,7 @@ public sealed class PaymentControllerTests
             Id = Guid.NewGuid(),
             PayerUniqueId = UniqueId("other"),
             PayPalTransactionId = txId,
-            Amount = "75.50"
+            Amount = "75.50",
         };
 
         var mockUsers = new Mock<IUserRepository>();
@@ -310,7 +321,7 @@ public sealed class PaymentControllerTests
             PayerUniqueId = null,
             PayerEmail = "payer@test.local",
             PayPalTransactionId = txId,
-            Amount = "75.50"
+            Amount = "75.50",
         };
 
         var mockUsers = new Mock<IUserRepository>();
@@ -345,7 +356,7 @@ public sealed class PaymentControllerTests
             PayerUniqueId = null,
             PayerEmail = "someone.else@test.local",
             PayPalTransactionId = txId,
-            Amount = "75.50"
+            Amount = "75.50",
         };
 
         var mockUsers = new Mock<IUserRepository>();
@@ -367,7 +378,11 @@ public sealed class PaymentControllerTests
         var uniqueId = UniqueId("u1");
         var owned = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var other = Guid.Parse("99999999-9999-9999-9999-999999999999");
-        var user = new User { UniqueId = uniqueId, OwnedHomeIds = new List<Guid> { owned } };
+        var user = new User
+        {
+            UniqueId = uniqueId,
+            OwnedHomeIds = new List<Guid> { owned },
+        };
 
         var mockUsers = new Mock<IUserRepository>();
         mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(user);

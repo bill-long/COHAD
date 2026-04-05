@@ -8,7 +8,7 @@ import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.compone
   selector: 'app-manage-events',
   templateUrl: './manage-events.component.html',
   styleUrls: ['./manage-events.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class ManageEventsComponent implements OnInit {
   upcomingEvents: EventDetail[] = [];
@@ -20,8 +20,8 @@ export class ManageEventsComponent implements OnInit {
 
   constructor(
     private readonly eventsService: EventsService,
-    private readonly dialog: MatDialog
-  ) { }
+    private readonly dialog: MatDialog,
+  ) {}
 
   ngOnInit(): void {
     this.loadEvents();
@@ -36,7 +36,7 @@ export class ManageEventsComponent implements OnInit {
       width: '640px',
       maxWidth: 'calc(100vw - 32px)',
       maxHeight: '90vh',
-      panelClass: 'event-editor-dialog-panel'
+      panelClass: 'event-editor-dialog-panel',
     });
 
     ref.afterClosed().subscribe(result => {
@@ -54,8 +54,8 @@ export class ManageEventsComponent implements OnInit {
         body: `This will permanently delete "${eventItem.title}".\n\nYou can’t undo this.`,
         confirmText: 'Delete',
         cancelText: 'Cancel',
-        confirmColor: 'warn'
-      }
+        confirmColor: 'warn',
+      },
     });
 
     ref.afterClosed().subscribe(confirmed => {
@@ -75,7 +75,7 @@ export class ManageEventsComponent implements OnInit {
         error: () => {
           this.deletingId = null;
           this.error = 'Failed to delete event.';
-        }
+        },
       });
     });
   }
@@ -98,7 +98,7 @@ export class ManageEventsComponent implements OnInit {
         this.pastEvents = [];
         this.loading = false;
         this.error = 'Failed to load events.';
-      }
+      },
     });
   }
 }

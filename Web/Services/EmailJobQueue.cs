@@ -12,7 +12,8 @@ namespace Web.Services
     public sealed class EmailJobQueue
     {
         private readonly Channel<Guid> _channel = Channel.CreateUnbounded<Guid>(
-            new UnboundedChannelOptions { SingleReader = true });
+            new UnboundedChannelOptions { SingleReader = true }
+        );
 
         public ValueTask EnqueueAsync(Guid jobId, CancellationToken ct = default)
         {

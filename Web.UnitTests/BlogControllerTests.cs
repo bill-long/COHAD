@@ -5,9 +5,9 @@ using System.Net;
 using System.Reflection;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using Moq;
@@ -34,7 +34,8 @@ public sealed class BlogControllerTests
         IImageUploadHelper? imageUploadHelper = null,
         DocumentStorageOptions? storageOptions = null,
         string nameId = "u1",
-        string idp = "google.com")
+        string idp = "google.com"
+    )
     {
         storageOptions ??= new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 };
 
@@ -45,18 +46,20 @@ public sealed class BlogControllerTests
             fileStore,
             auditLog,
             imageUploadHelper ?? DefaultImageUploadHelper(),
-            Options.Create(storageOptions));
+            Options.Create(storageOptions)
+        );
 
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, nameId),
-                    new Claim(IdentityProviderClaim, idp)
-                }, "Test"))
-            }
+                User = new ClaimsPrincipal(
+                    new ClaimsIdentity(
+                        new[] { new Claim(ClaimTypes.NameIdentifier, nameId), new Claim(IdentityProviderClaim, idp) },
+                        "Test"
+                    )
+                ),
+            },
         };
         return c;
     }
@@ -67,17 +70,31 @@ public sealed class BlogControllerTests
     private static IImageUploadHelper DefaultImageUploadHelper()
     {
         var mock = new Mock<IImageUploadHelper>();
-        mock.Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((IFormFile f, string ext, string prefix, string baseName) =>
-                new ImageUploadResult($"{prefix}/{baseName}{ext.ToLowerInvariant()}", $"{baseName}{ext.ToLowerInvariant()}",
-                    ImageContentTypes.FromExtension(ext), f.Length));
+        mock.Setup(h =>
+                h.ConvertAndUploadAsync(
+                    It.IsAny<IFormFile>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>()
+                )
+            )
+            .ReturnsAsync(
+                (IFormFile f, string ext, string prefix, string baseName) =>
+                    new ImageUploadResult(
+                        $"{prefix}/{baseName}{ext.ToLowerInvariant()}",
+                        $"{baseName}{ext.ToLowerInvariant()}",
+                        ImageContentTypes.FromExtension(ext),
+                        f.Length
+                    )
+            );
         return mock.Object;
     }
 
     private static BlogController CreateAnonymousController(
         IBlogPostRepository posts,
         IBlogCommentRepository? comments = null,
-        IDocumentFileStore? files = null)
+        IDocumentFileStore? files = null
+    )
     {
         return new BlogController(
             Mock.Of<IUserRepository>(),
@@ -86,9 +103,10 @@ public sealed class BlogControllerTests
             files ?? Mock.Of<IDocumentFileStore>(),
             Mock.Of<IAuditLogRepository>(),
             Mock.Of<IImageUploadHelper>(),
-            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }))
+            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 })
+        )
         {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
     }
 
@@ -98,19 +116,23 @@ public sealed class BlogControllerTests
         var publishUtc = DateTime.UtcNow.AddDays(-1);
         var postId = Guid.NewGuid();
         var mockPosts = new Mock<IBlogPostRepository>();
-        mockPosts.Setup(r => r.GetPublishedAsync(It.IsAny<DateTime>())).ReturnsAsync(new List<BlogPost>
-        {
-            new()
-            {
-                Id = postId,
-                PublicSlug = "2026-public",
-                Title = "Hello",
-                Content = null,
-                Excerpt = "e",
-                PublishUtc = publishUtc,
-                AuthorDisplayName = "Author"
-            }
-        });
+        mockPosts
+            .Setup(r => r.GetPublishedAsync(It.IsAny<DateTime>()))
+            .ReturnsAsync(
+                new List<BlogPost>
+                {
+                    new()
+                    {
+                        Id = postId,
+                        PublicSlug = "2026-public",
+                        Title = "Hello",
+                        Content = null,
+                        Excerpt = "e",
+                        PublishUtc = publishUtc,
+                        AuthorDisplayName = "Author",
+                    },
+                }
+            );
 
         var c = CreateAnonymousController(mockPosts.Object);
         var result = await c.GetPublished();
@@ -125,16 +147,20 @@ public sealed class BlogControllerTests
     public async Task GetBySegment_returns_detail_when_post_exists()
     {
         var mockPosts = new Mock<IBlogPostRepository>();
-        mockPosts.Setup(r => r.GetByRouteSegmentAsync("2026-test")).ReturnsAsync(new BlogPost
-        {
-            Id = Guid.NewGuid(),
-            PublicSlug = "2026-test",
-            Title = "T",
-            Content = "## Body",
-            Excerpt = "ex",
-            PublishUtc = DateTime.UtcNow,
-            AuthorDisplayName = "A"
-        });
+        mockPosts
+            .Setup(r => r.GetByRouteSegmentAsync("2026-test"))
+            .ReturnsAsync(
+                new BlogPost
+                {
+                    Id = Guid.NewGuid(),
+                    PublicSlug = "2026-test",
+                    Title = "T",
+                    Content = "## Body",
+                    Excerpt = "ex",
+                    PublishUtc = DateTime.UtcNow,
+                    AuthorDisplayName = "A",
+                }
+            );
 
         var c = CreateAnonymousController(mockPosts.Object);
         var result = await c.GetBySegment("2026-test");
@@ -160,23 +186,27 @@ public sealed class BlogControllerTests
     public async Task DownloadFeaturedImage_returns_file_when_blob_exists()
     {
         var mockPosts = new Mock<IBlogPostRepository>();
-        mockPosts.Setup(r => r.GetByRouteSegmentAsync("2026-x")).ReturnsAsync(new BlogPost
-        {
-            Id = Guid.NewGuid(),
-            FeaturedImageBlobPath = "blog/guid/photo.jpg",
-            PublicSlug = "2026-x",
-            Title = "T",
-            Content = "c",
-            PublishUtc = DateTime.UtcNow,
-            AuthorDisplayName = "A"
-        });
+        mockPosts
+            .Setup(r => r.GetByRouteSegmentAsync("2026-x"))
+            .ReturnsAsync(
+                new BlogPost
+                {
+                    Id = Guid.NewGuid(),
+                    FeaturedImageBlobPath = "blog/guid/photo.jpg",
+                    PublicSlug = "2026-x",
+                    Title = "T",
+                    Content = "c",
+                    PublishUtc = DateTime.UtcNow,
+                    AuthorDisplayName = "A",
+                }
+            );
 
         var mockFiles = new Mock<IDocumentFileStore>();
-        mockFiles.Setup(f => f.DownloadAsync("blog/guid/photo.jpg")).ReturnsAsync(new DocumentFileResult
-        {
-            Stream = new MemoryStream(new byte[] { 1, 2, 3 }),
-            ContentType = "image/jpeg"
-        });
+        mockFiles
+            .Setup(f => f.DownloadAsync("blog/guid/photo.jpg"))
+            .ReturnsAsync(
+                new DocumentFileResult { Stream = new MemoryStream(new byte[] { 1, 2, 3 }), ContentType = "image/jpeg" }
+            );
 
         var c = CreateAnonymousController(mockPosts.Object, files: mockFiles.Object);
         var result = await c.DownloadFeaturedImage("2026-x");
@@ -190,15 +220,19 @@ public sealed class BlogControllerTests
     {
         var postId = Guid.NewGuid();
         var mockPosts = new Mock<IBlogPostRepository>();
-        mockPosts.Setup(r => r.GetByRouteSegmentAsync("2026-post")).ReturnsAsync(new BlogPost
-        {
-            Id = postId,
-            PublicSlug = "2026-post",
-            Title = "T",
-            Content = "c",
-            PublishUtc = DateTime.UtcNow,
-            AuthorDisplayName = "A"
-        });
+        mockPosts
+            .Setup(r => r.GetByRouteSegmentAsync("2026-post"))
+            .ReturnsAsync(
+                new BlogPost
+                {
+                    Id = postId,
+                    PublicSlug = "2026-post",
+                    Title = "T",
+                    Content = "c",
+                    PublishUtc = DateTime.UtcNow,
+                    AuthorDisplayName = "A",
+                }
+            );
 
         var mockComments = new Mock<IBlogCommentRepository>();
         mockComments.Setup(r => r.GetByBlogPostIdAsync(postId)).ReturnsAsync(new List<BlogComment>());
@@ -216,15 +250,19 @@ public sealed class BlogControllerTests
     {
         var postId = Guid.NewGuid();
         var mockPosts = new Mock<IBlogPostRepository>();
-        mockPosts.Setup(r => r.GetByRouteSegmentAsync("2026-post")).ReturnsAsync(new BlogPost
-        {
-            Id = postId,
-            PublicSlug = "2026-post",
-            Title = "T",
-            Content = "c",
-            PublishUtc = DateTime.UtcNow,
-            AuthorDisplayName = "A"
-        });
+        mockPosts
+            .Setup(r => r.GetByRouteSegmentAsync("2026-post"))
+            .ReturnsAsync(
+                new BlogPost
+                {
+                    Id = postId,
+                    PublicSlug = "2026-post",
+                    Title = "T",
+                    Content = "c",
+                    PublishUtc = DateTime.UtcNow,
+                    AuthorDisplayName = "A",
+                }
+            );
 
         var mockComments = new Mock<IBlogCommentRepository>();
         mockComments.Setup(r => r.GetByBlogPostIdAsync(postId)).ReturnsAsync(new List<BlogComment>());
@@ -234,11 +272,10 @@ public sealed class BlogControllerTests
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.Name, "broken-user")
-                }, "Test"))
-            }
+                User = new ClaimsPrincipal(
+                    new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, "broken-user") }, "Test")
+                ),
+            },
         };
 
         var result = await c.GetComments("2026-post");
@@ -252,14 +289,23 @@ public sealed class BlogControllerTests
     {
         var uniqueId = UniqueId("u1");
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident }
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
 
-        var c = CreateController(mockUsers.Object, Mock.Of<IBlogPostRepository>(), Mock.Of<IBlogCommentRepository>(),
-            Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var c = CreateController(
+            mockUsers.Object,
+            Mock.Of<IBlogPostRepository>(),
+            Mock.Of<IBlogCommentRepository>(),
+            Mock.Of<IDocumentFileStore>(),
+            Mock.Of<IAuditLogRepository>()
+        );
         var result = await c.GetManage();
 
         Assert.IsType<ForbidResult>(result);
@@ -270,30 +316,43 @@ public sealed class BlogControllerTests
     {
         var uniqueId = UniqueId("u1");
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator }
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+                }
+            );
 
         var postId = Guid.NewGuid();
         var mockPosts = new Mock<IBlogPostRepository>();
-        mockPosts.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<BlogPost>
-        {
-            new()
-            {
-                Id = postId,
-                PublicSlug = "2026-test",
-                Title = "Hello",
-                Content = "x",
-                Excerpt = "e",
-                PublishUtc = DateTime.UtcNow,
-                AuthorDisplayName = "A"
-            }
-        });
+        mockPosts
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<BlogPost>
+                {
+                    new()
+                    {
+                        Id = postId,
+                        PublicSlug = "2026-test",
+                        Title = "Hello",
+                        Content = "x",
+                        Excerpt = "e",
+                        PublishUtc = DateTime.UtcNow,
+                        AuthorDisplayName = "A",
+                    },
+                }
+            );
 
-        var c = CreateController(mockUsers.Object, mockPosts.Object, Mock.Of<IBlogCommentRepository>(),
-            Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var c = CreateController(
+            mockUsers.Object,
+            mockPosts.Object,
+            Mock.Of<IBlogCommentRepository>(),
+            Mock.Of<IDocumentFileStore>(),
+            Mock.Of<IAuditLogRepository>()
+        );
         var result = await c.GetManage();
 
         var ok = Assert.IsType<OkObjectResult>(result);
@@ -306,13 +365,17 @@ public sealed class BlogControllerTests
     {
         var uniqueId = UniqueId("u1");
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
-            GivenName = "Test",
-            Surname = "User"
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+                    GivenName = "Test",
+                    Surname = "User",
+                }
+            );
 
         var id = Guid.NewGuid();
         var existing = new BlogPost
@@ -323,23 +386,33 @@ public sealed class BlogControllerTests
             Content = "body",
             Excerpt = "ex",
             PublishUtc = DateTime.UtcNow,
-            AuthorDisplayName = "Test User"
+            AuthorDisplayName = "Test User",
         };
 
         var mockPosts = new Mock<IBlogPostRepository>();
         mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost> { existing });
-        mockPosts.Setup(r => r.ReadAsync(id)).ReturnsAsync(new BlogPostReadResult
-        {
-            Post = existing,
-            ETag = "\"etag\""
-        });
+        mockPosts
+            .Setup(r => r.ReadAsync(id))
+            .ReturnsAsync(new BlogPostReadResult { Post = existing, ETag = "\"etag\"" });
         mockPosts
             .Setup(r => r.ReplaceAsync(It.IsAny<BlogPost>(), It.IsAny<string>()))
-            .ThrowsAsync(new Microsoft.Azure.Cosmos.CosmosException(
-                "conflict", HttpStatusCode.PreconditionFailed, 0, string.Empty, 0));
+            .ThrowsAsync(
+                new Microsoft.Azure.Cosmos.CosmosException(
+                    "conflict",
+                    HttpStatusCode.PreconditionFailed,
+                    0,
+                    string.Empty,
+                    0
+                )
+            );
 
-        var c = CreateController(mockUsers.Object, mockPosts.Object, Mock.Of<IBlogCommentRepository>(),
-            Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>());
+        var c = CreateController(
+            mockUsers.Object,
+            mockPosts.Object,
+            Mock.Of<IBlogCommentRepository>(),
+            Mock.Of<IDocumentFileStore>(),
+            Mock.Of<IAuditLogRepository>()
+        );
 
         var request = new BlogPostUpsertRequest
         {
@@ -347,7 +420,7 @@ public sealed class BlogControllerTests
             Title = "New title",
             Content = "New content that is long enough for excerpt.",
             Excerpt = "manual",
-            PublishUtc = DateTime.UtcNow
+            PublishUtc = DateTime.UtcNow,
         };
 
         var result = await c.UpsertManage(request);
@@ -361,13 +434,17 @@ public sealed class BlogControllerTests
     {
         var uniqueId = UniqueId("u1");
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
-            GivenName = "Test",
-            Surname = "User"
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+                    GivenName = "Test",
+                    Surname = "User",
+                }
+            );
 
         var id = Guid.NewGuid();
         var existing = new BlogPost
@@ -379,37 +456,55 @@ public sealed class BlogControllerTests
             Excerpt = "ex",
             PublishUtc = DateTime.UtcNow,
             AuthorDisplayName = "Test User",
-            FeaturedImageBlobPath = $"blog/{id:D}/old.jpg"
+            FeaturedImageBlobPath = $"blog/{id:D}/old.jpg",
         };
 
         var mockPosts = new Mock<IBlogPostRepository>();
         mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost> { existing });
-        mockPosts.Setup(r => r.ReadAsync(id)).ReturnsAsync(new BlogPostReadResult
-        {
-            Post = existing,
-            ETag = "\"etag\""
-        });
+        mockPosts
+            .Setup(r => r.ReadAsync(id))
+            .ReturnsAsync(new BlogPostReadResult { Post = existing, ETag = "\"etag\"" });
         mockPosts
             .Setup(r => r.ReplaceAsync(It.IsAny<BlogPost>(), It.IsAny<string>()))
-            .ThrowsAsync(new Microsoft.Azure.Cosmos.CosmosException(
-                "conflict", HttpStatusCode.PreconditionFailed, 0, string.Empty, 0));
+            .ThrowsAsync(
+                new Microsoft.Azure.Cosmos.CosmosException(
+                    "conflict",
+                    HttpStatusCode.PreconditionFailed,
+                    0,
+                    string.Empty,
+                    0
+                )
+            );
 
         var deleted = new List<string>();
         var mockFiles = new Mock<IDocumentFileStore>();
-        mockFiles.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+        mockFiles
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
-        mockFiles.Setup(f => f.DeleteAsync(It.IsAny<string>()))
+        mockFiles
+            .Setup(f => f.DeleteAsync(It.IsAny<string>()))
             .Returns(Task.CompletedTask)
             .Callback<string>(deleted.Add);
 
-        var c = CreateController(mockUsers.Object, mockPosts.Object, Mock.Of<IBlogCommentRepository>(),
-            mockFiles.Object, Mock.Of<IAuditLogRepository>());
+        var c = CreateController(
+            mockUsers.Object,
+            mockPosts.Object,
+            Mock.Of<IBlogCommentRepository>(),
+            mockFiles.Object,
+            Mock.Of<IAuditLogRepository>()
+        );
 
         var imgBytes = new byte[] { 1, 2, 3 };
-        IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "FeaturedImage", "new image.jpg")
+        IFormFile formFile = new FormFile(
+            new MemoryStream(imgBytes),
+            0,
+            imgBytes.Length,
+            "FeaturedImage",
+            "new image.jpg"
+        )
         {
             Headers = new HeaderDictionary(),
-            ContentType = "image/jpeg"
+            ContentType = "image/jpeg",
         };
 
         var request = new BlogPostUpsertRequest
@@ -419,14 +514,20 @@ public sealed class BlogControllerTests
             Content = "New content that is long enough for excerpt.",
             Excerpt = "manual",
             PublishUtc = DateTime.UtcNow,
-            FeaturedImage = formFile
+            FeaturedImage = formFile,
         };
 
         var result = await c.UpsertManage(request);
 
         var status = Assert.IsType<ObjectResult>(result);
         Assert.Equal(StatusCodes.Status409Conflict, status.StatusCode);
-        Assert.Contains(deleted, p => p.StartsWith($"blog/{id:D}/", StringComparison.OrdinalIgnoreCase) && p.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) && !p.EndsWith("/old.jpg", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            deleted,
+            p =>
+                p.StartsWith($"blog/{id:D}/", StringComparison.OrdinalIgnoreCase)
+                && p.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+                && !p.EndsWith("/old.jpg", StringComparison.OrdinalIgnoreCase)
+        );
         Assert.DoesNotContain($"blog/{id:D}/old.jpg", deleted);
     }
 
@@ -435,34 +536,53 @@ public sealed class BlogControllerTests
     {
         var uniqueId = UniqueId("u1");
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
-            GivenName = "Test",
-            Surname = "User"
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+                    GivenName = "Test",
+                    Surname = "User",
+                }
+            );
 
         var mockPosts = new Mock<IBlogPostRepository>();
         mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost>());
-        mockPosts.Setup(r => r.UpsertAsync(It.IsAny<BlogPost>())).ThrowsAsync(new InvalidOperationException("save failed"));
+        mockPosts
+            .Setup(r => r.UpsertAsync(It.IsAny<BlogPost>()))
+            .ThrowsAsync(new InvalidOperationException("save failed"));
 
         var deleted = new List<string>();
         var mockFiles = new Mock<IDocumentFileStore>();
-        mockFiles.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+        mockFiles
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
-        mockFiles.Setup(f => f.DeleteAsync(It.IsAny<string>()))
+        mockFiles
+            .Setup(f => f.DeleteAsync(It.IsAny<string>()))
             .Returns(Task.CompletedTask)
             .Callback<string>(deleted.Add);
 
-        var c = CreateController(mockUsers.Object, mockPosts.Object, Mock.Of<IBlogCommentRepository>(),
-            mockFiles.Object, Mock.Of<IAuditLogRepository>());
+        var c = CreateController(
+            mockUsers.Object,
+            mockPosts.Object,
+            Mock.Of<IBlogCommentRepository>(),
+            mockFiles.Object,
+            Mock.Of<IAuditLogRepository>()
+        );
 
         var imgBytes = new byte[] { 1, 2, 3 };
-        IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "FeaturedImage", "new-image.jpg")
+        IFormFile formFile = new FormFile(
+            new MemoryStream(imgBytes),
+            0,
+            imgBytes.Length,
+            "FeaturedImage",
+            "new-image.jpg"
+        )
         {
             Headers = new HeaderDictionary(),
-            ContentType = "image/jpeg"
+            ContentType = "image/jpeg",
         };
 
         var request = new BlogPostUpsertRequest
@@ -471,7 +591,7 @@ public sealed class BlogControllerTests
             Content = "New content that is long enough for excerpt.",
             Excerpt = "manual",
             PublishUtc = DateTime.UtcNow,
-            FeaturedImage = formFile
+            FeaturedImage = formFile,
         };
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => c.UpsertManage(request));
@@ -495,13 +615,17 @@ public sealed class BlogControllerTests
     {
         var uniqueId = UniqueId("u1");
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
-            GivenName = "Test",
-            Surname = "User"
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+                    GivenName = "Test",
+                    Surname = "User",
+                }
+            );
 
         var postId = Guid.NewGuid();
         var inlinePath = "blog/images/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/photo.jpg";
@@ -512,7 +636,7 @@ public sealed class BlogControllerTests
             Content = $"![](/api/blog/images/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/photo.jpg)",
             PublicSlug = "2026-x",
             PublishUtc = DateTime.UtcNow,
-            AuthorDisplayName = "A"
+            AuthorDisplayName = "A",
         };
 
         var mockPosts = new Mock<IBlogPostRepository>();
@@ -524,14 +648,21 @@ public sealed class BlogControllerTests
 
         var deleted = new List<string>();
         var mockFiles = new Mock<IDocumentFileStore>();
-        mockFiles.Setup(f => f.DeleteAsync(It.IsAny<string>()))
+        mockFiles
+            .Setup(f => f.DeleteAsync(It.IsAny<string>()))
             .Returns(Task.CompletedTask)
             .Callback<string>(deleted.Add);
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockPosts.Object, mockComments.Object, mockFiles.Object, mockAudit.Object);
+        var c = CreateController(
+            mockUsers.Object,
+            mockPosts.Object,
+            mockComments.Object,
+            mockFiles.Object,
+            mockAudit.Object
+        );
         var result = await c.DeleteManage(postId);
 
         Assert.IsType<OkResult>(result);
@@ -543,13 +674,17 @@ public sealed class BlogControllerTests
     {
         var uniqueId = UniqueId("u1");
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
-            GivenName = "Test",
-            Surname = "User"
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+                    GivenName = "Test",
+                    Surname = "User",
+                }
+            );
 
         var mockPosts = new Mock<IBlogPostRepository>();
         mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost>());
@@ -558,27 +693,35 @@ public sealed class BlogControllerTests
         var mockUploadHelper = new Mock<IImageUploadHelper>();
         mockUploadHelper
             .Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), ".png", It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((IFormFile _, string _, string prefix, string baseName) =>
-                new ImageUploadResult($"{prefix}/{baseName}.jpg", $"{baseName}.jpg", "image/jpeg", 5));
+            .ReturnsAsync(
+                (IFormFile _, string _, string prefix, string baseName) =>
+                    new ImageUploadResult($"{prefix}/{baseName}.jpg", $"{baseName}.jpg", "image/jpeg", 5)
+            );
 
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockPosts.Object, Mock.Of<IBlogCommentRepository>(),
-            Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockUploadHelper.Object);
+        var c = CreateController(
+            mockUsers.Object,
+            mockPosts.Object,
+            Mock.Of<IBlogCommentRepository>(),
+            Mock.Of<IDocumentFileStore>(),
+            mockAudit.Object,
+            mockUploadHelper.Object
+        );
 
         var imgBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // PNG magic bytes
         IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "FeaturedImage", "photo.png")
         {
             Headers = new HeaderDictionary(),
-            ContentType = "image/png"
+            ContentType = "image/png",
         };
 
         var request = new BlogPostUpsertRequest
         {
             Title = "Test post",
             Content = "Body text",
-            FeaturedImage = formFile
+            FeaturedImage = formFile,
         };
 
         var result = await c.UpsertManage(request);
@@ -594,28 +737,40 @@ public sealed class BlogControllerTests
     {
         var uniqueId = UniqueId("u1");
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
-            GivenName = "Test",
-            Surname = "User"
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+                    GivenName = "Test",
+                    Surname = "User",
+                }
+            );
 
         var mockUploadHelper = new Mock<IImageUploadHelper>();
         mockUploadHelper
             .Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), ".png", It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((IFormFile _, string _, string prefix, string baseName) =>
-                new ImageUploadResult($"{prefix}/{baseName}.jpg", $"{baseName}.jpg", "image/jpeg", 5));
+            .ReturnsAsync(
+                (IFormFile _, string _, string prefix, string baseName) =>
+                    new ImageUploadResult($"{prefix}/{baseName}.jpg", $"{baseName}.jpg", "image/jpeg", 5)
+            );
 
-        var c = CreateController(mockUsers.Object, Mock.Of<IBlogPostRepository>(), Mock.Of<IBlogCommentRepository>(),
-            Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>(), mockUploadHelper.Object);
+        var c = CreateController(
+            mockUsers.Object,
+            Mock.Of<IBlogPostRepository>(),
+            Mock.Of<IBlogCommentRepository>(),
+            Mock.Of<IDocumentFileStore>(),
+            Mock.Of<IAuditLogRepository>(),
+            mockUploadHelper.Object
+        );
 
         var imgBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // PNG magic bytes
         IFormFile formFile = new FormFile(new MemoryStream(imgBytes), 0, imgBytes.Length, "file", "photo.png")
         {
             Headers = new HeaderDictionary(),
-            ContentType = "image/png"
+            ContentType = "image/png",
         };
 
         var result = await c.UploadImage(formFile);
@@ -646,25 +801,33 @@ public sealed class BlogControllerTests
     public async Task DownloadFeaturedImage_sets_no_cache_with_etag()
     {
         var mockPosts = new Mock<IBlogPostRepository>();
-        mockPosts.Setup(r => r.GetByRouteSegmentAsync("2026-x")).ReturnsAsync(new BlogPost
-        {
-            Id = Guid.NewGuid(),
-            FeaturedImageBlobPath = "blog/guid/photo.jpg",
-            PublicSlug = "2026-x",
-            Title = "T",
-            Content = "c",
-            PublishUtc = DateTime.UtcNow,
-            AuthorDisplayName = "A"
-        });
+        mockPosts
+            .Setup(r => r.GetByRouteSegmentAsync("2026-x"))
+            .ReturnsAsync(
+                new BlogPost
+                {
+                    Id = Guid.NewGuid(),
+                    FeaturedImageBlobPath = "blog/guid/photo.jpg",
+                    PublicSlug = "2026-x",
+                    Title = "T",
+                    Content = "c",
+                    PublishUtc = DateTime.UtcNow,
+                    AuthorDisplayName = "A",
+                }
+            );
 
         var mockFiles = new Mock<IDocumentFileStore>();
-        mockFiles.Setup(f => f.DownloadAsync("blog/guid/photo.jpg")).ReturnsAsync(new DocumentFileResult
-        {
-            Stream = new MemoryStream(new byte[] { 1, 2, 3 }),
-            ContentType = "image/jpeg",
-            EntityTag = new EntityTagHeaderValue("\"xyz789\""),
-            LastModified = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
-        });
+        mockFiles
+            .Setup(f => f.DownloadAsync("blog/guid/photo.jpg"))
+            .ReturnsAsync(
+                new DocumentFileResult
+                {
+                    Stream = new MemoryStream(new byte[] { 1, 2, 3 }),
+                    ContentType = "image/jpeg",
+                    EntityTag = new EntityTagHeaderValue("\"xyz789\""),
+                    LastModified = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+                }
+            );
 
         var c = CreateAnonymousController(mockPosts.Object, files: mockFiles.Object);
         var result = await c.DownloadFeaturedImage("2026-x");

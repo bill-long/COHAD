@@ -23,7 +23,7 @@ namespace Web.PresentationModels
                 FeaturedImageContentType = card.FeaturedImageContentType,
                 FeaturedImageDownloadUrl = card.FeaturedImageDownloadUrl,
                 Content = post.Content,
-                FeaturedImageDisplayName = post.FeaturedImageDisplayName
+                FeaturedImageDisplayName = post.FeaturedImageDisplayName,
             };
         }
     }

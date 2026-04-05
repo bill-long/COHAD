@@ -22,7 +22,7 @@ public sealed class UserAssociationStateTests
             OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
             Roles = new List<User.Role> { User.Role.Resident },
             UnassociatedSinceUtc = DateTime.UtcNow.AddDays(-5),
-            NoRolesSinceUtc = DateTime.UtcNow.AddDays(-5)
+            NoRolesSinceUtc = DateTime.UtcNow.AddDays(-5),
         };
 
         UserAssociationState.Apply(user);
@@ -34,7 +34,11 @@ public sealed class UserAssociationStateTests
     [Fact]
     public void Apply_with_no_homes_sets_clock_once()
     {
-        var user = new User { OwnedHomeIds = new List<Guid>(), Roles = new List<User.Role> { User.Role.Resident } };
+        var user = new User
+        {
+            OwnedHomeIds = new List<Guid>(),
+            Roles = new List<User.Role> { User.Role.Resident },
+        };
         var before = DateTime.UtcNow;
 
         UserAssociationState.Apply(user);
@@ -52,7 +56,7 @@ public sealed class UserAssociationStateTests
         {
             OwnedHomeIds = new List<Guid>(),
             Roles = new List<User.Role> { User.Role.Resident },
-            UnassociatedSinceUtc = frozen
+            UnassociatedSinceUtc = frozen,
         };
 
         UserAssociationState.Apply(user);
@@ -63,7 +67,11 @@ public sealed class UserAssociationStateTests
     [Fact]
     public void Apply_with_null_OwnedHomeIds_treats_as_unassociated()
     {
-        var user = new User { OwnedHomeIds = null, Roles = new List<User.Role> { User.Role.Resident } };
+        var user = new User
+        {
+            OwnedHomeIds = null,
+            Roles = new List<User.Role> { User.Role.Resident },
+        };
 
         UserAssociationState.Apply(user);
 
@@ -76,7 +84,7 @@ public sealed class UserAssociationStateTests
         var user = new User
         {
             OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
-            Roles = new List<User.Role>()
+            Roles = new List<User.Role>(),
         };
         var before = DateTime.UtcNow;
 
@@ -95,7 +103,7 @@ public sealed class UserAssociationStateTests
         {
             OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
             Roles = new List<User.Role>(),
-            NoRolesSinceUtc = frozen
+            NoRolesSinceUtc = frozen,
         };
 
         UserAssociationState.Apply(user);
@@ -110,7 +118,7 @@ public sealed class UserAssociationStateTests
         {
             OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
             Roles = new List<User.Role> { User.Role.Resident },
-            NoRolesSinceUtc = DateTime.UtcNow.AddDays(-10)
+            NoRolesSinceUtc = DateTime.UtcNow.AddDays(-10),
         };
 
         UserAssociationState.Apply(user);
@@ -124,7 +132,7 @@ public sealed class UserAssociationStateTests
         var user = new User
         {
             OwnedHomeIds = new List<Guid> { Guid.NewGuid(), Guid.NewGuid() },
-            Roles = new List<User.Role>()
+            Roles = new List<User.Role>(),
         };
 
         UserAssociationState.Apply(user);
@@ -138,7 +146,7 @@ public sealed class UserAssociationStateTests
         var user = new User
         {
             OwnedHomeIds = new List<Guid>(),
-            Roles = new List<User.Role> { User.Role.Resident, User.Role.Board, User.Role.SocialCommittee }
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Board, User.Role.SocialCommittee },
         };
 
         UserAssociationState.Apply(user);
@@ -152,7 +160,7 @@ public sealed class UserAssociationStateTests
         var user = new User
         {
             OwnedHomeIds = null,
-            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator, User.Role.GardenClub }
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator, User.Role.GardenClub },
         };
 
         UserAssociationState.Apply(user);
@@ -169,7 +177,7 @@ public sealed class UserAssociationStateTests
         var user = new User
         {
             OwnedHomeIds = new List<Guid> { homeA, homeB },
-            Roles = new List<User.Role> { User.Role.Administrator, User.Role.Resident }
+            Roles = new List<User.Role> { User.Role.Administrator, User.Role.Resident },
         };
 
         UserAssociationState.Apply(user);

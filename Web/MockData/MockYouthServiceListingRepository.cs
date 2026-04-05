@@ -73,7 +73,7 @@ namespace Web.MockData
                 CreatedByUniqueId = listing.CreatedByUniqueId,
                 ModifiedByUniqueId = listing.ModifiedByUniqueId,
                 CreatedUtc = listing.CreatedUtc,
-                ModifiedUtc = listing.ModifiedUtc
+                ModifiedUtc = listing.ModifiedUtc,
             };
         }
     }

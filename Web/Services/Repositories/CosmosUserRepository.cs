@@ -87,7 +87,8 @@ namespace Web.Services.Repositories
             }
 
             // OwnedHomeIds and Roles are commonly stored as JSON strings (legacy).
-            var query = new CosmosQueryDefinition(@"
+            var query = new CosmosQueryDefinition(
+                @"
 SELECT * FROM c
 WHERE c.Discriminator = 'User'
   AND (
@@ -110,7 +111,8 @@ WHERE c.Discriminator = 'User'
         OR (IS_ARRAY(c.Roles) AND ARRAY_LENGTH(c.Roles) = 0)
       )
     )
-  )").WithParameter("@cutoff", cutoffUtc);
+  )"
+            ).WithParameter("@cutoff", cutoffUtc);
 
             var results = new List<User>();
             var iterator = _usersContainer.GetItemQueryIterator<JObject>(query);
@@ -120,10 +122,12 @@ WHERE c.Discriminator = 'User'
                 foreach (var doc in response)
                 {
                     var user = CosmosLegacyDocumentMapper.ToUser(doc);
-                    var noHomesEligible = (user.OwnedHomeIds == null || user.OwnedHomeIds.Count == 0)
+                    var noHomesEligible =
+                        (user.OwnedHomeIds == null || user.OwnedHomeIds.Count == 0)
                         && user.UnassociatedSinceUtc != null
                         && user.UnassociatedSinceUtc <= cutoffUtc;
-                    var noRolesEligible = (user.Roles == null || user.Roles.Count == 0)
+                    var noRolesEligible =
+                        (user.Roles == null || user.Roles.Count == 0)
                         && user.NoRolesSinceUtc != null
                         && user.NoRolesSinceUtc <= cutoffUtc;
                     if (noHomesEligible || noRolesEligible)

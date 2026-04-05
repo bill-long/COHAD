@@ -18,19 +18,25 @@ public sealed class PaymentRepositoryIntegrationTests
         var repo = _fixture.CreatePaymentRepository();
         var payerUniqueId = $"google.com{Guid.NewGuid():N}";
         var marker = Guid.NewGuid().ToString("N");
-        await repo.AddAsync(new Payment
-        {
-            Id = Guid.NewGuid(),
-            PayerUniqueId = payerUniqueId,
-            PayerEmail = "payer@example.com",
-            PayerName = "Payer",
-            Amount = "10.00",
-            Date = DateTime.UtcNow,
-            PaymentType = Payment.Type.OneTime,
-            FullDetailsJSON = $"{{\"marker\":\"{marker}\"}}"
-        }).ConfigureAwait(false);
+        await repo.AddAsync(
+                new Payment
+                {
+                    Id = Guid.NewGuid(),
+                    PayerUniqueId = payerUniqueId,
+                    PayerEmail = "payer@example.com",
+                    PayerName = "Payer",
+                    Amount = "10.00",
+                    Date = DateTime.UtcNow,
+                    PaymentType = Payment.Type.OneTime,
+                    FullDetailsJSON = $"{{\"marker\":\"{marker}\"}}",
+                }
+            )
+            .ConfigureAwait(false);
 
         var list = await repo.GetByPayerUniqueIdAsync(payerUniqueId).ConfigureAwait(false);
-        Assert.Contains(list, p => p.FullDetailsJSON != null && p.FullDetailsJSON.Contains(marker, StringComparison.Ordinal));
+        Assert.Contains(
+            list,
+            p => p.FullDetailsJSON != null && p.FullDetailsJSON.Contains(marker, StringComparison.Ordinal)
+        );
     }
 }

@@ -6,32 +6,42 @@ import { applicationState, ApplicationState, dispatcher, Action, LoadUserComplet
 import { map, filter, distinctUntilChanged, withLatestFrom } from 'rxjs/operators';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class MeService {
-
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Subject<Action>,
-    private httpClient: HttpClient) {
-
-    this.dispatcher.pipe(filter(a => a instanceof LoadUser), withLatestFrom(this.appState)).subscribe(([a, s]) => {
-      if (s.authUser?.accessToken == null) {
-        this.dispatcher.next(new LoadUserCompleted(null));
-      } else {
-        httpClient.get<ApiUser>('api/me').subscribe({
-          next: u => this.dispatcher.next(new LoadUserCompleted(u)),
-          error: e => {
-            console.error('Failed to load api/me after authentication', e);
-            this.dispatcher.next(new LoadUserCompleted(null));
-          }
-        });
-      }
-    });
+    private httpClient: HttpClient,
+  ) {
+    this.dispatcher
+      .pipe(
+        filter(a => a instanceof LoadUser),
+        withLatestFrom(this.appState),
+      )
+      .subscribe(([a, s]) => {
+        if (s.authUser?.accessToken == null) {
+          this.dispatcher.next(new LoadUserCompleted(null));
+        } else {
+          httpClient.get<ApiUser>('api/me').subscribe({
+            next: u => this.dispatcher.next(new LoadUserCompleted(u)),
+            error: e => {
+              console.error('Failed to load api/me after authentication', e);
+              this.dispatcher.next(new LoadUserCompleted(null));
+            },
+          });
+        }
+      });
 
     // When the auth state changes, update the ApiUser
-    this.appState.pipe(map(s => s.authUser?.accessToken), filter(t => t != null), distinctUntilChanged()).subscribe(accessToken => {
-      this.dispatcher.next(new LoadUser());
-    });
+    this.appState
+      .pipe(
+        map(s => s.authUser?.accessToken),
+        filter(t => t != null),
+        distinctUntilChanged(),
+      )
+      .subscribe(accessToken => {
+        this.dispatcher.next(new LoadUser());
+      });
   }
 }

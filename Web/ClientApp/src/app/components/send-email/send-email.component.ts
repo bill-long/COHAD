@@ -15,13 +15,12 @@ import { httpErrorMessage } from 'src/app/utils/http-error-message';
 import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
 
 @Component({
-    selector: 'app-send-email',
-    templateUrl: './send-email.component.html',
-    styleUrls: ['./send-email.component.css'],
-    standalone: false
+  selector: 'app-send-email',
+  templateUrl: './send-email.component.html',
+  styleUrls: ['./send-email.component.css'],
+  standalone: false,
 })
 export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
-
   @ViewChild(EmailJobListComponent) emailJobList?: EmailJobListComponent;
 
   /** Set when returning from job detail; list scrolls this row after jobs load. */
@@ -55,46 +54,52 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     private telemetry: ApplicationInsightsService,
     private emailJobNotifications: EmailJobNotificationsService,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    @Inject(DOCUMENT) private document: Document
+    @Inject(DOCUMENT) private document: Document,
   ) {
     const Block = Quill.import('blots/block') as any;
     class MyBlock extends Block {
       static tagName = 'DIV';
     }
     Quill.register(MyBlock, true);
-    zip(this.canSendFromBoard, this.canSendFromGardenClub, this.canSendFromSocialCommittee, this.canSendFromWelcomeCommittee, this.canSendFromSunshineCommittee)
-    .pipe(take(1))
-    .subscribe(([board, garden, social, welcome, sunshine]) => {
-      if (board) {
-        this.senderEndpoint = "from-board";
-      } else if (garden) {
-        this.senderEndpoint = "from-garden";
-      } else if (social) {
-        this.senderEndpoint = "from-social";
-      } else if (welcome) {
-        this.senderEndpoint = "from-welcome";
-      } else if (sunshine) {
-        this.senderEndpoint = "from-sunshine";
-      }
-    });
+    zip(
+      this.canSendFromBoard,
+      this.canSendFromGardenClub,
+      this.canSendFromSocialCommittee,
+      this.canSendFromWelcomeCommittee,
+      this.canSendFromSunshineCommittee,
+    )
+      .pipe(take(1))
+      .subscribe(([board, garden, social, welcome, sunshine]) => {
+        if (board) {
+          this.senderEndpoint = 'from-board';
+        } else if (garden) {
+          this.senderEndpoint = 'from-garden';
+        } else if (social) {
+          this.senderEndpoint = 'from-social';
+        } else if (welcome) {
+          this.senderEndpoint = 'from-welcome';
+        } else if (sunshine) {
+          this.senderEndpoint = 'from-sunshine';
+        }
+      });
   }
 
   ngOnInit(): void {
     this.routeQuerySub = this.route.queryParamMap
       .pipe(map(q => q.get(EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM)?.toLowerCase() ?? null))
-      .subscribe(id => { this.focusJobId = id; });
+      .subscribe(id => {
+        this.focusJobId = id;
+      });
   }
 
   ngAfterViewInit(): void {
-    this.routerEventsSub = this.router.events
-      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
-      .subscribe(() => {
-        if (this.router.parseUrl(this.router.url).fragment !== EMAIL_JOBS_SECTION_ANCHOR) {
-          return;
-        }
-        // Run after RouterScroller (setTimeout + rAF) so this wins over scroll-to-top.
-        this.scheduleScrollJobsSectionAfterNav();
-      });
+    this.routerEventsSub = this.router.events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd)).subscribe(() => {
+      if (this.router.parseUrl(this.router.url).fragment !== EMAIL_JOBS_SECTION_ANCHOR) {
+        return;
+      }
+      // Run after RouterScroller (setTimeout + rAF) so this wins over scroll-to-top.
+      this.scheduleScrollJobsSectionAfterNav();
+    });
   }
 
   ngOnDestroy(): void {
@@ -136,23 +141,33 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get canSendFromBoard(): Observable<boolean> {
-    return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsBoard.includes(r)).length > 0));
+    return this.appState.pipe(
+      map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsBoard.includes(r)).length > 0),
+    );
   }
 
   get canSendFromWelcomeCommittee(): Observable<boolean> {
-    return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsWelcomeCommittee.includes(r)).length > 0));
+    return this.appState.pipe(
+      map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsWelcomeCommittee.includes(r)).length > 0),
+    );
   }
 
   get canSendFromGardenClub(): Observable<boolean> {
-    return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsGardenClub.includes(r)).length > 0));
+    return this.appState.pipe(
+      map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsGardenClub.includes(r)).length > 0),
+    );
   }
 
   get canSendFromSocialCommittee(): Observable<boolean> {
-    return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsSocialCommittee.includes(r)).length > 0));
+    return this.appState.pipe(
+      map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsSocialCommittee.includes(r)).length > 0),
+    );
   }
 
   get canSendFromSunshineCommittee(): Observable<boolean> {
-    return this.appState.pipe(map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsSunshineCommittee.includes(r)).length > 0));
+    return this.appState.pipe(
+      map(s => s.apiUser != null && s.apiUser.roles.filter(r => rolePermissions.sendEmailAsSunshineCommittee.includes(r)).length > 0),
+    );
   }
 
   get apiUserEmail(): Observable<string> {
@@ -167,9 +182,12 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
 
   jobStatusLabel(status: EmailJobStatus): string {
     switch (status) {
-      case 'InProgress': return 'In Progress';
-      case 'PartiallyCompleted': return 'Partially Completed';
-      default: return status;
+      case 'InProgress':
+        return 'In Progress';
+      case 'PartiallyCompleted':
+        return 'Partially Completed';
+      default:
+        return status;
     }
   }
 
@@ -179,42 +197,48 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
       this.testSucceeded = false;
     }
 
-    this.httpClient.put(`api/email/${this.senderEndpoint}`, {
-      subject: this.subject,
-      htmlBody: this.htmlBody,
-      isTestEmail: isTest
-    }, { observe: 'response' }).subscribe({
-      next: (resp: HttpResponse<Object>) => {
-        this.errorText = null;
-        if (isTest) {
-          // Test email: synchronous 200 OK
-          this.testSucceeded = true;
+    this.httpClient
+      .put(
+        `api/email/${this.senderEndpoint}`,
+        {
+          subject: this.subject,
+          htmlBody: this.htmlBody,
+          isTestEmail: isTest,
+        },
+        { observe: 'response' },
+      )
+      .subscribe({
+        next: (resp: HttpResponse<object>) => {
+          this.errorText = null;
+          if (isTest) {
+            // Test email: synchronous 200 OK
+            this.testSucceeded = true;
+            this.editEnabled = true;
+          } else if (resp.status === 202) {
+            // Non-test: 202 Accepted with EmailJobSummary
+            const jobSummary = resp.body as EmailJobSummary;
+            this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint, jobId: jobSummary.id });
+            this.activeJob = jobSummary;
+            this.jobCompleted = false;
+            this.sendSucceeded = true;
+            this.subscribeToJobUpdates(jobSummary.id);
+            this.emailJobList?.loadJobs();
+          } else if (resp.status === 200 && resp.body && (resp.body as any).message) {
+            // 200 OK with a message means no matching recipients
+            this.errorText = (resp.body as any).message;
+            this.editEnabled = true;
+          } else {
+            // Fallback for unexpected success responses
+            this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint });
+            this.sendSucceeded = true;
+            this.editEnabled = true;
+          }
+        },
+        error: err => {
+          this.errorText = httpErrorMessage(err, 'Failed to send email.');
           this.editEnabled = true;
-        } else if (resp.status === 202) {
-          // Non-test: 202 Accepted with EmailJobSummary
-          const jobSummary = resp.body as EmailJobSummary;
-          this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint, jobId: jobSummary.id });
-          this.activeJob = jobSummary;
-          this.jobCompleted = false;
-          this.sendSucceeded = true;
-          this.subscribeToJobUpdates(jobSummary.id);
-          this.emailJobList?.loadJobs();
-        } else if (resp.status === 200 && resp.body && (resp.body as any).message) {
-          // 200 OK with a message means no matching recipients
-          this.errorText = (resp.body as any).message;
-          this.editEnabled = true;
-        } else {
-          // Fallback for unexpected success responses
-          this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint });
-          this.sendSucceeded = true;
-          this.editEnabled = true;
-        }
-      },
-      error: err => {
-        this.errorText = httpErrorMessage(err, 'Failed to send email.');
-        this.editEnabled = true;
-      }
-    });
+        },
+      });
   }
 
   sendNew() {
@@ -239,7 +263,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
             status: event.status,
             sentCount: event.sentCount,
             failedCount: event.failedCount,
-            totalRecipients: event.totalRecipients
+            totalRecipients: event.totalRecipients,
           };
         }
       }),
@@ -251,11 +275,11 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
             sentCount: event.sentCount,
             failedCount: event.failedCount,
             totalRecipients: event.totalRecipients,
-            lastError: event.lastError
+            lastError: event.lastError,
           };
           this.jobCompleted = true;
         }
-      })
+      }),
     );
   }
 
@@ -263,5 +287,4 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.jobSubscriptions.forEach(s => s.unsubscribe());
     this.jobSubscriptions = [];
   }
-
 }

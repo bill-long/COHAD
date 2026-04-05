@@ -20,7 +20,7 @@ namespace Web.PresentationModels
                 Id = folder.Id,
                 Name = folder.Name,
                 SortOrder = folder.SortOrder,
-                DocumentCount = documentCount
+                DocumentCount = documentCount,
             };
         }
     }

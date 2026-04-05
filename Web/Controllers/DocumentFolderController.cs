@@ -28,7 +28,8 @@ namespace Web.Controllers
             IDocumentFolderRepository folderRepository,
             IDocumentRepository documentRepository,
             IAuditLogRepository auditLogRepository,
-            DocumentListCache listCache)
+            DocumentListCache listCache
+        )
         {
             _userRepository = userRepository;
             _folderRepository = folderRepository;
@@ -61,8 +62,7 @@ namespace Web.Controllers
             var payload = folders
                 .OrderBy(f => f.SortOrder)
                 .ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(f => DocumentFolderSummary.FromStorageModel(
-                    f, countsByFolder.GetValueOrDefault(f.Id, 0)))
+                .Select(f => DocumentFolderSummary.FromStorageModel(f, countsByFolder.GetValueOrDefault(f.Id, 0)))
                 .ToList();
 
             return _listCache.OkWithETag(payload, Request, Response, DocumentListCache.FoldersResponseKey);
@@ -95,23 +95,25 @@ namespace Web.Controllers
                 Id = Guid.NewGuid(),
                 Name = name,
                 SortOrder = maxSort + 1,
-                CreatedUtc = DateTime.UtcNow
+                CreatedUtc = DateTime.UtcNow,
             };
 
             await _folderRepository.UpsertAsync(folder);
             _listCache.InvalidateFolders();
 
             var apiUser = await GetApiUserAsync();
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = folder.Id.ToString("D"),
-                SubjectName = folder.Name,
-                Action = "Created document folder.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser?.GivenName ?? ""} {apiUser?.Surname ?? ""}",
-                UserId = apiUser?.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = folder.Id.ToString("D"),
+                    SubjectName = folder.Name,
+                    Action = "Created document folder.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser?.GivenName ?? ""} {apiUser?.Surname ?? ""}",
+                    UserId = apiUser?.UniqueId,
+                }
+            );
 
             return Ok(DocumentFolderSummary.FromStorageModel(folder, 0));
         }
@@ -153,16 +155,18 @@ namespace Web.Controllers
             _listCache.InvalidateFolders();
 
             var apiUser = await GetApiUserAsync();
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = folder.Id.ToString("D"),
-                SubjectName = folder.Name,
-                Action = "Updated document folder.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser?.GivenName ?? ""} {apiUser?.Surname ?? ""}",
-                UserId = apiUser?.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = folder.Id.ToString("D"),
+                    SubjectName = folder.Name,
+                    Action = "Updated document folder.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser?.GivenName ?? ""} {apiUser?.Surname ?? ""}",
+                    UserId = apiUser?.UniqueId,
+                }
+            );
 
             var documents = await _listCache.GetAllDocumentsAsync();
             var count = documents.Count(d => d.FolderId == id);
@@ -183,23 +187,27 @@ namespace Web.Controllers
             var count = documents.Count(d => d.FolderId == id);
             if (count > 0)
             {
-                return Conflict($"Cannot delete folder \"{folder.Name}\" because it contains {count} document(s). Remove or reassign them first.");
+                return Conflict(
+                    $"Cannot delete folder \"{folder.Name}\" because it contains {count} document(s). Remove or reassign them first."
+                );
             }
 
             await _folderRepository.DeleteAsync(id);
             _listCache.InvalidateFolders();
 
             var apiUser = await GetApiUserAsync();
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = folder.Id.ToString("D"),
-                SubjectName = folder.Name,
-                Action = "Deleted document folder.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser?.GivenName ?? ""} {apiUser?.Surname ?? ""}",
-                UserId = apiUser?.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = folder.Id.ToString("D"),
+                    SubjectName = folder.Name,
+                    Action = "Deleted document folder.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser?.GivenName ?? ""} {apiUser?.Surname ?? ""}",
+                    UserId = apiUser?.UniqueId,
+                }
+            );
 
             return Ok();
         }

@@ -35,8 +35,8 @@ public sealed class SlugAliasTests
                 Title = "Different Title Now",
                 PublicSlug = "2025-different-title-now",
                 PreviousSlugs = new List<string> { "2025-neighborhood-picnic" },
-                StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc)
-            }
+                StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            },
         };
 
         // A new event wants the slug "2025-neighborhood-picnic" but it's an alias of the other event.
@@ -45,7 +45,8 @@ public sealed class SlugAliasTests
             newId,
             new DateTime(2025, 7, 1, 0, 0, 0, DateTimeKind.Utc),
             "Neighborhood Picnic",
-            allEvents);
+            allEvents
+        );
 
         Assert.NotEqual("2025-neighborhood-picnic", slug);
         Assert.StartsWith("2025-neighborhood-picnic-", slug);
@@ -64,8 +65,8 @@ public sealed class SlugAliasTests
                 Title = "Renamed",
                 PublicSlug = "2025-renamed",
                 PreviousSlugs = new List<string> { "2025-original" },
-                StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc)
-            }
+                StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            },
         };
 
         // Renaming back to the original title should get the original slug (self is skipped in uniqueness).
@@ -73,7 +74,8 @@ public sealed class SlugAliasTests
             myId,
             new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
             "Original",
-            allEvents);
+            allEvents
+        );
 
         Assert.Equal("2025-original", slug);
     }
@@ -92,8 +94,8 @@ public sealed class SlugAliasTests
                 Title = "Updated Title",
                 PublicSlug = "2026-updated-title",
                 PreviousSlugs = new List<string> { "2026-garden-tips" },
-                PublishUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
-            }
+                PublishUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            },
         };
 
         var newId = Guid.NewGuid();
@@ -101,7 +103,8 @@ public sealed class SlugAliasTests
             newId,
             new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc),
             "Garden Tips",
-            allPosts);
+            allPosts
+        );
 
         Assert.NotEqual("2026-garden-tips", slug);
         Assert.StartsWith("2026-garden-tips-", slug);
@@ -122,7 +125,7 @@ public sealed class SlugAliasTests
             PublicSlug = "2025-original-name",
             PreviousSlugs = new List<string> { "2025-old-name" },
             StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
-            Signups = new List<EventSignup>()
+            Signups = new List<EventSignup>(),
         };
         await repo.UpsertAsync(ev);
 
@@ -160,7 +163,7 @@ public sealed class SlugAliasTests
             PreviousSlugs = new List<string> { "2026-old-title" },
             PublishUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
             Content = "body",
-            AuthorDisplayName = "Test"
+            AuthorDisplayName = "Test",
         };
         await repo.UpsertAsync(post);
 
@@ -182,7 +185,8 @@ public sealed class SlugAliasTests
     private static EventsController CreateEventsController(
         IUserRepository users,
         ICommunityEventRepository events,
-        string nameId = "u1")
+        string nameId = "u1"
+    )
     {
         var c = new EventsController(
             users,
@@ -192,18 +196,24 @@ public sealed class SlugAliasTests
             Mock.Of<IOgThumbnailService>(),
             DefaultImageUploadHelper(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
-            Options.Create(new JsonOptions()));
+            Options.Create(new JsonOptions())
+        );
 
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, nameId),
-                    new Claim(IdentityProviderClaim, "google.com")
-                }, "Test"))
-            }
+                User = new ClaimsPrincipal(
+                    new ClaimsIdentity(
+                        new[]
+                        {
+                            new Claim(ClaimTypes.NameIdentifier, nameId),
+                            new Claim(IdentityProviderClaim, "google.com"),
+                        },
+                        "Test"
+                    )
+                ),
+            },
         };
         return c;
     }
@@ -211,7 +221,8 @@ public sealed class SlugAliasTests
     private static BlogController CreateBlogController(
         IUserRepository users,
         IBlogPostRepository posts,
-        string nameId = "u1")
+        string nameId = "u1"
+    )
     {
         var c = new BlogController(
             users,
@@ -220,18 +231,24 @@ public sealed class SlugAliasTests
             Mock.Of<IDocumentFileStore>(),
             Mock.Of<IAuditLogRepository>(),
             DefaultImageUploadHelper(),
-            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }));
+            Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 })
+        );
 
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, nameId),
-                    new Claim(IdentityProviderClaim, "google.com")
-                }, "Test"))
-            }
+                User = new ClaimsPrincipal(
+                    new ClaimsIdentity(
+                        new[]
+                        {
+                            new Claim(ClaimTypes.NameIdentifier, nameId),
+                            new Claim(IdentityProviderClaim, "google.com"),
+                        },
+                        "Test"
+                    )
+                ),
+            },
         };
         return c;
     }
@@ -239,20 +256,34 @@ public sealed class SlugAliasTests
     private static IImageUploadHelper DefaultImageUploadHelper()
     {
         var mock = new Mock<IImageUploadHelper>();
-        mock.Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((IFormFile f, string ext, string prefix, string baseName) =>
-                new ImageUploadResult($"{prefix}/{baseName}{ext.ToLowerInvariant()}", $"{baseName}{ext.ToLowerInvariant()}",
-                    ImageContentTypes.FromExtension(ext), f.Length));
+        mock.Setup(h =>
+                h.ConvertAndUploadAsync(
+                    It.IsAny<IFormFile>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>()
+                )
+            )
+            .ReturnsAsync(
+                (IFormFile f, string ext, string prefix, string baseName) =>
+                    new ImageUploadResult(
+                        $"{prefix}/{baseName}{ext.ToLowerInvariant()}",
+                        $"{baseName}{ext.ToLowerInvariant()}",
+                        ImageContentTypes.FromExtension(ext),
+                        f.Length
+                    )
+            );
         return mock.Object;
     }
 
-    private static User AdminUser(string uniqueId) => new()
-    {
-        UniqueId = uniqueId,
-        GivenName = "Test",
-        Surname = "Admin",
-        Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator }
-    };
+    private static User AdminUser(string uniqueId) =>
+        new()
+        {
+            UniqueId = uniqueId,
+            GivenName = "Test",
+            Surname = "Admin",
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+        };
 
     [Fact]
     public async Task EventUpsert_preserves_old_slug_when_title_changes()
@@ -270,18 +301,17 @@ public sealed class SlugAliasTests
             StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
             Signups = new List<EventSignup>(),
             CreatedByUniqueId = uniqueId,
-            CreatedUtc = DateTime.UtcNow.AddDays(-1)
+            CreatedUtc = DateTime.UtcNow.AddDays(-1),
         };
 
         CommunityEvent saved = null;
         var mockEvents = new Mock<ICommunityEventRepository>();
-        mockEvents.Setup(r => r.ReadAsync(eventId)).ReturnsAsync(new CommunityEventReadResult
-        {
-            Event = existing,
-            ETag = "\"e1\""
-        });
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = existing, ETag = "\"e1\"" });
         mockEvents.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<CommunityEvent> { existing });
-        mockEvents.Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
             .Callback<CommunityEvent, string>((e, _) => saved = e)
             .ReturnsAsync((CommunityEvent e, string _) => e);
 
@@ -289,12 +319,14 @@ public sealed class SlugAliasTests
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var c = CreateEventsController(mockUsers.Object, mockEvents.Object);
-        var result = await c.UpsertManage(new EventUpsertRequest
-        {
-            Id = eventId,
-            Title = "New Title",
-            StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc)
-        });
+        var result = await c.UpsertManage(
+            new EventUpsertRequest
+            {
+                Id = eventId,
+                Title = "New Title",
+                StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            }
+        );
 
         Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(saved);
@@ -318,18 +350,17 @@ public sealed class SlugAliasTests
             StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
             Signups = new List<EventSignup>(),
             CreatedByUniqueId = uniqueId,
-            CreatedUtc = DateTime.UtcNow.AddDays(-1)
+            CreatedUtc = DateTime.UtcNow.AddDays(-1),
         };
 
         CommunityEvent saved = null;
         var mockEvents = new Mock<ICommunityEventRepository>();
-        mockEvents.Setup(r => r.ReadAsync(eventId)).ReturnsAsync(new CommunityEventReadResult
-        {
-            Event = existing,
-            ETag = "\"e1\""
-        });
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = existing, ETag = "\"e1\"" });
         mockEvents.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<CommunityEvent> { existing });
-        mockEvents.Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
             .Callback<CommunityEvent, string>((e, _) => saved = e)
             .ReturnsAsync((CommunityEvent e, string _) => e);
 
@@ -337,13 +368,15 @@ public sealed class SlugAliasTests
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var c = CreateEventsController(mockUsers.Object, mockEvents.Object);
-        var result = await c.UpsertManage(new EventUpsertRequest
-        {
-            Id = eventId,
-            Title = "Same Title",
-            Description = "Updated description only",
-            StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc)
-        });
+        var result = await c.UpsertManage(
+            new EventUpsertRequest
+            {
+                Id = eventId,
+                Title = "Same Title",
+                Description = "Updated description only",
+                StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            }
+        );
 
         Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(saved);
@@ -368,18 +401,17 @@ public sealed class SlugAliasTests
             StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
             Signups = new List<EventSignup>(),
             CreatedByUniqueId = uniqueId,
-            CreatedUtc = DateTime.UtcNow.AddDays(-1)
+            CreatedUtc = DateTime.UtcNow.AddDays(-1),
         };
 
         CommunityEvent saved = null;
         var mockEvents = new Mock<ICommunityEventRepository>();
-        mockEvents.Setup(r => r.ReadAsync(eventId)).ReturnsAsync(new CommunityEventReadResult
-        {
-            Event = existing,
-            ETag = "\"e1\""
-        });
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = existing, ETag = "\"e1\"" });
         mockEvents.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<CommunityEvent> { existing });
-        mockEvents.Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
             .Callback<CommunityEvent, string>((e, _) => saved = e)
             .ReturnsAsync((CommunityEvent e, string _) => e);
 
@@ -387,12 +419,14 @@ public sealed class SlugAliasTests
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var c = CreateEventsController(mockUsers.Object, mockEvents.Object);
-        var result = await c.UpsertManage(new EventUpsertRequest
-        {
-            Id = eventId,
-            Title = "Third Title",
-            StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc)
-        });
+        var result = await c.UpsertManage(
+            new EventUpsertRequest
+            {
+                Id = eventId,
+                Title = "Third Title",
+                StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            }
+        );
 
         Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(saved);
@@ -412,7 +446,8 @@ public sealed class SlugAliasTests
         CommunityEvent saved = null;
         var mockEvents = new Mock<ICommunityEventRepository>();
         mockEvents.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<CommunityEvent>());
-        mockEvents.Setup(r => r.UpsertAsync(It.IsAny<CommunityEvent>()))
+        mockEvents
+            .Setup(r => r.UpsertAsync(It.IsAny<CommunityEvent>()))
             .Callback<CommunityEvent>(e => saved = e)
             .ReturnsAsync((CommunityEvent e) => e);
 
@@ -420,11 +455,13 @@ public sealed class SlugAliasTests
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var c = CreateEventsController(mockUsers.Object, mockEvents.Object);
-        var result = await c.UpsertManage(new EventUpsertRequest
-        {
-            Title = "Brand New",
-            StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc)
-        });
+        var result = await c.UpsertManage(
+            new EventUpsertRequest
+            {
+                Title = "Brand New",
+                StartUtc = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            }
+        );
 
         Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(saved);
@@ -450,18 +487,17 @@ public sealed class SlugAliasTests
             PublishUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
             AuthorDisplayName = "Test Admin",
             CreatedByUniqueId = uniqueId,
-            CreatedUtc = DateTime.UtcNow.AddDays(-1)
+            CreatedUtc = DateTime.UtcNow.AddDays(-1),
         };
 
         BlogPost saved = null;
         var mockPosts = new Mock<IBlogPostRepository>();
-        mockPosts.Setup(r => r.ReadAsync(postId)).ReturnsAsync(new BlogPostReadResult
-        {
-            Post = existing,
-            ETag = "\"e1\""
-        });
+        mockPosts
+            .Setup(r => r.ReadAsync(postId))
+            .ReturnsAsync(new BlogPostReadResult { Post = existing, ETag = "\"e1\"" });
         mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost> { existing });
-        mockPosts.Setup(r => r.ReplaceAsync(It.IsAny<BlogPost>(), It.IsAny<string>()))
+        mockPosts
+            .Setup(r => r.ReplaceAsync(It.IsAny<BlogPost>(), It.IsAny<string>()))
             .Callback<BlogPost, string>((p, _) => saved = p)
             .ReturnsAsync((BlogPost p, string _) => p);
 
@@ -469,13 +505,15 @@ public sealed class SlugAliasTests
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var c = CreateBlogController(mockUsers.Object, mockPosts.Object);
-        var result = await c.UpsertManage(new BlogPostUpsertRequest
-        {
-            Id = postId,
-            Title = "New Title",
-            Content = "body",
-            PublishUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
-        });
+        var result = await c.UpsertManage(
+            new BlogPostUpsertRequest
+            {
+                Id = postId,
+                Title = "New Title",
+                Content = "body",
+                PublishUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            }
+        );
 
         Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(saved);
@@ -500,18 +538,17 @@ public sealed class SlugAliasTests
             PublishUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
             AuthorDisplayName = "Test Admin",
             CreatedByUniqueId = uniqueId,
-            CreatedUtc = DateTime.UtcNow.AddDays(-1)
+            CreatedUtc = DateTime.UtcNow.AddDays(-1),
         };
 
         BlogPost saved = null;
         var mockPosts = new Mock<IBlogPostRepository>();
-        mockPosts.Setup(r => r.ReadAsync(postId)).ReturnsAsync(new BlogPostReadResult
-        {
-            Post = existing,
-            ETag = "\"e1\""
-        });
+        mockPosts
+            .Setup(r => r.ReadAsync(postId))
+            .ReturnsAsync(new BlogPostReadResult { Post = existing, ETag = "\"e1\"" });
         mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost> { existing });
-        mockPosts.Setup(r => r.ReplaceAsync(It.IsAny<BlogPost>(), It.IsAny<string>()))
+        mockPosts
+            .Setup(r => r.ReplaceAsync(It.IsAny<BlogPost>(), It.IsAny<string>()))
             .Callback<BlogPost, string>((p, _) => saved = p)
             .ReturnsAsync((BlogPost p, string _) => p);
 
@@ -519,13 +556,15 @@ public sealed class SlugAliasTests
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var c = CreateBlogController(mockUsers.Object, mockPosts.Object);
-        var result = await c.UpsertManage(new BlogPostUpsertRequest
-        {
-            Id = postId,
-            Title = "Same Title",
-            Content = "updated body",
-            PublishUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
-        });
+        var result = await c.UpsertManage(
+            new BlogPostUpsertRequest
+            {
+                Id = postId,
+                Title = "Same Title",
+                Content = "updated body",
+                PublishUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            }
+        );
 
         Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(saved);

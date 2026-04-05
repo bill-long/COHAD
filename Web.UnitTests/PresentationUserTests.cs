@@ -21,11 +21,16 @@ public sealed class PresentationUserTests
             IdentityProvider = "google.com",
             LastLoggedIn = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc),
             Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
-            OwnedHomeIds = new List<Guid>()
+            OwnedHomeIds = new List<Guid>(),
         };
         var homes = new List<Home>
         {
-            new Home { Id = Guid.NewGuid(), StreetNumber = 10, StreetName = "Oak" }
+            new Home
+            {
+                Id = Guid.NewGuid(),
+                StreetNumber = 10,
+                StreetName = "Oak",
+            },
         };
 
         var p = PresentationUser.FromStorageModel(user, homes);

@@ -20,8 +20,7 @@ namespace Web.MockData
         {
             lock (_committees)
             {
-                return Task.FromResult(
-                    _committees.Values.OrderBy(c => c.DisplayOrder).Select(Clone).ToList());
+                return Task.FromResult(_committees.Values.OrderBy(c => c.DisplayOrder).Select(Clone).ToList());
             }
         }
 
@@ -29,8 +28,7 @@ namespace Web.MockData
         {
             lock (_committees)
             {
-                return Task.FromResult(
-                    _committees.TryGetValue(committeeKey, out var c) ? Clone(c) : null);
+                return Task.FromResult(_committees.TryGetValue(committeeKey, out var c) ? Clone(c) : null);
             }
         }
 
@@ -65,7 +63,7 @@ namespace Web.MockData
                             Title = "President",
                             Bio = "Longtime Canyon Oaks resident and community volunteer.",
                             ReceivesForwardedEmail = true,
-                            DisplayOrder = 1
+                            DisplayOrder = 1,
                         },
                         new CommitteeMember
                         {
@@ -74,9 +72,9 @@ namespace Web.MockData
                             Title = "Treasurer",
                             Bio = "Manages the HOA budget and financial reports.",
                             ReceivesForwardedEmail = true,
-                            DisplayOrder = 2
-                        }
-                    }
+                            DisplayOrder = 2,
+                        },
+                    },
                 },
                 new Committee
                 {
@@ -94,9 +92,9 @@ namespace Web.MockData
                             ResidentId = MockDataConstants.MockResident1Id,
                             Bio = "Enjoys meeting new neighbors and organizing welcome events.",
                             ReceivesForwardedEmail = true,
-                            DisplayOrder = 1
-                        }
-                    }
+                            DisplayOrder = 1,
+                        },
+                    },
                 },
                 new Committee
                 {
@@ -106,7 +104,7 @@ namespace Web.MockData
                     Description = "Organizes neighborhood beautification, garden tours, and plant swaps.",
                     DisplayOrder = 3,
                     ManagementRole = User.Role.GardenClub,
-                    Members = new List<CommitteeMember>()
+                    Members = new List<CommitteeMember>(),
                 },
                 new Committee
                 {
@@ -124,9 +122,9 @@ namespace Web.MockData
                             ResidentId = MockDataConstants.TaylorResident1Id,
                             Title = "Chair",
                             ReceivesForwardedEmail = true,
-                            DisplayOrder = 1
-                        }
-                    }
+                            DisplayOrder = 1,
+                        },
+                    },
                 },
                 new Committee
                 {
@@ -136,14 +134,15 @@ namespace Web.MockData
                     Description = "Sends cards and well-wishes to neighbors during milestones and difficult times.",
                     DisplayOrder = 5,
                     ManagementRole = User.Role.SunshineCommittee,
-                    Members = new List<CommitteeMember>()
+                    Members = new List<CommitteeMember>(),
                 },
                 new Committee
                 {
                     Id = "architectural",
                     CommitteeEmail = "ac@cohad.org",
                     DisplayName = "Architectural Committee",
-                    Description = "Reviews and approves plans for new structures and modifications to ensure compliance with community covenants.",
+                    Description =
+                        "Reviews and approves plans for new structures and modifications to ensure compliance with community covenants.",
                     DisplayOrder = 6,
                     ManagementRole = User.Role.ArchitecturalCommittee,
                     Members = new List<CommitteeMember>
@@ -155,42 +154,44 @@ namespace Web.MockData
                             Title = "Chair",
                             Bio = "Helps maintain the architectural standards of Canyon Oaks.",
                             ReceivesForwardedEmail = true,
-                            DisplayOrder = 1
-                        }
-                    }
-                }
+                            DisplayOrder = 1,
+                        },
+                    },
+                },
             };
 
             foreach (var c in committees)
                 _committees[c.Id] = c;
         }
 
-        private static Committee Clone(Committee c) => new()
-        {
-            Id = c.Id,
-            CommitteeEmail = c.CommitteeEmail,
-            DisplayName = c.DisplayName,
-            Description = c.Description,
-            DisplayOrder = c.DisplayOrder,
-            Members = c.Members?.Select(CloneMember).ToList() ?? new List<CommitteeMember>(),
-            ManagementRole = c.ManagementRole,
-            GraphMessageRuleId = c.GraphMessageRuleId,
-            LastSyncedUtc = c.LastSyncedUtc,
-            LastSyncStatus = c.LastSyncStatus,
-            LastSyncError = c.LastSyncError
-        };
+        private static Committee Clone(Committee c) =>
+            new()
+            {
+                Id = c.Id,
+                CommitteeEmail = c.CommitteeEmail,
+                DisplayName = c.DisplayName,
+                Description = c.Description,
+                DisplayOrder = c.DisplayOrder,
+                Members = c.Members?.Select(CloneMember).ToList() ?? new List<CommitteeMember>(),
+                ManagementRole = c.ManagementRole,
+                GraphMessageRuleId = c.GraphMessageRuleId,
+                LastSyncedUtc = c.LastSyncedUtc,
+                LastSyncStatus = c.LastSyncStatus,
+                LastSyncError = c.LastSyncError,
+            };
 
-        private static CommitteeMember CloneMember(CommitteeMember m) => new()
-        {
-            Id = m.Id,
-            ResidentId = m.ResidentId,
-            Title = m.Title,
-            Bio = m.Bio,
-            PhotoBlobPath = m.PhotoBlobPath,
-            PhotoContentType = m.PhotoContentType,
-            ReceivesForwardedEmail = m.ReceivesForwardedEmail,
-            PhotoOffsetY = m.PhotoOffsetY,
-            DisplayOrder = m.DisplayOrder
-        };
+        private static CommitteeMember CloneMember(CommitteeMember m) =>
+            new()
+            {
+                Id = m.Id,
+                ResidentId = m.ResidentId,
+                Title = m.Title,
+                Bio = m.Bio,
+                PhotoBlobPath = m.PhotoBlobPath,
+                PhotoContentType = m.PhotoContentType,
+                ReceivesForwardedEmail = m.ReceivesForwardedEmail,
+                PhotoOffsetY = m.PhotoOffsetY,
+                DisplayOrder = m.DisplayOrder,
+            };
     }
 }

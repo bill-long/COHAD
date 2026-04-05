@@ -13,13 +13,13 @@ export interface ConfirmDialogData {
   selector: 'app-confirm-dialog',
   templateUrl: './confirm-dialog.component.html',
   styleUrls: ['./confirm-dialog.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class ConfirmDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<ConfirmDialogComponent, boolean>,
-    @Inject(MAT_DIALOG_DATA) public data: ConfirmDialogData
-  ) { }
+    @Inject(MAT_DIALOG_DATA) public data: ConfirmDialogData,
+  ) {}
 
   cancel() {
     this.dialogRef.close(false);
@@ -29,4 +29,3 @@ export class ConfirmDialogComponent {
     this.dialogRef.close(true);
   }
 }
-

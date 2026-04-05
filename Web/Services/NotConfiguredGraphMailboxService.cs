@@ -19,16 +19,20 @@ namespace Web.Services
             _logger = logger;
         }
 
-        public Task<Committee> SyncForwardingRuleAsync(Committee committee,
-            IReadOnlyDictionary<Guid, Resident> residents)
+        public Task<Committee> SyncForwardingRuleAsync(
+            Committee committee,
+            IReadOnlyDictionary<Guid, Resident> residents
+        )
         {
             _logger.LogWarning(
                 "Graph API credentials are not configured. Forwarding sync for {Email} skipped.",
-                committee.CommitteeEmail);
+                committee.CommitteeEmail
+            );
 
             committee.LastSyncedUtc = DateTime.UtcNow;
             committee.LastSyncStatus = "NotConfigured";
-            committee.LastSyncError = "Graph API credentials (Graph:TenantId, Graph:ClientId, Graph:ClientSecret) are not configured.";
+            committee.LastSyncError =
+                "Graph API credentials (Graph:TenantId, Graph:ClientId, Graph:ClientSecret) are not configured.";
 
             return Task.FromResult(committee);
         }

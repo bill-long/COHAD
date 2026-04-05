@@ -4,20 +4,20 @@ import { Observable } from 'rxjs';
 import { EmailPreferences } from '../models';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class EmailPreferencesService {
-  constructor(private readonly httpClient: HttpClient) { }
+  constructor(private readonly httpClient: HttpClient) {}
 
   getPreferences(token: string): Observable<EmailPreferences> {
     return this.httpClient.get<EmailPreferences>(`api/email/preferences`, {
-      params: { token }
+      params: { token },
     });
   }
 
   updatePreferences(token: string, prefs: EmailPreferences): Observable<unknown> {
     return this.httpClient.put(`api/email/preferences`, prefs, {
-      params: { token }
+      params: { token },
     });
   }
 }

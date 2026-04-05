@@ -42,7 +42,9 @@ namespace Web.Services.Repositories
 
         public async Task<List<NewAuditLogEntry>> GetAllAsync()
         {
-            var iterator = _auditLogContainer.GetItemQueryIterator<JObject>(new CosmosQueryDefinition("SELECT * FROM c"));
+            var iterator = _auditLogContainer.GetItemQueryIterator<JObject>(
+                new CosmosQueryDefinition("SELECT * FROM c")
+            );
             var results = new List<NewAuditLogEntry>();
             while (iterator.HasMoreResults)
             {
@@ -80,7 +82,8 @@ namespace Web.Services.Repositories
             var iterator = _auditLogContainer.GetItemQueryIterator<JObject>(
                 queryDefinition,
                 normalizedContinuationToken,
-                new QueryRequestOptions { MaxItemCount = pageSize });
+                new QueryRequestOptions { MaxItemCount = pageSize }
+            );
 
             try
             {
@@ -89,21 +92,23 @@ namespace Web.Services.Repositories
                 {
                     Items = response.Select(CosmosLegacyDocumentMapper.ToAuditLog).ToList(),
                     ContinuationToken = response.ContinuationToken,
-                    HasMore = !string.IsNullOrWhiteSpace(response.ContinuationToken)
+                    HasMore = !string.IsNullOrWhiteSpace(response.ContinuationToken),
                 };
             }
-            catch (CosmosException ex) when (normalizedContinuationToken != null && ex.StatusCode == HttpStatusCode.BadRequest)
+            catch (CosmosException ex)
+                when (normalizedContinuationToken != null && ex.StatusCode == HttpStatusCode.BadRequest)
             {
                 // Invalid/expired continuation token — avoid surfacing as an opaque 500; client can treat as end of list.
                 _logger.LogWarning(
                     ex,
                     "Audit log paged query returned BadRequest while using a continuation token; returning empty page. SubStatusCode={SubStatusCode}",
-                    ex.SubStatusCode);
+                    ex.SubStatusCode
+                );
                 return new AuditLogPage
                 {
                     Items = new List<NewAuditLogEntry>(),
                     ContinuationToken = null,
-                    HasMore = false
+                    HasMore = false,
                 };
             }
         }

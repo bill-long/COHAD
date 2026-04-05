@@ -6,7 +6,7 @@ namespace Web.Models
     public enum PreferredContactMethod
     {
         Call = 0,
-        Text = 1
+        Text = 1,
     }
 
     public class YouthServiceListing

@@ -34,16 +34,18 @@ namespace Web.MockData
             if (string.IsNullOrEmpty(signingKey))
             {
                 throw new InvalidOperationException(
-                    "MockData requires a non-empty MockJwt:SigningKey. Set user secret " +
-                    "(dotnet user-secrets set \"MockJwt:SigningKey\" \"<32+ UTF-8 bytes>\") or environment variable " +
-                    "MockJwt__SigningKey (do not commit real keys).");
+                    "MockData requires a non-empty MockJwt:SigningKey. Set user secret "
+                        + "(dotnet user-secrets set \"MockJwt:SigningKey\" \"<32+ UTF-8 bytes>\") or environment variable "
+                        + "MockJwt__SigningKey (do not commit real keys)."
+                );
             }
 
             var byteCount = Encoding.UTF8.GetByteCount(signingKey);
             if (byteCount < MinUtf8ByteLength)
             {
                 throw new InvalidOperationException(
-                    $"MockJwt:SigningKey must be at least {MinUtf8ByteLength} UTF-8 bytes for HS256 (got {byteCount}).");
+                    $"MockJwt:SigningKey must be at least {MinUtf8ByteLength} UTF-8 bytes for HS256 (got {byteCount})."
+                );
             }
         }
     }

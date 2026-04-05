@@ -15,10 +15,10 @@ export interface ReorderItem {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class DocumentFolderService {
-  constructor(private readonly httpClient: HttpClient) { }
+  constructor(private readonly httpClient: HttpClient) {}
 
   getAll(): Observable<DocumentFolder[]> {
     return this.httpClient.get<DocumentFolder[]>('api/document-folder');

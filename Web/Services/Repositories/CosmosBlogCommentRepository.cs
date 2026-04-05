@@ -32,8 +32,9 @@ namespace Web.Services.Repositories
 
         public async Task<List<BlogComment>> GetByBlogPostIdAsync(Guid blogPostId)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.BlogPostId = @blogPostId ORDER BY c.CreatedUtc ASC")
-                .WithParameter("@blogPostId", blogPostId.ToString("D"));
+            var query = new CosmosQueryDefinition(
+                "SELECT * FROM c WHERE c.BlogPostId = @blogPostId ORDER BY c.CreatedUtc ASC"
+            ).WithParameter("@blogPostId", blogPostId.ToString("D"));
             var iterator = _container.GetItemQueryIterator<JObject>(query);
             var results = new List<BlogComment>();
             while (iterator.HasMoreResults)
@@ -51,7 +52,8 @@ namespace Web.Services.Repositories
             {
                 var response = await _container.ReadItemAsync<JObject>(
                     ToDocumentId(commentId),
-                    CosmosPartitionKey.None);
+                    CosmosPartitionKey.None
+                );
                 return ToBlogComment(response.Resource);
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
@@ -109,7 +111,7 @@ namespace Web.Services.Repositories
                 AuthorUniqueId = doc.Value<string>("AuthorUniqueId"),
                 AuthorDisplayName = doc.Value<string>("AuthorDisplayName"),
                 Content = doc.Value<string>("Content"),
-                CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue
+                CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
             };
         }
 
@@ -123,7 +125,7 @@ namespace Web.Services.Repositories
                 ["AuthorUniqueId"] = comment.AuthorUniqueId,
                 ["AuthorDisplayName"] = comment.AuthorDisplayName,
                 ["Content"] = comment.Content ?? string.Empty,
-                ["CreatedUtc"] = JToken.FromObject(comment.CreatedUtc)
+                ["CreatedUtc"] = JToken.FromObject(comment.CreatedUtc),
             };
         }
     }

@@ -26,7 +26,7 @@ namespace Web.PresentationModels
                 VendorName = vendor.Name,
                 AuthorDisplayName = flag.AuthorDisplayName,
                 FlagNote = flag.FlagNote,
-                CreatedUtc = flag.CreatedUtc
+                CreatedUtc = flag.CreatedUtc,
             };
         }
     }

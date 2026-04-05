@@ -25,7 +25,7 @@ namespace Web.MockData
                 StreetAddress = "123 Mock Lane",
                 Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator, User.Role.Board },
                 OwnedHomeIds = new List<Guid> { MockDataConstants.SampleHomeId },
-                LastLoggedIn = DateTime.UtcNow.AddDays(-1)
+                LastLoggedIn = DateTime.UtcNow.AddDays(-1),
             };
             UserAssociationState.Apply(adminUser);
             _users[adminUser.UniqueId] = adminUser;
@@ -41,7 +41,7 @@ namespace Web.MockData
                 StreetAddress = "456 Test Court",
                 Roles = new List<User.Role> { User.Role.Resident },
                 OwnedHomeIds = new List<Guid> { MockDataConstants.SecondSampleHomeId },
-                LastLoggedIn = DateTime.UtcNow.AddDays(-2)
+                LastLoggedIn = DateTime.UtcNow.AddDays(-2),
             };
             UserAssociationState.Apply(secondaryUser);
             _users[secondaryUser.UniqueId] = secondaryUser;
@@ -114,7 +114,7 @@ namespace Web.MockData
                 OwnedHomeIds = u.OwnedHomeIds?.ToList() ?? new List<Guid>(),
                 LastLoggedIn = u.LastLoggedIn,
                 UnassociatedSinceUtc = u.UnassociatedSinceUtc,
-                NoRolesSinceUtc = u.NoRolesSinceUtc
+                NoRolesSinceUtc = u.NoRolesSinceUtc,
             };
         }
     }

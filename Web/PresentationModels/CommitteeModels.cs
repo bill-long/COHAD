@@ -23,21 +23,22 @@ namespace Web.PresentationModels
 
         public List<CommitteeMemberCard> Members { get; set; }
 
-        public static CommitteeCard FromStorageModel(Committee c,
-            IReadOnlyDictionary<Guid, Resident> residents) => new()
-        {
-            Id = c.Id,
-            DisplayName = c.DisplayName,
-            Description = c.Description,
-            CommitteeEmail = c.CommitteeEmail,
-            DisplayOrder = c.DisplayOrder,
-            MemberCount = c.Members?.Count ?? 0,
-            Members = (c.Members ?? new List<CommitteeMember>())
-                .OrderBy(m => m.DisplayOrder)
-                .Select(m => CommitteeMemberCard.FromStorageModel(m, c.Id,
-                    residents.GetValueOrDefault(m.ResidentId)))
-                .ToList()
-        };
+        public static CommitteeCard FromStorageModel(Committee c, IReadOnlyDictionary<Guid, Resident> residents) =>
+            new()
+            {
+                Id = c.Id,
+                DisplayName = c.DisplayName,
+                Description = c.Description,
+                CommitteeEmail = c.CommitteeEmail,
+                DisplayOrder = c.DisplayOrder,
+                MemberCount = c.Members?.Count ?? 0,
+                Members = (c.Members ?? new List<CommitteeMember>())
+                    .OrderBy(m => m.DisplayOrder)
+                    .Select(m =>
+                        CommitteeMemberCard.FromStorageModel(m, c.Id, residents.GetValueOrDefault(m.ResidentId))
+                    )
+                    .ToList(),
+            };
     }
 
     /// <summary>Public view of a committee member (excludes email, homeId, forwarding flag).</summary>
@@ -60,19 +61,23 @@ namespace Web.PresentationModels
         public int DisplayOrder { get; set; }
 
         internal static CommitteeMemberCard FromStorageModel(
-            CommitteeMember m, string committeeKey, Resident resident) => new()
-        {
-            Id = m.Id,
-            DisplayName = ResidentDisplayName(resident),
-            Title = m.Title,
-            Bio = m.Bio,
-            HasPhoto = !string.IsNullOrWhiteSpace(m.PhotoBlobPath),
-            PhotoDownloadUrl = !string.IsNullOrWhiteSpace(m.PhotoBlobPath)
-                ? $"/api/committee/{Uri.EscapeDataString(committeeKey)}/members/{m.Id:D}/photo"
-                : null,
-            PhotoOffsetY = m.PhotoOffsetY,
-            DisplayOrder = m.DisplayOrder
-        };
+            CommitteeMember m,
+            string committeeKey,
+            Resident resident
+        ) =>
+            new()
+            {
+                Id = m.Id,
+                DisplayName = ResidentDisplayName(resident),
+                Title = m.Title,
+                Bio = m.Bio,
+                HasPhoto = !string.IsNullOrWhiteSpace(m.PhotoBlobPath),
+                PhotoDownloadUrl = !string.IsNullOrWhiteSpace(m.PhotoBlobPath)
+                    ? $"/api/committee/{Uri.EscapeDataString(committeeKey)}/members/{m.Id:D}/photo"
+                    : null,
+                PhotoOffsetY = m.PhotoOffsetY,
+                DisplayOrder = m.DisplayOrder,
+            };
     }
 
     /// <summary>Admin view of a committee (includes all fields).</summary>
@@ -96,23 +101,22 @@ namespace Web.PresentationModels
 
         public string LastSyncError { get; set; }
 
-        public static CommitteeAdmin FromStorageModel(Committee c,
-            IReadOnlyDictionary<Guid, Resident> residents) => new()
-        {
-            Id = c.Id,
-            DisplayName = c.DisplayName,
-            Description = c.Description,
-            CommitteeEmail = c.CommitteeEmail,
-            DisplayOrder = c.DisplayOrder,
-            Members = (c.Members ?? new List<CommitteeMember>())
-                .OrderBy(m => m.DisplayOrder)
-                .Select(m => CommitteeMemberAdmin.FromStorageModel(m,
-                    residents.GetValueOrDefault(m.ResidentId)))
-                .ToList(),
-            LastSyncedUtc = c.LastSyncedUtc,
-            LastSyncStatus = c.LastSyncStatus,
-            LastSyncError = c.LastSyncError
-        };
+        public static CommitteeAdmin FromStorageModel(Committee c, IReadOnlyDictionary<Guid, Resident> residents) =>
+            new()
+            {
+                Id = c.Id,
+                DisplayName = c.DisplayName,
+                Description = c.Description,
+                CommitteeEmail = c.CommitteeEmail,
+                DisplayOrder = c.DisplayOrder,
+                Members = (c.Members ?? new List<CommitteeMember>())
+                    .OrderBy(m => m.DisplayOrder)
+                    .Select(m => CommitteeMemberAdmin.FromStorageModel(m, residents.GetValueOrDefault(m.ResidentId)))
+                    .ToList(),
+                LastSyncedUtc = c.LastSyncedUtc,
+                LastSyncStatus = c.LastSyncStatus,
+                LastSyncError = c.LastSyncError,
+            };
     }
 
     /// <summary>Admin view of a committee member (includes email, residentId, forwarding).</summary>
@@ -138,28 +142,28 @@ namespace Web.PresentationModels
 
         public int DisplayOrder { get; set; }
 
-        internal static CommitteeMemberAdmin FromStorageModel(
-            CommitteeMember m, Resident resident) => new()
-        {
-            Id = m.Id,
-            ResidentId = m.ResidentId,
-            DisplayName = ResidentDisplayName(resident),
-            Title = m.Title,
-            Bio = m.Bio,
-            HasPhoto = !string.IsNullOrWhiteSpace(m.PhotoBlobPath),
-            Email = resident?.EmailAddresses?
-                .FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))?.Address,
-            ReceivesForwardedEmail = m.ReceivesForwardedEmail,
-            PhotoOffsetY = m.PhotoOffsetY,
-            DisplayOrder = m.DisplayOrder
-        };
+        internal static CommitteeMemberAdmin FromStorageModel(CommitteeMember m, Resident resident) =>
+            new()
+            {
+                Id = m.Id,
+                ResidentId = m.ResidentId,
+                DisplayName = ResidentDisplayName(resident),
+                Title = m.Title,
+                Bio = m.Bio,
+                HasPhoto = !string.IsNullOrWhiteSpace(m.PhotoBlobPath),
+                Email = resident?.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))?.Address,
+                ReceivesForwardedEmail = m.ReceivesForwardedEmail,
+                PhotoOffsetY = m.PhotoOffsetY,
+                DisplayOrder = m.DisplayOrder,
+            };
     }
 
     internal static class CommitteeMemberHelpers
     {
         internal static string ResidentDisplayName(Resident resident)
         {
-            if (resident == null) return "Unknown";
+            if (resident == null)
+                return "Unknown";
             return $"{resident.GivenName} {resident.Surname}".Trim();
         }
     }

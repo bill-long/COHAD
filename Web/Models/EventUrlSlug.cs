@@ -74,7 +74,12 @@ namespace Web.Models
         /// <summary>
         /// Assigns a unique <see cref="CommunityEvent.PublicSlug"/> among all other events.
         /// </summary>
-        public static string EnsureUniquePublicSlug(Guid id, DateTime startUtc, string title, IEnumerable<CommunityEvent> allEvents)
+        public static string EnsureUniquePublicSlug(
+            Guid id,
+            DateTime startUtc,
+            string title,
+            IEnumerable<CommunityEvent> allEvents
+        )
         {
             var baseSlug = BuildBaseSlug(startUtc, title);
             var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

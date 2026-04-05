@@ -30,7 +30,8 @@ namespace Web.Controllers
             IResidentRepository residentRepository,
             IAuditLogRepository auditLogRepository,
             ResidentCleanupService residentCleanup,
-            ILogger<HomeController> logger)
+            ILogger<HomeController> logger
+        )
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
@@ -62,8 +63,7 @@ namespace Web.Controllers
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] UpdatedHome updatedHome)
         {
-            var apiUser =
-                await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
 
             var ownsHome = apiUser.OwnedHomeIds != null && apiUser.OwnedHomeIds.Contains(updatedHome.Id);
             if (!ownsHome)
@@ -88,8 +88,8 @@ namespace Web.Controllers
             if (updatedHome.Residents != null)
             {
                 // Validate and sanitize incoming residents.
-                var incomingResidents = updatedHome.Residents
-                    .Where(r => r != null && !string.IsNullOrWhiteSpace(r.GivenName?.Trim()))
+                var incomingResidents = updatedHome
+                    .Residents.Where(r => r != null && !string.IsNullOrWhiteSpace(r.GivenName?.Trim()))
                     .ToList();
 
                 foreach (var resident in incomingResidents)
@@ -105,10 +105,13 @@ namespace Web.Controllers
                     }
                     else if (resident.EmailAddresses != null && resident.EmailAddresses.Any())
                     {
-                        resident.EmailAddresses =
-                            resident.EmailAddresses
-                                .Where(e => e != null && !string.IsNullOrWhiteSpace(e.Address) && e.Address.Contains("@", StringComparison.OrdinalIgnoreCase))
-                                .ToList();
+                        resident.EmailAddresses = resident
+                            .EmailAddresses.Where(e =>
+                                e != null
+                                && !string.IsNullOrWhiteSpace(e.Address)
+                                && e.Address.Contains("@", StringComparison.OrdinalIgnoreCase)
+                            )
+                            .ToList();
                     }
                 }
 
@@ -116,8 +119,9 @@ namespace Web.Controllers
                 var existingResidents = await _residentRepository.GetByHomeIdAsync(updatedHome.Id);
                 var existingById = existingResidents.Where(r => r.Id != Guid.Empty).ToDictionary(r => r.Id);
 
-                var invalidResidentId = incomingResidents
-                    .FirstOrDefault(r => r.Id != Guid.Empty && !existingById.ContainsKey(r.Id));
+                var invalidResidentId = incomingResidents.FirstOrDefault(r =>
+                    r.Id != Guid.Empty && !existingById.ContainsKey(r.Id)
+                );
                 if (invalidResidentId != null)
                 {
                     return BadRequest("Resident IDs must already belong to the home being updated.");
@@ -134,7 +138,9 @@ namespace Web.Controllers
                 }
                 catch (ConcurrencyConflictException)
                 {
-                    return Conflict(new { error = "Home was modified by another request. Please refresh and try again." });
+                    return Conflict(
+                        new { error = "Home was modified by another request. Please refresh and try again." }
+                    );
                 }
 
                 // Home saved — now apply resident creates/updates/deletes.
@@ -168,7 +174,11 @@ namespace Web.Controllers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to apply resident changes for home {HomeId} after home save succeeded", updatedHome.Id);
+                    _logger.LogError(
+                        ex,
+                        "Failed to apply resident changes for home {HomeId} after home save succeeded",
+                        updatedHome.Id
+                    );
                 }
             }
             else
@@ -183,20 +193,24 @@ namespace Web.Controllers
                 }
                 catch (ConcurrencyConflictException)
                 {
-                    return Conflict(new { error = "Home was modified by another request. Please refresh and try again." });
+                    return Conflict(
+                        new { error = "Home was modified by another request. Please refresh and try again." }
+                    );
                 }
             }
 
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = storedHome.Id.ToString(),
-                SubjectName = $"{storedHome.StreetNumber} {storedHome.StreetName}",
-                Action = "Updated home information.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = storedHome.Id.ToString(),
+                    SubjectName = $"{storedHome.StreetNumber} {storedHome.StreetName}",
+                    Action = "Updated home information.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             return Ok();
         }
@@ -229,16 +243,18 @@ namespace Web.Controllers
             }
 
             userToUpdate.OwnedHomeIds = userToUpdate.OwnedHomeIds.Where(h => h != homeId).ToList();
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = userToUpdate.UniqueId,
-                SubjectName = userToUpdate.Emails,
-                Action = $"Removed home {homeId:D} from this user.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = userToUpdate.UniqueId,
+                    SubjectName = userToUpdate.Emails,
+                    Action = $"Removed home {homeId:D} from this user.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             await _userRepository.UpsertAsync(userToUpdate);
             return Ok();
@@ -256,7 +272,7 @@ namespace Web.Controllers
                         GivenName = u.GivenName,
                         Surname = u.Surname,
                         Emails = u.Emails,
-                        IdentityProvider = u.IdentityProvider
+                        IdentityProvider = u.IdentityProvider,
                     })
                     .ToList();
             }

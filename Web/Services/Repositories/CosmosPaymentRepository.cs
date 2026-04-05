@@ -51,7 +51,12 @@ namespace Web.Services.Repositories
         private readonly IResidentRepository _residents;
         private readonly IUserRepository _users;
 
-        public CosmosPaymentRepository(CosmosContainer paymentsContainer, IHomeRepository homes, IResidentRepository residents, IUserRepository users)
+        public CosmosPaymentRepository(
+            CosmosContainer paymentsContainer,
+            IHomeRepository homes,
+            IResidentRepository residents,
+            IUserRepository users
+        )
         {
             _paymentsContainer = paymentsContainer;
             _homes = homes;
@@ -61,8 +66,10 @@ namespace Web.Services.Repositories
 
         public async Task<List<Payment>> GetByPayerUniqueIdAsync(string uniqueId)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PayerUniqueId = @uniqueId")
-                .WithParameter("@uniqueId", uniqueId);
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PayerUniqueId = @uniqueId").WithParameter(
+                "@uniqueId",
+                uniqueId
+            );
             var iterator = _paymentsContainer.GetItemQueryIterator<JObject>(query);
             var results = new List<Payment>();
             while (iterator.HasMoreResults)
@@ -96,12 +103,13 @@ namespace Web.Services.Repositories
                     continue;
                 }
 
-                var query = new CosmosQueryDefinition(@"
+                var query = new CosmosQueryDefinition(
+                    @"
 SELECT * FROM c WHERE
   (NOT IS_DEFINED(c.HomeId) OR IS_NULL(c.HomeId) OR c.HomeId = '')
   AND (NOT IS_DEFINED(c.PayerUniqueId) OR IS_NULL(c.PayerUniqueId) OR c.PayerUniqueId = '')
-  AND LOWER(c.PayerEmail) = @email")
-                    .WithParameter("@email", normalized);
+  AND LOWER(c.PayerEmail) = @email"
+                ).WithParameter("@email", normalized);
 
                 var iterator = _paymentsContainer.GetItemQueryIterator<JObject>(query);
                 while (iterator.HasMoreResults)
@@ -127,23 +135,25 @@ SELECT * FROM c WHERE
 
                 foreach (var p in await QueryPaymentsByHomeIdsAsync(ownedHomeIds).ConfigureAwait(false))
                 {
-                    if (p.HomeId is Guid hid &&
-                        PaymentHomeAssociation.PayerEmailStillOnHome(p.PayerEmail, hid, emailSets))
+                    if (
+                        p.HomeId is Guid hid
+                        && PaymentHomeAssociation.PayerEmailStillOnHome(p.PayerEmail, hid, emailSets)
+                    )
                     {
                         byId[p.Id] = p;
                     }
                 }
             }
 
-            return byId.Values
-                .OrderByDescending(p => p.Date ?? DateTime.MinValue)
-                .ToList();
+            return byId.Values.OrderByDescending(p => p.Date ?? DateTime.MinValue).ToList();
         }
 
         public async Task<List<Payment>> GetByHomeIdAsync(Guid homeId)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.HomeId = @hid")
-                .WithParameter("@hid", homeId.ToString("D"));
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.HomeId = @hid").WithParameter(
+                "@hid",
+                homeId.ToString("D")
+            );
             var iterator = _paymentsContainer.GetItemQueryIterator<JObject>(query);
             var results = new List<Payment>();
             while (iterator.HasMoreResults)
@@ -160,21 +170,22 @@ SELECT * FROM c WHERE
             CosmosQueryDefinition query;
             if (minDateUtc.HasValue)
             {
-                query = new CosmosQueryDefinition(@"
+                query = new CosmosQueryDefinition(
+                    @"
 SELECT * FROM c WHERE
   (NOT IS_DEFINED(c.HomeId) OR IS_NULL(c.HomeId) OR c.HomeId = '')
   AND c.PaymentType = @pt
-  AND (NOT IS_DEFINED(c.Date) OR IS_NULL(c.Date) OR c.Date >= @minDate)")
-                    .WithParameter("@pt", (int)Payment.Type.PayPalSync)
-                    .WithParameter("@minDate", minDateUtc.Value);
+  AND (NOT IS_DEFINED(c.Date) OR IS_NULL(c.Date) OR c.Date >= @minDate)"
+                ).WithParameter("@pt", (int)Payment.Type.PayPalSync).WithParameter("@minDate", minDateUtc.Value);
             }
             else
             {
-                query = new CosmosQueryDefinition(@"
+                query = new CosmosQueryDefinition(
+                    @"
 SELECT * FROM c WHERE
   (NOT IS_DEFINED(c.HomeId) OR IS_NULL(c.HomeId) OR c.HomeId = '')
-  AND c.PaymentType = @pt")
-                    .WithParameter("@pt", (int)Payment.Type.PayPalSync);
+  AND c.PaymentType = @pt"
+                ).WithParameter("@pt", (int)Payment.Type.PayPalSync);
             }
 
             var iterator = _paymentsContainer.GetItemQueryIterator<JObject>(query);
@@ -189,7 +200,8 @@ SELECT * FROM c WHERE
         }
 
         public async Task<HashSet<string>> GetExistingPayPalTransactionIdsAsync(
-            IReadOnlyCollection<string> transactionIds)
+            IReadOnlyCollection<string> transactionIds
+        )
         {
             var result = new HashSet<string>(StringComparer.Ordinal);
             if (transactionIds == null || transactionIds.Count == 0)
@@ -208,7 +220,8 @@ SELECT * FROM c WHERE
                 var paramNames = Enumerable.Range(0, batch.Count).Select(i => $"@t{i}").ToArray();
                 var inClause = string.Join(", ", paramNames);
                 var q = new CosmosQueryDefinition(
-                    $"SELECT VALUE c.PayPalTransactionId FROM c WHERE c.PayPalTransactionId IN ({inClause})");
+                    $"SELECT VALUE c.PayPalTransactionId FROM c WHERE c.PayPalTransactionId IN ({inClause})"
+                );
                 for (var j = 0; j < batch.Count; j++)
                 {
                     q = q.WithParameter(paramNames[j], batch[j]);
@@ -269,8 +282,10 @@ SELECT * FROM c WHERE
                 return null;
             }
 
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PayPalTransactionId = @txId")
-                .WithParameter("@txId", payPalTransactionId);
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.PayPalTransactionId = @txId").WithParameter(
+                "@txId",
+                payPalTransactionId
+            );
             var iterator = _paymentsContainer.GetItemQueryIterator<JObject>(query);
             while (iterator.HasMoreResults)
             {

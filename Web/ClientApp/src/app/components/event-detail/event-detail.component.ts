@@ -14,7 +14,7 @@ import { httpErrorMessage } from 'src/app/utils/http-error-message';
   selector: 'app-event-detail',
   templateUrl: './event-detail.component.html',
   styleUrls: ['./event-detail.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class EventDetailComponent implements OnInit {
   eventItem: EventDetail | null = null;
@@ -37,7 +37,8 @@ export class EventDetailComponent implements OnInit {
     private readonly eventsService: EventsService,
     private readonly telemetry: ApplicationInsightsService,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    @Inject(dispatcher) private dispatcher: Observer<Action>) { }
+    @Inject(dispatcher) private dispatcher: Observer<Action>,
+  ) {}
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
@@ -74,23 +75,25 @@ export class EventDetailComponent implements OnInit {
     this.success = '';
     this.saving = true;
 
-    this.eventsService.signUp(this.eventItem.publicSlug, {
-      adults: this.adults,
-      children: this.children,
-      adultNames: this.parseNames(this.adultNames),
-      childNames: this.parseNames(this.childNames)
-    }).subscribe({
-      next: updated => {
-        this.eventItem = updated;
-        this.saving = false;
-        this.success = 'Signup saved.';
-        this.telemetry.trackEvent('EventSignupSubmitted', { eventSlug: this.eventItem.publicSlug });
-      },
-      error: (err) => {
-        this.saving = false;
-        this.error = httpErrorMessage(err, 'Failed to save signup.');
-      }
-    });
+    this.eventsService
+      .signUp(this.eventItem.publicSlug, {
+        adults: this.adults,
+        children: this.children,
+        adultNames: this.parseNames(this.adultNames),
+        childNames: this.parseNames(this.childNames),
+      })
+      .subscribe({
+        next: updated => {
+          this.eventItem = updated;
+          this.saving = false;
+          this.success = 'Signup saved.';
+          this.telemetry.trackEvent('EventSignupSubmitted', { eventSlug: this.eventItem.publicSlug });
+        },
+        error: err => {
+          this.saving = false;
+          this.error = httpErrorMessage(err, 'Failed to save signup.');
+        },
+      });
   }
 
   hasDescription(event: EventDetail): boolean {
@@ -112,13 +115,16 @@ export class EventDetailComponent implements OnInit {
           this.currentSlug = eventItem.publicSlug;
           const snapshot = this.route.snapshot;
           const params = new URLSearchParams();
-          snapshot.queryParamMap.keys.forEach(k =>
-            (snapshot.queryParamMap.getAll(k) ?? []).forEach(v => params.append(k, v ?? '')));
+          snapshot.queryParamMap.keys.forEach(k => (snapshot.queryParamMap.getAll(k) ?? []).forEach(v => params.append(k, v ?? '')));
           const query = params.toString();
           const fragment = snapshot.fragment;
           let newUrl = '/events/' + eventItem.publicSlug;
-          if (query) { newUrl += '?' + query; }
-          if (fragment) { newUrl += '#' + fragment; }
+          if (query) {
+            newUrl += '?' + query;
+          }
+          if (fragment) {
+            newUrl += '#' + fragment;
+          }
           this.location.replaceState(newUrl);
         }
       },
@@ -127,7 +133,7 @@ export class EventDetailComponent implements OnInit {
         this.loading = false;
         this.error = 'Failed to load event.';
         this.titleService.setTitle('COHAD | Events');
-      }
+      },
     });
   }
 

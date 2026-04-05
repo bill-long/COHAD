@@ -21,7 +21,7 @@ const makeDetail = (overrides: Partial<EmailJobDetail> = {}): EmailJobDetail => 
   failedCount: 0,
   lastError: null,
   recipients: [],
-  ...overrides
+  ...overrides,
 });
 
 describe('EmailJobDetailComponent', () => {
@@ -52,9 +52,9 @@ describe('EmailJobDetailComponent', () => {
         { provide: Router, useValue: routerSpy },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { paramMap: convertToParamMap({ id: 'j1' }) } }
-        }
-      ]
+          useValue: { snapshot: { paramMap: convertToParamMap({ id: 'j1' }) } },
+        },
+      ],
     });
 
     component = TestBed.inject(EmailJobDetailComponent);

@@ -34,7 +34,9 @@ namespace Web.Authorization
         }
 
         protected override async Task HandleRequirementAsync(
-            AuthorizationHandlerContext context, AnyRoleAuthorizationRequirement requirement)
+            AuthorizationHandlerContext context,
+            AnyRoleAuthorizationRequirement requirement
+        )
         {
             string uniqueId;
             try
@@ -50,7 +52,10 @@ namespace Web.Authorization
             var storedUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
             if (storedUser?.Roles == null)
             {
-                _logger.LogWarning("AnyRole authorization failed: user {UniqueId} not found or has null roles.", uniqueId);
+                _logger.LogWarning(
+                    "AnyRole authorization failed: user {UniqueId} not found or has null roles.",
+                    uniqueId
+                );
                 return;
             }
 

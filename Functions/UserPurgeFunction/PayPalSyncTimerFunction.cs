@@ -14,7 +14,8 @@ public sealed class PayPalSyncTimerFunction
     public PayPalSyncTimerFunction(
         PayPalPaymentSyncRunner runner,
         IOptions<PayPalOptions> payPalOptions,
-        ILogger<PayPalSyncTimerFunction> logger)
+        ILogger<PayPalSyncTimerFunction> logger
+    )
     {
         _runner = runner;
         _payPalOptions = payPalOptions;
@@ -29,7 +30,8 @@ public sealed class PayPalSyncTimerFunction
     [Function("PayPalSyncTimer")]
     public async Task RunAsync(
         [TimerTrigger("%PayPalSyncSchedule%")] TimerInfo timerInfo,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         if (!_payPalOptions.Value.SyncEnabled)
         {
@@ -37,8 +39,10 @@ public sealed class PayPalSyncTimerFunction
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_payPalOptions.Value.ClientId) ||
-            string.IsNullOrWhiteSpace(_payPalOptions.Value.ClientSecret))
+        if (
+            string.IsNullOrWhiteSpace(_payPalOptions.Value.ClientId)
+            || string.IsNullOrWhiteSpace(_payPalOptions.Value.ClientSecret)
+        )
         {
             _logger.LogWarning("PayPal sync is enabled but PayPal:ClientId or PayPal:ClientSecret is missing.");
             return;
@@ -54,6 +58,7 @@ public sealed class PayPalSyncTimerFunction
             result.ExistingLinked,
             result.SkippedNoPayerEmail,
             result.SkippedDuplicate,
-            result.SkippedFiltered);
+            result.SkippedFiltered
+        );
     }
 }

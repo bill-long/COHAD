@@ -38,7 +38,7 @@ namespace Web.PresentationModels
                 FeaturedImageContentType = post.FeaturedImageContentType,
                 FeaturedImageDownloadUrl = !string.IsNullOrWhiteSpace(post.FeaturedImageBlobPath)
                     ? $"/api/blog/{Uri.EscapeDataString(urlSegment)}/image"
-                    : null
+                    : null,
             };
         }
     }

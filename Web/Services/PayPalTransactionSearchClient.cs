@@ -28,7 +28,8 @@ namespace Web.Services
         public PayPalTransactionSearchClient(
             HttpClient http,
             IOptions<PayPalOptions> options,
-            ILogger<PayPalTransactionSearchClient> logger)
+            ILogger<PayPalTransactionSearchClient> logger
+        )
         {
             _http = http;
             _options = options.Value;
@@ -38,7 +39,8 @@ namespace Web.Services
         public async Task<IReadOnlyList<JObject>> ListAllTransactionDetailsAsync(
             DateTime startUtc,
             DateTime endUtcExclusive,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken
+        )
         {
             if (string.IsNullOrWhiteSpace(_options.ClientId) || string.IsNullOrWhiteSpace(_options.ClientSecret))
             {
@@ -56,7 +58,9 @@ namespace Web.Services
             }
 
             var results = new List<JObject>();
-            foreach (var (winStart, winEnd) in PayPalDateRangeChunker.EnumerateWindowsUtc(rangeStart, rangeEndExclusive))
+            foreach (
+                var (winStart, winEnd) in PayPalDateRangeChunker.EnumerateWindowsUtc(rangeStart, rangeEndExclusive)
+            )
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -82,12 +86,12 @@ namespace Web.Services
                 while (page <= totalPages)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var url =
-                        $"{baseUrl}/v1/reporting/transactions?{BuildQuery(startParam, endParam, page)}";
+                    var url = $"{baseUrl}/v1/reporting/transactions?{BuildQuery(startParam, endParam, page)}";
                     using var request = new HttpRequestMessage(HttpMethod.Get, url);
                     request.Headers.Authorization = new AuthenticationHeaderValue(
                         "Bearer",
-                        await GetAccessTokenAsync(baseUrl, cancellationToken).ConfigureAwait(false));
+                        await GetAccessTokenAsync(baseUrl, cancellationToken).ConfigureAwait(false)
+                    );
 
                     using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
                     var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -96,7 +100,8 @@ namespace Web.Services
                         _logger.LogError(
                             "PayPal Transaction Search failed: {Status} {Body}",
                             (int)response.StatusCode,
-                            body);
+                            body
+                        );
                         response.EnsureSuccessStatusCode();
                     }
 
@@ -123,11 +128,15 @@ namespace Web.Services
 
         private static string BuildQuery(string startParam, string endParam, int page)
         {
-            return "start_date=" + Uri.EscapeDataString(startParam)
-                + "&end_date=" + Uri.EscapeDataString(endParam)
+            return "start_date="
+                + Uri.EscapeDataString(startParam)
+                + "&end_date="
+                + Uri.EscapeDataString(endParam)
                 + "&fields=all"
-                + "&page_size=" + MaxPageSize
-                + "&page=" + page;
+                + "&page_size="
+                + MaxPageSize
+                + "&page="
+                + page;
         }
 
         private static string FormatPayPalDate(DateTime utc)
@@ -165,8 +174,7 @@ namespace Web.Services
         {
             lock (_tokenLock)
             {
-                if (!string.IsNullOrEmpty(_accessToken) &&
-                    DateTimeOffset.UtcNow < _accessTokenExpiresUtc)
+                if (!string.IsNullOrEmpty(_accessToken) && DateTimeOffset.UtcNow < _accessTokenExpiresUtc)
                 {
                     return _accessToken;
                 }
@@ -177,11 +185,11 @@ namespace Web.Services
             var raw = $"{_options.ClientId}:{_options.ClientSecret}";
             request.Headers.Authorization = new AuthenticationHeaderValue(
                 "Basic",
-                Convert.ToBase64String(Encoding.UTF8.GetBytes(raw)));
-            request.Content = new FormUrlEncodedContent(new[]
-            {
-                new KeyValuePair<string, string>("grant_type", "client_credentials")
-            });
+                Convert.ToBase64String(Encoding.UTF8.GetBytes(raw))
+            );
+            request.Content = new FormUrlEncodedContent(
+                new[] { new KeyValuePair<string, string>("grant_type", "client_credentials") }
+            );
 
             using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);

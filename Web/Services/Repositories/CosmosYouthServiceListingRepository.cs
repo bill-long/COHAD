@@ -29,7 +29,9 @@ namespace Web.Services.Repositories
 
         public async Task<List<YouthServiceListing>> GetAllAsync()
         {
-            var iterator = _youthServicesContainer.GetItemQueryIterator<JObject>(new CosmosQueryDefinition("SELECT * FROM c"));
+            var iterator = _youthServicesContainer.GetItemQueryIterator<JObject>(
+                new CosmosQueryDefinition("SELECT * FROM c")
+            );
             var results = new List<YouthServiceListing>();
             while (iterator.HasMoreResults)
             {
@@ -42,8 +44,10 @@ namespace Web.Services.Repositories
 
         public async Task<YouthServiceListing> GetByIdAsync(Guid id)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id")
-                .WithParameter("@id", ToDocumentId(id));
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id").WithParameter(
+                "@id",
+                ToDocumentId(id)
+            );
             var iterator = _youthServicesContainer.GetItemQueryIterator<JObject>(query);
             while (iterator.HasMoreResults)
             {
@@ -96,7 +100,10 @@ namespace Web.Services.Repositories
                 Services = doc["Services"]?.ToObject<List<string>>() ?? new List<string>(),
                 BornYear = doc.Value<int?>("BornYear"),
                 Phone = doc.Value<string>("Phone"),
-                ContactMethod = Enum.TryParse<PreferredContactMethod>(doc.Value<string>("ContactMethod"), out var contactMethod)
+                ContactMethod = Enum.TryParse<PreferredContactMethod>(
+                    doc.Value<string>("ContactMethod"),
+                    out var contactMethod
+                )
                     ? contactMethod
                     : PreferredContactMethod.Text,
                 Email = doc.Value<string>("Email"),
@@ -105,7 +112,7 @@ namespace Web.Services.Repositories
                 CreatedByUniqueId = doc.Value<string>("CreatedByUniqueId"),
                 ModifiedByUniqueId = doc.Value<string>("ModifiedByUniqueId"),
                 CreatedUtc = doc["CreatedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
-                ModifiedUtc = doc["ModifiedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue
+                ModifiedUtc = doc["ModifiedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
             };
         }
 
@@ -126,9 +133,8 @@ namespace Web.Services.Repositories
                 ["CreatedByUniqueId"] = listing.CreatedByUniqueId,
                 ["ModifiedByUniqueId"] = listing.ModifiedByUniqueId,
                 ["CreatedUtc"] = JToken.FromObject(listing.CreatedUtc),
-                ["ModifiedUtc"] = JToken.FromObject(listing.ModifiedUtc)
+                ["ModifiedUtc"] = JToken.FromObject(listing.ModifiedUtc),
             };
         }
-
     }
 }

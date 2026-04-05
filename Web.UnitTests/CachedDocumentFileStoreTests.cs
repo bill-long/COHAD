@@ -150,8 +150,13 @@ public sealed class CachedDocumentFileStoreTests : IDisposable
     {
         private readonly Dictionary<string, FakeBlob> _blobs = new();
 
-        public void Seed(string path, string contentType, string content,
-            EntityTagHeaderValue etag = null, DateTimeOffset? lastModified = null)
+        public void Seed(
+            string path,
+            string contentType,
+            string content,
+            EntityTagHeaderValue etag = null,
+            DateTimeOffset? lastModified = null
+        )
         {
             _blobs[path] = new FakeBlob
             {
@@ -159,7 +164,7 @@ public sealed class CachedDocumentFileStoreTests : IDisposable
                 Bytes = Encoding.UTF8.GetBytes(content),
                 EntityTag = etag,
                 LastModified = lastModified,
-                ContentLength = null // will be set from Bytes.Length in DownloadAsync
+                ContentLength = null, // will be set from Bytes.Length in DownloadAsync
             };
         }
 
@@ -169,7 +174,7 @@ public sealed class CachedDocumentFileStoreTests : IDisposable
             {
                 ContentType = contentType,
                 Bytes = Encoding.UTF8.GetBytes(content),
-                ContentLength = contentLength
+                ContentLength = contentLength,
             };
         }
 
@@ -183,7 +188,7 @@ public sealed class CachedDocumentFileStoreTests : IDisposable
             {
                 ContentType = contentType,
                 Bytes = ms.ToArray(),
-                ContentLength = null
+                ContentLength = null,
             };
             return Task.CompletedTask;
         }
@@ -193,14 +198,16 @@ public sealed class CachedDocumentFileStoreTests : IDisposable
             if (!_blobs.TryGetValue(blobPath, out var blob))
                 return Task.FromResult<DocumentFileResult>(null);
 
-            return Task.FromResult(new DocumentFileResult
-            {
-                Stream = new TaggedStream(blob.Bytes),
-                ContentType = blob.ContentType,
-                EntityTag = blob.EntityTag,
-                LastModified = blob.LastModified,
-                ContentLength = blob.ContentLength ?? blob.Bytes.Length
-            });
+            return Task.FromResult(
+                new DocumentFileResult
+                {
+                    Stream = new TaggedStream(blob.Bytes),
+                    ContentType = blob.ContentType,
+                    EntityTag = blob.EntityTag,
+                    LastModified = blob.LastModified,
+                    ContentLength = blob.ContentLength ?? blob.Bytes.Length,
+                }
+            );
         }
 
         public Task DeleteAsync(string blobPath)
@@ -214,7 +221,8 @@ public sealed class CachedDocumentFileStoreTests : IDisposable
         /// </summary>
         public sealed class TaggedStream : MemoryStream
         {
-            public TaggedStream(byte[] buffer) : base(buffer, writable: false) { }
+            public TaggedStream(byte[] buffer)
+                : base(buffer, writable: false) { }
         }
 
         private class FakeBlob

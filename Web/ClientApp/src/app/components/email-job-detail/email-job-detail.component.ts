@@ -8,10 +8,10 @@ import { httpErrorMessage } from 'src/app/utils/http-error-message';
 import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
 
 @Component({
-    selector: 'app-email-job-detail',
-    templateUrl: './email-job-detail.component.html',
-    styleUrls: ['./email-job-detail.component.css'],
-    standalone: false
+  selector: 'app-email-job-detail',
+  templateUrl: './email-job-detail.component.html',
+  styleUrls: ['./email-job-detail.component.css'],
+  standalone: false,
 })
 export class EmailJobDetailComponent implements OnInit, OnDestroy {
   job: EmailJobDetail | null = null;
@@ -22,8 +22,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
   /** Queued for this long without starting counts as stale (client-side nudge only). */
   private readonly staleQueuedThresholdMs = 12 * 60 * 1000;
 
-  readonly cancelJobTooltip =
-    'Stops processing and marks the job cancelled. You can run it again afterward.';
+  readonly cancelJobTooltip = 'Stops processing and marks the job cancelled. You can run it again afterward.';
 
   private jobId!: string;
   private subscriptions: Subscription[] = [];
@@ -32,8 +31,8 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private emailJobService: EmailJobService,
-    private emailJobNotifications: EmailJobNotificationsService
-  ) { }
+    private emailJobNotifications: EmailJobNotificationsService,
+  ) {}
 
   ngOnInit(): void {
     this.jobId = this.route.snapshot.paramMap.get('id')!;
@@ -48,7 +47,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
             status: event.status,
             sentCount: event.sentCount,
             failedCount: event.failedCount,
-            totalRecipients: event.totalRecipients
+            totalRecipients: event.totalRecipients,
           };
         }
       }),
@@ -60,17 +59,19 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
             sentCount: event.sentCount,
             failedCount: event.failedCount,
             totalRecipients: event.totalRecipients,
-            lastError: event.lastError
+            lastError: event.lastError,
           };
           // Reload full detail to get updated recipient statuses
           this.emailJobService.getJob(this.jobId).subscribe({
-            next: detail => { this.job = detail; },
+            next: detail => {
+              this.job = detail;
+            },
             error: err => {
               this.errorText = httpErrorMessage(err, 'Failed to refresh email job details.');
-            }
+            },
           });
         }
-      })
+      }),
     );
   }
 
@@ -90,7 +91,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
       error: err => {
         this.errorText = httpErrorMessage(err, 'Failed to load email job.');
         this.loading = false;
-      }
+      },
     });
   }
 
@@ -147,7 +148,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
       error: err => {
         this.errorText = httpErrorMessage(err, 'Failed to retry job.');
         this.actionInProgress = false;
-      }
+      },
     });
   }
 
@@ -164,7 +165,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
       error: err => {
         this.errorText = httpErrorMessage(err, 'Failed to cancel job.');
         this.actionInProgress = false;
-      }
+      },
     });
   }
 
@@ -177,30 +178,44 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
 
   statusLabel(status: EmailJobStatus): string {
     switch (status) {
-      case 'InProgress': return 'In Progress';
-      case 'PartiallyCompleted': return 'Partial';
-      default: return status;
+      case 'InProgress':
+        return 'In Progress';
+      case 'PartiallyCompleted':
+        return 'Partial';
+      default:
+        return status;
     }
   }
 
   statusClass(status: EmailJobStatus): string {
     switch (status) {
-      case 'Queued': return 'status-queued';
-      case 'InProgress': return 'status-in-progress';
-      case 'Completed': return 'status-completed';
-      case 'PartiallyCompleted': return 'status-partial';
-      case 'Failed': return 'status-failed';
-      case 'Cancelled': return 'status-cancelled';
-      default: return '';
+      case 'Queued':
+        return 'status-queued';
+      case 'InProgress':
+        return 'status-in-progress';
+      case 'Completed':
+        return 'status-completed';
+      case 'PartiallyCompleted':
+        return 'status-partial';
+      case 'Failed':
+        return 'status-failed';
+      case 'Cancelled':
+        return 'status-cancelled';
+      default:
+        return '';
     }
   }
 
   recipientStatusClass(status: EmailJobRecipientStatus): string {
     switch (status) {
-      case 'Sent': return 'status-completed';
-      case 'Failed': return 'status-failed';
-      case 'Pending': return 'status-queued';
-      default: return '';
+      case 'Sent':
+        return 'status-completed';
+      case 'Failed':
+        return 'status-failed';
+      case 'Pending':
+        return 'status-queued';
+      default:
+        return '';
     }
   }
 }

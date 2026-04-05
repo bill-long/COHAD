@@ -5,11 +5,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { DocumentsService, ResidentDocument } from 'src/app/services/documents.service';
 import { DocumentFolderService, DocumentFolder } from 'src/app/services/document-folder.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
-import {
-  formatFileSize,
-  getFileIconName,
-  getFileTypeChipLabel
-} from 'src/app/utils/document-display.utils';
+import { formatFileSize, getFileIconName, getFileTypeChipLabel } from 'src/app/utils/document-display.utils';
 
 interface FolderGroup {
   folder: DocumentFolder;
@@ -21,7 +17,7 @@ interface FolderGroup {
   selector: 'app-manage-documents',
   templateUrl: './manage-documents.component.html',
   styleUrls: ['./manage-documents.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class ManageDocumentsComponent implements OnInit {
   @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
@@ -48,7 +44,8 @@ export class ManageDocumentsComponent implements OnInit {
     private readonly documentsService: DocumentsService,
     private readonly folderService: DocumentFolderService,
     private readonly snackBar: MatSnackBar,
-    private readonly dialog: MatDialog) { }
+    private readonly dialog: MatDialog,
+  ) {}
 
   ngOnInit(): void {
     this.loadAll();
@@ -58,7 +55,9 @@ export class ManageDocumentsComponent implements OnInit {
 
   createFolder(): void {
     const name = this.newFolderName.trim();
-    if (!name) { return; }
+    if (!name) {
+      return;
+    }
     this.creatingFolder = true;
     this.folderService.create(name).subscribe({
       next: () => {
@@ -70,7 +69,7 @@ export class ManageDocumentsComponent implements OnInit {
       error: () => {
         this.creatingFolder = false;
         this.error = 'Failed to create folder.';
-      }
+      },
     });
   }
 
@@ -86,7 +85,9 @@ export class ManageDocumentsComponent implements OnInit {
 
   saveEditFolder(folder: DocumentFolder): void {
     const name = this.editingFolderName.trim();
-    if (!name) { return; }
+    if (!name) {
+      return;
+    }
     this.folderService.update(folder.id, name, folder.sortOrder).subscribe({
       next: () => {
         this.editingFolderId = null;
@@ -96,7 +97,7 @@ export class ManageDocumentsComponent implements OnInit {
       },
       error: () => {
         this.error = 'Failed to rename folder.';
-      }
+      },
     });
   }
 
@@ -107,12 +108,14 @@ export class ManageDocumentsComponent implements OnInit {
         body: `This will permanently remove the folder "${folder.name}".\n\nYou can't undo this.`,
         confirmText: 'Delete',
         cancelText: 'Cancel',
-        confirmColor: 'warn'
-      }
+        confirmColor: 'warn',
+      },
     });
 
     ref.afterClosed().subscribe(confirmed => {
-      if (confirmed !== true) { return; }
+      if (confirmed !== true) {
+        return;
+      }
       this.deletingFolderId = folder.id;
       this.folderService.delete(folder.id).subscribe({
         next: () => {
@@ -123,20 +126,24 @@ export class ManageDocumentsComponent implements OnInit {
         error: () => {
           this.deletingFolderId = null;
           this.error = 'Cannot delete folder. Remove its documents first.';
-        }
+        },
       });
     });
   }
 
   moveFolderUp(folder: DocumentFolder): void {
     const idx = this.folders.findIndex(f => f.id === folder.id);
-    if (idx <= 0) { return; }
+    if (idx <= 0) {
+      return;
+    }
     this.swapFolderOrder(idx, idx - 1);
   }
 
   moveFolderDown(folder: DocumentFolder): void {
     const idx = this.folders.findIndex(f => f.id === folder.id);
-    if (idx < 0 || idx >= this.folders.length - 1) { return; }
+    if (idx < 0 || idx >= this.folders.length - 1) {
+      return;
+    }
     this.swapFolderOrder(idx, idx + 1);
   }
 
@@ -221,7 +228,7 @@ export class ManageDocumentsComponent implements OnInit {
         this.uploadInProgress = false;
         this.uploadProgress = 0;
         this.error = 'Upload failed.';
-      }
+      },
     });
   }
 
@@ -234,8 +241,8 @@ export class ManageDocumentsComponent implements OnInit {
         body: `This will permanently remove "${doc.displayName}".\n\nYou can't undo this.`,
         confirmText: 'Delete',
         cancelText: 'Cancel',
-        confirmColor: 'warn'
-      }
+        confirmColor: 'warn',
+      },
     });
 
     ref.afterClosed().subscribe(confirmed => {
@@ -254,7 +261,7 @@ export class ManageDocumentsComponent implements OnInit {
         error: () => {
           this.deletingId = null;
           this.error = 'Delete failed.';
-        }
+        },
       });
     });
   }
@@ -294,13 +301,13 @@ export class ManageDocumentsComponent implements OnInit {
           error: () => {
             this.loading = false;
             this.error = 'Failed to load documents.';
-          }
+          },
         });
       },
       error: () => {
         this.loading = false;
         this.error = 'Failed to load data.';
-      }
+      },
     });
   }
 
@@ -321,7 +328,7 @@ export class ManageDocumentsComponent implements OnInit {
     this.folderGroups = folders.map(f => ({
       folder: f,
       documents: byFolder.get(f.id) ?? [],
-      collapsed: false
+      collapsed: false,
     }));
 
     this.unfiledDocuments = unfiled;
@@ -334,13 +341,17 @@ export class ManageDocumentsComponent implements OnInit {
     a.sortOrder = b.sortOrder;
     b.sortOrder = tempSort;
 
-    this.folderService.reorder([
-      { id: a.id, sortOrder: a.sortOrder },
-      { id: b.id, sortOrder: b.sortOrder }
-    ]).subscribe({
-      next: () => this.loadAll(),
-      error: () => { this.error = 'Failed to reorder folders.'; }
-    });
+    this.folderService
+      .reorder([
+        { id: a.id, sortOrder: a.sortOrder },
+        { id: b.id, sortOrder: b.sortOrder },
+      ])
+      .subscribe({
+        next: () => this.loadAll(),
+        error: () => {
+          this.error = 'Failed to reorder folders.';
+        },
+      });
   }
 
   private resetFileInput(): void {

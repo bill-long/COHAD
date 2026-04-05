@@ -1,13 +1,6 @@
 import { Subject } from 'rxjs';
 import { ApiUser, AuthUser } from './models';
-import {
-  Action,
-  applicationStateFactory,
-  AuthenticatedUserChanged,
-  initialStateValue,
-  LoadUserCompleted,
-  ApplicationState
-} from './state';
+import { Action, applicationStateFactory, AuthenticatedUserChanged, initialStateValue, LoadUserCompleted, ApplicationState } from './state';
 
 describe('application state auth bootstrap', () => {
   function createApiUser(): ApiUser {
@@ -24,7 +17,7 @@ describe('application state auth bootstrap', () => {
       email: 'test@example.com',
       streetAddress: '',
       roles: ['Resident'],
-      ownedHomes: []
+      ownedHomes: [],
     };
   }
 
@@ -37,8 +30,8 @@ describe('application state auth bootstrap', () => {
         given_name: 'Test',
         idp: 'idp',
         sub: 'sub',
-        streetAddress: ''
-      }
+        streetAddress: '',
+      },
     };
   }
 
@@ -46,7 +39,7 @@ describe('application state auth bootstrap', () => {
     const dispatcher = new Subject<Action>();
     const state$ = applicationStateFactory(initialStateValue, dispatcher);
     let latestState: ApplicationState = initialStateValue;
-    state$.subscribe(s => latestState = s);
+    state$.subscribe(s => (latestState = s));
 
     dispatcher.next(new LoadUserCompleted(createApiUser()));
     dispatcher.next(new AuthenticatedUserChanged(createAuthUser()));
@@ -59,7 +52,7 @@ describe('application state auth bootstrap', () => {
     const dispatcher = new Subject<Action>();
     const state$ = applicationStateFactory(initialStateValue, dispatcher);
     let latestState: ApplicationState = initialStateValue;
-    state$.subscribe(s => latestState = s);
+    state$.subscribe(s => (latestState = s));
 
     dispatcher.next(new AuthenticatedUserChanged(createAuthUser()));
     dispatcher.next(new LoadUserCompleted(createApiUser()));
@@ -72,7 +65,7 @@ describe('application state auth bootstrap', () => {
     const dispatcher = new Subject<Action>();
     const state$ = applicationStateFactory(initialStateValue, dispatcher);
     let latestState: ApplicationState = initialStateValue;
-    state$.subscribe(s => latestState = s);
+    state$.subscribe(s => (latestState = s));
 
     dispatcher.next(new AuthenticatedUserChanged(createAuthUser()));
     dispatcher.next(new LoadUserCompleted(createApiUser()));

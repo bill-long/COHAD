@@ -4,7 +4,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 type ThemePreference = 'light' | 'dark' | 'system';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class ThemeService {
   private readonly themeStorageKey = 'cohad.themePreference';

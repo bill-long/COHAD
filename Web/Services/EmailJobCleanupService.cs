@@ -17,7 +17,8 @@ public sealed class EmailJobCleanupService
         IEmailJobRepository repo,
         IDocumentFileStore fileStore,
         IConfiguration config,
-        ILogger<EmailJobCleanupService> logger)
+        ILogger<EmailJobCleanupService> logger
+    )
     {
         _repo = repo;
         _fileStore = fileStore;
@@ -59,9 +60,12 @@ public sealed class EmailJobCleanupService
                     catch (Exception ex)
                     {
                         blobDeletedOrAbsent = false;
-                        _logger.LogWarning(ex,
+                        _logger.LogWarning(
+                            ex,
                             "Email job retention: failed to delete blob {BlobPath} for job {JobId}",
-                            job.ContentBlobPath, job.Id);
+                            job.ContentBlobPath,
+                            job.Id
+                        );
                     }
                 }
 
@@ -85,7 +89,12 @@ public sealed class EmailJobCleanupService
 
             _logger.LogInformation(
                 "Email job retention cleanup attempted {AttemptedJobs} job deletions and deleted {DeletedJobs}; attempted {AttemptedBlobs} blob deletes and deleted {DeletedBlobs} (cutoff {CutoffUtc:u})",
-                attemptedJobs, deletedJobs, attemptedBlobs, deletedBlobs, cutoffUtc);
+                attemptedJobs,
+                deletedJobs,
+                attemptedBlobs,
+                deletedBlobs,
+                cutoffUtc
+            );
         }
         catch (Exception ex)
         {
@@ -93,4 +102,3 @@ public sealed class EmailJobCleanupService
         }
     }
 }
-

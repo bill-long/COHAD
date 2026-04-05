@@ -18,7 +18,11 @@ namespace Web.Services
                 ".jpg" or ".jpeg" => "image/jpeg",
                 ".gif" => "image/gif",
                 ".webp" => "image/webp",
-                _ => throw new ArgumentOutOfRangeException(nameof(extension), extension, "Extension must be allowed by the caller's allowlist.")
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(extension),
+                    extension,
+                    "Extension must be allowed by the caller's allowlist."
+                ),
             };
         }
     }

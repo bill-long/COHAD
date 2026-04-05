@@ -1,7 +1,7 @@
+using System.Data;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using System.Data;
 using System.Text.Json;
 using ExcelDataReader;
 
@@ -31,10 +31,12 @@ var seenFingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     using var stream = File.Open(inputPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
     using var reader = ExcelReaderFactory.CreateReader(stream);
-    var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration
-    {
-        ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
-    });
+    var dataSet = reader.AsDataSet(
+        new ExcelDataSetConfiguration
+        {
+            ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false },
+        }
+    );
 
     foreach (DataTable worksheet in dataSet.Tables)
     {
@@ -66,7 +68,9 @@ var seenFingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var normalized = Normalize(raw);
             if (!normalized.IsValid)
             {
-                rowOutcomes.Add(new RowOutcome(worksheet.TableName, rowIndex + 1, "skipped", normalized.Reason ?? "Invalid row"));
+                rowOutcomes.Add(
+                    new RowOutcome(worksheet.TableName, rowIndex + 1, "skipped", normalized.Reason ?? "Invalid row")
+                );
                 continue;
             }
 
@@ -78,16 +82,19 @@ var seenFingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             if (normalized.IsYouthService)
             {
-                youthServices.Add(new YouthServiceImportRecord(
-                    normalized.Fingerprint,
-                    normalized.Name,
-                    normalized.Services,
-                    normalized.BornYear,
-                    normalized.Phone,
-                    normalized.ContactMethod,
-                    normalized.Email,
-                    normalized.Address,
-                    normalized.ParentNote));
+                youthServices.Add(
+                    new YouthServiceImportRecord(
+                        normalized.Fingerprint,
+                        normalized.Name,
+                        normalized.Services,
+                        normalized.BornYear,
+                        normalized.Phone,
+                        normalized.ContactMethod,
+                        normalized.Email,
+                        normalized.Address,
+                        normalized.ParentNote
+                    )
+                );
                 rowOutcomes.Add(new RowOutcome(worksheet.TableName, rowIndex + 1, "imported", "Youth service"));
             }
             else
@@ -101,15 +108,25 @@ var seenFingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     normalized.Email,
                     normalized.Website,
                     normalized.Address,
-                    normalized.Notes);
+                    normalized.Notes
+                );
                 vendors.Add(vendorRecord);
                 if (!string.IsNullOrWhiteSpace(normalized.ReviewText))
                 {
-                    vendorReviews.Add(new VendorReviewImportRecord(
-                        ComputeReviewFingerprint(vendorRecord.Fingerprint, normalized.ReferrerName, normalized.ReviewText),
-                        vendorRecord.Fingerprint,
-                        string.IsNullOrWhiteSpace(normalized.ReferrerName) ? "Community Referrer" : normalized.ReferrerName,
-                        normalized.ReviewText));
+                    vendorReviews.Add(
+                        new VendorReviewImportRecord(
+                            ComputeReviewFingerprint(
+                                vendorRecord.Fingerprint,
+                                normalized.ReferrerName,
+                                normalized.ReviewText
+                            ),
+                            vendorRecord.Fingerprint,
+                            string.IsNullOrWhiteSpace(normalized.ReferrerName)
+                                ? "Community Referrer"
+                                : normalized.ReferrerName,
+                            normalized.ReviewText
+                        )
+                    );
                 }
                 rowOutcomes.Add(new RowOutcome(worksheet.TableName, rowIndex + 1, "imported", "Vendor"));
             }
@@ -130,7 +147,7 @@ var report = new
     importedVendorReviews = vendorReviews.Count,
     importedYouthServices = youthServices.Count,
     skippedRows = rowOutcomes.Count(r => r.Outcome == "skipped"),
-    totalRowsProcessed = rowOutcomes.Count
+    totalRowsProcessed = rowOutcomes.Count,
 };
 File.WriteAllText(Path.Combine(outputDir, "report.json"), JsonSerializer.Serialize(report, options));
 
@@ -155,7 +172,17 @@ static Dictionary<string, string> ReadRawRow(DataRow row, IReadOnlyDictionary<st
         return string.Empty;
     }
 
-    var name = Read("name", "vendor", "vendor name", "business", "business name", "company", "provider", "provider name", "contact");
+    var name = Read(
+        "name",
+        "vendor",
+        "vendor name",
+        "business",
+        "business name",
+        "company",
+        "provider",
+        "provider name",
+        "contact"
+    );
     if (string.IsNullOrWhiteSpace(name))
     {
         for (var i = 0; i < row.Table.Columns.Count; i++)
@@ -185,18 +212,21 @@ static Dictionary<string, string> ReadRawRow(DataRow row, IReadOnlyDictionary<st
         ["referrerName"] = Read("referrer name", "referrer", "referred by"),
         ["parentNote"] = Read("parent note", "parent notes"),
         ["bornYear"] = Read("born", "born year", "birth year"),
-        ["sheetCategory"] = sheetName
+        ["sheetCategory"] = sheetName,
     };
 }
 
-static bool IsEmpty(Dictionary<string, string> raw) =>
-    raw.Values.All(v => string.IsNullOrWhiteSpace(v));
+static bool IsEmpty(Dictionary<string, string> raw) => raw.Values.All(v => string.IsNullOrWhiteSpace(v));
 
 static NormalizedRow Normalize(Dictionary<string, string> raw)
 {
     var name = (raw["name"] ?? string.Empty).Trim();
     var categories = NormalizeList(raw["category"]);
-    if (categories.Count == 0 && !string.IsNullOrWhiteSpace(raw["sheetCategory"]) && !raw["sheetCategory"].Contains("Babysitters", StringComparison.OrdinalIgnoreCase))
+    if (
+        categories.Count == 0
+        && !string.IsNullOrWhiteSpace(raw["sheetCategory"])
+        && !raw["sheetCategory"].Contains("Babysitters", StringComparison.OrdinalIgnoreCase)
+    )
     {
         categories = NormalizeList(raw["sheetCategory"]);
     }
@@ -218,7 +248,8 @@ static NormalizedRow Normalize(Dictionary<string, string> raw)
         return NormalizedRow.Invalid("Missing name");
     }
 
-    var hasContact = !string.IsNullOrWhiteSpace(phone) || !string.IsNullOrWhiteSpace(email) || !string.IsNullOrWhiteSpace(website);
+    var hasContact =
+        !string.IsNullOrWhiteSpace(phone) || !string.IsNullOrWhiteSpace(email) || !string.IsNullOrWhiteSpace(website);
     if (!hasContact && categories.Count == 0 && services.Count == 0)
     {
         return NormalizedRow.Invalid("Missing contact/category/service");
@@ -257,7 +288,8 @@ static NormalizedRow Normalize(Dictionary<string, string> raw)
         reviewText,
         referrerName,
         parentNote,
-        bornYear);
+        bornYear
+    );
 }
 
 static int? ParseYear(string value)
@@ -274,9 +306,9 @@ static int? ParseYear(string value)
 }
 
 static bool ParseBool(string raw) =>
-    string.Equals(raw?.Trim(), "yes", StringComparison.OrdinalIgnoreCase) ||
-    string.Equals(raw?.Trim(), "y", StringComparison.OrdinalIgnoreCase) ||
-    string.Equals(raw?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+    string.Equals(raw?.Trim(), "yes", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(raw?.Trim(), "y", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(raw?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
 
 static bool InferNeighborAffiliated(string notes, string reviewText, string referrerName)
 {
@@ -286,14 +318,14 @@ static bool InferNeighborAffiliated(string notes, string reviewText, string refe
         return false;
     }
 
-    return haystack.Contains("neighbor:") ||
-           haystack.Contains("neighbour:") ||
-           haystack.Contains("neighbor ") ||
-           haystack.Contains("neighbour ") ||
-           haystack.Contains("lives in the neighborhood") ||
-           haystack.Contains("lives in our neighborhood") ||
-           haystack.Contains("resident at") ||
-           haystack.Contains("local resident");
+    return haystack.Contains("neighbor:")
+        || haystack.Contains("neighbour:")
+        || haystack.Contains("neighbor ")
+        || haystack.Contains("neighbour ")
+        || haystack.Contains("lives in the neighborhood")
+        || haystack.Contains("lives in our neighborhood")
+        || haystack.Contains("resident at")
+        || haystack.Contains("local resident");
 }
 
 static string NormalizeContactMethod(string raw)
@@ -352,12 +384,42 @@ static int DetectHeaderRowIndex(DataTable worksheet)
 {
     var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "name", "vendor", "business", "provider", "category", "categories", "type",
-        "services", "service", "phone", "phone number", "cell", "text/call",
-        "contact method", "text or call", "email", "email address", "website", "url",
-        "address", "street address", "notes", "review", "description", "referrer name", "referrer", "referred by", "parent note",
-        "parent notes", "born", "born year", "birth year", "neighbor owned",
-        "neighbor affiliated", "neighbor", "hoa resident"
+        "name",
+        "vendor",
+        "business",
+        "provider",
+        "category",
+        "categories",
+        "type",
+        "services",
+        "service",
+        "phone",
+        "phone number",
+        "cell",
+        "text/call",
+        "contact method",
+        "text or call",
+        "email",
+        "email address",
+        "website",
+        "url",
+        "address",
+        "street address",
+        "notes",
+        "review",
+        "description",
+        "referrer name",
+        "referrer",
+        "referred by",
+        "parent note",
+        "parent notes",
+        "born",
+        "born year",
+        "birth year",
+        "neighbor owned",
+        "neighbor affiliated",
+        "neighbor",
+        "hoa resident",
     };
 
     var maxRows = Math.Min(worksheet.Rows.Count, 25);
@@ -388,10 +450,7 @@ static int DetectHeaderRowIndex(DataTable worksheet)
 
 static string ComputeFingerprint(string name, string phone, string email)
 {
-    var normalizedName = new string(name
-        .ToUpperInvariant()
-        .Where(char.IsLetterOrDigit)
-        .ToArray());
+    var normalizedName = new string(name.ToUpperInvariant().Where(char.IsLetterOrDigit).ToArray());
     var key = $"{normalizedName}|{phone}|{email.ToLowerInvariant()}";
     var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
     return Convert.ToHexString(hash);
@@ -413,13 +472,15 @@ public sealed record VendorImportRecord(
     string Email,
     string Website,
     string Address,
-    string Notes);
+    string Notes
+);
 
 public sealed record VendorReviewImportRecord(
     string Fingerprint,
     string VendorFingerprint,
     string ReferrerName,
-    string ReviewText);
+    string ReviewText
+);
 
 public sealed record YouthServiceImportRecord(
     string Fingerprint,
@@ -430,7 +491,8 @@ public sealed record YouthServiceImportRecord(
     string ContactMethod,
     string Email,
     string Address,
-    string ParentNote);
+    string ParentNote
+);
 
 public sealed record RowOutcome(string Sheet, int Row, string Outcome, string Reason);
 
@@ -452,8 +514,28 @@ public sealed record NormalizedRow(
     string ReviewText,
     string ReferrerName,
     string ParentNote,
-    int? BornYear)
+    int? BornYear
+)
 {
     public static NormalizedRow Invalid(string reason) =>
-        new(false, reason, false, string.Empty, string.Empty, new List<string>(), new List<string>(), false, string.Empty, "Text", string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, null);
+        new(
+            false,
+            reason,
+            false,
+            string.Empty,
+            string.Empty,
+            new List<string>(),
+            new List<string>(),
+            false,
+            string.Empty,
+            "Text",
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            null
+        );
 }

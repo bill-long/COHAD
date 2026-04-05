@@ -31,6 +31,7 @@ namespace Web.Services
     public class NullUnsubscribeTokenService : IUnsubscribeTokenService
     {
         public string GenerateToken(Guid homeId, string email) => null;
+
         public UnsubscribeTokenPayload ValidateToken(string token) => null;
     }
 }

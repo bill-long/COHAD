@@ -13,10 +13,10 @@ export interface ResidentDocument {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class DocumentsService {
-  constructor(private readonly httpClient: HttpClient) { }
+  constructor(private readonly httpClient: HttpClient) {}
 
   getAll(): Observable<ResidentDocument[]> {
     return this.httpClient.get<ResidentDocument[]>('api/document');
@@ -33,7 +33,7 @@ export class DocumentsService {
       formData.append('folderId', folderId);
     }
     const request = new HttpRequest<FormData>('POST', 'api/document', formData, {
-      reportProgress: true
+      reportProgress: true,
     });
     return this.httpClient.request<ResidentDocument>(request);
   }

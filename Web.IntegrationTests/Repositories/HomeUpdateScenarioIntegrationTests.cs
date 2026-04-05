@@ -27,22 +27,26 @@ public sealed class HomeUpdateScenarioIntegrationTests
             StreetName = "Flow Test",
             PhoneNumber = null,
             EmailAddress = null,
-            Residents = new List<Resident>()
+            Residents = new List<Resident>(),
         };
 
         await homes.UpsertAsync(home).ConfigureAwait(false);
 
         var marker = Guid.NewGuid().ToString("N");
-        await audit.AddAsync(new NewAuditLogEntry
-        {
-            Id = Guid.NewGuid(),
-            Time = DateTime.UtcNow,
-            UserId = $"google.com{Guid.NewGuid():N}",
-            UserDisplayName = "Flow User",
-            SubjectId = homeId.ToString(),
-            SubjectName = home.StreetName,
-            Action = $"Flow audit {marker}"
-        }).ConfigureAwait(false);
+        await audit
+            .AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    Time = DateTime.UtcNow,
+                    UserId = $"google.com{Guid.NewGuid():N}",
+                    UserDisplayName = "Flow User",
+                    SubjectId = homeId.ToString(),
+                    SubjectName = home.StreetName,
+                    Action = $"Flow audit {marker}",
+                }
+            )
+            .ConfigureAwait(false);
 
         home.StreetNumber = 301;
         await homes.UpsertAsync(home).ConfigureAwait(false);

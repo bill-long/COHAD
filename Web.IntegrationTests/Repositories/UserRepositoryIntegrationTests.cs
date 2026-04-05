@@ -29,7 +29,7 @@ public sealed class UserRepositoryIntegrationTests
             StreetAddress = "1 Test St",
             Roles = new List<User.Role> { User.Role.Resident },
             OwnedHomeIds = new List<Guid>(),
-            LastLoggedIn = DateTime.UtcNow
+            LastLoggedIn = DateTime.UtcNow,
         };
 
         await repo.UpsertAsync(user).ConfigureAwait(false);

@@ -23,7 +23,7 @@ public sealed class EmailJobCleanupServiceTests
             Id = Guid.NewGuid(),
             Status = EmailJobStatus.Completed,
             CreatedUtc = DateTime.UtcNow.AddDays(-60),
-            ContentBlobPath = $"email-jobs/{Guid.NewGuid():D}.html"
+            ContentBlobPath = $"email-jobs/{Guid.NewGuid():D}.html",
         };
 
         repo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 25))
@@ -32,14 +32,21 @@ public sealed class EmailJobCleanupServiceTests
         repo.Setup(r => r.DeleteAsync(oldJob.Id)).Returns(Task.CompletedTask);
 
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["EmailJobs:RetentionDays"] = "30",
-                ["EmailJobs:CleanupBatchSize"] = "25"
-            })
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["EmailJobs:RetentionDays"] = "30",
+                    ["EmailJobs:CleanupBatchSize"] = "25",
+                }
+            )
             .Build();
 
-        var svc = new EmailJobCleanupService(repo.Object, store.Object, config, NullLogger<EmailJobCleanupService>.Instance);
+        var svc = new EmailJobCleanupService(
+            repo.Object,
+            store.Object,
+            config,
+            NullLogger<EmailJobCleanupService>.Instance
+        );
         await svc.RunOnceBestEffortAsync();
 
         store.Verify(s => s.DeleteAsync(oldJob.ContentBlobPath), Times.Once);
@@ -58,7 +65,7 @@ public sealed class EmailJobCleanupServiceTests
             Id = Guid.NewGuid(),
             Status = EmailJobStatus.Failed,
             CreatedUtc = DateTime.UtcNow.AddDays(-60),
-            ContentBlobPath = $"email-jobs/{Guid.NewGuid():D}.html"
+            ContentBlobPath = $"email-jobs/{Guid.NewGuid():D}.html",
         };
 
         repo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 25))
@@ -66,14 +73,21 @@ public sealed class EmailJobCleanupServiceTests
         store.Setup(s => s.DeleteAsync(oldJob.ContentBlobPath)).ThrowsAsync(new InvalidOperationException("boom"));
 
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["EmailJobs:RetentionDays"] = "30",
-                ["EmailJobs:CleanupBatchSize"] = "25"
-            })
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["EmailJobs:RetentionDays"] = "30",
+                    ["EmailJobs:CleanupBatchSize"] = "25",
+                }
+            )
             .Build();
 
-        var svc = new EmailJobCleanupService(repo.Object, store.Object, config, NullLogger<EmailJobCleanupService>.Instance);
+        var svc = new EmailJobCleanupService(
+            repo.Object,
+            store.Object,
+            config,
+            NullLogger<EmailJobCleanupService>.Instance
+        );
         await svc.RunOnceBestEffortAsync();
 
         repo.Verify(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 25), Times.Once);
@@ -87,21 +101,26 @@ public sealed class EmailJobCleanupServiceTests
         var repo = new Mock<IEmailJobRepository>(MockBehavior.Strict);
         var store = new Mock<IDocumentFileStore>(MockBehavior.Strict);
 
-        repo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 3))
-            .ReturnsAsync(new List<EmailJob>());
+        repo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 3)).ReturnsAsync(new List<EmailJob>());
 
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["EmailJobs:RetentionDays"] = "30",
-                ["EmailJobs:CleanupBatchSize"] = "3"
-            })
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["EmailJobs:RetentionDays"] = "30",
+                    ["EmailJobs:CleanupBatchSize"] = "3",
+                }
+            )
             .Build();
 
-        var svc = new EmailJobCleanupService(repo.Object, store.Object, config, NullLogger<EmailJobCleanupService>.Instance);
+        var svc = new EmailJobCleanupService(
+            repo.Object,
+            store.Object,
+            config,
+            NullLogger<EmailJobCleanupService>.Instance
+        );
         await svc.RunOnceBestEffortAsync();
 
         repo.Verify(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 3), Times.Once);
     }
 }
-

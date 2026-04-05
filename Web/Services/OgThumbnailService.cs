@@ -32,7 +32,10 @@ namespace Web.Services
             var scaledWidth = (int)Math.Ceiling(original.Width * scale);
             var scaledHeight = (int)Math.Ceiling(original.Height * scale);
 
-            using var scaled = original.Resize(new SKImageInfo(scaledWidth, scaledHeight), new SKSamplingOptions(SKCubicResampler.Mitchell));
+            using var scaled = original.Resize(
+                new SKImageInfo(scaledWidth, scaledHeight),
+                new SKSamplingOptions(SKCubicResampler.Mitchell)
+            );
             if (scaled == null)
             {
                 throw new InvalidOperationException("Unable to resize image.");

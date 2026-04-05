@@ -34,7 +34,7 @@ namespace Web.PresentationModels
                 UnassociatedSinceUtc = user.UnassociatedSinceUtc,
                 NoRolesSinceUtc = user.NoRolesSinceUtc,
                 Roles = user.Roles?.Select(r => r.ToString()).ToList() ?? new List<string>(),
-                OwnedHomes = ownedHomes
+                OwnedHomes = ownedHomes,
             };
         }
     }

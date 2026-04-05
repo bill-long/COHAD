@@ -174,9 +174,7 @@ namespace Web.UnitTests
         public void ValidateToken_RejectsExpiredToken()
         {
             var service = CreateService();
-            var expired = DateTimeOffset.UtcNow
-                .Subtract(UnsubscribeTokenService.MaxTokenAge)
-                .AddDays(-1);
+            var expired = DateTimeOffset.UtcNow.Subtract(UnsubscribeTokenService.MaxTokenAge).AddDays(-1);
 
             var token = service.GenerateToken(Guid.NewGuid(), "test@example.com", expired);
             Assert.Null(service.ValidateToken(token));

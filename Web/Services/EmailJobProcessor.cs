@@ -83,8 +83,10 @@ namespace Web.Services
             var capMessage = $"Max attempts reached ({job.MaxRecipientAttempts}).";
             foreach (var r in job.Recipients ?? new List<EmailJobRecipient>())
             {
-                if ((r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
-                    r.AttemptCount >= job.MaxRecipientAttempts)
+                if (
+                    (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
+                    && r.AttemptCount >= job.MaxRecipientAttempts
+                )
                 {
                     r.Status = EmailJobRecipientStatus.Failed;
                     if (string.IsNullOrWhiteSpace(r.Error))
@@ -173,7 +175,8 @@ namespace Web.Services
             IHubContext<EmailJobHub> hubContext,
             IConfiguration config,
             IWebHostEnvironment env,
-            ILogger<EmailJobProcessor> logger)
+            ILogger<EmailJobProcessor> logger
+        )
         {
             _queue = queue;
             _scopeFactory = scopeFactory;
@@ -184,7 +187,7 @@ namespace Web.Services
             {
                 SmtpHost = config["SmtpHost"],
                 SmtpUser = config["SmtpUser"],
-                SmtpPassword = config["SmtpPassword"]
+                SmtpPassword = config["SmtpPassword"],
             };
             _appBaseUrl = (config["AppBaseUrl"] ?? "").TrimEnd('/');
             _isMockMode = env.IsEnvironment("MockData");
@@ -195,7 +198,11 @@ namespace Web.Services
 
             var mockDelayDefault = _isMockMode ? 250 : 50;
             _mockDelayMilliseconds = Math.Max(0, config.GetValue("EmailJobs:Mock:DelayMilliseconds", mockDelayDefault));
-            _mockRandomFailureProbability = Math.Clamp(config.GetValue("EmailJobs:Mock:RandomFailureProbability", 0.0), 0.0, 1.0);
+            _mockRandomFailureProbability = Math.Clamp(
+                config.GetValue("EmailJobs:Mock:RandomFailureProbability", 0.0),
+                0.0,
+                1.0
+            );
             _mockFailAllRecipients = config.GetValue("EmailJobs:Mock:FailAllRecipients", false);
             _mockJobFatalError = config["EmailJobs:Mock:JobFatalError"] ?? "";
             var mockSeed = config.GetValue<int?>("EmailJobs:Mock:RandomFailSeed");
@@ -244,7 +251,8 @@ namespace Web.Services
 
                 foreach (var job in incompleteJobs)
                 {
-                    if (ct.IsCancellationRequested) break;
+                    if (ct.IsCancellationRequested)
+                        break;
 
                     if (job.Status == EmailJobStatus.InProgress)
                     {
@@ -254,8 +262,7 @@ namespace Web.Services
                         {
                             var recipients = job.Recipients ?? new List<EmailJobRecipient>();
                             RecalculateCounts(job);
-                            if (recipients.Count > 0 &&
-                                recipients.All(r => r.Status == EmailJobRecipientStatus.Sent))
+                            if (recipients.Count > 0 && recipients.All(r => r.Status == EmailJobRecipientStatus.Sent))
                             {
                                 job.Status = EmailJobStatus.Completed;
                             }
@@ -277,7 +284,10 @@ namespace Web.Services
                                 await NotifyCompletedAsync(job);
                                 _logger.LogWarning(
                                     "Email job {JobId} stalled since {LastProgressUtc} — marked {Status} and will not resume",
-                                    job.Id, lastProgress, job.Status);
+                                    job.Id,
+                                    lastProgress,
+                                    job.Status
+                                );
                                 continue;
                             }
 
@@ -286,7 +296,8 @@ namespace Web.Services
                             {
                                 _logger.LogInformation(
                                     "Stall watchdog: job {JobId} missing or cancelled after failed persist — skipping",
-                                    job.Id);
+                                    job.Id
+                                );
                                 continue;
                             }
 
@@ -294,20 +305,29 @@ namespace Web.Services
                             {
                                 _logger.LogInformation(
                                     "Stall watchdog: job {JobId} is no longer InProgress ({Status}) after failed persist — skipping",
-                                    job.Id, latest.Status);
+                                    job.Id,
+                                    latest.Status
+                                );
                                 continue;
                             }
 
                             _logger.LogWarning(
                                 "Email job {JobId} stalled since {LastProgressUtc} — failed to persist terminal status; enqueueing for normal processing",
-                                job.Id, lastProgress);
+                                job.Id,
+                                lastProgress
+                            );
                             await _queue.EnqueueAsync(job.Id, ct);
                             continue;
                         }
                     }
 
-                    _logger.LogInformation("Resuming incomplete email job {JobId} (status={Status}, sent={Sent}/{Total})",
-                        job.Id, job.Status, job.SentCount, job.TotalRecipients);
+                    _logger.LogInformation(
+                        "Resuming incomplete email job {JobId} (status={Status}, sent={Sent}/{Total})",
+                        job.Id,
+                        job.Status,
+                        job.SentCount,
+                        job.TotalRecipients
+                    );
                     await _queue.EnqueueAsync(job.Id, ct);
                 }
             }
@@ -352,13 +372,15 @@ namespace Web.Services
                 job.Status = EmailJobStatus.InProgress;
                 job.StartedUtc ??= DateTime.UtcNow;
                 job.LastProgressUtc ??= job.StartedUtc;
-                var effectiveMaxAttempts = job.MaxRecipientAttempts > 0
-                    ? job.MaxRecipientAttempts
-                    : _defaultMaxRecipientAttempts;
+                var effectiveMaxAttempts =
+                    job.MaxRecipientAttempts > 0 ? job.MaxRecipientAttempts : _defaultMaxRecipientAttempts;
                 job.MaxRecipientAttempts = Math.Clamp(effectiveMaxAttempts, 1, 25);
                 if (!await repo.TryClaimAsync(job))
                 {
-                    _logger.LogInformation("Email job {JobId} was already claimed by another instance — skipping", jobId);
+                    _logger.LogInformation(
+                        "Email job {JobId} was already claimed by another instance — skipping",
+                        jobId
+                    );
                     return;
                 }
 
@@ -379,7 +401,11 @@ namespace Web.Services
                     }
 
                     await NotifyCompletedAsync(job);
-                    _logger.LogError("Email job {JobId} failed: content blob not found at {Path}", jobId, job.ContentBlobPath);
+                    _logger.LogError(
+                        "Email job {JobId} failed: content blob not found at {Path}",
+                        jobId,
+                        job.ContentBlobPath
+                    );
                     return;
                 }
 
@@ -397,7 +423,8 @@ namespace Web.Services
                     await ProcessJobSmtpAsync(job, htmlBody, repo, jobCts.Token);
                 }
             }
-            catch (OperationCanceledException) when (jobCts.IsCancellationRequested && !appStopping.IsCancellationRequested)
+            catch (OperationCanceledException)
+                when (jobCts.IsCancellationRequested && !appStopping.IsCancellationRequested)
             {
                 // Job was cancelled via the cancel API — the controller persists the Cancelled status
                 _logger.LogInformation("Email job {JobId} cancelled by user", jobId);
@@ -417,16 +444,26 @@ namespace Web.Services
             }
         }
 
-        private async Task ProcessJobSmtpAsync(EmailJob job, string htmlBody, IEmailJobRepository repo, CancellationToken ct)
+        private async Task ProcessJobSmtpAsync(
+            EmailJob job,
+            string htmlBody,
+            IEmailJobRepository repo,
+            CancellationToken ct
+        )
         {
             var imageData = EmailMessageBuilder.ExtractInlineImages(htmlBody);
-            var categoryDisplayName = EmailSubscriptionCategories.DisplayNames
-                .TryGetValue(job.Category ?? "", out var name) ? name : job.Category;
+            var categoryDisplayName = EmailSubscriptionCategories.DisplayNames.TryGetValue(
+                job.Category ?? "",
+                out var name
+            )
+                ? name
+                : job.Category;
 
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
-                    (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
-                    r.AttemptCount < job.MaxRecipientAttempts)
+                    (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
+                    && r.AttemptCount < job.MaxRecipientAttempts
+                )
                 .ToList();
 
             using var protocolLog = new MemoryStream();
@@ -443,133 +480,157 @@ namespace Web.Services
                     smtpClient = await ConnectSmtpAsync(logger, ct);
 
 #if DEBUG
-                // In DEBUG, send a single representative message instead of the full batch
-                if (pendingRecipients.Count > 0)
-                {
-                    var debugRecipient = pendingRecipients[0];
-                    var debugToken = (debugRecipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
-                        ? _tokenService.GenerateToken(debugRecipient.HomeId, debugRecipient.Email)
-                        : null;
-                    var debugFooter = EmailMessageBuilder.BuildUnsubscribeFooter(_appBaseUrl, categoryDisplayName, debugToken);
-                    var debugMessage = new MimeMessage();
-                    debugMessage.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
-                    debugMessage.Subject = $"[DEBUG {job.TotalRecipients} recipients] {job.Subject}";
-                    debugMessage.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
-                    debugMessage.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
-                    debugMessage.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
-                    debugMessage.To.Add(new GroupAddress("Private Recipients"));
-                    debugMessage.Body = EmailMessageBuilder.BuildBodyWithImages(imageData.ProcessedHtml + debugFooter, imageData.Images);
-                    if (debugToken != null && !string.IsNullOrEmpty(_appBaseUrl))
+                    // In DEBUG, send a single representative message instead of the full batch
+                    if (pendingRecipients.Count > 0)
                     {
-                        var unsubUrl = $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?token={Uri.EscapeDataString(debugToken)}";
-                        debugMessage.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
-                        debugMessage.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
-                    }
-                    await smtpClient.SendAsync(debugMessage, ct);
+                        var debugRecipient = pendingRecipients[0];
+                        var debugToken =
+                            (debugRecipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
+                                ? _tokenService.GenerateToken(debugRecipient.HomeId, debugRecipient.Email)
+                                : null;
+                        var debugFooter = EmailMessageBuilder.BuildUnsubscribeFooter(
+                            _appBaseUrl,
+                            categoryDisplayName,
+                            debugToken
+                        );
+                        var debugMessage = new MimeMessage();
+                        debugMessage.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                        debugMessage.Subject = $"[DEBUG {job.TotalRecipients} recipients] {job.Subject}";
+                        debugMessage.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                        debugMessage.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
+                        debugMessage.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
+                        debugMessage.To.Add(new GroupAddress("Private Recipients"));
+                        debugMessage.Body = EmailMessageBuilder.BuildBodyWithImages(
+                            imageData.ProcessedHtml + debugFooter,
+                            imageData.Images
+                        );
+                        if (debugToken != null && !string.IsNullOrEmpty(_appBaseUrl))
+                        {
+                            var unsubUrl =
+                                $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?token={Uri.EscapeDataString(debugToken)}";
+                            debugMessage.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
+                            debugMessage.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+                        }
+                        await smtpClient.SendAsync(debugMessage, ct);
 
-                    // Mark all recipients as sent in DEBUG mode
-                    foreach (var r in pendingRecipients)
-                    {
-                        r.Status = EmailJobRecipientStatus.Sent;
-                        r.SentUtc = DateTime.UtcNow;
-                        r.Error = null;
+                        // Mark all recipients as sent in DEBUG mode
+                        foreach (var r in pendingRecipients)
+                        {
+                            r.Status = EmailJobRecipientStatus.Sent;
+                            r.SentUtc = DateTime.UtcNow;
+                            r.Error = null;
+                        }
+                        job.LastProgressUtc = DateTime.UtcNow;
+                        RecalculateCounts(job);
+                        if (!await TryPersistJobAsync(repo, job))
+                            stoppedEarly = true;
                     }
-                    job.LastProgressUtc = DateTime.UtcNow;
-                    RecalculateCounts(job);
-                    if (!await TryPersistJobAsync(repo, job))
-                        stoppedEarly = true;
-                }
 #else
-                foreach (var recipient in pendingRecipients)
-                {
-                    ct.ThrowIfCancellationRequested();
-
-                    var attemptStartedUtc = DateTime.UtcNow;
-                    recipient.AttemptCount++;
-                    recipient.LastAttemptUtc = attemptStartedUtc;
-                    job.LastProgressUtc = attemptStartedUtc;
-                    if (!await TryPersistJobAsync(repo, job))
+                    foreach (var recipient in pendingRecipients)
                     {
-                        stoppedEarly = true;
-                        break;
-                    }
+                        ct.ThrowIfCancellationRequested();
 
-                    // Reset protocol log between messages to bound memory
-                    protocolLog.SetLength(0);
-
-                    try
-                    {
-                        // Ensure SMTP is connected (reconnect if needed)
-                        if (!smtpClient.IsConnected)
+                        var attemptStartedUtc = DateTime.UtcNow;
+                        recipient.AttemptCount++;
+                        recipient.LastAttemptUtc = attemptStartedUtc;
+                        job.LastProgressUtc = attemptStartedUtc;
+                        if (!await TryPersistJobAsync(repo, job))
                         {
-                            smtpClient.Dispose();
-                            protocolLog.SetLength(0);
-                            logger = new ProtocolLogger(protocolLog);
-                            smtpClient = await ConnectSmtpAsync(logger, ct);
+                            stoppedEarly = true;
+                            break;
                         }
 
-                        var token = (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
-                            ? _tokenService.GenerateToken(recipient.HomeId, recipient.Email)
-                            : null;
+                        // Reset protocol log between messages to bound memory
+                        protocolLog.SetLength(0);
 
-                        var footer = EmailMessageBuilder.BuildUnsubscribeFooter(_appBaseUrl, categoryDisplayName, token);
-                        var htmlWithFooter = imageData.ProcessedHtml + footer;
-
-                        var message = new MimeMessage();
-                        message.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
-                        message.Subject = job.Subject;
-                        message.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
-                        message.To.Add(new MailboxAddress("", recipient.Email));
-                        message.Body = EmailMessageBuilder.BuildBodyWithImages(htmlWithFooter, imageData.Images);
-
-                        if (token != null && !string.IsNullOrEmpty(_appBaseUrl))
+                        try
                         {
-                            var unsubUrl = $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?token={Uri.EscapeDataString(token)}";
-                            message.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
-                            message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+                            // Ensure SMTP is connected (reconnect if needed)
+                            if (!smtpClient.IsConnected)
+                            {
+                                smtpClient.Dispose();
+                                protocolLog.SetLength(0);
+                                logger = new ProtocolLogger(protocolLog);
+                                smtpClient = await ConnectSmtpAsync(logger, ct);
+                            }
+
+                            var token =
+                                (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
+                                    ? _tokenService.GenerateToken(recipient.HomeId, recipient.Email)
+                                    : null;
+
+                            var footer = EmailMessageBuilder.BuildUnsubscribeFooter(
+                                _appBaseUrl,
+                                categoryDisplayName,
+                                token
+                            );
+                            var htmlWithFooter = imageData.ProcessedHtml + footer;
+
+                            var message = new MimeMessage();
+                            message.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                            message.Subject = job.Subject;
+                            message.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                            message.To.Add(new MailboxAddress("", recipient.Email));
+                            message.Body = EmailMessageBuilder.BuildBodyWithImages(htmlWithFooter, imageData.Images);
+
+                            if (token != null && !string.IsNullOrEmpty(_appBaseUrl))
+                            {
+                                var unsubUrl =
+                                    $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?token={Uri.EscapeDataString(token)}";
+                                message.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
+                                message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+                            }
+
+                            await smtpClient.SendAsync(message, ct);
+
+                            recipient.Status = EmailJobRecipientStatus.Sent;
+                            recipient.SentUtc = DateTime.UtcNow;
+                            recipient.Error = null;
+                            job.LastProgressUtc = DateTime.UtcNow;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw; // Let cancellation propagate
+                        }
+                        catch (Exception ex)
+                        {
+                            if (_logSmtpProtocolOnFailure)
+                            {
+                                var transcript = FormatSmtpTranscriptForLogs(protocolLog);
+                                _logger.LogWarning(
+                                    ex,
+                                    "Failed to send email to {Email} in job {JobId}. SMTP transcript (redacted, truncated): {SmtpTranscript}",
+                                    recipient.Email,
+                                    job.Id,
+                                    transcript
+                                );
+                            }
+                            else
+                            {
+                                _logger.LogWarning(
+                                    ex,
+                                    "Failed to send email to {Email} in job {JobId}",
+                                    recipient.Email,
+                                    job.Id
+                                );
+                            }
+                            recipient.Status = EmailJobRecipientStatus.Failed;
+                            recipient.Error = ex.Message;
+                            job.LastProgressUtc = DateTime.UtcNow;
                         }
 
-                        await smtpClient.SendAsync(message, ct);
-
-                        recipient.Status = EmailJobRecipientStatus.Sent;
-                        recipient.SentUtc = DateTime.UtcNow;
-                        recipient.Error = null;
-                        job.LastProgressUtc = DateTime.UtcNow;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw; // Let cancellation propagate
-                    }
-                    catch (Exception ex)
-                    {
-                        if (_logSmtpProtocolOnFailure)
+                        RecalculateCounts(job);
+                        // Check cancellation before persisting to avoid overwriting a Cancelled status
+                        ct.ThrowIfCancellationRequested();
+                        // Persist progress after every recipient for maximum recovery granularity
+                        if (!await TryPersistJobAsync(repo, job))
                         {
-                            var transcript = FormatSmtpTranscriptForLogs(protocolLog);
-                            _logger.LogWarning(ex,
-                                "Failed to send email to {Email} in job {JobId}. SMTP transcript (redacted, truncated): {SmtpTranscript}",
-                                recipient.Email, job.Id, transcript);
+                            stoppedEarly = true;
+                            break;
                         }
-                        else
-                        {
-                            _logger.LogWarning(ex, "Failed to send email to {Email} in job {JobId}", recipient.Email, job.Id);
-                        }
-                        recipient.Status = EmailJobRecipientStatus.Failed;
-                        recipient.Error = ex.Message;
-                        job.LastProgressUtc = DateTime.UtcNow;
-                    }
 
-                    RecalculateCounts(job);
-                    // Check cancellation before persisting to avoid overwriting a Cancelled status
-                    ct.ThrowIfCancellationRequested();
-                    // Persist progress after every recipient for maximum recovery granularity
-                    if (!await TryPersistJobAsync(repo, job))
-                    {
-                        stoppedEarly = true;
-                        break;
+                        await NotifyProgressAsync(job);
                     }
-
-                    await NotifyProgressAsync(job);
-                }
 #endif
                 }
                 finally
@@ -581,7 +642,9 @@ namespace Web.Services
                             if (smtpClient.IsConnected)
                                 await smtpClient.DisconnectAsync(true, CancellationToken.None);
                         }
-                        catch { /* best-effort disconnect */ }
+                        catch
+                        { /* best-effort disconnect */
+                        }
                         smtpClient.Dispose();
                     }
                 }
@@ -618,8 +681,13 @@ namespace Web.Services
 
             await NotifyCompletedAsync(job);
 
-            _logger.LogInformation("Email job {JobId} finished: status={Status}, sent={Sent}, failed={Failed}",
-                job.Id, job.Status, job.SentCount, job.FailedCount);
+            _logger.LogInformation(
+                "Email job {JobId} finished: status={Status}, sent={Sent}, failed={Failed}",
+                job.Id,
+                job.Status,
+                job.SentCount,
+                job.FailedCount
+            );
         }
 
         /// <summary>
@@ -660,8 +728,9 @@ namespace Web.Services
 
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
-                    (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed) &&
-                    r.AttemptCount < job.MaxRecipientAttempts)
+                    (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
+                    && r.AttemptCount < job.MaxRecipientAttempts
+                )
                 .ToList();
 
             var stoppedEarly = false;
@@ -681,9 +750,9 @@ namespace Web.Services
                 if (_mockDelayMilliseconds > 0)
                     await Task.Delay(_mockDelayMilliseconds, ct);
 
-                var mockFailed = _mockFailAllRecipients ||
-                    (_mockRandomFailureProbability > 0 &&
-                     _mockRandom.NextDouble() < _mockRandomFailureProbability);
+                var mockFailed =
+                    _mockFailAllRecipients
+                    || (_mockRandomFailureProbability > 0 && _mockRandom.NextDouble() < _mockRandomFailureProbability);
 
                 if (mockFailed)
                 {
@@ -741,14 +810,17 @@ namespace Web.Services
 
             _logger.LogInformation(
                 "Email job {JobId} completed in mock mode: status={Status}, sent={Sent}, failed={Failed}",
-                job.Id, job.Status, job.SentCount, job.FailedCount);
+                job.Id,
+                job.Status,
+                job.SentCount,
+                job.FailedCount
+            );
         }
 
         private async Task<SmtpClient> ConnectSmtpAsync(ProtocolLogger logger, CancellationToken ct)
         {
             var client = new SmtpClient(logger);
-            await client.ConnectAsync(_smtpOptions.SmtpHost, 587,
-                MailKit.Security.SecureSocketOptions.StartTls, ct);
+            await client.ConnectAsync(_smtpOptions.SmtpHost, 587, MailKit.Security.SecureSocketOptions.StartTls, ct);
             await client.AuthenticateAsync(_smtpOptions.SmtpUser, _smtpOptions.SmtpPassword, ct);
             return client;
         }
@@ -776,15 +848,19 @@ namespace Web.Services
         {
             try
             {
-                await _hubContext.Clients.Group(EmailJobHub.EmailSendersGroupName)
-                    .SendAsync("EmailJobProgress", new
-                    {
-                        jobId = job.Id,
-                        status = job.Status.ToString(),
-                        sentCount = job.SentCount,
-                        failedCount = job.FailedCount,
-                        totalRecipients = job.TotalRecipients
-                    });
+                await _hubContext
+                    .Clients.Group(EmailJobHub.EmailSendersGroupName)
+                    .SendAsync(
+                        "EmailJobProgress",
+                        new
+                        {
+                            jobId = job.Id,
+                            status = job.Status.ToString(),
+                            sentCount = job.SentCount,
+                            failedCount = job.FailedCount,
+                            totalRecipients = job.TotalRecipients,
+                        }
+                    );
             }
             catch (Exception ex)
             {
@@ -796,16 +872,20 @@ namespace Web.Services
         {
             try
             {
-                await _hubContext.Clients.Group(EmailJobHub.EmailSendersGroupName)
-                    .SendAsync("EmailJobCompleted", new
-                    {
-                        jobId = job.Id,
-                        status = job.Status.ToString(),
-                        sentCount = job.SentCount,
-                        failedCount = job.FailedCount,
-                        totalRecipients = job.TotalRecipients,
-                        lastError = job.LastError
-                    });
+                await _hubContext
+                    .Clients.Group(EmailJobHub.EmailSendersGroupName)
+                    .SendAsync(
+                        "EmailJobCompleted",
+                        new
+                        {
+                            jobId = job.Id,
+                            status = job.Status.ToString(),
+                            sentCount = job.SentCount,
+                            failedCount = job.FailedCount,
+                            totalRecipients = job.TotalRecipients,
+                            lastError = job.LastError,
+                        }
+                    );
             }
             catch (Exception ex)
             {

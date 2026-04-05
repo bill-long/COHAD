@@ -17,7 +17,10 @@ namespace Web.Authorization
             _logger = logger;
         }
 
-        protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, RoleAuthorizationRequirement requirement)
+        protected override async Task HandleRequirementAsync(
+            AuthorizationHandlerContext context,
+            RoleAuthorizationRequirement requirement
+        )
         {
             string uniqueId;
             try
@@ -26,20 +29,31 @@ namespace Web.Authorization
             }
             catch (InvalidOperationException)
             {
-                _logger.LogWarning("Authorization failed for requirement {Role}: required claims are missing from the token.", requirement.RequiredRole);
+                _logger.LogWarning(
+                    "Authorization failed for requirement {Role}: required claims are missing from the token.",
+                    requirement.RequiredRole
+                );
                 return;
             }
 
             var storedUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
             if (storedUser == null)
             {
-                _logger.LogWarning("Authorization failed for requirement {Role}: user {UniqueId} not found in database.", requirement.RequiredRole, uniqueId);
+                _logger.LogWarning(
+                    "Authorization failed for requirement {Role}: user {UniqueId} not found in database.",
+                    requirement.RequiredRole,
+                    uniqueId
+                );
                 return;
             }
 
             if (storedUser.Roles == null)
             {
-                _logger.LogWarning("Authorization failed for requirement {Role}: user {UniqueId} has null roles.", requirement.RequiredRole, uniqueId);
+                _logger.LogWarning(
+                    "Authorization failed for requirement {Role}: user {UniqueId} has null roles.",
+                    requirement.RequiredRole,
+                    uniqueId
+                );
                 return;
             }
 
@@ -50,14 +64,20 @@ namespace Web.Authorization
             }
 
             // Legacy accounts may have Administrator without Resident; Resident-gated endpoints should still allow them.
-            if (requirement.RequiredRole == Models.User.Role.Resident &&
-                storedUser.Roles.Contains(Models.User.Role.Administrator))
+            if (
+                requirement.RequiredRole == Models.User.Role.Resident
+                && storedUser.Roles.Contains(Models.User.Role.Administrator)
+            )
             {
                 context.Succeed(requirement);
                 return;
             }
 
-            _logger.LogWarning("Authorization failed: user {UniqueId} does not have required role {Role}.", uniqueId, requirement.RequiredRole);
+            _logger.LogWarning(
+                "Authorization failed: user {UniqueId} does not have required role {Role}.",
+                uniqueId,
+                requirement.RequiredRole
+            );
         }
     }
 }

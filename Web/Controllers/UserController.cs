@@ -23,7 +23,8 @@ namespace Web.Controllers
         public UserController(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
-            IAuditLogRepository auditLogRepository)
+            IAuditLogRepository auditLogRepository
+        )
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
@@ -34,7 +35,12 @@ namespace Web.Controllers
         {
             var allUsers = await _userRepository.GetAllAsync();
             var allHomes = await _homeRepository.GetAllAsync();
-            return allUsers.Select(u => PresentationUser.FromStorageModel(u, allHomes.Where(h => u.OwnedHomeIds != null && u.OwnedHomeIds.Contains(h.Id)).ToList()));
+            return allUsers.Select(u =>
+                PresentationUser.FromStorageModel(
+                    u,
+                    allHomes.Where(h => u.OwnedHomeIds != null && u.OwnedHomeIds.Contains(h.Id)).ToList()
+                )
+            );
         }
 
         [Authorize(Policy = "Resident")]
@@ -62,23 +68,28 @@ namespace Web.Controllers
             storedUser.Surname = updatedUser.Surname;
             storedUser.StreetAddress = updatedUser.StreetAddress;
 
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = storedUser.UniqueId,
-                SubjectName = storedUser.Emails,
-                Action = "Updated user properties.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = storedUser.UniqueId,
+                    SubjectName = storedUser.Emails,
+                    Action = "Updated user properties.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             await _userRepository.UpsertAsync(storedUser);
             return Ok();
         }
 
         [HttpPut("{userId}/associations")]
-        public async Task<IActionResult> UpdateUserAssociations(string userId, [FromBody] UpdatedUserAssociations updatedAssociations)
+        public async Task<IActionResult> UpdateUserAssociations(
+            string userId,
+            [FromBody] UpdatedUserAssociations updatedAssociations
+        )
         {
             var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
             if (apiUser == null)
@@ -104,9 +115,7 @@ namespace Web.Controllers
                 requestedRoles.Add(parsedRole);
             }
 
-            var requestedHomeIds = (updatedAssociations?.OwnedHomeIds ?? new List<Guid>())
-                .Distinct()
-                .ToList();
+            var requestedHomeIds = (updatedAssociations?.OwnedHomeIds ?? new List<Guid>()).Distinct().ToList();
             var existingHomes = await _homeRepository.GetByIdsAsync(requestedHomeIds);
             if (existingHomes.Count != requestedHomeIds.Count)
             {
@@ -114,8 +123,10 @@ namespace Web.Controllers
             }
 
             // Enforce role hierarchy: every Administrator also receives Resident.
-            if (requestedRoles.Contains(Models.User.Role.Administrator) &&
-                !requestedRoles.Contains(Models.User.Role.Resident))
+            if (
+                requestedRoles.Contains(Models.User.Role.Administrator)
+                && !requestedRoles.Contains(Models.User.Role.Resident)
+            )
             {
                 requestedRoles.Add(Models.User.Role.Resident);
             }
@@ -123,16 +134,18 @@ namespace Web.Controllers
             userToModify.Roles = requestedRoles;
             userToModify.OwnedHomeIds = requestedHomeIds;
 
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = userToModify.UniqueId,
-                SubjectName = userToModify.Emails,
-                Action = "Updated user role and home associations.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = userToModify.UniqueId,
+                    SubjectName = userToModify.Emails,
+                    Action = "Updated user role and home associations.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             await _userRepository.UpsertAsync(userToModify);
             return Ok();

@@ -44,12 +44,14 @@ public sealed class CosmosLegacyDocumentMapperTests
     [Fact]
     public void ToUser_reads_UniqueId_from_prefixed_id()
     {
-        var doc = JObject.Parse(@"{
+        var doc = JObject.Parse(
+            @"{
             ""id"": ""User|google.comtest123"",
             ""GivenName"": ""A"",
             ""Roles"": ""[0]"",
             ""OwnedHomeIds"": ""[]""
-        }");
+        }"
+        );
         var user = CosmosLegacyDocumentMapper.ToUser(doc);
         Assert.Equal("google.comtest123", user.UniqueId);
         Assert.Equal("A", user.GivenName);
@@ -58,12 +60,14 @@ public sealed class CosmosLegacyDocumentMapperTests
     [Fact]
     public void ToUser_falls_back_to_UniqueId_property_when_id_unprefixed()
     {
-        var doc = JObject.Parse(@"{
+        var doc = JObject.Parse(
+            @"{
             ""id"": ""legacy-id"",
             ""UniqueId"": ""google.comx"",
             ""Roles"": ""[]"",
             ""OwnedHomeIds"": ""[]""
-        }");
+        }"
+        );
         var user = CosmosLegacyDocumentMapper.ToUser(doc);
         Assert.Equal("google.comx", user.UniqueId);
     }
@@ -72,12 +76,14 @@ public sealed class CosmosLegacyDocumentMapperTests
     public void ToUser_reads_UnassociatedSinceUtc()
     {
         var when = new DateTime(2025, 1, 15, 8, 30, 0, DateTimeKind.Utc);
-        var doc = JObject.Parse($@"{{
+        var doc = JObject.Parse(
+            $@"{{
             ""id"": ""User|google.comx"",
             ""Roles"": ""[]"",
             ""OwnedHomeIds"": ""[]"",
             ""UnassociatedSinceUtc"": ""{when:O}""
-        }}");
+        }}"
+        );
         var user = CosmosLegacyDocumentMapper.ToUser(doc);
         Assert.Equal(when, user.UnassociatedSinceUtc);
     }
@@ -93,7 +99,7 @@ public sealed class CosmosLegacyDocumentMapperTests
             NameIdentifier = "u1",
             Roles = new List<User.Role>(),
             OwnedHomeIds = new List<Guid>(),
-            UnassociatedSinceUtc = when
+            UnassociatedSinceUtc = when,
         };
         CosmosLegacyDocumentMapper.MergeUserIntoDocument(doc, user);
         Assert.Equal(when, doc["UnassociatedSinceUtc"]?.ToObject<DateTime?>());
@@ -103,12 +109,14 @@ public sealed class CosmosLegacyDocumentMapperTests
     public void ToUser_reads_NoRolesSinceUtc()
     {
         var when = new DateTime(2025, 1, 16, 8, 30, 0, DateTimeKind.Utc);
-        var doc = JObject.Parse($@"{{
+        var doc = JObject.Parse(
+            $@"{{
             ""id"": ""User|google.comx"",
             ""Roles"": ""[]"",
             ""OwnedHomeIds"": ""[]"",
             ""NoRolesSinceUtc"": ""{when:O}""
-        }}");
+        }}"
+        );
         var user = CosmosLegacyDocumentMapper.ToUser(doc);
         Assert.Equal(when, user.NoRolesSinceUtc);
     }
@@ -124,7 +132,7 @@ public sealed class CosmosLegacyDocumentMapperTests
             NameIdentifier = "u1",
             Roles = new List<User.Role>(),
             OwnedHomeIds = new List<Guid>(),
-            NoRolesSinceUtc = when
+            NoRolesSinceUtc = when,
         };
         CosmosLegacyDocumentMapper.MergeUserIntoDocument(doc, user);
         Assert.Equal(when, doc["NoRolesSinceUtc"]?.ToObject<DateTime?>());
@@ -133,17 +141,19 @@ public sealed class CosmosLegacyDocumentMapperTests
     [Fact]
     public void MergeUserIntoDocument_keeps_AuditLog_when_present()
     {
-        var doc = JObject.Parse(@"{
+        var doc = JObject.Parse(
+            @"{
             ""AuditLog"": ""[]"",
             ""Roles"": ""[]"",
             ""OwnedHomeIds"": ""[]""
-        }");
+        }"
+        );
         var user = new User
         {
             UniqueId = "google.comu1",
             NameIdentifier = "u1",
             Roles = new List<User.Role>(),
-            OwnedHomeIds = new List<Guid>()
+            OwnedHomeIds = new List<Guid>(),
         };
         CosmosLegacyDocumentMapper.MergeUserIntoDocument(doc, user);
         Assert.Equal("[]", doc.Value<string>("AuditLog"));
@@ -153,12 +163,14 @@ public sealed class CosmosLegacyDocumentMapperTests
     [Fact]
     public void ToHome_deserializes_Residents_string_payload()
     {
-        var doc = JObject.Parse(@"{
+        var doc = JObject.Parse(
+            @"{
             ""id"": ""Home|9a0fc52c-86c4-4f27-b899-32b5ece24d5c"",
             ""StreetNumber"": 110,
             ""StreetName"": ""Canyon Oaks Drive"",
             ""Residents"": ""[]""
-        }");
+        }"
+        );
         var home = CosmosLegacyDocumentMapper.ToHome(doc);
         Assert.Equal(110, home.StreetNumber);
         // Residents are now stored in a separate container; ToHome no longer populates them.
@@ -173,7 +185,7 @@ public sealed class CosmosLegacyDocumentMapperTests
             Id = Guid.Parse("9a0fc52c-86c4-4f27-b899-32b5ece24d5c"),
             StreetNumber = 1,
             StreetName = "Test",
-            Residents = new List<Resident>()
+            Residents = new List<Resident>(),
         };
         var doc = new JObject();
         CosmosLegacyDocumentMapper.MergeHomeIntoDocument(doc, home);
@@ -191,7 +203,7 @@ public sealed class CosmosLegacyDocumentMapperTests
             Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
             StreetNumber = 2,
             StreetName = "Y",
-            Residents = new List<Resident>()
+            Residents = new List<Resident>(),
         };
         CosmosLegacyDocumentMapper.MergeHomeIntoDocument(doc, home);
         Assert.Equal("keep-me", doc.Value<string>("UserUniqueId"));
@@ -202,7 +214,8 @@ public sealed class CosmosLegacyDocumentMapperTests
     [Fact]
     public void ToCommittee_reads_basic_fields()
     {
-        var doc = JObject.Parse(@"{
+        var doc = JObject.Parse(
+            @"{
             ""id"": ""board"",
             ""CommitteeEmail"": ""board@cohad.org"",
             ""DisplayName"": ""Board"",
@@ -210,7 +223,8 @@ public sealed class CosmosLegacyDocumentMapperTests
             ""DisplayOrder"": 1,
             ""ManagementRole"": ""Board"",
             ""Members"": []
-        }");
+        }"
+        );
 
         var committee = CosmosLegacyDocumentMapper.ToCommittee(doc);
 
@@ -230,7 +244,8 @@ public sealed class CosmosLegacyDocumentMapperTests
         // format produced by ToCommitteeDocument via JArray.FromObject().
         var memberId = Guid.NewGuid();
         var residentId = Guid.NewGuid();
-        var doc = JObject.Parse($@"{{
+        var doc = JObject.Parse(
+            $@"{{
             ""id"": ""social"",
             ""DisplayName"": ""Social"",
             ""Members"": [
@@ -244,7 +259,8 @@ public sealed class CosmosLegacyDocumentMapperTests
                     ""DisplayOrder"": 1
                 }}
             ]
-        }}");
+        }}"
+        );
 
         var committee = CosmosLegacyDocumentMapper.ToCommittee(doc);
 
@@ -262,7 +278,8 @@ public sealed class CosmosLegacyDocumentMapperTests
     [Fact]
     public void ToCommittee_handles_null_and_missing_member_fields()
     {
-        var doc = JObject.Parse(@"{
+        var doc = JObject.Parse(
+            @"{
             ""id"": ""test"",
             ""Members"": [
                 {
@@ -270,7 +287,8 @@ public sealed class CosmosLegacyDocumentMapperTests
                     ""Title"": null
                 }
             ]
-        }");
+        }"
+        );
 
         var committee = CosmosLegacyDocumentMapper.ToCommittee(doc);
 
@@ -326,9 +344,9 @@ public sealed class CosmosLegacyDocumentMapperTests
                     PhotoContentType = "image/jpeg",
                     ReceivesForwardedEmail = true,
                     PhotoOffsetY = 25,
-                    DisplayOrder = 0
-                }
-            }
+                    DisplayOrder = 0,
+                },
+            },
         };
 
         var doc = CosmosLegacyDocumentMapper.ToCommitteeDocument(original);

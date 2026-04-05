@@ -5,14 +5,14 @@ import { BlogPostCard, BlogService } from 'src/app/services/blog.service';
   selector: 'app-blog',
   templateUrl: './blog.component.html',
   styleUrls: ['./blog.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class BlogComponent implements OnInit {
   posts: BlogPostCard[] = [];
   loading = false;
   error = '';
 
-  constructor(private readonly blogService: BlogService) { }
+  constructor(private readonly blogService: BlogService) {}
 
   ngOnInit(): void {
     this.loadPosts();
@@ -29,7 +29,7 @@ export class BlogComponent implements OnInit {
         this.posts = [];
         this.loading = false;
         this.error = 'Failed to load news.';
-      }
+      },
     });
   }
 }

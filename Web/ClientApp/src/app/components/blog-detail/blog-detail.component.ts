@@ -13,7 +13,7 @@ import { Login, Action, dispatcher, applicationState, ApplicationState } from 's
   selector: 'app-blog-detail',
   templateUrl: './blog-detail.component.html',
   styleUrls: ['./blog-detail.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class BlogDetailComponent implements OnInit {
   post: BlogPostDetail | null = null;
@@ -40,7 +40,8 @@ export class BlogDetailComponent implements OnInit {
     private readonly blogService: BlogService,
     private readonly sanitizer: DomSanitizer,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
-    @Inject(dispatcher) private dispatcher: Observer<Action>) { }
+    @Inject(dispatcher) private dispatcher: Observer<Action>,
+  ) {}
 
   get apiUser$(): Observable<ApiUser | null> {
     return this.appState.pipe(map(s => s.apiUser));
@@ -85,7 +86,7 @@ export class BlogDetailComponent implements OnInit {
       error: () => {
         this.commentSubmitting = false;
         this.commentError = 'Failed to post comment.';
-      }
+      },
     });
   }
 
@@ -94,7 +95,7 @@ export class BlogDetailComponent implements OnInit {
       next: () => {
         this.comments = this.comments.filter(c => c.id !== commentId);
         this.commentHtmlCache.delete(commentId);
-      }
+      },
     });
   }
 
@@ -138,13 +139,16 @@ export class BlogDetailComponent implements OnInit {
           this.currentSlug = post.publicSlug;
           const snapshot = this.route.snapshot;
           const params = new URLSearchParams();
-          snapshot.queryParamMap.keys.forEach(k =>
-            (snapshot.queryParamMap.getAll(k) ?? []).forEach(v => params.append(k, v ?? '')));
+          snapshot.queryParamMap.keys.forEach(k => (snapshot.queryParamMap.getAll(k) ?? []).forEach(v => params.append(k, v ?? '')));
           const query = params.toString();
           const fragment = snapshot.fragment;
           let newUrl = '/news/' + post.publicSlug;
-          if (query) { newUrl += '?' + query; }
-          if (fragment) { newUrl += '#' + fragment; }
+          if (query) {
+            newUrl += '?' + query;
+          }
+          if (fragment) {
+            newUrl += '#' + fragment;
+          }
           this.location.replaceState(newUrl);
         }
         this.loadComments(this.currentSlug);
@@ -154,7 +158,7 @@ export class BlogDetailComponent implements OnInit {
         this.renderedHtml = '';
         this.loading = false;
         this.error = 'Failed to load post.';
-      }
+      },
     });
   }
 
@@ -173,7 +177,7 @@ export class BlogDetailComponent implements OnInit {
         this.comments = [];
         this.commentsLoading = false;
         this.commentsLoaded = true;
-      }
+      },
     });
   }
 

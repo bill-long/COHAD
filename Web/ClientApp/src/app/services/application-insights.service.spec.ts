@@ -18,8 +18,13 @@ type SdkSpy = jasmine.SpyObj<{
 
 function createSdkSpy(): SdkSpy {
   return jasmine.createSpyObj('ApplicationInsights', [
-    'loadAppInsights', 'trackPageView', 'trackEvent', 'trackException',
-    'setAuthenticatedUserContext', 'clearAuthenticatedUserContext', 'flush'
+    'loadAppInsights',
+    'trackPageView',
+    'trackEvent',
+    'trackException',
+    'setAuthenticatedUserContext',
+    'clearAuthenticatedUserContext',
+    'flush',
   ]);
 }
 
@@ -40,11 +45,7 @@ describe('ApplicationInsightsService', () => {
     sdkMock = createSdkSpy();
 
     TestBed.configureTestingModule({
-      providers: [
-        ApplicationInsightsService,
-        { provide: Router, useValue: routerSpy },
-        { provide: Title, useValue: titleService }
-      ]
+      providers: [ApplicationInsightsService, { provide: Router, useValue: routerSpy }, { provide: Title, useValue: titleService }],
     });
 
     service = TestBed.inject(ApplicationInsightsService);
@@ -92,7 +93,7 @@ describe('ApplicationInsightsService', () => {
       service.init();
       expect(sdkMock.trackPageView).toHaveBeenCalledWith({
         name: 'Test Page',
-        uri: '/test'
+        uri: '/test',
       });
     });
 
@@ -102,7 +103,7 @@ describe('ApplicationInsightsService', () => {
       routerEvents$.next(new NavigationEnd(1, '/residents/directory', '/residents/directory'));
       expect(sdkMock.trackPageView).toHaveBeenCalledWith({
         name: 'Test Page',
-        uri: '/residents/directory'
+        uri: '/residents/directory',
       });
     });
 
@@ -112,7 +113,7 @@ describe('ApplicationInsightsService', () => {
       routerEvents$.next(new NavigationEnd(2, '/callback?code=secret&state=abc', '/callback?code=secret&state=abc'));
       expect(sdkMock.trackPageView).toHaveBeenCalledWith({
         name: 'Test Page',
-        uri: '/callback'
+        uri: '/callback',
       });
     });
 
@@ -122,7 +123,7 @@ describe('ApplicationInsightsService', () => {
       routerEvents$.next(new NavigationEnd(3, '/page#section', '/page#section'));
       expect(sdkMock.trackPageView).toHaveBeenCalledWith({
         name: 'Test Page',
-        uri: '/page'
+        uri: '/page',
       });
     });
 

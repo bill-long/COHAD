@@ -27,7 +27,7 @@ namespace Web.Controllers
             ".docx",
             ".xls",
             ".xlsx",
-            ".txt"
+            ".txt",
         };
 
         private readonly IUserRepository _userRepository;
@@ -45,7 +45,8 @@ namespace Web.Controllers
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
             DocumentListCache listCache,
-            IOptions<DocumentStorageOptions> storageOptions)
+            IOptions<DocumentStorageOptions> storageOptions
+        )
         {
             _userRepository = userRepository;
             _documentRepository = documentRepository;
@@ -73,10 +74,13 @@ namespace Web.Controllers
             var docs = await _listCache.GetAllDocumentsAsync();
             var folders = await _listCache.GetAllFoldersAsync();
             var folderLookup = folders.ToDictionary(f => f.Id, f => f.Name);
-            var payload = docs
-                .OrderByDescending(d => d.CreatedUtc)
-                .Select(d => ResidentDocumentSummary.FromStorageModel(
-                    d, d.FolderId != null && folderLookup.TryGetValue(d.FolderId.Value, out var name) ? name : null))
+            var payload = docs.OrderByDescending(d => d.CreatedUtc)
+                .Select(d =>
+                    ResidentDocumentSummary.FromStorageModel(
+                        d,
+                        d.FolderId != null && folderLookup.TryGetValue(d.FolderId.Value, out var name) ? name : null
+                    )
+                )
                 .ToList();
 
             return _listCache.OkWithETag(payload, Request, Response, DocumentListCache.DocumentsResponseKey);
@@ -181,21 +185,23 @@ namespace Web.Controllers
                 SizeBytes = request.File.Length,
                 UploadedByUniqueId = apiUser.UniqueId,
                 CreatedUtc = DateTime.UtcNow,
-                FolderId = request.FolderId
+                FolderId = request.FolderId,
             };
 
             await _documentRepository.UpsertAsync(created);
             _listCache.InvalidateDocuments();
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = created.Id.ToString("D"),
-                SubjectName = created.DisplayName,
-                Action = "Uploaded resident document.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = created.Id.ToString("D"),
+                    SubjectName = created.DisplayName,
+                    Action = "Uploaded resident document.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             return Ok(ResidentDocumentSummary.FromStorageModel(created, folderName));
         }
@@ -219,16 +225,18 @@ namespace Web.Controllers
             await _documentFileStore.DeleteAsync(stored.BlobPath);
             await _documentRepository.DeleteAsync(id);
             _listCache.InvalidateDocuments();
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = stored.Id.ToString("D"),
-                SubjectName = stored.DisplayName,
-                Action = "Deleted resident document.",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = stored.Id.ToString("D"),
+                    SubjectName = stored.DisplayName,
+                    Action = "Deleted resident document.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
 
             return Ok();
         }

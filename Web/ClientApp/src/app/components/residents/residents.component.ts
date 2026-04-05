@@ -8,19 +8,17 @@ import { ApplicationState, applicationState } from 'src/app/state';
   selector: 'app-residents',
   templateUrl: './residents.component.html',
   styleUrls: ['./residents.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class ResidentsComponent {
-
-  constructor(@Inject(applicationState) private appState: Observable<ApplicationState>) { }
+  constructor(@Inject(applicationState) private appState: Observable<ApplicationState>) {}
 
   get apiUser$(): Observable<ApiUser | null> {
     return this.appState.pipe(map(s => s.apiUser));
   }
 
   get directoryVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u =>
-      u != null && (u.roles.includes('Resident') || u.roles.includes('Administrator'))));
+    return this.apiUser$.pipe(map(u => u != null && (u.roles.includes('Resident') || u.roles.includes('Administrator'))));
   }
 
   get mapVisible$(): Observable<boolean> {
@@ -28,8 +26,7 @@ export class ResidentsComponent {
   }
 
   get documentsVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u =>
-      u != null && (u.roles.includes('Resident') || u.roles.includes('Administrator'))));
+    return this.apiUser$.pipe(map(u => u != null && (u.roles.includes('Resident') || u.roles.includes('Administrator'))));
   }
 
   get duesVisible$(): Observable<boolean> {
@@ -41,8 +38,7 @@ export class ResidentsComponent {
   }
 
   get vendorsVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u =>
-      u != null && (u.roles.includes('Resident') || u.roles.includes('Administrator'))));
+    return this.apiUser$.pipe(map(u => u != null && (u.roles.includes('Resident') || u.roles.includes('Administrator'))));
   }
 
   get youthServicesVisible$(): Observable<boolean> {

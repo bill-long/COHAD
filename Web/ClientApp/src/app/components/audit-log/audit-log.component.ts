@@ -8,12 +8,12 @@ import { AuditLogEntry, AuditLogPage } from 'src/app/models';
 const auditLogCursorHeader = 'X-Audit-Log-Cursor';
 
 @Component({
-    selector: 'app-audit-log',
-    templateUrl: './audit-log.component.html',
-    styleUrls: ['./audit-log.component.css'],
-    encapsulation: ViewEncapsulation.None,
-    changeDetection: ChangeDetectionStrategy.OnPush,
-    standalone: false
+  selector: 'app-audit-log',
+  templateUrl: './audit-log.component.html',
+  styleUrls: ['./audit-log.component.css'],
+  encapsulation: ViewEncapsulation.None,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false,
 })
 export class AuditLogComponent implements OnInit, OnDestroy {
   entries: AuditLogEntry[] = [];
@@ -27,18 +27,12 @@ export class AuditLogComponent implements OnInit, OnDestroy {
   private queryVersion = 0;
   private readonly destroy$ = new Subject<void>();
 
-  columnsToDisplay = [
-    'time',
-    'subjectId',
-    'subjectName',
-    'action',
-    'userDisplayName'
-  ];
+  columnsToDisplay = ['time', 'subjectId', 'subjectName', 'action', 'userDisplayName'];
 
   constructor(
     private httpClient: HttpClient,
     private cdr: ChangeDetectorRef,
-    private ngZone: NgZone
+    private ngZone: NgZone,
   ) {}
 
   ngOnInit(): void {
@@ -47,7 +41,7 @@ export class AuditLogComponent implements OnInit, OnDestroy {
         debounceTime(250),
         map(value => (value ?? '').toString().trim()),
         distinctUntilChanged(),
-        takeUntil(this.destroy$)
+        takeUntil(this.destroy$),
       )
       .subscribe(query => {
         this.resetAndLoad(query);
@@ -57,10 +51,7 @@ export class AuditLogComponent implements OnInit, OnDestroy {
 
     this.ngZone.runOutsideAngular(() => {
       fromEvent(window, 'scroll', { passive: true })
-        .pipe(
-          throttleTime(150, undefined, { leading: true, trailing: true }),
-          takeUntil(this.destroy$)
-        )
+        .pipe(throttleTime(150, undefined, { leading: true, trailing: true }), takeUntil(this.destroy$))
         .subscribe(() => {
           this.ngZone.run(() => this.onWindowScroll());
         });
@@ -122,7 +113,8 @@ export class AuditLogComponent implements OnInit, OnDestroy {
       headers = headers.set(auditLogCursorHeader, this.continuationToken);
     }
 
-    this.httpClient.get<AuditLogPage>('api/auditlog', { params, headers })
+    this.httpClient
+      .get<AuditLogPage>('api/auditlog', { params, headers })
       .pipe(
         finalize(() => {
           if (version === this.queryVersion) {
@@ -130,7 +122,7 @@ export class AuditLogComponent implements OnInit, OnDestroy {
             this.isLoadingMore = false;
             this.cdr.markForCheck();
           }
-        })
+        }),
       )
       .subscribe({
         next: response => {
@@ -164,7 +156,7 @@ export class AuditLogComponent implements OnInit, OnDestroy {
           this.errorMessage = 'Could not load audit log entries. Try again.';
           this.hasMore = false;
           this.cdr.markForCheck();
-        }
+        },
       });
   }
 

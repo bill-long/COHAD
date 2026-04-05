@@ -23,7 +23,7 @@ namespace Web.PresentationModels
                 AuthorDisplayName = comment.AuthorDisplayName,
                 Content = comment.Content,
                 CreatedUtc = comment.CreatedUtc,
-                CanDelete = canDelete
+                CanDelete = canDelete,
             };
         }
     }

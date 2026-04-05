@@ -32,6 +32,7 @@ public sealed class PayPalDateRangeChunkerTests
         var start = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var end = new DateTime(2025, 2, 1, 0, 0, 0, DateTimeKind.Utc);
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            PayPalDateRangeChunker.EnumerateWindowsUtc(start, end, 0).ToList());
+            PayPalDateRangeChunker.EnumerateWindowsUtc(start, end, 0).ToList()
+        );
     }
 }

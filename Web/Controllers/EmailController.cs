@@ -42,7 +42,8 @@ namespace Web.Controllers
             EmailJobProcessor emailJobProcessor,
             IEmailService emailService,
             EmailJobCleanupService emailJobCleanup,
-            ILogger<EmailController> logger)
+            ILogger<EmailController> logger
+        )
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
@@ -63,33 +64,63 @@ namespace Web.Controllers
 
         [HttpPut("from-board")]
         [Authorize(Policy = "Board")]
-        public Task<IActionResult> SendEmailFromBoard([FromBody] EmailInfo emailInfo)
-            => SendCommitteeEmail("board@cohad.org", "COHAD Board", emailInfo,
-                e => e != null && e.BoardEmailOptedIn, "board", "Board");
+        public Task<IActionResult> SendEmailFromBoard([FromBody] EmailInfo emailInfo) =>
+            SendCommitteeEmail(
+                "board@cohad.org",
+                "COHAD Board",
+                emailInfo,
+                e => e != null && e.BoardEmailOptedIn,
+                "board",
+                "Board"
+            );
 
         [HttpPut("from-welcome")]
         [Authorize(Policy = "WelcomeCommittee")]
-        public Task<IActionResult> SendEmailFromWelcomeCommittee([FromBody] EmailInfo emailInfo)
-            => SendCommitteeEmail("welcome@cohad.org", "COHAD Welcome Committee", emailInfo,
-                e => e != null && e.WelcomeEmailOptedIn, "welcome", "Welcome Committee");
+        public Task<IActionResult> SendEmailFromWelcomeCommittee([FromBody] EmailInfo emailInfo) =>
+            SendCommitteeEmail(
+                "welcome@cohad.org",
+                "COHAD Welcome Committee",
+                emailInfo,
+                e => e != null && e.WelcomeEmailOptedIn,
+                "welcome",
+                "Welcome Committee"
+            );
 
         [HttpPut("from-garden")]
         [Authorize(Policy = "GardenClub")]
-        public Task<IActionResult> SendEmailFromGardenClub([FromBody] EmailInfo emailInfo)
-            => SendCommitteeEmail("gardenclub@cohad.org", "COHAD Garden Club", emailInfo,
-                e => e != null && e.GardenClubEmailOptedIn, "garden", "Garden Club");
+        public Task<IActionResult> SendEmailFromGardenClub([FromBody] EmailInfo emailInfo) =>
+            SendCommitteeEmail(
+                "gardenclub@cohad.org",
+                "COHAD Garden Club",
+                emailInfo,
+                e => e != null && e.GardenClubEmailOptedIn,
+                "garden",
+                "Garden Club"
+            );
 
         [HttpPut("from-social")]
         [Authorize(Policy = "SocialCommittee")]
-        public Task<IActionResult> SendEmailFromSocialCommittee([FromBody] EmailInfo emailInfo)
-            => SendCommitteeEmail("social@cohad.org", "COHAD Social Committee", emailInfo,
-                e => e != null && e.SocialCommitteeEmailOptedIn, "social", "Social Committee");
+        public Task<IActionResult> SendEmailFromSocialCommittee([FromBody] EmailInfo emailInfo) =>
+            SendCommitteeEmail(
+                "social@cohad.org",
+                "COHAD Social Committee",
+                emailInfo,
+                e => e != null && e.SocialCommitteeEmailOptedIn,
+                "social",
+                "Social Committee"
+            );
 
         [HttpPut("from-sunshine")]
         [Authorize(Policy = "SunshineCommittee")]
-        public Task<IActionResult> SendEmailFromSunshineCommittee([FromBody] EmailInfo emailInfo)
-            => SendCommitteeEmail("sunshine@cohad.org", "COHAD Sunshine Committee", emailInfo,
-                e => e != null && e.SunshineCommitteeEmailOptedIn, "sunshine", "Sunshine Committee");
+        public Task<IActionResult> SendEmailFromSunshineCommittee([FromBody] EmailInfo emailInfo) =>
+            SendCommitteeEmail(
+                "sunshine@cohad.org",
+                "COHAD Sunshine Committee",
+                emailInfo,
+                e => e != null && e.SunshineCommitteeEmailOptedIn,
+                "sunshine",
+                "Sunshine Committee"
+            );
 
         // ──────────────────────────────────────────────
         // Job management endpoints
@@ -120,15 +151,19 @@ namespace Web.Controllers
         {
             // Don't allow retry while the processor is actively working on this job
             if (_emailJobProcessor.IsJobActive(id))
-                return Conflict(new { error = "This job is currently being processed. Cancel it first if you want to retry." });
+                return Conflict(
+                    new { error = "This job is currently being processed. Cancel it first if you want to retry." }
+                );
 
             var job = await _emailJobRepository.GetByIdAsync(id);
             if (job == null)
                 return NotFound();
 
-            if (job.Status != EmailJobStatus.Failed &&
-                job.Status != EmailJobStatus.PartiallyCompleted &&
-                job.Status != EmailJobStatus.Cancelled)
+            if (
+                job.Status != EmailJobStatus.Failed
+                && job.Status != EmailJobStatus.PartiallyCompleted
+                && job.Status != EmailJobStatus.Cancelled
+            )
             {
                 return BadRequest(new { error = $"Cannot retry a job with status '{job.Status}'." });
             }
@@ -153,7 +188,9 @@ namespace Web.Controllers
             }
             catch (EmailJobConcurrencyException)
             {
-                return Conflict(new { error = "The job was changed by another process. Refresh the page and try again." });
+                return Conflict(
+                    new { error = "The job was changed by another process. Refresh the page and try again." }
+                );
             }
 
             return Ok(EmailJobSummary.FromJob(job));
@@ -202,11 +239,15 @@ namespace Web.Controllers
         // ──────────────────────────────────────────────
 
         private async Task<IActionResult> SendCommitteeEmail(
-            string fromEmail, string fromDisplay, EmailInfo emailInfo,
-            Func<EmailAddress, bool> recipientFilter, string category, string auditFrom)
+            string fromEmail,
+            string fromDisplay,
+            EmailInfo emailInfo,
+            Func<EmailAddress, bool> recipientFilter,
+            string category,
+            string auditFrom
+        )
         {
-            var apiUser = await _userRepository.GetByUniqueIdAsync(
-                Models.User.GetUniqueIdFromClaims(User.Claims));
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
             if (apiUser == null)
                 return Unauthorized(new { error = "User not found." });
 
@@ -248,7 +289,7 @@ namespace Web.Controllers
                 CreatedByUserId = apiUser.UniqueId,
                 CreatedByDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}".Trim(),
                 TotalRecipients = recipients.Count,
-                Recipients = recipients
+                Recipients = recipients,
             };
 
             // Store HTML body in blob storage
@@ -270,8 +311,13 @@ namespace Web.Controllers
                 // processor still needs it and deleting would cause "content not found".
                 if (!jobPersisted && !string.IsNullOrEmpty(job.ContentBlobPath))
                 {
-                    try { await _fileStore.DeleteAsync(job.ContentBlobPath); }
-                    catch { /* best-effort cleanup */ }
+                    try
+                    {
+                        await _fileStore.DeleteAsync(job.ContentBlobPath);
+                    }
+                    catch
+                    { /* best-effort cleanup */
+                    }
                 }
 
                 throw;
@@ -286,12 +332,22 @@ namespace Web.Controllers
             catch
             {
                 // Compensate: avoid orphaned Cosmos row pointing at blob if enqueue fails
-                try { await _emailJobRepository.DeleteAsync(job.Id); }
-                catch { /* best-effort cleanup */ }
+                try
+                {
+                    await _emailJobRepository.DeleteAsync(job.Id);
+                }
+                catch
+                { /* best-effort cleanup */
+                }
                 if (!string.IsNullOrEmpty(job.ContentBlobPath))
                 {
-                    try { await _fileStore.DeleteAsync(job.ContentBlobPath); }
-                    catch { /* best-effort cleanup */ }
+                    try
+                    {
+                        await _fileStore.DeleteAsync(job.ContentBlobPath);
+                    }
+                    catch
+                    { /* best-effort cleanup */
+                    }
                 }
 
                 throw;
@@ -313,7 +369,8 @@ namespace Web.Controllers
                 {
                     foreach (var resident in residents)
                     {
-                        if (resident.EmailAddresses == null) continue;
+                        if (resident.EmailAddresses == null)
+                            continue;
                         foreach (var addr in resident.EmailAddresses.Where(filter))
                         {
                             if (!string.IsNullOrWhiteSpace(addr.Address) && !seen.ContainsKey(addr.Address))
@@ -321,7 +378,7 @@ namespace Web.Controllers
                                 {
                                     Email = addr.Address,
                                     HomeId = home.Id,
-                                    Status = EmailJobRecipientStatus.Pending
+                                    Status = EmailJobRecipientStatus.Pending,
                                 };
                         }
                     }
@@ -334,7 +391,7 @@ namespace Web.Controllers
                         {
                             Email = home.EmailAddress.Address,
                             HomeId = home.Id,
-                            Status = EmailJobRecipientStatus.Pending
+                            Status = EmailJobRecipientStatus.Pending,
                         };
                 }
             }
@@ -344,16 +401,18 @@ namespace Web.Controllers
 
         private async Task AuditEmail(string from, EmailInfo emailInfo, User apiUser)
         {
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = "",
-                SubjectName = $"Email recipient: {(emailInfo.IsTestEmail ? apiUser.Emails : "Neighborhood")}",
-                Action = $"Sent email from {from}",
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = "",
+                    SubjectName = $"Email recipient: {(emailInfo.IsTestEmail ? apiUser.Emails : "Neighborhood")}",
+                    Action = $"Sent email from {from}",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                    UserId = apiUser.UniqueId,
+                }
+            );
         }
     }
 }

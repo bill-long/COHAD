@@ -1,13 +1,12 @@
-import { Component, ChangeDetectorRef, ElementRef, HostListener, ViewChild } from "@angular/core";
+import { Component, ChangeDetectorRef, ElementRef, HostListener, ViewChild } from '@angular/core';
 
 @Component({
-    selector: 'app-rendered-printable-directory',
-    templateUrl: './rendered-printable-directory.component.html',
-    styleUrls: ['./rendered-printable-directory.component.css'],
-    standalone: false
+  selector: 'app-rendered-printable-directory',
+  templateUrl: './rendered-printable-directory.component.html',
+  styleUrls: ['./rendered-printable-directory.component.css'],
+  standalone: false,
 })
 export class RenderedPrintableDirectoryComponent {
-
   @ViewChild('directoryPrintRoot', { static: true })
   directoryPrintRoot?: ElementRef<HTMLElement>;
 
@@ -21,10 +20,10 @@ export class RenderedPrintableDirectoryComponent {
   /** Trailing blank pages before back cover (1 or 2) for duplex parity. */
   trailingBlankCount = 1;
 
-  constructor(private readonly cdr: ChangeDetectorRef) { }
+  constructor(private readonly cdr: ChangeDetectorRef) {}
 
   private static formatMonthYear(d: Date): string {
-    const month = d.toLocaleDateString("en-US", { month: "long" });
+    const month = d.toLocaleDateString('en-US', { month: 'long' });
     return `${month}, ${d.getFullYear()}`;
   }
 
@@ -59,7 +58,7 @@ export class RenderedPrintableDirectoryComponent {
     const contentPages = Math.max(1, Math.ceil(scrollHeight / pageBodyPx));
 
     // Total = 3 + contentPages + b must be even => b ≡ contentPages + 1 (mod 2)
-    this.trailingBlankCount = (contentPages % 2 === 0) ? 1 : 2;
+    this.trailingBlankCount = contentPages % 2 === 0 ? 1 : 2;
     this.cdr.detectChanges();
   }
 }

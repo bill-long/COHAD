@@ -20,20 +20,27 @@ namespace Web.MockData
             _logger = logger;
         }
 
-        public Task<Committee> SyncForwardingRuleAsync(Committee committee,
-            IReadOnlyDictionary<Guid, Resident> residents)
+        public Task<Committee> SyncForwardingRuleAsync(
+            Committee committee,
+            IReadOnlyDictionary<Guid, Resident> residents
+        )
         {
-            var recipients = committee.Members?
-                .Where(m => m.ReceivesForwardedEmail)
-                .Select(m => residents.GetValueOrDefault(m.ResidentId))
-                .Where(r => r != null)
-                .Select(r => r.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))?.Address)
-                .Where(e => !string.IsNullOrWhiteSpace(e))
-                .ToList() ?? new();
+            var recipients =
+                committee
+                    .Members?.Where(m => m.ReceivesForwardedEmail)
+                    .Select(m => residents.GetValueOrDefault(m.ResidentId))
+                    .Where(r => r != null)
+                    .Select(r => r.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))?.Address)
+                    .Where(e => !string.IsNullOrWhiteSpace(e))
+                    .ToList()
+                ?? new();
 
             _logger.LogInformation(
                 "[MockGraph] Sync forwarding rule for {Email}: {Count} recipients ({Recipients})",
-                committee.CommitteeEmail, recipients.Count, string.Join(", ", recipients));
+                committee.CommitteeEmail,
+                recipients.Count,
+                string.Join(", ", recipients)
+            );
 
             committee.GraphMessageRuleId ??= $"mock-rule-{committee.Id}";
             committee.LastSyncedUtc = DateTime.UtcNow;

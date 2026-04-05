@@ -2,7 +2,13 @@ import { Component, Inject, OnDestroy, OnInit } from '@angular/core';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { Observable, Subscription, forkJoin } from 'rxjs';
-import { CommitteeAdmin, CommitteeMemberAdmin, CommitteeService, ForwardingSyncStatus, ResidentPickerItem } from 'src/app/services/committee.service';
+import {
+  CommitteeAdmin,
+  CommitteeMemberAdmin,
+  CommitteeService,
+  ForwardingSyncStatus,
+  ResidentPickerItem,
+} from 'src/app/services/committee.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { MatDialog } from '@angular/material/dialog';
 import { ApplicationState, applicationState } from 'src/app/state';
@@ -11,7 +17,7 @@ import { ApplicationState, applicationState } from 'src/app/state';
   selector: 'app-manage-committees',
   templateUrl: './manage-committees.component.html',
   styleUrls: ['./manage-committees.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class ManageCommitteesComponent implements OnInit, OnDestroy {
   committees: CommitteeAdmin[] = [];
@@ -47,8 +53,8 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     private readonly committeeService: CommitteeService,
     private readonly dialog: MatDialog,
     private readonly sanitizer: DomSanitizer,
-    @Inject(applicationState) private readonly appState$: Observable<ApplicationState>
-  ) { }
+    @Inject(applicationState) private readonly appState$: Observable<ApplicationState>,
+  ) {}
 
   ngOnInit(): void {
     this.stateSub = this.appState$.subscribe(s => {
@@ -83,7 +89,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       error: () => {
         this.savingKey = null;
         this.error = `Failed to save ${committee.displayName}.`;
-      }
+      },
     });
   }
 
@@ -94,12 +100,14 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         body: `Remove "${member.displayName}" from ${committee.displayName}?\n\nThis can't be undone.`,
         confirmText: 'Remove',
         cancelText: 'Cancel',
-        confirmColor: 'warn'
-      }
+        confirmColor: 'warn',
+      },
     });
 
     ref.afterClosed().subscribe(confirmed => {
-      if (confirmed !== true) { return; }
+      if (confirmed !== true) {
+        return;
+      }
       this.error = '';
       this.success = '';
       this.deletingMember = { key: committee.id, memberId: member.id };
@@ -116,15 +124,13 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         error: () => {
           this.deletingMember = null;
           this.error = `Failed to remove ${member.displayName}.`;
-        }
+        },
       });
     });
   }
 
   addMember(committee: CommitteeAdmin): void {
-    const nextOrder = committee.members.length > 0
-      ? Math.max(...committee.members.map(m => m.displayOrder)) + 1
-      : 0;
+    const nextOrder = committee.members.length > 0 ? Math.max(...committee.members.map(m => m.displayOrder)) + 1 : 0;
     committee.members.push({
       id: crypto.randomUUID(),
       residentId: '00000000-0000-0000-0000-000000000000',
@@ -135,7 +141,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       email: '',
       receivesForwardedEmail: true,
       photoOffsetY: 50,
-      displayOrder: nextOrder
+      displayOrder: nextOrder,
     });
     this.filteredResidentsCache.clear();
   }
@@ -156,15 +162,16 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   private residentLookupSize = -1;
 
   private ensureResidentLookup(): void {
-    if (this.residentLookupSize === this.allResidents.length) { return; }
+    if (this.residentLookupSize === this.allResidents.length) {
+      return;
+    }
     this.residentDisplayById = new Map(this.allResidents.map(r => [r.id, r.displayName]));
     this.residentLookupSize = this.allResidents.length;
   }
 
   /** Returns cached filtered residents for a committee member. */
   getFilteredResidents(committee: CommitteeAdmin, currentMember: CommitteeMemberAdmin): ResidentPickerItem[] {
-    return this.filteredResidentsCache.get(currentMember.id)
-      ?? this.recomputeFilteredResidents(committee, currentMember);
+    return this.filteredResidentsCache.get(currentMember.id) ?? this.recomputeFilteredResidents(committee, currentMember);
   }
 
   onResidentSearch(member: CommitteeMemberAdmin, event: Event): void {
@@ -204,11 +211,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   }
 
   private recomputeFilteredResidents(committee: CommitteeAdmin, currentMember: CommitteeMemberAdmin): ResidentPickerItem[] {
-    const usedIds = new Set(
-      committee.members
-        .filter(m => m.id !== currentMember.id && m.residentId)
-        .map(m => m.residentId)
-    );
+    const usedIds = new Set(committee.members.filter(m => m.id !== currentMember.id && m.residentId).map(m => m.residentId));
     const available = this.allResidents.filter(r => r.id === currentMember.residentId || !usedIds.has(r.id));
 
     const query = (this.residentSearchText.get(currentMember.id) ?? '').replace(/\s+/g, ' ').toLowerCase().trim();
@@ -217,9 +220,8 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       return available;
     }
 
-    const results = available.filter(r =>
-      r.displayName.replace(/\s+/g, ' ').toLowerCase().includes(query) ||
-      (r.email ?? '').toLowerCase().includes(query)
+    const results = available.filter(
+      r => r.displayName.replace(/\s+/g, ' ').toLowerCase().includes(query) || (r.email ?? '').toLowerCase().includes(query),
     );
     this.filteredResidentsCache.set(currentMember.id, results);
     return results;
@@ -231,7 +233,9 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
 
   onPhotoSelected(event: Event, committee: CommitteeAdmin, member: CommitteeMemberAdmin): void {
     const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) { return; }
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
     const file = input.files[0];
     if (!this.pendingPhotos.has(committee.id)) {
       this.pendingPhotos.set(committee.id, new Map<string, File>());
@@ -250,7 +254,9 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   private revokePreview(committeeId: string, memberId: string): void {
     const key = `${committeeId}:${memberId}`;
     const url = this.rawPreviewUrls.get(key);
-    if (url) { URL.revokeObjectURL(url); }
+    if (url) {
+      URL.revokeObjectURL(url);
+    }
     this.rawPreviewUrls.delete(key);
     this.previewUrls.delete(key);
   }
@@ -266,7 +272,9 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   getPhotoPreviewUrl(committeeId: string, member: CommitteeMemberAdmin): SafeUrl | string | null {
     // Pending upload takes priority (local blob URL)
     const preview = this.previewUrls.get(`${committeeId}:${member.id}`);
-    if (preview) { return preview; }
+    if (preview) {
+      return preview;
+    }
     // Existing photo from server
     if (member.hasPhoto) {
       return `/api/committee/${encodeURIComponent(committeeId)}/members/${member.id}/photo`;
@@ -276,18 +284,22 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
 
   dropMember(event: CdkDragDrop<CommitteeMemberAdmin[]>, committee: CommitteeAdmin): void {
     moveItemInArray(committee.members, event.previousIndex, event.currentIndex);
-    committee.members.forEach((m, i) => m.displayOrder = i);
+    committee.members.forEach((m, i) => (m.displayOrder = i));
   }
 
   moveCommittee(index: number, direction: -1 | 1): void {
     const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= this.committees.length) { return; }
+    if (newIndex < 0 || newIndex >= this.committees.length) {
+      return;
+    }
     moveItemInArray(this.committees, index, newIndex);
-    this.committees.forEach((c, i) => c.displayOrder = i);
+    this.committees.forEach((c, i) => (c.displayOrder = i));
   }
 
   get orderChanged(): boolean {
-    if (this.committees.length !== this.savedOrder.length) { return false; }
+    if (this.committees.length !== this.savedOrder.length) {
+      return false;
+    }
     return this.committees.some((c, i) => c.id !== this.savedOrder[i]);
   }
 
@@ -327,7 +339,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
             this.savingOrder = false;
             this.error = 'Failed to save committee order.';
           }
-        }
+        },
       });
     }
   }
@@ -346,7 +358,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         this.syncingKey = null;
         this.error = `Failed to sync forwarding for ${committee.displayName}.`;
         this.loadSyncStatus(committee);
-      }
+      },
     });
   }
 
@@ -354,7 +366,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     this.committeeService.getForwardingStatus(committee.id).subscribe({
       next: status => {
         this.syncStatuses.set(committee.id, status);
-      }
+      },
     });
   }
 
@@ -370,7 +382,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     this.loading = true;
     forkJoin({
       committees: this.committeeService.getAdminAll(),
-      residents: this.committeeService.getResidents()
+      residents: this.committeeService.getResidents(),
     }).subscribe({
       next: ({ committees, residents }) => {
         this.committees = committees ?? [];
@@ -392,7 +404,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         this.residentLookupSize = -1;
         this.loading = false;
         this.error = 'Failed to load committees.';
-      }
+      },
     });
   }
 }

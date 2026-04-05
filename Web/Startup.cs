@@ -18,7 +18,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 using Web.Authorization;
 using Web.Configuration;
 using Web.Hubs;
@@ -26,6 +25,7 @@ using Web.MockData;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
+using CosmosClient = Microsoft.Azure.Cosmos.CosmosClient;
 
 namespace Web
 {
@@ -53,17 +53,17 @@ namespace Web
             services.AddControllers();
             services.AddSignalR();
             services.AddMemoryCache();
-            services.AddScoped<DocumentListCache>(sp =>
-                new DocumentListCache(
-                    sp.GetRequiredService<IDocumentRepository>(),
-                    sp.GetRequiredService<IDocumentFolderRepository>(),
-                    sp.GetRequiredService<IMemoryCache>(),
-                    sp.GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions));
-            services.AddScoped<CommitteeListCache>(sp =>
-                new CommitteeListCache(
-                    sp.GetRequiredService<ICommitteeRepository>(),
-                    sp.GetRequiredService<IMemoryCache>(),
-                    sp.GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions));
+            services.AddScoped<DocumentListCache>(sp => new DocumentListCache(
+                sp.GetRequiredService<IDocumentRepository>(),
+                sp.GetRequiredService<IDocumentFolderRepository>(),
+                sp.GetRequiredService<IMemoryCache>(),
+                sp.GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions
+            ));
+            services.AddScoped<CommitteeListCache>(sp => new CommitteeListCache(
+                sp.GetRequiredService<ICommitteeRepository>(),
+                sp.GetRequiredService<IMemoryCache>(),
+                sp.GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions
+            ));
             services.AddScoped<ResidentCleanupService>();
 
             services.AddResponseCompression(options =>
@@ -72,11 +72,9 @@ namespace Web
                 // cookie-based CSRF tokens) and compressed responses do not mix
                 // secret values with attacker-controlled content.
                 options.EnableForHttps = true;
-                options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new[]
-                {
-                    "application/json",
-                    "image/svg+xml"
-                });
+                options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(
+                    new[] { "application/json", "image/svg+xml" }
+                );
             });
             services.Configure<BrotliCompressionProviderOptions>(options =>
             {
@@ -95,9 +93,12 @@ namespace Web
             {
                 options.AddDefaultPolicy(policy =>
                 {
-                    policy.WithOrigins(Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>())
-                          .AllowAnyHeader()
-                          .AllowAnyMethod();
+                    policy
+                        .WithOrigins(
+                            Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>()
+                        )
+                        .AllowAnyHeader()
+                        .AllowAnyMethod();
                 });
             });
 
@@ -107,7 +108,8 @@ namespace Web
             // Keep multipart request cap aligned with DocumentStorage:MaxUploadBytes (DocumentController enforces the same limit).
             services.Configure<FormOptions>(options =>
             {
-                var max = Configuration.GetSection("DocumentStorage").GetValue<long?>("MaxUploadBytes")
+                var max =
+                    Configuration.GetSection("DocumentStorage").GetValue<long?>("MaxUploadBytes")
                     ?? new DocumentStorageOptions().MaxUploadBytes;
                 options.MultipartBodyLengthLimit = max;
             });
@@ -131,7 +133,7 @@ namespace Web
                             ValidateIssuerSigningKey = true,
                             ValidIssuer = MockJwtIssuer.Issuer,
                             ValidAudience = MockJwtIssuer.Audience,
-                            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey))
+                            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
                         };
                     }
                     else
@@ -141,7 +143,7 @@ namespace Web
                             ValidateAudience = true,
                             ValidateIssuer = true,
                             ValidIssuer = "https://cohadorgb2c.b2clogin.com/a7e9006b-c606-4670-960c-3998b35ea5ee/v2.0/",
-                            ValidAudience = "5803d9fa-a62f-401c-b0f4-269b3cb468eb"
+                            ValidAudience = "5803d9fa-a62f-401c-b0f4-269b3cb468eb",
                         };
 
                         options.MetadataAddress =
@@ -154,22 +156,23 @@ namespace Web
                         OnMessageReceived = context =>
                         {
                             var accessToken = context.Request.Query["access_token"];
-                            if (!string.IsNullOrEmpty(accessToken) &&
-                                context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                            if (
+                                !string.IsNullOrEmpty(accessToken)
+                                && context.HttpContext.Request.Path.StartsWithSegments("/hubs")
+                            )
                             {
                                 context.Token = accessToken;
                             }
 
                             return Task.CompletedTask;
-                        }
+                        },
                     };
                 });
 
             // Allow reverse proxy from nginx
             services.Configure<ForwardedHeadersOptions>(options =>
             {
-                options.ForwardedHeaders =
-                    ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+                options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
             });
 
             // Authorization stuff - make sure users have required roles
@@ -184,27 +187,72 @@ namespace Web
                 // Role hierarchy: new Administrators are also assigned Resident in UserController.UpdateUserAssociations.
                 // RoleAuthorizationHandler additionally treats Administrator as satisfying the Resident policy so legacy
                 // admin-only accounts still pass Resident-gated APIs. Do not add redundant OR checks on controllers.
-                options.AddPolicy("Resident", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Resident)));
-                options.AddPolicy("Administrator", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Administrator)));
-                options.AddPolicy("WelcomeCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.WelcomeCommittee)));
-                options.AddPolicy("GardenClub", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.GardenClub)));
-                options.AddPolicy("Board", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Board)));
-                options.AddPolicy("SocialCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.SocialCommittee)));
-                options.AddPolicy("SunshineCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.SunshineCommittee)));
-                options.AddPolicy("ArchitecturalCommittee", policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.ArchitecturalCommittee)));
+                options.AddPolicy(
+                    "Resident",
+                    policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Resident))
+                );
+                options.AddPolicy(
+                    "Administrator",
+                    policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Administrator))
+                );
+                options.AddPolicy(
+                    "WelcomeCommittee",
+                    policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.WelcomeCommittee))
+                );
+                options.AddPolicy(
+                    "GardenClub",
+                    policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.GardenClub))
+                );
+                options.AddPolicy(
+                    "Board",
+                    policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.Board))
+                );
+                options.AddPolicy(
+                    "SocialCommittee",
+                    policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.SocialCommittee))
+                );
+                options.AddPolicy(
+                    "SunshineCommittee",
+                    policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.SunshineCommittee))
+                );
+                options.AddPolicy(
+                    "ArchitecturalCommittee",
+                    policy =>
+                        policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.ArchitecturalCommittee))
+                );
 
                 // Any role that can send committee emails — used for email job management endpoints and the SignalR hub.
-                options.AddPolicy("EmailSender", policy => policy.Requirements.Add(
-                    new AnyRoleAuthorizationRequirement(
-                        User.Role.Administrator, User.Role.Board, User.Role.WelcomeCommittee,
-                        User.Role.GardenClub, User.Role.SocialCommittee, User.Role.SunshineCommittee)));
+                options.AddPolicy(
+                    "EmailSender",
+                    policy =>
+                        policy.Requirements.Add(
+                            new AnyRoleAuthorizationRequirement(
+                                User.Role.Administrator,
+                                User.Role.Board,
+                                User.Role.WelcomeCommittee,
+                                User.Role.GardenClub,
+                                User.Role.SocialCommittee,
+                                User.Role.SunshineCommittee
+                            )
+                        )
+                );
 
                 // Any role that can manage at least one committee — used for committee admin endpoints.
-                options.AddPolicy("CommitteeEditor", policy => policy.Requirements.Add(
-                    new AnyRoleAuthorizationRequirement(
-                        User.Role.Administrator, User.Role.Board, User.Role.WelcomeCommittee,
-                        User.Role.GardenClub, User.Role.SocialCommittee, User.Role.SunshineCommittee,
-                        User.Role.ArchitecturalCommittee)));
+                options.AddPolicy(
+                    "CommitteeEditor",
+                    policy =>
+                        policy.Requirements.Add(
+                            new AnyRoleAuthorizationRequirement(
+                                User.Role.Administrator,
+                                User.Role.Board,
+                                User.Role.WelcomeCommittee,
+                                User.Role.GardenClub,
+                                User.Role.SocialCommittee,
+                                User.Role.SunshineCommittee,
+                                User.Role.ArchitecturalCommittee
+                            )
+                        )
+                );
             });
 
             services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();
@@ -231,11 +279,11 @@ namespace Web
             {
                 services.AddSingleton<IUserRepository, MockUserRepository>();
                 services.AddSingleton<IHomeRepository, MockHomeRepository>();
-                services.AddSingleton<IPaymentRepository>(sp =>
-                    new MockPaymentRepository(
-                        sp.GetRequiredService<IHomeRepository>(),
-                        sp.GetRequiredService<IResidentRepository>(),
-                        sp.GetRequiredService<IUserRepository>()));
+                services.AddSingleton<IPaymentRepository>(sp => new MockPaymentRepository(
+                    sp.GetRequiredService<IHomeRepository>(),
+                    sp.GetRequiredService<IResidentRepository>(),
+                    sp.GetRequiredService<IUserRepository>()
+                ));
                 services.AddSingleton<IAuditLogRepository, MockAuditLogRepository>();
                 services.AddSingleton<IDocumentRepository, MockDocumentRepository>();
                 services.AddSingleton<IDocumentFolderRepository, MockDocumentFolderRepository>();
@@ -249,12 +297,14 @@ namespace Web
                 services.AddSingleton<ICommitteeRepository, MockCommitteeRepository>();
                 services.AddSingleton<IResidentRepository, MockResidentRepository>();
                 services.AddSingleton<IGraphMailboxService, MockGraphMailboxService>();
-                services.AddSingleton<IDocumentFileStore>(sp =>
-                    new CachedDocumentFileStore(new MockDocumentFileStore()));
+                services.AddSingleton<IDocumentFileStore>(sp => new CachedDocumentFileStore(
+                    new MockDocumentFileStore()
+                ));
                 services.AddScoped<IEmailService, NoOpEmailService>();
                 // Seeds sample completed jobs + HTML blobs for Manage → Email testing.
-                services.AddSingleton<IEmailJobRepository>(sp =>
-                    new MockEmailJobRepository(sp.GetRequiredService<IDocumentFileStore>()));
+                services.AddSingleton<IEmailJobRepository>(sp => new MockEmailJobRepository(
+                    sp.GetRequiredService<IDocumentFileStore>()
+                ));
             }
             else
             {
@@ -263,56 +313,73 @@ namespace Web
                 var db = Configuration["CosmosDatabase"];
 
                 services.AddSingleton(_ => new CosmosClient(uri, key));
-                services.AddScoped<IUserRepository>(sp =>
-                    new CosmosUserRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Users")));
-                services.AddScoped<IHomeRepository>(sp =>
-                    new CosmosHomeRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Homes")));
-                services.AddScoped<IPaymentRepository>(sp =>
-                    new CosmosPaymentRepository(
-                        sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments"),
-                        sp.GetRequiredService<IHomeRepository>(),
-                        sp.GetRequiredService<IResidentRepository>(),
-                        sp.GetRequiredService<IUserRepository>()));
-                services.AddScoped<IAuditLogRepository>(sp =>
-                    new CosmosAuditLogRepository(
-                        sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog"),
-                        sp.GetRequiredService<ILogger<CosmosAuditLogRepository>>()));
-                services.AddScoped<IDocumentRepository>(sp =>
-                    new CosmosDocumentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
-                services.AddScoped<IDocumentFolderRepository>(sp =>
-                    new CosmosDocumentFolderRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")));
-                services.AddScoped<ICommunityEventRepository>(sp =>
-                    new CosmosCommunityEventRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Events")));
-                services.AddScoped<IBlogPostRepository>(sp =>
-                    new CosmosBlogPostRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "BlogPosts")));
-                services.AddScoped<IBlogCommentRepository>(sp =>
-                    new CosmosBlogCommentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "BlogComments")));
-                services.AddScoped<IVendorRepository>(sp =>
-                    new CosmosVendorRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Vendors")));
-                services.AddScoped<IVendorReviewRepository>(sp =>
-                    new CosmosVendorReviewRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "VendorReviews")));
-                services.AddScoped<IVendorFlagRepository>(sp =>
-                    new CosmosVendorFlagRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "VendorFlags")));
-                services.AddScoped<IYouthServiceListingRepository>(sp =>
-                    new CosmosYouthServiceListingRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "YouthServices")));
-                services.AddScoped<ICommitteeRepository>(sp =>
-                    new CosmosCommitteeRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Committees")));
-                services.AddScoped<IResidentRepository>(sp =>
-                    new CosmosResidentRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "Residents")));
-                services.AddSingleton<IDocumentFileStore>(sp =>
-                    new CachedDocumentFileStore(
-                        new AzureBlobDocumentFileStore(sp.GetRequiredService<IOptions<DocumentStorageOptions>>())));
+                services.AddScoped<IUserRepository>(sp => new CosmosUserRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "Users")
+                ));
+                services.AddScoped<IHomeRepository>(sp => new CosmosHomeRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "Homes")
+                ));
+                services.AddScoped<IPaymentRepository>(sp => new CosmosPaymentRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "Payments"),
+                    sp.GetRequiredService<IHomeRepository>(),
+                    sp.GetRequiredService<IResidentRepository>(),
+                    sp.GetRequiredService<IUserRepository>()
+                ));
+                services.AddScoped<IAuditLogRepository>(sp => new CosmosAuditLogRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "AuditLog"),
+                    sp.GetRequiredService<ILogger<CosmosAuditLogRepository>>()
+                ));
+                services.AddScoped<IDocumentRepository>(sp => new CosmosDocumentRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")
+                ));
+                services.AddScoped<IDocumentFolderRepository>(sp => new CosmosDocumentFolderRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "Documents")
+                ));
+                services.AddScoped<ICommunityEventRepository>(sp => new CosmosCommunityEventRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "Events")
+                ));
+                services.AddScoped<IBlogPostRepository>(sp => new CosmosBlogPostRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "BlogPosts")
+                ));
+                services.AddScoped<IBlogCommentRepository>(sp => new CosmosBlogCommentRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "BlogComments")
+                ));
+                services.AddScoped<IVendorRepository>(sp => new CosmosVendorRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "Vendors")
+                ));
+                services.AddScoped<IVendorReviewRepository>(sp => new CosmosVendorReviewRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "VendorReviews")
+                ));
+                services.AddScoped<IVendorFlagRepository>(sp => new CosmosVendorFlagRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "VendorFlags")
+                ));
+                services.AddScoped<IYouthServiceListingRepository>(sp => new CosmosYouthServiceListingRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "YouthServices")
+                ));
+                services.AddScoped<ICommitteeRepository>(sp => new CosmosCommitteeRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "Committees")
+                ));
+                services.AddScoped<IResidentRepository>(sp => new CosmosResidentRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "Residents")
+                ));
+                services.AddSingleton<IDocumentFileStore>(sp => new CachedDocumentFileStore(
+                    new AzureBlobDocumentFileStore(sp.GetRequiredService<IOptions<DocumentStorageOptions>>())
+                ));
 
                 services.AddScoped<IEmailService, EmailService>();
-                services.AddScoped<IEmailJobRepository>(sp =>
-                    new CosmosEmailJobRepository(sp.GetRequiredService<CosmosClient>().GetContainer(db, "EmailJobs")));
+                services.AddScoped<IEmailJobRepository>(sp => new CosmosEmailJobRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "EmailJobs")
+                ));
 
                 // Graph API for committee mailbox forwarding — registered only when credentials are configured.
                 var graphTenantId = Configuration["Graph:TenantId"];
                 var graphClientId = Configuration["Graph:ClientId"];
                 var graphClientSecret = Configuration["Graph:ClientSecret"];
-                if (!string.IsNullOrWhiteSpace(graphTenantId) && !string.IsNullOrWhiteSpace(graphClientId)
-                    && !string.IsNullOrWhiteSpace(graphClientSecret))
+                if (
+                    !string.IsNullOrWhiteSpace(graphTenantId)
+                    && !string.IsNullOrWhiteSpace(graphClientId)
+                    && !string.IsNullOrWhiteSpace(graphClientSecret)
+                )
                 {
                     services.AddSingleton<IGraphMailboxService, GraphMailboxService>();
                 }
@@ -334,10 +401,12 @@ namespace Web
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILogger<Startup> logger)
         {
-            app.UseForwardedHeaders(new ForwardedHeadersOptions
-            {
-                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-            });
+            app.UseForwardedHeaders(
+                new ForwardedHeadersOptions
+                {
+                    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+                }
+            );
 
             var useDevSpaProxy = env.IsDevelopment() || env.IsEnvironment("MockData");
 
@@ -357,7 +426,12 @@ namespace Web
                         var exceptionHandler = context.Features.Get<IExceptionHandlerFeature>();
                         if (exceptionHandler != null)
                         {
-                            logger.LogError(exceptionHandler.Error, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path);
+                            logger.LogError(
+                                exceptionHandler.Error,
+                                "Unhandled exception for {Method} {Path}",
+                                context.Request.Method,
+                                context.Request.Path
+                            );
                         }
 
                         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
@@ -368,13 +442,15 @@ namespace Web
             }
 
             // Add security headers on every response
-            app.Use(async (context, next) =>
-            {
-                context.Response.Headers["X-Frame-Options"] = "DENY";
-                context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-                context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-                await next();
-            });
+            app.Use(
+                async (context, next) =>
+                {
+                    context.Response.Headers["X-Frame-Options"] = "DENY";
+                    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+                    await next();
+                }
+            );
 
             app.UseHttpsRedirection();
             app.UseResponseCompression();
@@ -394,9 +470,7 @@ namespace Web
                 endpoints.MapBlogDeepLinkOpenGraph(env);
                 endpoints.MapHub<VendorFlagNotificationsHub>("/hubs/vendor-flags");
                 endpoints.MapHub<EmailJobHub>("/hubs/email-jobs");
-                endpoints.MapControllerRoute(
-                    name: "default",
-                    pattern: "{controller}/{action=Index}/{id?}");
+                endpoints.MapControllerRoute(name: "default", pattern: "{controller}/{action=Index}/{id?}");
             });
 
             app.UseSpa(spa =>

@@ -33,7 +33,8 @@ namespace Web.Services
             IHomeRepository homes,
             IResidentRepository residents,
             IOptions<PayPalOptions> options,
-            ILogger<PayPalPaymentSyncRunner> logger)
+            ILogger<PayPalPaymentSyncRunner> logger
+        )
         {
             _payPal = payPal;
             _payments = payments;
@@ -55,7 +56,8 @@ namespace Web.Services
                 "PayPal sync run: lookbackDays={Lookback}, utcRange=[{Start:o}, {End:o})",
                 lookback,
                 startUtc,
-                endUtc);
+                endUtc
+            );
 
             var users = await _users.GetAllAsync().ConfigureAwait(false);
             var homes = await _homes.GetAllAsync().ConfigureAwait(false);
@@ -98,8 +100,10 @@ namespace Web.Services
                 }
 
                 var gross = txInfo["transaction_amount"]?["value"]?.Value<string>();
-                if (!decimal.TryParse(gross, NumberStyles.Any, CultureInfo.InvariantCulture, out var grossAmount) ||
-                    grossAmount <= 0)
+                if (
+                    !decimal.TryParse(gross, NumberStyles.Any, CultureInfo.InvariantCulture, out var grossAmount)
+                    || grossAmount <= 0
+                )
                 {
                     result.SkippedFiltered++;
                     continue;
@@ -114,9 +118,15 @@ namespace Web.Services
 
                 var initiation = txInfo.Value<string>("transaction_initiation_date");
                 DateTime? when = null;
-                if (!string.IsNullOrEmpty(initiation) &&
-                    DateTime.TryParse(initiation, CultureInfo.InvariantCulture,
-                        DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
+                if (
+                    !string.IsNullOrEmpty(initiation)
+                    && DateTime.TryParse(
+                        initiation,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+                        out var parsed
+                    )
+                )
                 {
                     when = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
                 }
@@ -162,7 +172,7 @@ namespace Web.Services
                     Date = row.When,
                     PaymentType = Payment.Type.PayPalSync,
                     FullDetailsJSON = row.Detail.ToString(Newtonsoft.Json.Formatting.None),
-                    PayPalTransactionId = row.TxId
+                    PayPalTransactionId = row.TxId,
                 };
 
                 await _payments.AddAsync(payment).ConfigureAwait(false);
@@ -174,10 +184,12 @@ namespace Web.Services
             }
 
             result.ExistingLinked = await LinkExistingUnlinkedPaymentsAsync(
-                emailToUniqueId,
-                homeLookup,
-                startUtc,
-                cancellationToken).ConfigureAwait(false);
+                    emailToUniqueId,
+                    homeLookup,
+                    startUtc,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
 
             _logger.LogInformation(
                 "PayPal sync finished: read={Read}, inserted={Inserted}, insertedUnlinked={Unlinked}, duplicates={Dup}, existingLinked={Linked}, filtered={Filtered}, noPayerEmail={NoEmail}",
@@ -187,7 +199,8 @@ namespace Web.Services
                 result.SkippedDuplicate,
                 result.ExistingLinked,
                 result.SkippedFiltered,
-                result.SkippedNoPayerEmail);
+                result.SkippedNoPayerEmail
+            );
 
             return result;
         }
@@ -200,7 +213,8 @@ namespace Web.Services
             IReadOnlyDictionary<string, string> emailToUniqueId,
             PayerEmailHomeLookup homeLookup,
             DateTime syncLookbackStartUtc,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken
+        )
         {
             var unlinked = await _payments
                 .GetPayPalSyncPaymentsWithoutHomeIdAsync(syncLookbackStartUtc)
@@ -314,7 +328,8 @@ namespace Web.Services
             public PayerEmailHomeLookup(
                 IReadOnlyList<Home> homes,
                 IReadOnlyDictionary<Guid, List<Resident>> residentsByHome,
-                IReadOnlyList<User> users)
+                IReadOnlyList<User> users
+            )
             {
                 _homes = homes;
                 _residentsByHome = residentsByHome;
@@ -330,7 +345,12 @@ namespace Web.Services
 
                 if (!_cache.TryGetValue(normalizedEmail, out var homeIds))
                 {
-                    homeIds = PaymentHomeAssociation.FindHomeIdsForPayerEmail(normalizedEmail, _homes, _residentsByHome, _users);
+                    homeIds = PaymentHomeAssociation.FindHomeIdsForPayerEmail(
+                        normalizedEmail,
+                        _homes,
+                        _residentsByHome,
+                        _users
+                    );
                     _cache[normalizedEmail] = homeIds;
                 }
 
@@ -345,7 +365,8 @@ namespace Web.Services
                 string txId,
                 string payerEmail,
                 decimal grossAmount,
-                DateTime? when)
+                DateTime? when
+            )
             {
                 Detail = detail;
                 TxId = txId;

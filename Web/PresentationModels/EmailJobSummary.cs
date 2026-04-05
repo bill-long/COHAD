@@ -50,7 +50,7 @@ namespace Web.PresentationModels
                 TotalRecipients = job.TotalRecipients,
                 SentCount = job.SentCount,
                 FailedCount = job.FailedCount,
-                LastError = job.LastError
+                LastError = job.LastError,
             };
         }
     }

@@ -24,18 +24,20 @@ export class VendorFlagNotificationsService {
     @Inject(applicationState) appState$: Observable<ApplicationState>,
     private readonly vendorsService: VendorsService,
     private readonly oauthService: OAuthService,
-    private readonly mockAuthTokens: MockAuthTokenService
+    private readonly mockAuthTokens: MockAuthTokenService,
   ) {
-    appState$.pipe(
-      map(s => s.apiUser?.roles?.includes('Administrator') ?? false),
-      distinctUntilChanged()
-    ).subscribe(isAdmin => {
-      if (isAdmin) {
-        this.initializeForAdmin();
-      } else {
-        this.teardown();
-      }
-    });
+    appState$
+      .pipe(
+        map(s => s.apiUser?.roles?.includes('Administrator') ?? false),
+        distinctUntilChanged(),
+      )
+      .subscribe(isAdmin => {
+        if (isAdmin) {
+          this.initializeForAdmin();
+        } else {
+          this.teardown();
+        }
+      });
   }
 
   markAsRead(flagId: string): void {
@@ -54,9 +56,7 @@ export class VendorFlagNotificationsService {
   }
 
   removeNotificationsForVendor(vendorId: string): void {
-    const toRemove = this.notificationsSubject.value
-      .filter(n => n.vendorId === vendorId)
-      .map(n => n.flagId);
+    const toRemove = this.notificationsSubject.value.filter(n => n.vendorId === vendorId).map(n => n.flagId);
     if (toRemove.length === 0) {
       return;
     }
@@ -79,7 +79,7 @@ export class VendorFlagNotificationsService {
         this.notificationsSubject.next([]);
         this.unreadIds.clear();
         this.syncUnreadCount();
-      }
+      },
     });
 
     this.ensureConnection();
@@ -92,7 +92,7 @@ export class VendorFlagNotificationsService {
 
     const connection = new HubConnectionBuilder()
       .withUrl('/hubs/vendor-flags', {
-        accessTokenFactory: () => this.getHubAccessToken()
+        accessTokenFactory: () => this.getHubAccessToken(),
       })
       .withAutomaticReconnect()
       .build();
@@ -148,9 +148,7 @@ export class VendorFlagNotificationsService {
   }
 
   private sortNotifications(items: VendorFlagNotification[]): VendorFlagNotification[] {
-    return [...items].sort((a, b) =>
-      new Date(b.createdUtc).getTime() - new Date(a.createdUtc).getTime()
-    );
+    return [...items].sort((a, b) => new Date(b.createdUtc).getTime() - new Date(a.createdUtc).getTime());
   }
 
   private teardown(): void {

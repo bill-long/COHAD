@@ -68,7 +68,12 @@ namespace Web.Models
             return BuildBaseSlug(post.PublishUtc, post.Title);
         }
 
-        public static string EnsureUniquePublicSlug(Guid id, DateTime publishUtc, string title, IEnumerable<BlogPost> allPosts)
+        public static string EnsureUniquePublicSlug(
+            Guid id,
+            DateTime publishUtc,
+            string title,
+            IEnumerable<BlogPost> allPosts
+        )
         {
             var baseSlug = BuildBaseSlug(publishUtc, title);
             var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

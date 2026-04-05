@@ -27,10 +27,7 @@ namespace Web.MockData
         {
             lock (_lock)
             {
-                var list = _payments
-                    .Where(p => p.PayerUniqueId == uniqueId)
-                    .Select(ClonePayment)
-                    .ToList();
+                var list = _payments.Where(p => p.PayerUniqueId == uniqueId).Select(ClonePayment).ToList();
                 return Task.FromResult(list);
             }
         }
@@ -85,19 +82,14 @@ namespace Web.MockData
                 }
             }
 
-            return byId.Values
-                .OrderByDescending(p => p.Date ?? DateTime.MinValue)
-                .ToList();
+            return byId.Values.OrderByDescending(p => p.Date ?? DateTime.MinValue).ToList();
         }
 
         public Task<List<Payment>> GetByHomeIdAsync(Guid homeId)
         {
             lock (_lock)
             {
-                var list = _payments
-                    .Where(p => p.HomeId == homeId)
-                    .Select(ClonePayment)
-                    .ToList();
+                var list = _payments.Where(p => p.HomeId == homeId).Select(ClonePayment).ToList();
                 return Task.FromResult(list);
             }
         }
@@ -106,8 +98,9 @@ namespace Web.MockData
         {
             lock (_lock)
             {
-                IEnumerable<Payment> q = _payments
-                    .Where(p => p.PaymentType == Payment.Type.PayPalSync && !p.HomeId.HasValue);
+                IEnumerable<Payment> q = _payments.Where(p =>
+                    p.PaymentType == Payment.Type.PayPalSync && !p.HomeId.HasValue
+                );
                 if (minDateUtc.HasValue)
                 {
                     var min = minDateUtc.Value;
@@ -129,13 +122,13 @@ namespace Web.MockData
 
             var want = new HashSet<string>(
                 transactionIds.Where(id => !string.IsNullOrWhiteSpace(id)),
-                StringComparer.Ordinal);
+                StringComparer.Ordinal
+            );
             lock (_lock)
             {
                 foreach (var p in _payments)
                 {
-                    if (!string.IsNullOrWhiteSpace(p.PayPalTransactionId) &&
-                        want.Contains(p.PayPalTransactionId))
+                    if (!string.IsNullOrWhiteSpace(p.PayPalTransactionId) && want.Contains(p.PayPalTransactionId))
                     {
                         result.Add(p.PayPalTransactionId);
                     }
@@ -150,8 +143,9 @@ namespace Web.MockData
             lock (_lock)
             {
                 var found = _payments.FirstOrDefault(p =>
-                    !string.IsNullOrWhiteSpace(p.PayPalTransactionId) &&
-                    string.Equals(p.PayPalTransactionId, payPalTransactionId, StringComparison.Ordinal));
+                    !string.IsNullOrWhiteSpace(p.PayPalTransactionId)
+                    && string.Equals(p.PayPalTransactionId, payPalTransactionId, StringComparison.Ordinal)
+                );
                 return Task.FromResult(found != null ? ClonePayment(found) : null);
             }
         }
@@ -205,7 +199,7 @@ namespace Web.MockData
                 PaymentType = p.PaymentType,
                 FullDetailsJSON = p.FullDetailsJSON,
                 PayPalTransactionId = p.PayPalTransactionId,
-                HomeId = p.HomeId
+                HomeId = p.HomeId,
             };
         }
     }

@@ -16,23 +16,27 @@ public sealed class RoleAuthorizationHandlerTests
     private const string IdentityProviderClaim = "http://schemas.microsoft.com/identity/claims/identityprovider";
 
     private static ClaimsPrincipal Principal(string nameId, string idp) =>
-        new ClaimsPrincipal(new ClaimsIdentity(new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, nameId),
-            new Claim(IdentityProviderClaim, idp)
-        }, "Test"));
+        new ClaimsPrincipal(
+            new ClaimsIdentity(
+                new[] { new Claim(ClaimTypes.NameIdentifier, nameId), new Claim(IdentityProviderClaim, idp) },
+                "Test"
+            )
+        );
 
     [Fact]
     public async Task Does_not_succeed_when_unique_id_cannot_be_built_from_claims()
     {
-        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, "only-name-id")
-        }, "Test"));
+        var user = new ClaimsPrincipal(
+            new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, "only-name-id") }, "Test")
+        );
         var mockRepo = new Mock<IUserRepository>(MockBehavior.Strict);
         var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Resident);
-        var context = new AuthorizationHandlerContext(new IAuthorizationRequirement[] { requirement }, user, resource: null);
+        var context = new AuthorizationHandlerContext(
+            new IAuthorizationRequirement[] { requirement },
+            user,
+            resource: null
+        );
 
         await ((IAuthorizationHandler)handler).HandleAsync(context);
 
@@ -51,7 +55,8 @@ public sealed class RoleAuthorizationHandlerTests
         var context = new AuthorizationHandlerContext(
             new IAuthorizationRequirement[] { requirement },
             Principal("u1", "google.com"),
-            resource: null);
+            resource: null
+        );
 
         await ((IAuthorizationHandler)handler).HandleAsync(context);
 
@@ -63,17 +68,16 @@ public sealed class RoleAuthorizationHandlerTests
     {
         var uniqueId = "google.comu1";
         var mockRepo = new Mock<IUserRepository>();
-        mockRepo.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = null
-        });
+        mockRepo
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(new User { UniqueId = uniqueId, Roles = null });
         var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Resident);
         var context = new AuthorizationHandlerContext(
             new IAuthorizationRequirement[] { requirement },
             Principal("u1", "google.com"),
-            resource: null);
+            resource: null
+        );
 
         await ((IAuthorizationHandler)handler).HandleAsync(context);
 
@@ -85,17 +89,22 @@ public sealed class RoleAuthorizationHandlerTests
     {
         var uniqueId = "google.comu1";
         var mockRepo = new Mock<IUserRepository>();
-        mockRepo.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Board }
-        });
+        mockRepo
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Board },
+                }
+            );
         var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Administrator);
         var context = new AuthorizationHandlerContext(
             new IAuthorizationRequirement[] { requirement },
             Principal("u1", "google.com"),
-            resource: null);
+            resource: null
+        );
 
         await ((IAuthorizationHandler)handler).HandleAsync(context);
 
@@ -107,17 +116,22 @@ public sealed class RoleAuthorizationHandlerTests
     {
         var uniqueId = "google.comu1";
         var mockRepo = new Mock<IUserRepository>();
-        mockRepo.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Administrator }
-        });
+        mockRepo
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
         var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Resident);
         var context = new AuthorizationHandlerContext(
             new IAuthorizationRequirement[] { requirement },
             Principal("u1", "google.com"),
-            resource: null);
+            resource: null
+        );
 
         await ((IAuthorizationHandler)handler).HandleAsync(context);
 
@@ -129,17 +143,22 @@ public sealed class RoleAuthorizationHandlerTests
     {
         var uniqueId = "google.comu1";
         var mockRepo = new Mock<IUserRepository>();
-        mockRepo.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = uniqueId,
-            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator }
-        });
+        mockRepo
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+                }
+            );
         var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Administrator);
         var context = new AuthorizationHandlerContext(
             new IAuthorizationRequirement[] { requirement },
             Principal("u1", "google.com"),
-            resource: null);
+            resource: null
+        );
 
         await ((IAuthorizationHandler)handler).HandleAsync(context);
 

@@ -28,7 +28,10 @@ namespace Web.PresentationModels
 
         public bool CanEdit { get; set; }
 
-        public static YouthServiceListingPresentation FromStorageModel(YouthServiceListing listing, bool canEdit = false)
+        public static YouthServiceListingPresentation FromStorageModel(
+            YouthServiceListing listing,
+            bool canEdit = false
+        )
         {
             return new YouthServiceListingPresentation
             {
@@ -42,7 +45,7 @@ namespace Web.PresentationModels
                 Address = listing.Address,
                 ParentNote = listing.ParentNote,
                 OwnerUniqueId = listing.CreatedByUniqueId,
-                CanEdit = canEdit
+                CanEdit = canEdit,
             };
         }
     }

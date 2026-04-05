@@ -61,10 +61,10 @@ export interface ResidentPickerItem {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class CommitteeService {
-  constructor(private readonly httpClient: HttpClient) { }
+  constructor(private readonly httpClient: HttpClient) {}
 
   // Public endpoints
   getAll(): Observable<CommitteeCard[]> {

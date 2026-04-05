@@ -6,10 +6,7 @@ import { EmailJobListComponent } from './email-job-list.component';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { EmailJobSummary, EmailJobProgress, EmailJobCompleted } from 'src/app/models';
-import {
-  EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM,
-  EMAIL_JOBS_SECTION_ANCHOR,
-} from 'src/app/constants/email-jobs-send-page.constants';
+import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
 
 const makeJob = (id: string, overrides: Partial<EmailJobSummary> = {}): EmailJobSummary => ({
   id,
@@ -25,7 +22,7 @@ const makeJob = (id: string, overrides: Partial<EmailJobSummary> = {}): EmailJob
   sentCount: 10,
   failedCount: 0,
   lastError: null,
-  ...overrides
+  ...overrides,
 });
 
 describe('EmailJobListComponent', () => {
@@ -62,8 +59,8 @@ describe('EmailJobListComponent', () => {
         { provide: EmailJobService, useValue: emailJobServiceSpy },
         { provide: EmailJobNotificationsService, useValue: notificationsSpy },
         { provide: Router, useValue: routerSpy },
-        { provide: Location, useValue: locationSpy }
-      ]
+        { provide: Location, useValue: locationSpy },
+      ],
     });
 
     component = TestBed.inject(EmailJobListComponent);
@@ -153,8 +150,7 @@ describe('EmailJobListComponent', () => {
       const base = '/manage/send-email' + (q ? '?' + q : '');
       return tree.fragment ? `${base}#${tree.fragment}` : base;
     });
-    routerUrlMock.value =
-      `/manage/send-email?focusJob=j1&keep=2#${EMAIL_JOBS_SECTION_ANCHOR}`;
+    routerUrlMock.value = `/manage/send-email?focusJob=j1&keep=2#${EMAIL_JOBS_SECTION_ANCHOR}`;
     (component as unknown as { stripFocusNavigationFromUrl(): void }).stripFocusNavigationFromUrl();
     expect(locationSpy.replaceState).toHaveBeenCalledWith('/manage/send-email', 'keep=2');
     expect(parsed.queryParams[EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM]).toBeUndefined();

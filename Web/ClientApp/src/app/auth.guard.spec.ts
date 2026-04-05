@@ -23,8 +23,8 @@ describe('AuthGuard', () => {
         { provide: applicationState, useValue: appState$ },
         { provide: dispatcher, useValue: dispatcher$ },
         { provide: Router, useValue: router },
-        { provide: AuthService, useValue: {} }
-      ]
+        { provide: AuthService, useValue: {} },
+      ],
     });
 
     guard = TestBed.inject(AuthGuard);
@@ -42,9 +42,9 @@ describe('AuthGuard', () => {
           given_name: 'Test',
           idp: 'idp',
           sub: 'sub',
-          streetAddress: '123 Mock Lane'
-        }
-      }
+          streetAddress: '123 Mock Lane',
+        },
+      },
     });
 
     let result: boolean | undefined;
@@ -61,7 +61,7 @@ describe('AuthGuard', () => {
     appState$.next({
       ...initialStateValue,
       authSessionResolved: true,
-      authUser: null
+      authUser: null,
     });
 
     let result: boolean | undefined;

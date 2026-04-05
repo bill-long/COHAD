@@ -9,9 +9,7 @@ namespace Web;
 /// </summary>
 internal static class BlogInlineImageBlobPaths
 {
-    private static readonly Regex MarkdownImageRegex = new(
-        @"!\[[^\]]*\]\(([^)]+)\)",
-        RegexOptions.Compiled);
+    private static readonly Regex MarkdownImageRegex = new(@"!\[[^\]]*\]\(([^)]+)\)", RegexOptions.Compiled);
 
     /// <summary>
     /// Returns distinct <c>blog/images/...</c> paths referenced in Markdown (suitable for <see cref="Services.IDocumentFileStore.DeleteAsync"/>).

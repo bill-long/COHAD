@@ -7,14 +7,13 @@ import { applicationState, ApplicationState, Action, dispatcher, LoadDirectory }
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 
 @Component({
-    selector: 'app-directory',
-    templateUrl: './directory.component.html',
-    styleUrls: ['./directory.component.css'],
-    changeDetection: ChangeDetectionStrategy.OnPush,
-    standalone: false
+  selector: 'app-directory',
+  templateUrl: './directory.component.html',
+  styleUrls: ['./directory.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: false,
 })
 export class DirectoryComponent {
-
   itemsToRender: Observable<DirectoryHome[]>;
 
   showSpinner: Observable<boolean>;
@@ -26,8 +25,12 @@ export class DirectoryComponent {
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Subject<Action>,
-    private telemetry: ApplicationInsightsService) {
-    const directoryData = this.appState.pipe(delay(5), map(s => s.directory));
+    private telemetry: ApplicationInsightsService,
+  ) {
+    const directoryData = this.appState.pipe(
+      delay(5),
+      map(s => s.directory),
+    );
 
     this.showSpinner = this.appState.pipe(map(s => s.operationsInProgress > 0));
 
@@ -37,64 +40,76 @@ export class DirectoryComponent {
       }
     });
 
-    const directoryDataSortedBySurname = directoryData.pipe(map(homes => {
-      const sorted = [...homes].sort((a, b) => {
-        let surnameA = this.getSurname(a);
-        let surnameB = this.getSurname(b);
-        if (surnameA !== '' && surnameB != '') {
-          return this.getSurname(a).localeCompare(this.getSurname(b));
-        } else {
-          if (surnameA === surnameB) return 0;
-          if (surnameA === '') return 1;
-          return -1;
-        }
-      });
+    const directoryDataSortedBySurname = directoryData.pipe(
+      map(homes => {
+        const sorted = [...homes].sort((a, b) => {
+          const surnameA = this.getSurname(a);
+          const surnameB = this.getSurname(b);
+          if (surnameA !== '' && surnameB != '') {
+            return this.getSurname(a).localeCompare(this.getSurname(b));
+          } else {
+            if (surnameA === surnameB) return 0;
+            if (surnameA === '') return 1;
+            return -1;
+          }
+        });
 
-      return sorted;
-    }));
+        return sorted;
+      }),
+    );
 
     const filteredSortedBySurname = combineLatest([
       this.homeFilter.valueChanges.pipe(debounceTime(200), startWith('')),
-      directoryDataSortedBySurname
-    ]).pipe(map(([f, h]) => {
-      if (f.length < 1) {
-        return h;
-      }
+      directoryDataSortedBySurname,
+    ]).pipe(
+      map(([f, h]) => {
+        if (f.length < 1) {
+          return h;
+        }
 
-      const filterValue = f.toLowerCase();
-      const filteredHomes = h.filter(home => this.isFilterMatch(filterValue, home));
+        const filterValue = f.toLowerCase();
+        const filteredHomes = h.filter(home => this.isFilterMatch(filterValue, home));
 
-      if (filterValue.length >= 3) {
-        this.telemetry.trackEvent('DirectorySearched', { resultCount: filteredHomes.length.toString() });
-      }
+        if (filterValue.length >= 3) {
+          this.telemetry.trackEvent('DirectorySearched', { resultCount: filteredHomes.length.toString() });
+        }
 
-      return filteredHomes;
-    }));
+        return filteredHomes;
+      }),
+    );
 
     const numberOfItemsToRender = new ReplaySubject<number>(1);
     numberOfItemsToRender.next(20);
 
-    this.itemsToRender = combineLatest([filteredSortedBySurname, numberOfItemsToRender]).pipe(map(([homes, count]) => homes.slice(0, count)));
+    this.itemsToRender = combineLatest([filteredSortedBySurname, numberOfItemsToRender]).pipe(
+      map(([homes, count]) => homes.slice(0, count)),
+    );
 
-    combineLatest([this.itemsToRender, filteredSortedBySurname]).pipe(delay(5)).subscribe(([rendered, all]) => {
-      if (rendered.length < all.length) {
-        numberOfItemsToRender.next(rendered.length + 20);
-      }
-    });
+    combineLatest([this.itemsToRender, filteredSortedBySurname])
+      .pipe(delay(5))
+      .subscribe(([rendered, all]) => {
+        if (rendered.length < all.length) {
+          numberOfItemsToRender.next(rendered.length + 20);
+        }
+      });
   }
 
   isFilterMatch(f: string, home: DirectoryHome) {
-    return `${home.streetNumber.toString()} ${home.streetName.toLowerCase()}`.includes(f) ||
-      home.residents.filter(r =>
-        r.givenName.toLowerCase().includes(f) ||
-        r.surname.toLowerCase().includes(f) ||
-        r.emailAddresses.filter(e => e.address.toLowerCase().includes(f)).length > 0 ||
-        r.phoneNumbers.filter(p => `(${p.areaCode}) ${p.prefix}-${('0000' + p.lineNumber).slice(-4)} ${p.type}`.toLowerCase().includes(f)).length > 0
-      ).length > 0;
+    return (
+      `${home.streetNumber.toString()} ${home.streetName.toLowerCase()}`.includes(f) ||
+      home.residents.filter(
+        r =>
+          r.givenName.toLowerCase().includes(f) ||
+          r.surname.toLowerCase().includes(f) ||
+          r.emailAddresses.filter(e => e.address.toLowerCase().includes(f)).length > 0 ||
+          r.phoneNumbers.filter(p => `(${p.areaCode}) ${p.prefix}-${('0000' + p.lineNumber).slice(-4)} ${p.type}`.toLowerCase().includes(f))
+            .length > 0,
+      ).length > 0
+    );
   }
 
   getSurname(home: DirectoryHome) {
-    let homeowners = this.getHomeowners(home);
+    const homeowners = this.getHomeowners(home);
     if (homeowners.length < 1) {
       return '';
     }
@@ -103,7 +118,7 @@ export class DirectoryComponent {
   }
 
   getGivenNames(home: DirectoryHome) {
-    let homeowners = this.getHomeowners(home);
+    const homeowners = this.getHomeowners(home);
     if (homeowners.length < 1) {
       return '';
     }
@@ -133,5 +148,4 @@ export class DirectoryComponent {
   getChildren(home: DirectoryHome) {
     return home.residents.filter(r => r.residentType === 2);
   }
-
 }

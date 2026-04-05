@@ -8,7 +8,7 @@ import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.compone
   selector: 'app-manage-blog',
   templateUrl: './manage-blog.component.html',
   styleUrls: ['./manage-blog.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class ManageBlogComponent implements OnInit {
   posts: BlogPostDetail[] = [];
@@ -19,8 +19,8 @@ export class ManageBlogComponent implements OnInit {
 
   constructor(
     private readonly blogService: BlogService,
-    private readonly dialog: MatDialog
-  ) { }
+    private readonly dialog: MatDialog,
+  ) {}
 
   ngOnInit(): void {
     this.loadPosts();
@@ -35,7 +35,7 @@ export class ManageBlogComponent implements OnInit {
       width: '780px',
       maxWidth: 'calc(100vw - 32px)',
       maxHeight: '90vh',
-      panelClass: 'blog-editor-dialog-panel'
+      panelClass: 'blog-editor-dialog-panel',
     });
 
     ref.afterClosed().subscribe(result => {
@@ -53,8 +53,8 @@ export class ManageBlogComponent implements OnInit {
         body: `This will permanently delete "${post.title}".\n\nYou can't undo this.`,
         confirmText: 'Delete',
         cancelText: 'Cancel',
-        confirmColor: 'warn'
-      }
+        confirmColor: 'warn',
+      },
     });
 
     ref.afterClosed().subscribe(confirmed => {
@@ -74,7 +74,7 @@ export class ManageBlogComponent implements OnInit {
         error: () => {
           this.deletingId = null;
           this.error = 'Failed to delete post.';
-        }
+        },
       });
     });
   }
@@ -90,7 +90,7 @@ export class ManageBlogComponent implements OnInit {
         this.posts = [];
         this.loading = false;
         this.error = 'Failed to load posts.';
-      }
+      },
     });
   }
 }

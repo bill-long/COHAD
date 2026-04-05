@@ -37,7 +37,7 @@ namespace Web.PresentationModels
                 Date = payment.Date,
                 PaymentType = payment.PaymentType,
                 PayPalTransactionId = payment.PayPalTransactionId,
-                HomeId = payment.HomeId
+                HomeId = payment.HomeId,
             };
         }
     }

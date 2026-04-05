@@ -8,7 +8,7 @@ describe('EmailJobService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule]
+      imports: [HttpClientTestingModule],
     });
     service = TestBed.inject(EmailJobService);
     httpMock = TestBed.inject(HttpTestingController);

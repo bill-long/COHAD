@@ -27,7 +27,7 @@ namespace Web.Models
         {
             Homeowner,
             OtherAdult,
-            Child
+            Child,
         }
     }
 }

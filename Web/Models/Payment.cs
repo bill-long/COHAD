@@ -35,8 +35,9 @@ namespace Web.Models
         {
             OneTime,
             SubscriptionCreated,
+
             /// <summary>Inserted by scheduled PayPal Transaction Search sync.</summary>
-            PayPalSync
+            PayPalSync,
         }
     }
 }

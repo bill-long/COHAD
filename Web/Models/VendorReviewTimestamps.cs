@@ -8,8 +8,7 @@ namespace Web.Models
     public static class VendorReviewTimestamps
     {
         /// <summary>Placeholder for unknown created/modified time (serialized as year 0001).</summary>
-        public static readonly DateTime Unknown =
-            new DateTime(1, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        public static readonly DateTime Unknown = new DateTime(1, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         public static bool IsUnknown(DateTime value)
         {
@@ -22,7 +21,7 @@ namespace Web.Models
             {
                 DateTimeKind.Utc => value,
                 DateTimeKind.Local => value.ToUniversalTime(),
-                _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+                _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
             };
 
             return utc.Year <= 1;

@@ -56,7 +56,7 @@ namespace Web.Models
             Board,
             SocialCommittee,
             SunshineCommittee,
-            ArchitecturalCommittee
+            ArchitecturalCommittee,
         }
 
         public static string GetUniqueIdFromClaims(IEnumerable<Claim> claims)
@@ -64,11 +64,13 @@ namespace Web.Models
             var claimsList = claims.ToList();
             var nameId = claimsList.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
             var idProvider = claimsList
-                .FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")?.Value;
+                .FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")
+                ?.Value;
             if (nameId == null || idProvider == null)
             {
                 throw new InvalidOperationException(
-                    "Cannot build a unique user ID: one or more required claims (NameIdentifier, identityprovider) are missing.");
+                    "Cannot build a unique user ID: one or more required claims (NameIdentifier, identityprovider) are missing."
+                );
             }
 
             return idProvider + nameId;

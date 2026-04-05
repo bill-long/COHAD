@@ -24,7 +24,8 @@ public sealed class HomeControllerAssociationsTests
         IAuditLogRepository audit,
         IResidentRepository? residents = null,
         string nameId = "nid-1",
-        string idp = "google.com")
+        string idp = "google.com"
+    )
     {
         if (residents == null)
         {
@@ -33,25 +34,41 @@ public sealed class HomeControllerAssociationsTests
             mock.Setup(r => r.GetByHomeIdAsync(It.IsAny<Guid>())).ReturnsAsync(new List<Resident>());
             residents = mock.Object;
         }
-        var c = new HomeController(users, homes, residents, audit,
+        var c = new HomeController(
+            users,
+            homes,
+            residents,
+            audit,
             new ResidentCleanupService(
                 Mock.Of<ICommitteeRepository>(),
-                new CommitteeListCache(Mock.Of<ICommitteeRepository>(), new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())),
+                new CommitteeListCache(
+                    Mock.Of<ICommitteeRepository>(),
+                    new Microsoft.Extensions.Caching.Memory.MemoryCache(
+                        new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()
+                    )
+                ),
                 Mock.Of<IDocumentFileStore>(),
-                Mock.Of<ILogger<ResidentCleanupService>>()),
-            Mock.Of<ILogger<HomeController>>())
+                Mock.Of<ILogger<ResidentCleanupService>>()
+            ),
+            Mock.Of<ILogger<HomeController>>()
+        )
         {
             ControllerContext = new ControllerContext
             {
                 HttpContext = new DefaultHttpContext
                 {
-                    User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                    {
-                        new Claim(ClaimTypes.NameIdentifier, nameId),
-                        new Claim(IdentityProviderClaim, idp)
-                    }, "Test"))
-                }
-            }
+                    User = new ClaimsPrincipal(
+                        new ClaimsIdentity(
+                            new[]
+                            {
+                                new Claim(ClaimTypes.NameIdentifier, nameId),
+                                new Claim(IdentityProviderClaim, idp),
+                            },
+                            "Test"
+                        )
+                    ),
+                },
+            },
         };
         return c;
     }
@@ -65,14 +82,47 @@ public sealed class HomeControllerAssociationsTests
         var homeB = Guid.NewGuid();
         var homes = new List<Home>
         {
-            new Home { Id = homeA, StreetNumber = 1, StreetName = "A", Residents = new List<Resident>() },
-            new Home { Id = homeB, StreetNumber = 2, StreetName = "B", Residents = new List<Resident>() }
+            new Home
+            {
+                Id = homeA,
+                StreetNumber = 1,
+                StreetName = "A",
+                Residents = new List<Resident>(),
+            },
+            new Home
+            {
+                Id = homeB,
+                StreetNumber = 2,
+                StreetName = "B",
+                Residents = new List<Resident>(),
+            },
         };
         var users = new List<User>
         {
-            new User { UniqueId = "u1", GivenName = "U", Surname = "One", Emails = "u1@test.com", OwnedHomeIds = new List<Guid> { homeA } },
-            new User { UniqueId = "u2", GivenName = "U", Surname = "Two", Emails = "u2@test.com", OwnedHomeIds = new List<Guid> { homeA, homeB } },
-            new User { UniqueId = "u3", GivenName = "U", Surname = "Three", Emails = "u3@test.com", OwnedHomeIds = new List<Guid>() }
+            new User
+            {
+                UniqueId = "u1",
+                GivenName = "U",
+                Surname = "One",
+                Emails = "u1@test.com",
+                OwnedHomeIds = new List<Guid> { homeA },
+            },
+            new User
+            {
+                UniqueId = "u2",
+                GivenName = "U",
+                Surname = "Two",
+                Emails = "u2@test.com",
+                OwnedHomeIds = new List<Guid> { homeA, homeB },
+            },
+            new User
+            {
+                UniqueId = "u3",
+                GivenName = "U",
+                Surname = "Three",
+                Emails = "u3@test.com",
+                OwnedHomeIds = new List<Guid>(),
+            },
         };
 
         var mockUsers = new Mock<IUserRepository>();
@@ -99,14 +149,23 @@ public sealed class HomeControllerAssociationsTests
         var homeId = Guid.NewGuid();
         var requesterUniqueId = ExpectedUniqueId("u1", "google.com");
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(requesterUniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = requesterUniqueId,
-            Roles = new List<User.Role> { User.Role.Resident },
-            OwnedHomeIds = new List<Guid>()
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(requesterUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = requesterUniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
 
-        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>(), nameId: "u1");
+        var c = CreateController(
+            mockUsers.Object,
+            Mock.Of<IHomeRepository>(),
+            Mock.Of<IAuditLogRepository>(),
+            nameId: "u1"
+        );
         var result = await c.RemoveAssociatedUser(homeId, "target-user");
         Assert.IsType<ForbidResult>(result);
     }
@@ -121,15 +180,19 @@ public sealed class HomeControllerAssociationsTests
             UniqueId = "target-user",
             Emails = "target@example.com",
             OwnedHomeIds = new List<Guid> { homeId, Guid.NewGuid() },
-            Roles = new List<User.Role>()
+            Roles = new List<User.Role>(),
         };
         var mockUsers = new Mock<IUserRepository>();
-        mockUsers.Setup(r => r.GetByUniqueIdAsync(requesterUniqueId)).ReturnsAsync(new User
-        {
-            UniqueId = requesterUniqueId,
-            Roles = new List<User.Role> { User.Role.Resident },
-            OwnedHomeIds = new List<Guid> { homeId }
-        });
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(requesterUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = requesterUniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
         mockUsers.Setup(r => r.GetByUniqueIdAsync("target-user")).ReturnsAsync(target);
         mockUsers.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
 

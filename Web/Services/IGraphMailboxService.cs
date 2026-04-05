@@ -17,7 +17,6 @@ namespace Web.Services
         /// Updates <see cref="Committee.GraphMessageRuleId"/>, <see cref="Committee.LastSyncedUtc"/>,
         /// <see cref="Committee.LastSyncStatus"/>, and <see cref="Committee.LastSyncError"/> on the returned object.
         /// </summary>
-        Task<Committee> SyncForwardingRuleAsync(Committee committee,
-            IReadOnlyDictionary<Guid, Resident> residents);
+        Task<Committee> SyncForwardingRuleAsync(Committee committee, IReadOnlyDictionary<Guid, Resident> residents);
     }
 }

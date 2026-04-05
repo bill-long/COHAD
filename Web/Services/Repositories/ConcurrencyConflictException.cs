@@ -9,8 +9,6 @@ namespace Web.Services.Repositories
     public class ConcurrencyConflictException : Exception
     {
         public ConcurrencyConflictException(string message, Exception innerException)
-            : base(message, innerException)
-        {
-        }
+            : base(message, innerException) { }
     }
 }

@@ -6,16 +6,13 @@ import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
-import {
-  EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM,
-  EMAIL_JOBS_SECTION_ANCHOR,
-} from 'src/app/constants/email-jobs-send-page.constants';
+import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
 
 @Component({
-    selector: 'app-email-job-list',
-    templateUrl: './email-job-list.component.html',
-    styleUrls: ['./email-job-list.component.css'],
-    standalone: false
+  selector: 'app-email-job-list',
+  templateUrl: './email-job-list.component.html',
+  styleUrls: ['./email-job-list.component.css'],
+  standalone: false,
 })
 export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
   /** When set (e.g. after navigating back from job detail), scroll this row into view once data is ready. */
@@ -37,8 +34,8 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
     private emailJobNotifications: EmailJobNotificationsService,
     private router: Router,
     private location: Location,
-    @Inject(DOCUMENT) private document: Document
-  ) { }
+    @Inject(DOCUMENT) private document: Document,
+  ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['scrollTargetJobId']) {
@@ -63,7 +60,7 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
           status: event.status,
           sentCount: event.sentCount,
           failedCount: event.failedCount,
-          totalRecipients: event.totalRecipients
+          totalRecipients: event.totalRecipients,
         });
       }),
       this.emailJobNotifications.completed$.subscribe(event => {
@@ -72,9 +69,9 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
           sentCount: event.sentCount,
           failedCount: event.failedCount,
           totalRecipients: event.totalRecipients,
-          lastError: event.lastError
+          lastError: event.lastError,
         });
-      })
+      }),
     );
   }
 
@@ -97,7 +94,7 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
       error: err => {
         this.errorText = httpErrorMessage(err, 'Failed to load email jobs.');
         this.loading = false;
-      }
+      },
     });
   }
 
@@ -107,21 +104,31 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
 
   statusLabel(status: EmailJobStatus): string {
     switch (status) {
-      case 'InProgress': return 'In Progress';
-      case 'PartiallyCompleted': return 'Partial';
-      default: return status;
+      case 'InProgress':
+        return 'In Progress';
+      case 'PartiallyCompleted':
+        return 'Partial';
+      default:
+        return status;
     }
   }
 
   statusClass(status: EmailJobStatus): string {
     switch (status) {
-      case 'Queued': return 'status-queued';
-      case 'InProgress': return 'status-in-progress';
-      case 'Completed': return 'status-completed';
-      case 'PartiallyCompleted': return 'status-partial';
-      case 'Failed': return 'status-failed';
-      case 'Cancelled': return 'status-cancelled';
-      default: return '';
+      case 'Queued':
+        return 'status-queued';
+      case 'InProgress':
+        return 'status-in-progress';
+      case 'Completed':
+        return 'status-completed';
+      case 'PartiallyCompleted':
+        return 'status-partial';
+      case 'Failed':
+        return 'status-failed';
+      case 'Cancelled':
+        return 'status-cancelled';
+      default:
+        return '';
     }
   }
 
@@ -133,9 +140,7 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private targetRowScrollBehavior(): ScrollBehavior {
-    return this.document.defaultView?.matchMedia('(prefers-reduced-motion: reduce)').matches
-      ? 'auto'
-      : 'smooth';
+    return this.document.defaultView?.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
   }
 
   private scheduleScrollToTargetJob(): void {
@@ -179,10 +184,7 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
    */
   private stripFocusNavigationFromUrl(): void {
     const parsed = this.router.parseUrl(this.router.url);
-    const hasFocusJob = Object.prototype.hasOwnProperty.call(
-      parsed.queryParams,
-      EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM
-    );
+    const hasFocusJob = Object.prototype.hasOwnProperty.call(parsed.queryParams, EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM);
     const hasEmailJobsFragment = parsed.fragment === EMAIL_JOBS_SECTION_ANCHOR;
     if (!hasFocusJob && !hasEmailJobsFragment) {
       return;

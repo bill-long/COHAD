@@ -8,7 +8,7 @@ describe('VendorsService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule]
+      imports: [HttpClientTestingModule],
     });
     service = TestBed.inject(VendorsService);
     httpMock = TestBed.inject(HttpTestingController);
@@ -40,7 +40,7 @@ describe('VendorsService', () => {
       'Outdoor & Property',
       'Home Services & Household',
       'Personal, Health & Professional',
-      'Auto, Pet & Community'
+      'Auto, Pet & Community',
     ]);
   });
 

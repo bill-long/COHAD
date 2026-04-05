@@ -58,7 +58,7 @@ namespace Web.PresentationModels
                     : null,
                 TotalSignups = signups.Count,
                 TotalAdults = SumCapped(signups.Select(s => s.Adults)),
-                TotalChildren = SumCapped(signups.Select(s => s.Children))
+                TotalChildren = SumCapped(signups.Select(s => s.Children)),
             };
         }
 

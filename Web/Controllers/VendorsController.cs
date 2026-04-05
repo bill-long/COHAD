@@ -32,7 +32,8 @@ namespace Web.Controllers
             IVendorFlagRepository vendorFlagRepository,
             IUserRepository userRepository,
             IAuditLogRepository auditLogRepository,
-            IHubContext<VendorFlagNotificationsHub> vendorFlagNotificationsHub)
+            IHubContext<VendorFlagNotificationsHub> vendorFlagNotificationsHub
+        )
         {
             _vendorRepository = vendorRepository;
             _vendorReviewRepository = vendorReviewRepository;
@@ -43,7 +44,11 @@ namespace Web.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll([FromQuery] string q = null, [FromQuery] string category = null, [FromQuery] bool neighborOnly = false)
+        public async Task<IActionResult> GetAll(
+            [FromQuery] string q = null,
+            [FromQuery] string category = null,
+            [FromQuery] bool neighborOnly = false
+        )
         {
             var vendors = await _vendorRepository.GetAllAsync();
             var query = vendors.AsEnumerable();
@@ -51,15 +56,18 @@ namespace Web.Controllers
             {
                 var trimmed = q.Trim();
                 query = query.Where(v =>
-                    (v.Name?.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                    (v.Notes?.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                    (v.Categories?.Any(c => c.Contains(trimmed, StringComparison.OrdinalIgnoreCase)) ?? false));
+                    (v.Name?.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (v.Notes?.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (v.Categories?.Any(c => c.Contains(trimmed, StringComparison.OrdinalIgnoreCase)) ?? false)
+                );
             }
 
             if (!string.IsNullOrWhiteSpace(category))
             {
                 var trimmedCategory = category.Trim();
-                query = query.Where(v => v.Categories?.Any(c => c.Equals(trimmedCategory, StringComparison.OrdinalIgnoreCase)) == true);
+                query = query.Where(v =>
+                    v.Categories?.Any(c => c.Equals(trimmedCategory, StringComparison.OrdinalIgnoreCase)) == true
+                );
             }
 
             if (neighborOnly)
@@ -71,10 +79,13 @@ namespace Web.Controllers
             var reviewCounts = await _vendorReviewRepository.GetReviewCountsByVendorAsync();
             var latestModifiedByVendor = await _vendorReviewRepository.GetLatestReviewModifiedUtcByVendorAsync();
             var summaries = filtered
-                .Select(v => VendorSummary.FromStorageModel(
-                    v,
-                    reviewCounts.TryGetValue(v.Id, out var c) ? c : 0,
-                    latestModifiedByVendor.TryGetValue(v.Id, out var latest) ? (DateTime?)latest : null))
+                .Select(v =>
+                    VendorSummary.FromStorageModel(
+                        v,
+                        reviewCounts.TryGetValue(v.Id, out var c) ? c : 0,
+                        latestModifiedByVendor.TryGetValue(v.Id, out var latest) ? (DateTime?)latest : null
+                    )
+                )
                 .ToList();
 
             return Ok(summaries);
@@ -96,12 +107,14 @@ namespace Web.Controllers
                     continue;
                 }
 
-                result.Add(new
-                {
-                    vendorId = vendor.Id,
-                    vendorName = vendor.Name,
-                    pendingFlagCount = group.Count()
-                });
+                result.Add(
+                    new
+                    {
+                        vendorId = vendor.Id,
+                        vendorName = vendor.Name,
+                        pendingFlagCount = group.Count(),
+                    }
+                );
             }
 
             return Ok(result);
@@ -182,23 +195,26 @@ namespace Web.Controllers
                 CreatedByUniqueId = apiUser.UniqueId,
                 ModifiedByUniqueId = apiUser.UniqueId,
                 CreatedUtc = now,
-                ModifiedUtc = now
+                ModifiedUtc = now,
             };
 
             var saved = await _vendorRepository.UpsertAsync(vendor);
             VendorReview initialReview;
             try
             {
-                initialReview = await _vendorReviewRepository.UpsertAsync(new VendorReview
-                {
-                    Id = Guid.NewGuid(),
-                    VendorId = saved.Id,
-                    AuthorUniqueId = apiUser.UniqueId,
-                    AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
-                    ReviewText = request.InitialReviewText.Trim(),
-                    CreatedUtc = now,
-                    ModifiedUtc = now
-                });
+                initialReview = await _vendorReviewRepository.UpsertAsync(
+                    new VendorReview
+                    {
+                        Id = Guid.NewGuid(),
+                        VendorId = saved.Id,
+                        AuthorUniqueId = apiUser.UniqueId,
+                        AuthorDisplayName =
+                            $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                        ReviewText = request.InitialReviewText.Trim(),
+                        CreatedUtc = now,
+                        ModifiedUtc = now,
+                    }
+                );
             }
             catch
             {
@@ -206,7 +222,15 @@ namespace Web.Controllers
                 throw;
             }
             await WriteAudit(apiUser, saved.Id.ToString("D"), saved.Name, "Created vendor.");
-            return Ok(VendorDetail.FromStorageModel(saved, new List<VendorReview> { initialReview }, new List<VendorFlag>(), apiUser.UniqueId, apiUser.Roles?.Contains(Models.User.Role.Administrator) == true));
+            return Ok(
+                VendorDetail.FromStorageModel(
+                    saved,
+                    new List<VendorReview> { initialReview },
+                    new List<VendorFlag>(),
+                    apiUser.UniqueId,
+                    apiUser.Roles?.Contains(Models.User.Role.Administrator) == true
+                )
+            );
         }
 
         [HttpPut("{id:guid}")]
@@ -249,7 +273,15 @@ namespace Web.Controllers
             var reviews = await _vendorReviewRepository.GetByVendorIdAsync(saved.Id);
             var flags = await _vendorFlagRepository.GetByVendorIdAsync(saved.Id);
             await WriteAudit(apiUser, saved.Id.ToString("D"), saved.Name, "Updated vendor.");
-            return Ok(VendorDetail.FromStorageModel(saved, reviews, flags, apiUser.UniqueId, apiUser.Roles?.Contains(Models.User.Role.Administrator) == true));
+            return Ok(
+                VendorDetail.FromStorageModel(
+                    saved,
+                    reviews,
+                    flags,
+                    apiUser.UniqueId,
+                    apiUser.Roles?.Contains(Models.User.Role.Administrator) == true
+                )
+            );
         }
 
         [HttpDelete("{id:guid}")]
@@ -286,7 +318,8 @@ namespace Web.Controllers
 
             await _vendorRepository.DeleteAsync(id);
 
-            await _vendorFlagNotificationsHub.Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
+            await _vendorFlagNotificationsHub
+                .Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
                 .SendAsync("VendorDeleted", new { vendorId = id.ToString("D") });
             await WriteAudit(apiUser, id.ToString("D"), stored.Name, "Deleted vendor.");
             return Ok();
@@ -310,10 +343,13 @@ namespace Web.Controllers
             var reviews = await _vendorReviewRepository.GetByVendorIdAsync(id);
             var payload = reviews
                 .OrderByDescending(r => r.ModifiedUtc)
-                .Select(r => VendorReviewPresentation.FromStorageModel(
-                    r,
-                    apiUser.Roles?.Contains(Models.User.Role.Administrator) == true ||
-                    string.Equals(r.AuthorUniqueId, apiUser.UniqueId, StringComparison.OrdinalIgnoreCase)))
+                .Select(r =>
+                    VendorReviewPresentation.FromStorageModel(
+                        r,
+                        apiUser.Roles?.Contains(Models.User.Role.Administrator) == true
+                            || string.Equals(r.AuthorUniqueId, apiUser.UniqueId, StringComparison.OrdinalIgnoreCase)
+                    )
+                )
                 .ToList();
             return Ok(payload);
         }
@@ -347,7 +383,7 @@ namespace Web.Controllers
                 AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
                 ReviewText = request.ReviewText?.Trim() ?? string.Empty,
                 CreatedUtc = now,
-                ModifiedUtc = now
+                ModifiedUtc = now,
             };
 
             var saved = await _vendorReviewRepository.UpsertAsync(review);
@@ -356,7 +392,11 @@ namespace Web.Controllers
         }
 
         [HttpPut("{vendorId:guid}/reviews/{reviewId:guid}")]
-        public async Task<IActionResult> UpdateReview(Guid vendorId, Guid reviewId, [FromBody] VendorReviewUpsertRequest request)
+        public async Task<IActionResult> UpdateReview(
+            Guid vendorId,
+            Guid reviewId,
+            [FromBody] VendorReviewUpsertRequest request
+        )
         {
             var apiUser = await GetApiUserAsync();
             if (apiUser == null)
@@ -448,13 +488,14 @@ namespace Web.Controllers
                 FlagNote = request.FlagNote.Trim(),
                 Status = "Pending",
                 CreatedUtc = now,
-                ResolvedUtc = DateTime.MinValue
+                ResolvedUtc = DateTime.MinValue,
             };
 
             var saved = await _vendorFlagRepository.UpsertAsync(flag);
             await WriteAudit(apiUser, id.ToString("D"), vendor.Name, "Flagged vendor.");
             var notification = VendorFlagNotificationPresentation.FromStorageModel(saved, vendor);
-            await _vendorFlagNotificationsHub.Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
+            await _vendorFlagNotificationsHub
+                .Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
                 .SendAsync("VendorFlagCreated", notification);
             return Ok(VendorFlagPresentation.FromStorageModel(saved, includeAuthor: false));
         }
@@ -481,7 +522,8 @@ namespace Web.Controllers
             flag.ResolvedUtc = DateTime.UtcNow;
             await _vendorFlagRepository.UpsertAsync(flag);
             await WriteAudit(apiUser, id.ToString("D"), vendor?.Name ?? id.ToString("D"), "Dismissed vendor flag.");
-            await _vendorFlagNotificationsHub.Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
+            await _vendorFlagNotificationsHub
+                .Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
                 .SendAsync("VendorFlagResolved", new { flagId = flagId.ToString("D"), vendorId = id.ToString("D") });
             return Ok();
         }
@@ -509,16 +551,18 @@ namespace Web.Controllers
 
         private async Task WriteAudit(User apiUser, string subjectId, string subjectName, string action)
         {
-            await _auditLogRepository.AddAsync(new NewAuditLogEntry
-            {
-                Id = Guid.NewGuid(),
-                SubjectId = subjectId,
-                SubjectName = subjectName,
-                Action = action,
-                Time = DateTime.UtcNow,
-                UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
-                UserId = apiUser.UniqueId
-            });
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = subjectId,
+                    SubjectName = subjectName,
+                    Action = action,
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                    UserId = apiUser.UniqueId,
+                }
+            );
         }
     }
 }

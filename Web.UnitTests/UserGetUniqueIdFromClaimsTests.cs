@@ -13,9 +13,7 @@ public sealed class UserGetUniqueIdFromClaimsTests
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, "2fec9914-0562-4ff7-b827-8e5b39ce0978"),
-            new Claim(
-                "http://schemas.microsoft.com/identity/claims/identityprovider",
-                "google.com")
+            new Claim("http://schemas.microsoft.com/identity/claims/identityprovider", "google.com"),
         };
         var id = User.GetUniqueIdFromClaims(claims);
         Assert.Equal("google.com2fec9914-0562-4ff7-b827-8e5b39ce0978", id);
@@ -26,9 +24,7 @@ public sealed class UserGetUniqueIdFromClaimsTests
     {
         var claims = new List<Claim>
         {
-            new Claim(
-                "http://schemas.microsoft.com/identity/claims/identityprovider",
-                "google.com")
+            new Claim("http://schemas.microsoft.com/identity/claims/identityprovider", "google.com"),
         };
         Assert.Throws<InvalidOperationException>(() => User.GetUniqueIdFromClaims(claims));
     }
@@ -36,10 +32,7 @@ public sealed class UserGetUniqueIdFromClaimsTests
     [Fact]
     public void Returns_null_when_identity_provider_missing()
     {
-        var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, "abc")
-        };
+        var claims = new List<Claim> { new Claim(ClaimTypes.NameIdentifier, "abc") };
         Assert.Throws<InvalidOperationException>(() => User.GetUniqueIdFromClaims(claims));
     }
 }

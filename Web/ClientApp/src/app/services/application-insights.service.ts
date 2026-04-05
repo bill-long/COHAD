@@ -10,7 +10,10 @@ export class ApplicationInsightsService {
   private appInsights: ApplicationInsights | null = null;
   private pendingUserContext: { userId: string; accountId?: string } | null = null;
 
-  constructor(private router: Router, private titleService: Title) {}
+  constructor(
+    private router: Router,
+    private titleService: Title,
+  ) {}
 
   /** Override in tests to return a mock SDK instance. */
   protected createSdkInstance(connectionString: string): ApplicationInsights {
@@ -24,8 +27,8 @@ export class ApplicationInsightsService {
         correlationHeaderExcludedDomains: ['*.b2clogin.com'],
         // Do not collect HTTP headers to avoid leaking sensitive data (auth tokens, cookies, PII).
         enableRequestHeaderTracking: false,
-        enableResponseHeaderTracking: false
-      }
+        enableResponseHeaderTracking: false,
+      },
     });
     ai.loadAppInsights();
     return ai;
@@ -54,15 +57,13 @@ export class ApplicationInsightsService {
     // Track the initial page view (the router subscription only captures future navigations).
     this.appInsights.trackPageView({
       name: this.titleService.getTitle(),
-      uri: this.stripQueryAndFragment(this.router.url)
+      uri: this.stripQueryAndFragment(this.router.url),
     });
 
-    this.router.events.pipe(
-      filter((event): event is NavigationEnd => event instanceof NavigationEnd)
-    ).subscribe(event => {
+    this.router.events.pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd)).subscribe(event => {
       this.appInsights!.trackPageView({
         name: this.titleService.getTitle(),
-        uri: this.stripQueryAndFragment(event.urlAfterRedirects)
+        uri: this.stripQueryAndFragment(event.urlAfterRedirects),
       });
     });
   }
@@ -74,9 +75,7 @@ export class ApplicationInsightsService {
     if (qIndex === -1 && hIndex === -1) {
       return url;
     }
-    const end = qIndex !== -1 && hIndex !== -1
-      ? Math.min(qIndex, hIndex)
-      : qIndex !== -1 ? qIndex : hIndex;
+    const end = qIndex !== -1 && hIndex !== -1 ? Math.min(qIndex, hIndex) : qIndex !== -1 ? qIndex : hIndex;
     return url.substring(0, end);
   }
 

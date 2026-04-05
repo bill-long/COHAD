@@ -20,8 +20,15 @@ public sealed class YouthServicesControllerTests
         var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
         var listingRepo = new Mock<IYouthServiceListingRepository>(MockBehavior.Strict);
         var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
-        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
-            .ReturnsAsync(new User { UniqueId = "idpuser-1", Roles = new List<User.Role> { User.Role.Resident } });
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
 
         var controller = BuildController(userRepo.Object, listingRepo.Object, auditRepo.Object);
         var result = await controller.Create(new YouthServiceUpsertRequest { Name = " " });
@@ -36,31 +43,41 @@ public sealed class YouthServicesControllerTests
         var listingRepo = new Mock<IYouthServiceListingRepository>(MockBehavior.Strict);
         var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
 
-        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
-            .ReturnsAsync(new User
-            {
-                UniqueId = "idpuser-1",
-                GivenName = "Alex",
-                Surname = "Resident",
-                Roles = new List<User.Role> { User.Role.Resident }
-            });
-        listingRepo.Setup(r => r.UpsertAsync(It.IsAny<YouthServiceListing>()))
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    GivenName = "Alex",
+                    Surname = "Resident",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
+        listingRepo
+            .Setup(r => r.UpsertAsync(It.IsAny<YouthServiceListing>()))
             .ReturnsAsync((YouthServiceListing l) => l);
-        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
-            .Returns(Task.CompletedTask);
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var controller = BuildController(userRepo.Object, listingRepo.Object, auditRepo.Object);
-        var result = await controller.Create(new YouthServiceUpsertRequest
-        {
-            Name = "Sam Sitter",
-            Services = new List<string> { "Babysit" },
-            ContactMethod = PreferredContactMethod.Text
-        });
+        var result = await controller.Create(
+            new YouthServiceUpsertRequest
+            {
+                Name = "Sam Sitter",
+                Services = new List<string> { "Babysit" },
+                ContactMethod = PreferredContactMethod.Text,
+            }
+        );
 
         var ok = Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(ok.Value);
-        listingRepo.Verify(r => r.UpsertAsync(It.Is<YouthServiceListing>(l =>
-            l.Name == "Sam Sitter" && l.CreatedByUniqueId == "idpuser-1")), Times.Once);
+        listingRepo.Verify(
+            r =>
+                r.UpsertAsync(
+                    It.Is<YouthServiceListing>(l => l.Name == "Sam Sitter" && l.CreatedByUniqueId == "idpuser-1")
+                ),
+            Times.Once
+        );
         auditRepo.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Once);
     }
 
@@ -70,15 +87,18 @@ public sealed class YouthServicesControllerTests
         var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
         var listingRepo = new Mock<IYouthServiceListingRepository>(MockBehavior.Strict);
         var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
-        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
-            .ReturnsAsync(new User { UniqueId = "idpuser-1", Roles = new List<User.Role> { User.Role.Resident } });
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
 
         var controller = BuildController(userRepo.Object, listingRepo.Object, auditRepo.Object);
-        var result = await controller.Create(new YouthServiceUpsertRequest
-        {
-            Name = "Sam Sitter",
-            BornYear = 1800
-        });
+        var result = await controller.Create(new YouthServiceUpsertRequest { Name = "Sam Sitter", BornYear = 1800 });
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
@@ -91,19 +111,25 @@ public sealed class YouthServicesControllerTests
         var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
         var listingId = Guid.NewGuid();
 
-        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
-            .ReturnsAsync(new User
-            {
-                UniqueId = "idpuser-1",
-                Roles = new List<User.Role> { User.Role.Resident }
-            });
-        listingRepo.Setup(r => r.GetByIdAsync(listingId))
-            .ReturnsAsync(new YouthServiceListing
-            {
-                Id = listingId,
-                Name = "Teen Tutor",
-                CreatedByUniqueId = "someone-else"
-            });
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
+        listingRepo
+            .Setup(r => r.GetByIdAsync(listingId))
+            .ReturnsAsync(
+                new YouthServiceListing
+                {
+                    Id = listingId,
+                    Name = "Teen Tutor",
+                    CreatedByUniqueId = "someone-else",
+                }
+            );
 
         var controller = BuildController(userRepo.Object, listingRepo.Object, auditRepo.Object);
         var result = await controller.Update(listingId, new YouthServiceUpsertRequest { Name = "Updated" });
@@ -119,30 +145,43 @@ public sealed class YouthServicesControllerTests
         var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
         var listingId = Guid.NewGuid();
 
-        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
-            .ReturnsAsync(new User
-            {
-                UniqueId = "idpuser-1",
-                Roles = new List<User.Role> { User.Role.Resident }
-            });
-        listingRepo.Setup(r => r.GetByIdAsync(listingId))
-            .ReturnsAsync(new YouthServiceListing
-            {
-                Id = listingId,
-                Name = "Old Name",
-                CreatedByUniqueId = "idpuser-1"
-            });
-        listingRepo.Setup(r => r.UpsertAsync(It.IsAny<YouthServiceListing>()))
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
+        listingRepo
+            .Setup(r => r.GetByIdAsync(listingId))
+            .ReturnsAsync(
+                new YouthServiceListing
+                {
+                    Id = listingId,
+                    Name = "Old Name",
+                    CreatedByUniqueId = "idpuser-1",
+                }
+            );
+        listingRepo
+            .Setup(r => r.UpsertAsync(It.IsAny<YouthServiceListing>()))
             .ReturnsAsync((YouthServiceListing l) => l);
-        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
-            .Returns(Task.CompletedTask);
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var controller = BuildController(userRepo.Object, listingRepo.Object, auditRepo.Object);
         var result = await controller.Update(listingId, new YouthServiceUpsertRequest { Name = "New Name" });
 
         Assert.IsType<OkObjectResult>(result);
-        listingRepo.Verify(r => r.UpsertAsync(It.Is<YouthServiceListing>(l =>
-            l.Id == listingId && l.Name == "New Name" && l.ModifiedByUniqueId == "idpuser-1")), Times.Once);
+        listingRepo.Verify(
+            r =>
+                r.UpsertAsync(
+                    It.Is<YouthServiceListing>(l =>
+                        l.Id == listingId && l.Name == "New Name" && l.ModifiedByUniqueId == "idpuser-1"
+                    )
+                ),
+            Times.Once
+        );
         auditRepo.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Once);
     }
 
@@ -154,30 +193,38 @@ public sealed class YouthServicesControllerTests
         var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
         var listingId = Guid.NewGuid();
 
-        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
-            .ReturnsAsync(new User
-            {
-                UniqueId = "idpuser-1",
-                Roles = new List<User.Role> { User.Role.Administrator }
-            });
-        listingRepo.Setup(r => r.GetByIdAsync(listingId))
-            .ReturnsAsync(new YouthServiceListing
-            {
-                Id = listingId,
-                Name = "Old Name",
-                CreatedByUniqueId = "someone-else"
-            });
-        listingRepo.Setup(r => r.UpsertAsync(It.IsAny<YouthServiceListing>()))
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+        listingRepo
+            .Setup(r => r.GetByIdAsync(listingId))
+            .ReturnsAsync(
+                new YouthServiceListing
+                {
+                    Id = listingId,
+                    Name = "Old Name",
+                    CreatedByUniqueId = "someone-else",
+                }
+            );
+        listingRepo
+            .Setup(r => r.UpsertAsync(It.IsAny<YouthServiceListing>()))
             .ReturnsAsync((YouthServiceListing l) => l);
-        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
-            .Returns(Task.CompletedTask);
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var controller = BuildController(userRepo.Object, listingRepo.Object, auditRepo.Object);
         var result = await controller.Update(listingId, new YouthServiceUpsertRequest { Name = "Admin Updated Name" });
 
         Assert.IsType<OkObjectResult>(result);
-        listingRepo.Verify(r => r.UpsertAsync(It.Is<YouthServiceListing>(l =>
-            l.Id == listingId && l.Name == "Admin Updated Name")), Times.Once);
+        listingRepo.Verify(
+            r => r.UpsertAsync(It.Is<YouthServiceListing>(l => l.Id == listingId && l.Name == "Admin Updated Name")),
+            Times.Once
+        );
         auditRepo.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Once);
     }
 
@@ -189,23 +236,27 @@ public sealed class YouthServicesControllerTests
         var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
         var listingId = Guid.NewGuid();
 
-        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
-            .ReturnsAsync(new User
-            {
-                UniqueId = "idpuser-1",
-                Roles = new List<User.Role> { User.Role.Administrator }
-            });
-        listingRepo.Setup(r => r.GetByIdAsync(listingId))
-            .ReturnsAsync(new YouthServiceListing
-            {
-                Id = listingId,
-                Name = "Teen Tutor",
-                CreatedByUniqueId = "someone-else"
-            });
-        listingRepo.Setup(r => r.DeleteAsync(listingId))
-            .Returns(Task.CompletedTask);
-        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
-            .Returns(Task.CompletedTask);
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+        listingRepo
+            .Setup(r => r.GetByIdAsync(listingId))
+            .ReturnsAsync(
+                new YouthServiceListing
+                {
+                    Id = listingId,
+                    Name = "Teen Tutor",
+                    CreatedByUniqueId = "someone-else",
+                }
+            );
+        listingRepo.Setup(r => r.DeleteAsync(listingId)).Returns(Task.CompletedTask);
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var controller = BuildController(userRepo.Object, listingRepo.Object, auditRepo.Object);
         var result = await controller.Delete(listingId);
@@ -223,23 +274,27 @@ public sealed class YouthServicesControllerTests
         var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
         var listingId = Guid.NewGuid();
 
-        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
-            .ReturnsAsync(new User
-            {
-                UniqueId = "idpuser-1",
-                Roles = new List<User.Role> { User.Role.Resident }
-            });
-        listingRepo.Setup(r => r.GetByIdAsync(listingId))
-            .ReturnsAsync(new YouthServiceListing
-            {
-                Id = listingId,
-                Name = "Teen Tutor",
-                CreatedByUniqueId = "idpuser-1"
-            });
-        listingRepo.Setup(r => r.DeleteAsync(listingId))
-            .Returns(Task.CompletedTask);
-        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
-            .Returns(Task.CompletedTask);
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
+        listingRepo
+            .Setup(r => r.GetByIdAsync(listingId))
+            .ReturnsAsync(
+                new YouthServiceListing
+                {
+                    Id = listingId,
+                    Name = "Teen Tutor",
+                    CreatedByUniqueId = "idpuser-1",
+                }
+            );
+        listingRepo.Setup(r => r.DeleteAsync(listingId)).Returns(Task.CompletedTask);
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var controller = BuildController(userRepo.Object, listingRepo.Object, auditRepo.Object);
         var result = await controller.Delete(listingId);
@@ -252,7 +307,8 @@ public sealed class YouthServicesControllerTests
     private static YouthServicesController BuildController(
         IUserRepository userRepository,
         IYouthServiceListingRepository youthServiceRepository,
-        IAuditLogRepository auditLogRepository)
+        IAuditLogRepository auditLogRepository
+    )
     {
         var controller = new YouthServicesController(youthServiceRepository, userRepository, auditLogRepository)
         {
@@ -260,15 +316,18 @@ public sealed class YouthServicesControllerTests
             {
                 HttpContext = new DefaultHttpContext
                 {
-                    User = new ClaimsPrincipal(new ClaimsIdentity(
-                        new[]
-                        {
-                            new Claim(ClaimTypes.NameIdentifier, "user-1"),
-                            new Claim("http://schemas.microsoft.com/identity/claims/identityprovider", "idp")
-                        },
-                        "TestAuth"))
-                }
-            }
+                    User = new ClaimsPrincipal(
+                        new ClaimsIdentity(
+                            new[]
+                            {
+                                new Claim(ClaimTypes.NameIdentifier, "user-1"),
+                                new Claim("http://schemas.microsoft.com/identity/claims/identityprovider", "idp"),
+                            },
+                            "TestAuth"
+                        )
+                    ),
+                },
+            },
         };
 
         return controller;

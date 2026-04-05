@@ -15,7 +15,8 @@ namespace Web.PresentationModels
         public static CommunityEventDetail FromStorageModel(
             CommunityEvent communityEvent,
             bool includeSignups,
-            string currentUserUniqueId)
+            string currentUserUniqueId
+        )
         {
             var card = FromStorageModel(communityEvent);
             var signups = communityEvent.Signups ?? new List<EventSignup>();
@@ -42,7 +43,7 @@ namespace Web.PresentationModels
                 Signups = includeSignups
                     ? signups.Select(EventSignupPresentation.FromStorageModel).ToList()
                     : new List<EventSignupPresentation>(),
-                MySignup = EventSignupPresentation.FromStorageModel(mySignup)
+                MySignup = EventSignupPresentation.FromStorageModel(mySignup),
             };
         }
     }

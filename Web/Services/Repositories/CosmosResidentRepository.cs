@@ -23,8 +23,7 @@ namespace Web.Services.Repositories
 
         public async Task<List<Resident>> GetAllAsync()
         {
-            var iterator = _container.GetItemQueryIterator<JObject>(
-                new CosmosQueryDefinition("SELECT * FROM c"));
+            var iterator = _container.GetItemQueryIterator<JObject>(new CosmosQueryDefinition("SELECT * FROM c"));
             var results = new List<Resident>();
             while (iterator.HasMoreResults)
             {
@@ -59,8 +58,9 @@ namespace Web.Services.Repositories
 
             // Parameterized IN clause to avoid injection.
             // Note: very large ID lists may hit Cosmos parameter-count or query-length limits.
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id IN ("
-                + string.Join(", ", idList.Select((_, i) => $"@id{i}")) + ")");
+            var query = new CosmosQueryDefinition(
+                "SELECT * FROM c WHERE c.id IN (" + string.Join(", ", idList.Select((_, i) => $"@id{i}")) + ")"
+            );
             for (var i = 0; i < idList.Count; i++)
             {
                 query = query.WithParameter($"@id{i}", CosmosLegacyDocumentMapper.ResidentEntityDocumentId(idList[i]));
@@ -79,9 +79,10 @@ namespace Web.Services.Repositories
 
         public async Task<List<Resident>> GetByHomeIdAsync(Guid homeId)
         {
-            var query = new CosmosQueryDefinition(
-                "SELECT * FROM c WHERE c.HomeId = @homeId")
-                .WithParameter("@homeId", homeId.ToString("D"));
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.HomeId = @homeId").WithParameter(
+                "@homeId",
+                homeId.ToString("D")
+            );
             var iterator = _container.GetItemQueryIterator<JObject>(query);
             var results = new List<Resident>();
             while (iterator.HasMoreResults)
@@ -96,11 +97,13 @@ namespace Web.Services.Repositories
         public async Task<List<Resident>> GetByHomeIdsAsync(IEnumerable<Guid> homeIds)
         {
             var idSet = homeIds?.ToHashSet() ?? new HashSet<Guid>();
-            if (idSet.Count == 0) return new List<Resident>();
+            if (idSet.Count == 0)
+                return new List<Resident>();
 
             // Build a parameterized IN clause.
-            var parameters = new CosmosQueryDefinition("SELECT * FROM c WHERE c.HomeId IN ("
-                + string.Join(", ", idSet.Select((_, i) => $"@h{i}")) + ")");
+            var parameters = new CosmosQueryDefinition(
+                "SELECT * FROM c WHERE c.HomeId IN (" + string.Join(", ", idSet.Select((_, i) => $"@h{i}")) + ")"
+            );
             var idx = 0;
             foreach (var hid in idSet)
             {

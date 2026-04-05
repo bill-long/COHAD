@@ -9,8 +9,6 @@ namespace Web.Services.Repositories
     public sealed class EmailJobConcurrencyException : Exception
     {
         public EmailJobConcurrencyException()
-            : base("The email job was modified by another operation.")
-        {
-        }
+            : base("The email job was modified by another operation.") { }
     }
 }

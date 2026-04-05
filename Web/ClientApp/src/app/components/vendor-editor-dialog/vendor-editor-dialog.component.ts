@@ -14,7 +14,7 @@ export interface VendorEditorDialogData {
   selector: 'app-vendor-editor-dialog',
   templateUrl: './vendor-editor-dialog.component.html',
   styleUrls: ['./vendor-editor-dialog.component.css'],
-  standalone: false
+  standalone: false,
 })
 export class VendorEditorDialogComponent {
   saving = false;
@@ -29,14 +29,14 @@ export class VendorEditorDialogComponent {
     website: [''],
     address: [''],
     notes: [''],
-    initialReviewText: ['']
+    initialReviewText: [''],
   });
 
   constructor(
     private readonly formBuilder: FormBuilder,
     private readonly vendorsService: VendorsService,
     public readonly dialogRef: MatDialogRef<VendorEditorDialogComponent, VendorDetail | null>,
-    @Inject(MAT_DIALOG_DATA) public readonly data: VendorEditorDialogData
+    @Inject(MAT_DIALOG_DATA) public readonly data: VendorEditorDialogData,
   ) {
     if (data?.vendor) {
       this.form.patchValue({
@@ -48,7 +48,7 @@ export class VendorEditorDialogComponent {
         website: data.vendor.website ?? '',
         address: data.vendor.address ?? '',
         notes: data.vendor.notes ?? '',
-        initialReviewText: ''
+        initialReviewText: '',
       });
     } else if (data?.presetCategory) {
       this.form.patchValue({ categories: data.presetCategory });
@@ -94,7 +94,7 @@ export class VendorEditorDialogComponent {
       email: (raw.email ?? '').trim(),
       website: (raw.website ?? '').trim(),
       address: (raw.address ?? '').trim(),
-      notes: (raw.notes ?? '').trim()
+      notes: (raw.notes ?? '').trim(),
     };
     if (!this.isEditMode) {
       payload.initialReviewText = initialReviewText;
@@ -106,15 +106,14 @@ export class VendorEditorDialogComponent {
       ? this.vendorsService.updateVendor(this.data.vendor!.id, payload)
       : this.vendorsService.createVendor(payload);
     save$.subscribe({
-      next: (created) => {
+      next: created => {
         this.saving = false;
         this.dialogRef.close(created);
       },
       error: () => {
         this.error = this.isEditMode ? 'Unable to update vendor.' : 'Unable to create vendor.';
         this.saving = false;
-      }
+      },
     });
   }
 }
-
