@@ -345,6 +345,12 @@ namespace Web.Controllers
                 return BadRequest("Review text is required.");
             }
 
+            var existing = await _vendorReviewRepository.GetByVendorAndAuthorAsync(id, apiUser.UniqueId);
+            if (existing != null)
+            {
+                return Conflict("You have already reviewed this vendor. Edit your existing review instead.");
+            }
+
             var now = DateTime.UtcNow;
             var review = new VendorReview
             {

@@ -19,6 +19,7 @@ namespace Web.Services.Repositories
 
         /// <summary>Deletes by id without an extra read. Use only when ids came from <see cref="GetByVendorIdAsync"/> for <paramref name="vendorId"/> (e.g. vendor cascade delete).</summary>
         Task DeleteByVendorCascadeAsync(Guid vendorId, Guid reviewId);
+        Task<VendorReview> GetByVendorAndAuthorAsync(Guid vendorId, string authorUniqueId);
         Task<IReadOnlyDictionary<Guid, int>> GetReviewCountsByVendorAsync();
         Task<IReadOnlyDictionary<Guid, DateTime>> GetLatestReviewModifiedUtcByVendorAsync();
     }
@@ -54,6 +55,27 @@ namespace Web.Services.Repositories
             var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id AND c.VendorId = @vendorId")
                 .WithParameter("@id", ToDocumentId(reviewId))
                 .WithParameter("@vendorId", vendorId.ToString("D"));
+            var iterator = _vendorReviewsContainer.GetItemQueryIterator<JObject>(query);
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                var doc = response.FirstOrDefault();
+                if (doc != null)
+                {
+                    return ToVendorReview(doc);
+                }
+            }
+
+            return null;
+        }
+
+        public async Task<VendorReview> GetByVendorAndAuthorAsync(Guid vendorId, string authorUniqueId)
+        {
+            var query = new CosmosQueryDefinition(
+                "SELECT * FROM c WHERE c.VendorId = @vendorId AND c.AuthorUniqueId = @authorUniqueId"
+            )
+                .WithParameter("@vendorId", vendorId.ToString("D"))
+                .WithParameter("@authorUniqueId", authorUniqueId);
             var iterator = _vendorReviewsContainer.GetItemQueryIterator<JObject>(query);
             while (iterator.HasMoreResults)
             {

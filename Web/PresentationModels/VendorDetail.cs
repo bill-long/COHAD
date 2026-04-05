@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Web.Models;
@@ -12,6 +13,9 @@ namespace Web.PresentationModels
         public string Address { get; set; }
 
         public List<VendorReviewPresentation> Reviews { get; set; }
+
+        /// <summary>The current user's existing review id for this vendor, or null if they haven't reviewed it.</summary>
+        public Guid? MyReviewId { get; set; }
 
         /// <summary>All pending flags on this vendor. Non-null (even if empty) for admins; null for residents.</summary>
         public List<VendorFlagPresentation> PendingFlags { get; set; }
@@ -60,6 +64,12 @@ namespace Web.PresentationModels
                     .ToList();
             }
 
+            var myReview = !string.IsNullOrWhiteSpace(currentUserUniqueId)
+                ? safeReviews.FirstOrDefault(r =>
+                    string.Equals(r.AuthorUniqueId, currentUserUniqueId, System.StringComparison.OrdinalIgnoreCase)
+                )
+                : null;
+
             return new VendorDetail
             {
                 Id = summary.Id,
@@ -91,6 +101,7 @@ namespace Web.PresentationModels
                         )
                     )
                     .ToList(),
+                MyReviewId = myReview?.Id,
                 PendingFlags = pendingFlags,
                 MyFlag = myFlag,
             };

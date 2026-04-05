@@ -33,6 +33,18 @@ namespace Web.MockData
             }
         }
 
+        public Task<VendorReview> GetByVendorAndAuthorAsync(Guid vendorId, string authorUniqueId)
+        {
+            lock (_reviews)
+            {
+                var match = _reviews.Values.FirstOrDefault(r =>
+                    r.VendorId == vendorId
+                    && string.Equals(r.AuthorUniqueId, authorUniqueId, StringComparison.OrdinalIgnoreCase)
+                );
+                return Task.FromResult(match != null ? Clone(match) : null);
+            }
+        }
+
         public Task<VendorReview> UpsertAsync(VendorReview review)
         {
             lock (_reviews)

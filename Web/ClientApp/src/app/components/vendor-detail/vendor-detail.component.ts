@@ -93,6 +93,19 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
     return t.length >= VendorDetailComponent.minNewReviewLength;
   }
 
+  /** True when the current user already has a review for this vendor. */
+  get hasExistingReview(): boolean {
+    return !!this.vendor?.myReviewId;
+  }
+
+  /** The current user's review, if they have one. */
+  get myReview(): VendorReview | undefined {
+    if (!this.vendor?.myReviewId) {
+      return undefined;
+    }
+    return this.vendor.reviews?.find(r => r.id === this.vendor!.myReviewId);
+  }
+
   /** True for admins (API sets pendingFlags to a non-null array for admins, null for residents). */
   get isAdmin(): boolean {
     return this.vendor?.pendingFlags !== null && this.vendor?.pendingFlags !== undefined;
@@ -178,8 +191,13 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
           this.saving = false;
           this.load(this.vendor!.id);
         },
-        error: () => {
-          this.error = 'Unable to save review.';
+        error: err => {
+          if (err?.status === 409) {
+            this.error = 'You have already reviewed this vendor. Edit your existing review instead.';
+            this.load(this.vendor!.id);
+          } else {
+            this.error = 'Unable to save review.';
+          }
           this.saving = false;
         },
       });

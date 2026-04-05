@@ -53,6 +53,8 @@ export interface VendorDetail extends VendorSummary {
   createdByUniqueId?: string | null;
   address: string | null;
   reviews: VendorReview[];
+  /** The current user's existing review id for this vendor, or null if they haven't reviewed it. */
+  myReviewId: string | null;
   /** All pending flags. Non-null (even if empty) for admins; null for residents. */
   pendingFlags: VendorFlag[] | null;
   /** The current resident's most recent flag (any status), or null. Always null for admins. */
