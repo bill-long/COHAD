@@ -125,7 +125,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       : 0;
     committee.members.push({
       id: crypto.randomUUID(),
-      residentId: '',
+      residentId: '00000000-0000-0000-0000-000000000000',
       displayName: '',
       title: null,
       bio: null,
