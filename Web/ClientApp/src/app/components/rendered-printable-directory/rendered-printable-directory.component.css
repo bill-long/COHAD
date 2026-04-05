@@ -31,6 +31,18 @@
 
 /* Match directory layout to @page content box so scrollHeight / page parity matches print. */
 @media print {
+  /* Scale content to 80 % so users don't need to adjust print scaling for 5×8 paper. */
+  .printable-directory-root {
+    zoom: 0.8;
+  }
+
+  /* Compensate for zoom: structural page placeholders must still fill one physical page each. */
+  .print-cover,
+  .print-blank,
+  .print-back {
+    min-height: calc((8in - 0.5in) / 0.8);
+  }
+
   .directory-print-root ::ng-deep .outerWrapper > div {
     width: 100%;
     max-width: 100%;
