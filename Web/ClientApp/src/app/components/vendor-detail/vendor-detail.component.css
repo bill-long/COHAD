@@ -209,3 +209,10 @@
   color: var(--error);
 }
 
+.already-reviewed-note {
+  max-width: 820px;
+  margin-top: 22px;
+  font-size: 0.9375rem;
+  opacity: 0.7;
+  font-style: italic;
+}

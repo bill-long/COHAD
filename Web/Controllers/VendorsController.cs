@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -345,10 +347,16 @@ namespace Web.Controllers
                 return BadRequest("Review text is required.");
             }
 
+            var existing = await _vendorReviewRepository.GetByVendorAndAuthorAsync(id, apiUser.UniqueId);
+            if (existing != null)
+            {
+                return Conflict("You have already reviewed this vendor. Edit your existing review instead.");
+            }
+
             var now = DateTime.UtcNow;
             var review = new VendorReview
             {
-                Id = Guid.NewGuid(),
+                Id = DeterministicReviewId(id, apiUser.UniqueId),
                 VendorId = id,
                 AuthorUniqueId = apiUser.UniqueId,
                 AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
@@ -394,7 +402,16 @@ namespace Web.Controllers
             existing.ReviewText = request.ReviewText?.Trim() ?? string.Empty;
             existing.ModifiedUtc = DateTime.UtcNow;
             var saved = await _vendorReviewRepository.UpsertAsync(existing);
-            await WriteAudit(apiUser, vendorId.ToString("D"), "Vendor review", "Updated vendor review.");
+
+            var isAdminOverride = !string.Equals(
+                apiUser.UniqueId,
+                existing.AuthorUniqueId,
+                StringComparison.OrdinalIgnoreCase
+            );
+            var auditAction = isAdminOverride
+                ? $"Admin edited review by {existing.AuthorDisplayName}."
+                : "Updated vendor review.";
+            await WriteAudit(apiUser, vendorId.ToString("D"), "Vendor review", auditAction);
             return Ok(VendorReviewPresentation.FromStorageModel(saved, canEdit: true));
         }
 
@@ -419,7 +436,16 @@ namespace Web.Controllers
             }
 
             await _vendorReviewRepository.DeleteAsync(vendorId, reviewId);
-            await WriteAudit(apiUser, vendorId.ToString("D"), "Vendor review", "Deleted vendor review.");
+
+            var isAdminOverride = !string.Equals(
+                apiUser.UniqueId,
+                existing.AuthorUniqueId,
+                StringComparison.OrdinalIgnoreCase
+            );
+            var auditAction = isAdminOverride
+                ? $"Admin deleted review by {existing.AuthorDisplayName}."
+                : "Deleted vendor review.";
+            await WriteAudit(apiUser, vendorId.ToString("D"), "Vendor review", auditAction);
             return Ok();
         }
 
@@ -534,6 +560,18 @@ namespace Web.Controllers
                     UserId = apiUser.UniqueId,
                 }
             );
+        }
+
+        /// <summary>
+        /// Produces a deterministic GUID from (vendorId, authorUniqueId) so that two
+        /// racing CreateReview requests target the same Cosmos document and the second
+        /// upsert is idempotent rather than creating a duplicate.
+        /// </summary>
+        private static Guid DeterministicReviewId(Guid vendorId, string authorUniqueId)
+        {
+            var input = Encoding.UTF8.GetBytes($"{vendorId:D}:{authorUniqueId.ToLowerInvariant()}");
+            var hash = SHA256.HashData(input);
+            return new Guid(hash.AsSpan(0, 16));
         }
     }
 }

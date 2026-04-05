@@ -307,6 +307,83 @@ public sealed class VendorsControllerTests
         auditRepo.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Once);
     }
 
+    [Fact]
+    public async Task CreateReview_returns_conflict_when_user_already_reviewed()
+    {
+        var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        var vendorRepo = new Mock<IVendorRepository>(MockBehavior.Strict);
+        var reviewRepo = new Mock<IVendorReviewRepository>(MockBehavior.Strict);
+        var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+        var vendorId = Guid.NewGuid();
+
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    GivenName = "Test",
+                    Surname = "User",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
+        vendorRepo.Setup(r => r.GetByIdAsync(vendorId)).ReturnsAsync(new Vendor { Id = vendorId, Name = "Vendor A" });
+        reviewRepo
+            .Setup(r => r.GetByVendorAndAuthorAsync(vendorId, "idpuser-1"))
+            .ReturnsAsync(
+                new VendorReview
+                {
+                    Id = Guid.NewGuid(),
+                    VendorId = vendorId,
+                    AuthorUniqueId = "idpuser-1",
+                    ReviewText = "Existing review",
+                }
+            );
+
+        var controller = BuildController(userRepo.Object, vendorRepo.Object, reviewRepo.Object, auditRepo.Object);
+        var result = await controller.CreateReview(
+            vendorId,
+            new VendorReviewUpsertRequest { ReviewText = "Second review attempt" }
+        );
+
+        Assert.IsType<ConflictObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateReview_succeeds_for_new_reviewer()
+    {
+        var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        var vendorRepo = new Mock<IVendorRepository>(MockBehavior.Strict);
+        var reviewRepo = new Mock<IVendorReviewRepository>(MockBehavior.Strict);
+        var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+        var vendorId = Guid.NewGuid();
+
+        userRepo
+            .Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "idpuser-1",
+                    GivenName = "Test",
+                    Surname = "User",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
+        vendorRepo.Setup(r => r.GetByIdAsync(vendorId)).ReturnsAsync(new Vendor { Id = vendorId, Name = "Vendor A" });
+        reviewRepo.Setup(r => r.GetByVendorAndAuthorAsync(vendorId, "idpuser-1")).ReturnsAsync((VendorReview)null);
+        reviewRepo.Setup(r => r.UpsertAsync(It.IsAny<VendorReview>())).ReturnsAsync((VendorReview v) => v);
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var controller = BuildController(userRepo.Object, vendorRepo.Object, reviewRepo.Object, auditRepo.Object);
+        var result = await controller.CreateReview(
+            vendorId,
+            new VendorReviewUpsertRequest { ReviewText = "Great vendor!" }
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        reviewRepo.Verify(r => r.UpsertAsync(It.Is<VendorReview>(v => v.ReviewText == "Great vendor!")), Times.Once);
+    }
+
     private static VendorsController BuildController(
         IUserRepository userRepository,
         IVendorRepository vendorRepository,

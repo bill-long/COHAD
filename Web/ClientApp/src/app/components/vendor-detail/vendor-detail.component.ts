@@ -93,6 +93,19 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
     return t.length >= VendorDetailComponent.minNewReviewLength;
   }
 
+  /** True when the current user already has a review for this vendor. */
+  get hasExistingReview(): boolean {
+    return !!this.vendor?.myReviewId;
+  }
+
+  /** The current user's review, if they have one. */
+  get myReview(): VendorReview | undefined {
+    if (!this.vendor?.myReviewId) {
+      return undefined;
+    }
+    return this.vendor.reviews?.find(r => r.id === this.vendor!.myReviewId);
+  }
+
   /** True for admins (API sets pendingFlags to a non-null array for admins, null for residents). */
   get isAdmin(): boolean {
     return this.vendor?.pendingFlags !== null && this.vendor?.pendingFlags !== undefined;
@@ -178,14 +191,45 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
           this.saving = false;
           this.load(this.vendor!.id);
         },
-        error: () => {
-          this.error = 'Unable to save review.';
+        error: err => {
+          if (err?.status === 409) {
+            this.error = 'You have already reviewed this vendor. Edit your existing review instead.';
+            this.load(this.vendor!.id);
+          } else {
+            this.error = 'Unable to save review.';
+          }
           this.saving = false;
         },
       });
   }
 
+  /** True when the given review belongs to someone other than the current user. */
+  private isOtherUsersReview(review: VendorReview): boolean {
+    return !this.vendor?.myReviewId || review.id !== this.vendor.myReviewId;
+  }
+
   startEdit(review: VendorReview): void {
+    if (this.isAdmin && this.isOtherUsersReview(review)) {
+      const ref = this.dialog.open(ConfirmDialogComponent, {
+        data: {
+          title: 'Edit another user\u2019s review?',
+          body: `You are about to use admin rights to edit ${review.authorDisplayName}\u2019s review \u2014 not your own. Are you sure?`,
+          confirmText: 'Edit Review',
+          cancelText: 'Cancel',
+          confirmColor: 'warn',
+        },
+      });
+      ref.afterClosed().subscribe(confirmed => {
+        if (confirmed === true) {
+          this.beginEdit(review);
+        }
+      });
+    } else {
+      this.beginEdit(review);
+    }
+  }
+
+  private beginEdit(review: VendorReview): void {
     this.editingReviewId = review.id;
     this.editReviewForm.setValue({ reviewText: review.reviewText ?? '' });
   }
@@ -206,9 +250,30 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.isAdmin && this.isOtherUsersReview(review)) {
+      const ref = this.dialog.open(ConfirmDialogComponent, {
+        data: {
+          title: 'Save changes to another user\u2019s review?',
+          body: `You are about to save changes to ${review.authorDisplayName}\u2019s review using admin rights. Are you sure?`,
+          confirmText: 'Save',
+          cancelText: 'Cancel',
+          confirmColor: 'warn',
+        },
+      });
+      ref.afterClosed().subscribe(confirmed => {
+        if (confirmed === true) {
+          this.performSaveEdit(review, reviewText);
+        }
+      });
+    } else {
+      this.performSaveEdit(review, reviewText);
+    }
+  }
+
+  private performSaveEdit(review: VendorReview, reviewText: string): void {
     this.saving = true;
     this.error = null;
-    this.vendorsService.updateReview(this.vendor.id, review.id, { reviewText }).subscribe({
+    this.vendorsService.updateReview(this.vendor!.id, review.id, { reviewText }).subscribe({
       next: () => {
         this.saving = false;
         this.cancelEdit();
@@ -226,14 +291,23 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const isAdminOverride = this.isAdmin && this.isOtherUsersReview(review);
     const ref = this.dialog.open(ConfirmDialogComponent, {
-      data: {
-        title: 'Delete review?',
-        body: 'This review will be permanently deleted. This action cannot be undone.',
-        confirmText: 'Delete',
-        cancelText: 'Cancel',
-        confirmColor: 'warn',
-      },
+      data: isAdminOverride
+        ? {
+            title: 'Delete another user\u2019s review?',
+            body: `You are about to use admin rights to delete ${review.authorDisplayName}\u2019s review \u2014 not your own. This action cannot be undone. Are you sure?`,
+            confirmText: 'Delete Review',
+            cancelText: 'Cancel',
+            confirmColor: 'warn',
+          }
+        : {
+            title: 'Delete review?',
+            body: 'This review will be permanently deleted. This action cannot be undone.',
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            confirmColor: 'warn',
+          },
     });
 
     ref.afterClosed().subscribe(confirmed => {
