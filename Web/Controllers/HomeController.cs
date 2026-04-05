@@ -55,7 +55,7 @@ namespace Web.Controllers
         }
 
         /// <summary>
-        /// Updates the properties of a home. Committee role can
+        /// Updates the properties of a home. Administrator role can
         /// do this for any home, but Resident role can only do this
         /// for their owned homes.
         /// </summary>
