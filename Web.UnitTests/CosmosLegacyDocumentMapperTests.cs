@@ -196,4 +196,165 @@ public sealed class CosmosLegacyDocumentMapperTests
         CosmosLegacyDocumentMapper.MergeHomeIntoDocument(doc, home);
         Assert.Equal("keep-me", doc.Value<string>("UserUniqueId"));
     }
+
+    // ── Committee round-trip tests ───────────────────────────────
+
+    [Fact]
+    public void ToCommittee_reads_basic_fields()
+    {
+        var doc = JObject.Parse(@"{
+            ""id"": ""board"",
+            ""CommitteeEmail"": ""board@cohad.org"",
+            ""DisplayName"": ""Board"",
+            ""Description"": ""The board."",
+            ""DisplayOrder"": 1,
+            ""ManagementRole"": ""Board"",
+            ""Members"": []
+        }");
+
+        var committee = CosmosLegacyDocumentMapper.ToCommittee(doc);
+
+        Assert.Equal("board", committee.Id);
+        Assert.Equal("board@cohad.org", committee.CommitteeEmail);
+        Assert.Equal("Board", committee.DisplayName);
+        Assert.Equal("The board.", committee.Description);
+        Assert.Equal(1, committee.DisplayOrder);
+        Assert.Equal(User.Role.Board, committee.ManagementRole);
+        Assert.Empty(committee.Members);
+    }
+
+    [Fact]
+    public void ToCommittee_parses_member_guids_stored_as_strings()
+    {
+        // Guids are serialized as strings in Cosmos JSON — this is the exact
+        // format produced by ToCommitteeDocument via JArray.FromObject().
+        var memberId = Guid.NewGuid();
+        var residentId = Guid.NewGuid();
+        var doc = JObject.Parse($@"{{
+            ""id"": ""social"",
+            ""DisplayName"": ""Social"",
+            ""Members"": [
+                {{
+                    ""Id"": ""{memberId}"",
+                    ""ResidentId"": ""{residentId}"",
+                    ""Title"": ""Chair"",
+                    ""Bio"": ""Likes parties."",
+                    ""ReceivesForwardedEmail"": true,
+                    ""PhotoOffsetY"": 30,
+                    ""DisplayOrder"": 1
+                }}
+            ]
+        }}");
+
+        var committee = CosmosLegacyDocumentMapper.ToCommittee(doc);
+
+        Assert.Single(committee.Members);
+        var member = committee.Members[0];
+        Assert.Equal(memberId, member.Id);
+        Assert.Equal(residentId, member.ResidentId);
+        Assert.Equal("Chair", member.Title);
+        Assert.Equal("Likes parties.", member.Bio);
+        Assert.True(member.ReceivesForwardedEmail);
+        Assert.Equal(30, member.PhotoOffsetY);
+        Assert.Equal(1, member.DisplayOrder);
+    }
+
+    [Fact]
+    public void ToCommittee_handles_null_and_missing_member_fields()
+    {
+        var doc = JObject.Parse(@"{
+            ""id"": ""test"",
+            ""Members"": [
+                {
+                    ""Id"": null,
+                    ""Title"": null
+                }
+            ]
+        }");
+
+        var committee = CosmosLegacyDocumentMapper.ToCommittee(doc);
+
+        Assert.Single(committee.Members);
+        var member = committee.Members[0];
+        Assert.Equal(Guid.Empty, member.Id);
+        Assert.Equal(Guid.Empty, member.ResidentId);
+        Assert.Null(member.Title);
+        Assert.False(member.ReceivesForwardedEmail);
+        Assert.Equal(50, member.PhotoOffsetY);
+        Assert.Equal(0, member.DisplayOrder);
+    }
+
+    [Fact]
+    public void ToCommittee_handles_missing_Members_array()
+    {
+        var doc = JObject.Parse(@"{ ""id"": ""empty"" }");
+
+        var committee = CosmosLegacyDocumentMapper.ToCommittee(doc);
+
+        Assert.NotNull(committee.Members);
+        Assert.Empty(committee.Members);
+    }
+
+    [Fact]
+    public void ToCommitteeDocument_roundtrips_through_ToCommittee()
+    {
+        var memberId = Guid.NewGuid();
+        var residentId = Guid.NewGuid();
+        var syncTime = new DateTime(2026, 3, 15, 10, 0, 0, DateTimeKind.Utc);
+
+        var original = new Committee
+        {
+            Id = "garden",
+            CommitteeEmail = "garden@cohad.org",
+            DisplayName = "Garden Club",
+            Description = "Plants and stuff.",
+            DisplayOrder = 3,
+            ManagementRole = User.Role.GardenClub,
+            GraphMessageRuleId = "rule-123",
+            LastSyncedUtc = syncTime,
+            LastSyncStatus = "Success",
+            LastSyncError = null,
+            Members = new List<CommitteeMember>
+            {
+                new CommitteeMember
+                {
+                    Id = memberId,
+                    ResidentId = residentId,
+                    Title = "Chair",
+                    Bio = "Green thumb.",
+                    PhotoBlobPath = "committees/garden/photo.jpg",
+                    PhotoContentType = "image/jpeg",
+                    ReceivesForwardedEmail = true,
+                    PhotoOffsetY = 25,
+                    DisplayOrder = 0
+                }
+            }
+        };
+
+        var doc = CosmosLegacyDocumentMapper.ToCommitteeDocument(original);
+        var roundTripped = CosmosLegacyDocumentMapper.ToCommittee(doc);
+
+        Assert.Equal(original.Id, roundTripped.Id);
+        Assert.Equal(original.CommitteeEmail, roundTripped.CommitteeEmail);
+        Assert.Equal(original.DisplayName, roundTripped.DisplayName);
+        Assert.Equal(original.Description, roundTripped.Description);
+        Assert.Equal(original.DisplayOrder, roundTripped.DisplayOrder);
+        Assert.Equal(original.ManagementRole, roundTripped.ManagementRole);
+        Assert.Equal(original.GraphMessageRuleId, roundTripped.GraphMessageRuleId);
+        Assert.Equal(original.LastSyncedUtc, roundTripped.LastSyncedUtc);
+        Assert.Equal(original.LastSyncStatus, roundTripped.LastSyncStatus);
+        Assert.Null(roundTripped.LastSyncError);
+
+        Assert.Single(roundTripped.Members);
+        var m = roundTripped.Members[0];
+        Assert.Equal(memberId, m.Id);
+        Assert.Equal(residentId, m.ResidentId);
+        Assert.Equal("Chair", m.Title);
+        Assert.Equal("Green thumb.", m.Bio);
+        Assert.Equal("committees/garden/photo.jpg", m.PhotoBlobPath);
+        Assert.Equal("image/jpeg", m.PhotoContentType);
+        Assert.True(m.ReceivesForwardedEmail);
+        Assert.Equal(25, m.PhotoOffsetY);
+        Assert.Equal(0, m.DisplayOrder);
+    }
 }
