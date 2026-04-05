@@ -56,7 +56,6 @@ export interface ForwardingSyncStatus {
 
 export interface ResidentPickerItem {
   id: string;
-  homeId: string;
   displayName: string;
   email: string | null;
 }

@@ -127,7 +127,6 @@ namespace Web.Controllers
                 .Select(r => new
                 {
                     r.Id,
-                    r.HomeId,
                     DisplayName = $"{r.GivenName} {r.Surname}".Trim(),
                     Email = r.EmailAddresses?
                         .Select(e => e?.Address)
