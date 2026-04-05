@@ -22,7 +22,8 @@ namespace Web.UpdateModels
 
         /// <summary>
         /// Reference to an existing Resident. The resident's display name and email
-        /// are resolved automatically — callers should not send name or email.
+        /// are resolved server-side from this ID. Any name or email fields sent by
+        /// the client are ignored.
         /// </summary>
         public Guid ResidentId { get; set; }
 
