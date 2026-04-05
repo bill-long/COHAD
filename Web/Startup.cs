@@ -312,7 +312,20 @@ namespace Web
                 var key = Configuration["CosmosKey"];
                 var db = Configuration["CosmosDatabase"];
 
-                services.AddSingleton(_ => new CosmosClient(uri, key));
+                services.AddSingleton(_ => new CosmosClient(
+                    uri,
+                    key,
+                    new Microsoft.Azure.Cosmos.CosmosClientOptions
+                    {
+                        ConnectionMode = Microsoft.Azure.Cosmos.ConnectionMode.Direct,
+                        MaxRetryAttemptsOnRateLimitedRequests = 9,
+                        MaxRetryWaitTimeOnRateLimitedRequests = TimeSpan.FromSeconds(30),
+                        CosmosClientTelemetryOptions = new Microsoft.Azure.Cosmos.CosmosClientTelemetryOptions
+                        {
+                            DisableDistributedTracing = false,
+                        },
+                    }
+                ));
                 services.AddScoped<IUserRepository>(sp => new CosmosUserRepository(
                     sp.GetRequiredService<CosmosClient>().GetContainer(db, "Users")
                 ));
