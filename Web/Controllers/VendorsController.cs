@@ -400,7 +400,16 @@ namespace Web.Controllers
             existing.ReviewText = request.ReviewText?.Trim() ?? string.Empty;
             existing.ModifiedUtc = DateTime.UtcNow;
             var saved = await _vendorReviewRepository.UpsertAsync(existing);
-            await WriteAudit(apiUser, vendorId.ToString("D"), "Vendor review", "Updated vendor review.");
+
+            var isAdminOverride = !string.Equals(
+                apiUser.UniqueId,
+                existing.AuthorUniqueId,
+                StringComparison.OrdinalIgnoreCase
+            );
+            var auditAction = isAdminOverride
+                ? $"Admin edited review by {existing.AuthorDisplayName}."
+                : "Updated vendor review.";
+            await WriteAudit(apiUser, vendorId.ToString("D"), "Vendor review", auditAction);
             return Ok(VendorReviewPresentation.FromStorageModel(saved, canEdit: true));
         }
 
@@ -425,7 +434,16 @@ namespace Web.Controllers
             }
 
             await _vendorReviewRepository.DeleteAsync(vendorId, reviewId);
-            await WriteAudit(apiUser, vendorId.ToString("D"), "Vendor review", "Deleted vendor review.");
+
+            var isAdminOverride = !string.Equals(
+                apiUser.UniqueId,
+                existing.AuthorUniqueId,
+                StringComparison.OrdinalIgnoreCase
+            );
+            var auditAction = isAdminOverride
+                ? $"Admin deleted review by {existing.AuthorDisplayName}."
+                : "Deleted vendor review.";
+            await WriteAudit(apiUser, vendorId.ToString("D"), "Vendor review", auditAction);
             return Ok();
         }
 
