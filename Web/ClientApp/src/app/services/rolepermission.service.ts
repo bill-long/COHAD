@@ -3,14 +3,14 @@ export const rolePermissions = {
     manageUsersRoles: ['Administrator'],
     manageHomesRoles: ['Administrator'],
     manageCommitteesRoles: ['Administrator', 'WelcomeCommittee', 'GardenClub', 'Board', 'SocialCommittee', 'SunshineCommittee', 'ArchitecturalCommittee'],
-    manageEmailRoles: ['Administrator', 'WelcomeCommittee', 'GardenClub', 'Board', 'SocialCommittee', 'SunshineCommittee', 'ArchitecturalCommittee'],
+    manageEmailRoles: ['Administrator', 'WelcomeCommittee', 'GardenClub', 'Board', 'SocialCommittee', 'SunshineCommittee'],
     manageEventsRoles: ['Administrator', 'WelcomeCommittee', 'GardenClub', 'Board', 'SocialCommittee', 'SunshineCommittee', 'ArchitecturalCommittee'],
     manageBlogRoles: ['Administrator', 'WelcomeCommittee', 'GardenClub', 'Board', 'SocialCommittee', 'SunshineCommittee', 'ArchitecturalCommittee'],
     manageAuditLogRoles: ['Administrator'],
+    printDirectoryRoles: ['Administrator'],
     sendEmailAsBoard: ['Board'],
     sendEmailAsWelcomeCommittee: ['WelcomeCommittee'],
     sendEmailAsGardenClub: ['GardenClub'],
     sendEmailAsSocialCommittee: ['SocialCommittee'],
-    sendEmailAsSunshineCommittee: ['SunshineCommittee'],
-    sendEmailAsArchitecturalCommittee: ['ArchitecturalCommittee']
+    sendEmailAsSunshineCommittee: ['SunshineCommittee']
 }

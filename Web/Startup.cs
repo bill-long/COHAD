@@ -197,8 +197,7 @@ namespace Web
                 options.AddPolicy("EmailSender", policy => policy.Requirements.Add(
                     new AnyRoleAuthorizationRequirement(
                         User.Role.Administrator, User.Role.Board, User.Role.WelcomeCommittee,
-                        User.Role.GardenClub, User.Role.SocialCommittee, User.Role.SunshineCommittee,
-                        User.Role.ArchitecturalCommittee)));
+                        User.Role.GardenClub, User.Role.SocialCommittee, User.Role.SunshineCommittee)));
 
                 // Any role that can manage at least one committee — used for committee admin endpoints.
                 options.AddPolicy("CommitteeEditor", policy => policy.Requirements.Add(
