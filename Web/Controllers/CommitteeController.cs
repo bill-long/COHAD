@@ -259,6 +259,7 @@ namespace Web.Controllers
             }
 
             // Null Members = no member changes (keep existing); prevents accidental data loss from partial payloads
+            IReadOnlyDictionary<Guid, Resident> resolvedResidents = null;
             if (request.Members == null)
             {
                 if (uploadedPhotos.Count > 0)
@@ -278,7 +279,7 @@ namespace Web.Controllers
                     .Distinct()
                     .ToList();
 
-                var resolvedResidents = requestedResidentIds.Count > 0
+                resolvedResidents = requestedResidentIds.Count > 0
                     ? (await _residentRepository.GetByIdsAsync(requestedResidentIds))
                         .ToDictionary(r => r.Id)
                     : new Dictionary<Guid, Resident>();
@@ -374,7 +375,8 @@ namespace Web.Controllers
 
             await AuditAsync(committee.Id, committee.DisplayName, "Updated committee.");
 
-            var residents = await ResolveResidentsForCommittees(new[] { committee });
+            // Reuse already-resolved residents when available; only query again if Members was null (kept existing).
+            var residents = resolvedResidents ?? await ResolveResidentsForCommittees(new[] { committee });
             return Ok(CommitteeAdmin.FromStorageModel(committee, residents));
         }
 

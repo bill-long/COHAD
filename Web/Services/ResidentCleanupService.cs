@@ -70,8 +70,18 @@ namespace Web.Services
                 }
 
                 // Persist the committee change first, then delete blobs.
-                await _committeeRepository.UpsertAsync(committee);
-                anyModified = true;
+                try
+                {
+                    await _committeeRepository.UpsertAsync(committee);
+                    anyModified = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "Failed to persist committee {CommitteeId} after removing members; skipping blob cleanup for this committee",
+                        committee.Id);
+                    continue;
+                }
 
                 foreach (var blobPath in blobsToDelete)
                 {

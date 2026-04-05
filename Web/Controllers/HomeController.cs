@@ -91,6 +91,8 @@ namespace Web.Controllers
             foreach (var resident in incomingResidents)
             {
                 resident.HomeId = updatedHome.Id;
+                resident.GivenName = resident.GivenName?.Trim();
+                resident.Surname = resident.Surname?.Trim();
 
                 if (resident.ResidentType == Resident.Type.Child)
                 {
