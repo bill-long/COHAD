@@ -309,39 +309,6 @@ public sealed class CommitteeControllerTests
         Assert.Equal(304, ((StatusCodeResult)second).StatusCode);
     }
 
-    [Fact]
-    public async Task GetByKey_returns_NotFound_for_missing_committee()
-    {
-        var mockRepo = new Mock<ICommitteeRepository>();
-        mockRepo.Setup(r => r.GetByIdAsync("missing")).ReturnsAsync((Committee)null);
-
-        var c = CreateController(committeeRepo: mockRepo.Object);
-        var result = await c.GetByKey("missing");
-
-        Assert.IsType<NotFoundResult>(result);
-    }
-
-    [Fact]
-    public async Task GetByKey_returns_committee_card_without_email_or_homeId()
-    {
-        var committee = SampleCommittee();
-        var mockRepo = new Mock<ICommitteeRepository>();
-        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
-
-        var c = CreateController(committeeRepo: mockRepo.Object);
-        var result = await c.GetByKey("board");
-
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var card = Assert.IsType<CommitteeCard>(ok.Value);
-        Assert.Equal("Board", card.DisplayName);
-        Assert.Equal(2, card.MemberCount);
-        Assert.Equal(2, card.Members.Count);
-        // Public view should not expose email or homeId — check that CommitteeMemberCard doesn't have those
-        var json = JsonSerializer.Serialize(card.Members[0], WebJsonOptions);
-        Assert.DoesNotContain("\"email\"", json);
-        Assert.DoesNotContain("\"homeId\"", json);
-    }
-
     // ──────────────────────────────────────────────
     // Admin Update — photo handling
     // ──────────────────────────────────────────────
@@ -992,30 +959,6 @@ public sealed class CommitteeControllerTests
 
         Assert.False(card.HasPhoto);
         Assert.Null(card.PhotoDownloadUrl);
-    }
-
-    [Fact]
-    public async Task GetByKey_returns_photo_urls_that_match_controller_route()
-    {
-        var committee = SampleCommittee();
-        committee.Members[0].PhotoBlobPath = "committees/board/aaaaaaaa.jpg";
-        committee.Members[0].PhotoContentType = "image/jpeg";
-
-        var mockRepo = new Mock<ICommitteeRepository>();
-        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
-
-        var c = CreateController(committeeRepo: mockRepo.Object);
-        var result = await c.GetByKey("board");
-
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var card = Assert.IsType<CommitteeCard>(ok.Value);
-        var memberWithPhoto = card.Members.First(m => m.Id == Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
-        Assert.True(memberWithPhoto.HasPhoto);
-        // The URL must be routable to the controller's [HttpGet("{key}/members/{memberId:guid}/photo")] endpoint
-        Assert.Equal(
-            "/api/committee/board/members/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/photo",
-            memberWithPhoto.PhotoDownloadUrl
-        );
     }
 
     // ──────────────────────────────────────────────

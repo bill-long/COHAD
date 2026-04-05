@@ -39,12 +39,6 @@ export interface VendorFlag {
   createdUtc: string;
 }
 
-export interface VendorFlaggedSummary {
-  vendorId: string;
-  vendorName: string;
-  pendingFlagCount: number;
-}
-
 export interface VendorFlagNotification {
   flagId: string;
   vendorId: string;
@@ -285,10 +279,6 @@ export class VendorsService {
 
   dismissFlag(vendorId: string, flagId: string): Observable<void> {
     return this.httpClient.delete<void>(`api/vendors/${vendorId}/flags/${flagId}`);
-  }
-
-  getFlaggedVendors(): Observable<VendorFlaggedSummary[]> {
-    return this.httpClient.get<VendorFlaggedSummary[]>('api/vendors/flagged');
   }
 
   getPendingFlagNotifications(): Observable<VendorFlagNotification[]> {

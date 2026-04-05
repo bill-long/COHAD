@@ -83,18 +83,6 @@ namespace Web.Controllers
             return _listCache.OkWithETag(payload, Request, Response);
         }
 
-        [HttpGet("{key}")]
-        [AllowAnonymous]
-        public async Task<IActionResult> GetByKey(string key)
-        {
-            var committee = await _committeeRepository.GetByIdAsync(key);
-            if (committee == null)
-                return NotFound();
-
-            var residents = await ResolveResidentsForCommittees(new[] { committee });
-            return Ok(CommitteeCard.FromStorageModel(committee, residents));
-        }
-
         [HttpGet("{key}/members/{memberId:guid}/photo")]
         [HttpHead("{key}/members/{memberId:guid}/photo")]
         [AllowAnonymous]
