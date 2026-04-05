@@ -56,21 +56,12 @@ namespace Web.Services
                 if (toRemove.Count == 0)
                     continue;
 
+                var blobsToDelete = new List<string>();
+
                 foreach (var member in toRemove)
                 {
                     if (!string.IsNullOrWhiteSpace(member.PhotoBlobPath))
-                    {
-                        try
-                        {
-                            await _documentFileStore.DeleteAsync(member.PhotoBlobPath);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex,
-                                "Failed to delete photo blob {BlobPath} for removed committee member {MemberId}",
-                                member.PhotoBlobPath, member.Id);
-                        }
-                    }
+                        blobsToDelete.Add(member.PhotoBlobPath);
 
                     committee.Members.Remove(member);
                     _logger.LogInformation(
@@ -78,8 +69,23 @@ namespace Web.Services
                         member.Id, member.ResidentId, committee.Id);
                 }
 
+                // Persist the committee change first, then delete blobs.
                 await _committeeRepository.UpsertAsync(committee);
                 anyModified = true;
+
+                foreach (var blobPath in blobsToDelete)
+                {
+                    try
+                    {
+                        await _documentFileStore.DeleteAsync(blobPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "Failed to delete photo blob {BlobPath} after committee member removal",
+                            blobPath);
+                    }
+                }
             }
 
             if (anyModified)

@@ -32,7 +32,8 @@ public sealed class HomeControllerUpdateTests
                 Mock.Of<ICommitteeRepository>(),
                 new CommitteeListCache(Mock.Of<ICommitteeRepository>(), new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())),
                 Mock.Of<IDocumentFileStore>(),
-                Mock.Of<ILogger<ResidentCleanupService>>()))
+                Mock.Of<ILogger<ResidentCleanupService>>()),
+            Mock.Of<ILogger<HomeController>>())
         {
             ControllerContext = new ControllerContext
             {

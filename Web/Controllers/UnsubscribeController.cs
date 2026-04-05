@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -21,15 +22,18 @@ namespace Web.Controllers
         private readonly IUnsubscribeTokenService _tokenService;
         private readonly IHomeRepository _homeRepository;
         private readonly IResidentRepository _residentRepository;
+        private readonly ILogger<UnsubscribeController> _logger;
 
         public UnsubscribeController(
             IUnsubscribeTokenService tokenService,
             IHomeRepository homeRepository,
-            IResidentRepository residentRepository)
+            IResidentRepository residentRepository,
+            ILogger<UnsubscribeController> logger)
         {
             _tokenService = tokenService;
             _homeRepository = homeRepository;
             _residentRepository = residentRepository;
+            _logger = logger;
         }
 
         /// <summary>
@@ -157,8 +161,18 @@ namespace Web.Controllers
                 {
                     await _homeRepository.UpsertAsync(home);
                     // Save all residents that might have had email preferences modified.
-                    foreach (var resident in residents)
-                        await _residentRepository.UpsertAsync(resident);
+                    // If a resident upsert fails after the home save, log the error but
+                    // still return the result — the home update was already committed.
+                    try
+                    {
+                        foreach (var resident in residents)
+                            await _residentRepository.UpsertAsync(resident);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to persist resident preference updates for home {HomeId} after home save succeeded", payload.HomeId);
+                    }
+
                     return result;
                 }
                 catch (ConcurrencyConflictException)

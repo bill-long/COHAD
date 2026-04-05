@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Web.Controllers;
 using Web.Models;
@@ -19,7 +20,7 @@ namespace Web.UnitTests
 
         private UnsubscribeController CreateController()
         {
-            return new UnsubscribeController(_tokenService.Object, _homeRepository.Object, _residentRepository.Object);
+            return new UnsubscribeController(_tokenService.Object, _homeRepository.Object, _residentRepository.Object, Mock.Of<ILogger<UnsubscribeController>>());
         }
 
         private static Resident CreateTestResident(Guid homeId, string email, bool allOptedIn = true)

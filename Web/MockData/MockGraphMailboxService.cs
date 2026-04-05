@@ -27,7 +27,7 @@ namespace Web.MockData
                 .Where(m => m.ReceivesForwardedEmail)
                 .Select(m => residents.GetValueOrDefault(m.ResidentId))
                 .Where(r => r != null)
-                .Select(r => r.EmailAddresses?.FirstOrDefault()?.Address)
+                .Select(r => r.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))?.Address)
                 .Where(e => !string.IsNullOrWhiteSpace(e))
                 .ToList() ?? new();
 

@@ -341,7 +341,7 @@ export class EditHomeComponent implements OnInit, OnChanges {
     }
 
     this.homeCopy.residents.push({
-      id: '',
+      id: '00000000-0000-0000-0000-000000000000',
       homeId: this.homeCopy.id,
       givenName: '',
       surname: '',

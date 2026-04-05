@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
@@ -21,19 +22,22 @@ namespace Web.Controllers
         private readonly IResidentRepository _residentRepository;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly ResidentCleanupService _residentCleanup;
+        private readonly ILogger<HomeController> _logger;
 
         public HomeController(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
             IAuditLogRepository auditLogRepository,
-            ResidentCleanupService residentCleanup)
+            ResidentCleanupService residentCleanup,
+            ILogger<HomeController> logger)
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
             _residentRepository = residentRepository;
             _auditLogRepository = auditLogRepository;
             _residentCleanup = residentCleanup;
+            _logger = logger;
         }
 
         /// <summary>
@@ -81,7 +85,7 @@ namespace Web.Controllers
 
             // Validate and sanitize incoming residents.
             var incomingResidents = (updatedHome.Residents ?? new List<Resident>())
-                .Where(r => !string.IsNullOrEmpty(r.GivenName))
+                .Where(r => !string.IsNullOrWhiteSpace(r.GivenName?.Trim()))
                 .ToList();
 
             foreach (var resident in incomingResidents)
@@ -128,29 +132,38 @@ namespace Web.Controllers
             }
 
             // Home saved — now apply resident creates/updates/deletes.
-            foreach (var incoming in incomingResidents)
+            // If any resident operation fails after the home save, log the error
+            // but still return Ok — the home update was already committed.
+            try
             {
-                if (incoming.Id == Guid.Empty)
+                foreach (var incoming in incomingResidents)
                 {
-                    incoming.Id = Guid.NewGuid();
-                    await _residentRepository.UpsertAsync(incoming);
+                    if (incoming.Id == Guid.Empty)
+                    {
+                        incoming.Id = Guid.NewGuid();
+                        await _residentRepository.UpsertAsync(incoming);
+                    }
+                    else
+                    {
+                        await _residentRepository.UpsertAsync(incoming);
+                        existingById.Remove(incoming.Id);
+                    }
                 }
-                else
-                {
-                    await _residentRepository.UpsertAsync(incoming);
-                    existingById.Remove(incoming.Id);
-                }
-            }
 
-            var removedResidentIds = new List<Guid>();
-            foreach (var removed in existingById.Values)
+                var removedResidentIds = new List<Guid>();
+                foreach (var removed in existingById.Values)
+                {
+                    await _residentRepository.DeleteAsync(removed.Id);
+                    removedResidentIds.Add(removed.Id);
+                }
+
+                // Cascade: remove deleted residents from any committees they belong to.
+                await _residentCleanup.RemoveFromCommitteesAsync(removedResidentIds);
+            }
+            catch (Exception ex)
             {
-                await _residentRepository.DeleteAsync(removed.Id);
-                removedResidentIds.Add(removed.Id);
+                _logger.LogError(ex, "Failed to apply resident changes for home {HomeId} after home save succeeded", updatedHome.Id);
             }
-
-            // Cascade: remove deleted residents from any committees they belong to.
-            await _residentCleanup.RemoveFromCommitteesAsync(removedResidentIds);
 
             await _auditLogRepository.AddAsync(new NewAuditLogEntry
             {

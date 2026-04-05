@@ -57,9 +57,14 @@ namespace Web.Services.Repositories
                 return new List<Resident>();
             }
 
-            var docIds = idList.Select(id => $"\"{CosmosLegacyDocumentMapper.ResidentEntityDocumentId(id)}\"");
-            var query = new CosmosQueryDefinition(
-                $"SELECT * FROM c WHERE c.id IN ({string.Join(", ", docIds)})");
+            // Parameterized IN clause to avoid injection and query-length issues.
+            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id IN ("
+                + string.Join(", ", idList.Select((_, i) => $"@id{i}")) + ")");
+            for (var i = 0; i < idList.Count; i++)
+            {
+                query = query.WithParameter($"@id{i}", CosmosLegacyDocumentMapper.ResidentEntityDocumentId(idList[i]));
+            }
+
             var iterator = _container.GetItemQueryIterator<JObject>(query);
             var results = new List<Resident>();
             while (iterator.HasMoreResults)
