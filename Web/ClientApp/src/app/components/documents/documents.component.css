@@ -1,195 +1,251 @@
 .documents-page {
-    max-width: 900px;
-    padding: 1.5rem 1rem;
-    box-sizing: border-box;
+  max-width: 900px;
+  padding: 1.5rem 1rem;
+  box-sizing: border-box;
 }
 
 .documents-shell {
-    background: var(--surface-muted);
-    border: 1px solid var(--border-faint);
-    border-radius: 12px;
-    padding: 1.35rem;
-    box-shadow: 0 6px 18px var(--surface-subtle);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-faint);
+  border-radius: 12px;
+  padding: 1.35rem;
+  box-shadow: 0 6px 18px var(--surface-subtle);
 }
 
 .documents-header h1 {
-    margin: 0;
-    font-size: var(--heading-page);
-    font-weight: var(--heading-page-weight);
-    letter-spacing: var(--heading-page-tracking);
+  margin: 0;
+  font-size: var(--heading-page);
+  font-weight: var(--heading-page-weight);
+  letter-spacing: var(--heading-page-tracking);
 }
 
 .documents-header p {
-    margin: 0.5rem 0 1.25rem;
-    color: var(--text-secondary);
+  margin: 0.5rem 0 1.25rem;
+  color: var(--text-secondary);
 }
 
 .loading-state,
 .empty-state {
-    color: var(--text-muted);
-    padding: 0.25rem 0;
+  color: var(--text-muted);
+  padding: 0.25rem 0;
 }
 
 .documents-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
 .document-card {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    border: 1px solid var(--border-faint);
-    background: var(--surface);
-    border-radius: 8px;
-    padding: 0.65rem 0.85rem;
-    transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--border-faint);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  transition:
+    border-color 120ms ease,
+    transform 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .document-card:hover {
-    border-color: var(--border-subtle);
-    transform: translateY(-1px);
-    box-shadow: 0 3px 10px var(--surface-subtle);
+  border-color: var(--border-subtle);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px var(--surface-subtle);
 }
 
 .file-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    border: 0;
-    background: transparent;
-    color: var(--text-primary);
-    cursor: pointer;
-    padding: 0;
-    text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  min-width: 0;
 }
 
 .file-icon {
-    color: var(--text-secondary);
-    font-size: 1.15rem;
-    width: 1.15rem;
-    height: 1.15rem;
+  color: var(--text-secondary);
+  font-size: 1.15rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
 }
 
 .file-link:hover .file-name {
-    text-decoration: underline;
+  text-decoration: underline;
 }
 
 .file-name {
-    font-weight: 500;
-    max-width: 420px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  font-weight: 500;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .file-chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 2.35rem;
-    height: 1.25rem;
-    border-radius: 999px;
-    background: var(--surface-chip);
-    color: var(--text-secondary);
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    padding: 0 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.35rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--surface-chip);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0 0.45rem;
+  flex-shrink: 0;
 }
 
 .document-meta {
-    margin-left: auto;
-    color: var(--text-tertiary);
-    font-size: 0.9rem;
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 0.9rem;
 }
 
 .meta-separator {
-    margin: 0 0.4rem;
-    color: var(--text-separator);
+  margin: 0 0.4rem;
+  color: var(--text-separator);
 }
 
-@media (max-width: 760px) {
-    .document-card {
-        flex-wrap: wrap;
-        align-items: flex-start;
-    }
+@media (max-width: 768px) {
+  .document-card {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
 
-    .document-meta {
-        margin-left: 0;
-    }
+  .document-meta {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .file-chip {
+    display: none;
+  }
+
+  /* Flatten the shell card on mobile — go full-bleed */
+  .documents-shell {
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  /* Reduce page padding */
+  .documents-page {
+    padding: 1rem 0.25rem;
+  }
+
+  /* Reduce folder indent */
+  .folder-documents {
+    padding-left: 0.5rem;
+  }
+
+  /* Flatten document cards to divider style */
+  .document-card {
+    border: none;
+    border-radius: 0;
+    border-top: 1px solid var(--border-faint);
+    padding: 0.65rem 0.25rem;
+    background: none;
+  }
 }
 
 .folder-group {
-    margin-bottom: 1rem;
+  margin-bottom: 1rem;
 }
 
 .folder-header {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    border: 0;
-    background: transparent;
-    color: var(--text-primary);
-    cursor: pointer;
-    padding: 0.35rem 0;
-    font-size: 1rem;
-    font-weight: 600;
-    width: 100%;
-    text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 0.35rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  width: 100%;
+  text-align: left;
 }
 
 .folder-header:hover {
-    color: var(--text-secondary);
+  color: var(--text-secondary);
 }
 
 .folder-toggle-icon {
-    color: var(--text-tertiary);
-    font-size: 1.2rem;
-    width: 1.2rem;
-    height: 1.2rem;
+  color: var(--text-tertiary);
+  font-size: 1.2rem;
+  width: 1.2rem;
+  height: 1.2rem;
 }
 
 .folder-icon {
-    color: var(--text-secondary);
-    font-size: 1.15rem;
-    width: 1.15rem;
-    height: 1.15rem;
+  color: var(--text-secondary);
+  font-size: 1.15rem;
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
 .folder-name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .folder-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.4rem;
-    height: 1.25rem;
-    border-radius: 999px;
-    background: var(--surface-chip);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--surface-chip);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0 0.35rem;
 }
 
 .folder-documents {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-    padding-left: 1.4rem;
-    margin-top: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-left: 1.4rem;
+  margin-top: 0.35rem;
 }
 
 .unfiled-heading {
-    margin: 0 0 0.65rem;
-    font-size: var(--heading-section);
-    font-weight: var(--heading-section-weight);
+  margin: 0 0 0.65rem;
+  font-size: var(--heading-section);
+  font-weight: var(--heading-section-weight);
+}
+
+@media (max-width: 480px) {
+  .documents-page {
+    padding: 0.75rem 0;
+  }
+
+  .folder-documents {
+    padding-left: 0.25rem;
+  }
+
+  .document-card {
+    padding: 0.5rem 0;
+    gap: 0.5rem;
+  }
 }
