@@ -108,6 +108,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
           committee.members = committee.members.filter(m => m.id !== member.id);
           this.pendingPhotos.get(committee.id)?.delete(member.id);
           this.revokePreview(committee.id, member.id);
+          this.residentSearchText.delete(member.id);
           this.filteredResidentsCache.clear();
           this.deletingMember = null;
           this.success = `${member.displayName} removed from ${committee.displayName}.`;
@@ -374,6 +375,9 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       next: ({ committees, residents }) => {
         this.committees = committees ?? [];
         this.allResidents = residents ?? [];
+        this.residentSearchText.clear();
+        this.filteredResidentsCache.clear();
+        this.residentLookupSize = -1;
         this.savedOrder = this.committees.map(c => c.id);
         this.loading = false;
         for (const c of this.committees) {
@@ -383,7 +387,9 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       error: () => {
         this.committees = [];
         this.allResidents = [];
-        this.loading = false;
+        this.residentSearchText.clear();
+        this.filteredResidentsCache.clear();
+        this.residentLookupSize = -1;        this.loading = false;
         this.error = 'Failed to load committees.';
       }
     });
