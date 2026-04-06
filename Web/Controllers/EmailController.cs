@@ -466,13 +466,11 @@ namespace Web.Controllers
 
             foreach (var home in homes)
             {
-                if (
-                    !string.IsNullOrWhiteSpace(home.EmailAddress?.Address)
-                    && !result.ContainsKey(home.EmailAddress.Address)
-                )
-                    result[home.EmailAddress.Address] = new EmailJobRecipient
+                var homeEmail = home.EmailAddress?.Address?.Trim();
+                if (!string.IsNullOrWhiteSpace(homeEmail) && !result.ContainsKey(homeEmail))
+                    result[homeEmail] = new EmailJobRecipient
                     {
-                        Email = home.EmailAddress.Address,
+                        Email = homeEmail,
                         HomeId = home.Id,
                         Status = EmailJobRecipientStatus.Pending,
                     };
@@ -485,10 +483,11 @@ namespace Web.Controllers
                             continue;
                         foreach (var addr in resident.EmailAddresses)
                         {
-                            if (!string.IsNullOrWhiteSpace(addr.Address) && !result.ContainsKey(addr.Address))
-                                result[addr.Address] = new EmailJobRecipient
+                            var email = addr?.Address?.Trim();
+                            if (!string.IsNullOrWhiteSpace(email) && !result.ContainsKey(email))
+                                result[email] = new EmailJobRecipient
                                 {
-                                    Email = addr.Address,
+                                    Email = email,
                                     HomeId = home.Id,
                                     Status = EmailJobRecipientStatus.Pending,
                                 };
