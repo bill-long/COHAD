@@ -181,6 +181,36 @@
   color: var(--text-muted);
 }
 
+/* Delivery status badges */
+.delivery-delivered {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.delivery-bounced {
+  background: var(--error-bg, #fde8e8);
+  color: var(--error);
+}
+
+.delivery-deferred {
+  background: #fef3e0;
+  color: #e65100;
+}
+
+.delivery-spam {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.delivery-rejected {
+  background: var(--error-bg, #fde8e8);
+  color: var(--error);
+}
+
+.delivery-unknown {
+  color: var(--text-muted);
+}
+
 /* Recipients table */
 .recipients-table {
   width: 100%;
@@ -210,6 +240,9 @@
 .col-r-status {
   width: 100px;
 }
+.col-delivery {
+  width: 100px;
+}
 .col-error {
   width: 250px;
 }
@@ -236,6 +269,7 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  .col-delivery,
   .col-error,
   .col-sent-time {
     display: none;

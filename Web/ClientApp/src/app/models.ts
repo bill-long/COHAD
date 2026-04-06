@@ -150,6 +150,7 @@ export interface TestRecipientOption {
 
 export type EmailJobStatus = 'Queued' | 'InProgress' | 'Completed' | 'PartiallyCompleted' | 'Failed' | 'Cancelled';
 export type EmailJobRecipientStatus = 'Pending' | 'Sent' | 'Failed';
+export type DeliveryStatus = 'Unknown' | 'Delivered' | 'Bounced' | 'Deferred' | 'SpamReport' | 'Rejected';
 
 export interface EmailJobSummary {
   id: string;
@@ -176,6 +177,9 @@ export interface EmailJobRecipientDetail {
   status: EmailJobRecipientStatus;
   error: string | null;
   sentUtc: string | null;
+  deliveryStatus: DeliveryStatus;
+  deliveryStatusUpdatedUtc: string | null;
+  provider: string | null;
 }
 
 export interface EmailJobProgress {

@@ -409,6 +409,11 @@ namespace Web
 
             // Retention cleanup (invoked on submission; best-effort)
             services.AddScoped<EmailJobCleanupService>();
+
+            // SendGrid webhook verification and delivery tracking
+            services.Configure<Configuration.SendGridOptions>(Configuration.GetSection("SendGrid"));
+            services.AddSingleton<ISendGridWebhookVerifier, SendGridWebhookVerifier>();
+            services.AddScoped<IEmailDeliveryActionService, EmailDeliveryActionService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { EmailJobDetail, EmailJobStatus, EmailJobRecipientStatus } from 'src/app/models';
+import { DeliveryStatus, EmailJobDetail, EmailJobStatus, EmailJobRecipientStatus } from 'src/app/models';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
@@ -216,6 +216,32 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
         return 'status-queued';
       default:
         return '';
+    }
+  }
+
+  deliveryStatusClass(status: DeliveryStatus): string {
+    switch (status) {
+      case 'Delivered':
+        return 'delivery-delivered';
+      case 'Bounced':
+        return 'delivery-bounced';
+      case 'Deferred':
+        return 'delivery-deferred';
+      case 'SpamReport':
+        return 'delivery-spam';
+      case 'Rejected':
+        return 'delivery-rejected';
+      default:
+        return '';
+    }
+  }
+
+  deliveryStatusLabel(status: DeliveryStatus): string {
+    switch (status) {
+      case 'SpamReport':
+        return 'Spam';
+      default:
+        return status;
     }
   }
 }

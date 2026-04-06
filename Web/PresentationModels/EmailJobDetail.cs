@@ -62,6 +62,9 @@ namespace Web.PresentationModels
                             Status = r.Status,
                             Error = r.Error,
                             SentUtc = r.SentUtc,
+                            DeliveryStatus = r.DeliveryStatus,
+                            DeliveryStatusUpdatedUtc = r.DeliveryStatusUpdatedUtc,
+                            Provider = r.Provider,
                         })
                         .ToList()
                     ?? new(),
@@ -78,5 +81,11 @@ namespace Web.PresentationModels
         public string Error { get; set; }
 
         public DateTime? SentUtc { get; set; }
+
+        public DeliveryStatus DeliveryStatus { get; set; }
+
+        public DateTime? DeliveryStatusUpdatedUtc { get; set; }
+
+        public string Provider { get; set; }
     }
 }
