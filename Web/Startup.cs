@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Amazon.SimpleEmailV2;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -405,13 +406,53 @@ namespace Web
             services.AddSingleton<EmailJobProcessor>();
             services.AddHostedService(sp => sp.GetRequiredService<EmailJobProcessor>());
 
+            // Email transport abstraction (SMTP / SES per-recipient routing)
+            services.Configure<SesOptions>(Configuration.GetSection("Ses"));
+            services.AddSingleton<IEmailTransport>(sp =>
+            {
+                var smtpOptions = new SmtpOptions
+                {
+                    SmtpHost = Configuration["SmtpHost"],
+                    SmtpUser = Configuration["SmtpUser"],
+                    SmtpPassword = Configuration["SmtpPassword"],
+                };
+                var logProtocol = Configuration.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
+                return new SmtpEmailTransport(
+                    smtpOptions,
+                    logProtocol,
+                    sp.GetRequiredService<ILogger<SmtpEmailTransport>>()
+                );
+            });
+
+            var sesOptions = Configuration.GetSection("Ses").Get<SesOptions>() ?? new SesOptions();
+            if (sesOptions.Enabled)
+            {
+                services.AddSingleton<IAmazonSimpleEmailServiceV2>(sp =>
+                {
+                    var region = Amazon.RegionEndpoint.GetBySystemName(sesOptions.Region);
+                    return new Amazon.SimpleEmailV2.AmazonSimpleEmailServiceV2Client(region);
+                });
+                services.AddSingleton<SesEmailTransport>();
+            }
+
+            services.AddSingleton<EmailTransportRouter>(sp =>
+            {
+                var smtp = sp.GetRequiredService<IEmailTransport>();
+                // When SES is disabled, use SMTP as the SES transport fallback (router always returns SMTP)
+                var ses = sesOptions.Enabled ? (IEmailTransport)sp.GetRequiredService<SesEmailTransport>() : smtp;
+                return new EmailTransportRouter(smtp, ses, sp.GetRequiredService<IOptions<SesOptions>>());
+            });
+
             // Retention cleanup (invoked on submission; best-effort)
             services.AddScoped<EmailJobCleanupService>();
 
-            // SendGrid webhook verification and delivery tracking
+            // Webhook verification and delivery tracking
             services.Configure<SendGridOptions>(Configuration.GetSection("SendGrid"));
             services.AddSingleton<ISendGridWebhookVerifier, SendGridWebhookVerifier>();
             services.AddScoped<IEmailDeliveryActionService, EmailDeliveryActionService>();
+
+            // HttpClientFactory for SNS signature certificate download
+            services.AddHttpClient();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

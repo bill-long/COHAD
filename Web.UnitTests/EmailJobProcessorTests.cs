@@ -10,7 +10,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
+using Web.Configuration;
 using Web.Hubs;
 using Web.Models;
 using Web.Services;
@@ -72,10 +74,26 @@ public sealed class EmailJobProcessorTests
 
         var config = new ConfigurationBuilder().AddInMemoryCollection(defaults).Build();
 
+        var sesOpts = Options.Create(new SesOptions());
+        var mockSmtp = new Mock<IEmailTransport>();
+        mockSmtp.Setup(t => t.ProviderName).Returns("SendGrid");
+        mockSmtp
+            .Setup(t =>
+                t.SendAsync(
+                    It.IsAny<MimeKit.MimeMessage>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
+        var router = new EmailTransportRouter(mockSmtp.Object, mockSmtp.Object, sesOpts);
+
         return new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
             _tokenService.Object,
+            router,
             hubContext.Object,
             config,
             env.Object,
@@ -485,10 +503,25 @@ public sealed class EmailJobProcessorTests
                 .Build();
 
             var queue = new EmailJobQueue();
+            var sesOpts2 = Options.Create(new SesOptions());
+            var mockSmtp2 = new Mock<IEmailTransport>();
+            mockSmtp2.Setup(t => t.ProviderName).Returns("SendGrid");
+            mockSmtp2
+                .Setup(t =>
+                    t.SendAsync(
+                        It.IsAny<MimeKit.MimeMessage>(),
+                        It.IsAny<string>(),
+                        It.IsAny<string>(),
+                        It.IsAny<CancellationToken>()
+                    )
+                )
+                .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
+            var router2 = new EmailTransportRouter(mockSmtp2.Object, mockSmtp2.Object, sesOpts2);
             var processor = new EmailJobProcessor(
                 queue,
                 scopeFactory.Object,
                 _tokenService.Object,
+                router2,
                 hubContext.Object,
                 config,
                 env.Object,
