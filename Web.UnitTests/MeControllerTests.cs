@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -29,18 +31,25 @@ public sealed class MeControllerTests
     private static MeController CreateController(
         IUserRepository userRepository,
         IHomeRepository homeRepository,
-        IEmailService emailService,
+        IEmailJobRepository? emailJobRepository = null,
+        IDocumentFileStore? fileStore = null,
+        EmailJobQueue? emailJobQueue = null,
         IResidentRepository? residentRepository = null,
         string nameId = "u1",
         string idp = "google.com"
     )
     {
         residentRepository ??= CreateDefaultResidentMock();
+        emailJobRepository ??= Mock.Of<IEmailJobRepository>();
+        fileStore ??= Mock.Of<IDocumentFileStore>();
+        emailJobQueue ??= new EmailJobQueue();
         var controller = new MeController(
             userRepository,
             homeRepository,
             residentRepository,
-            emailService,
+            emailJobRepository,
+            fileStore,
+            emailJobQueue,
             Mock.Of<ILogger<MeController>>()
         )
         {
@@ -89,8 +98,7 @@ public sealed class MeControllerTests
         var homes = new Mock<IHomeRepository>();
         homes.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync(new List<Home>());
 
-        var email = new Mock<IEmailService>();
-        var controller = CreateController(users.Object, homes.Object, email.Object);
+        var controller = CreateController(users.Object, homes.Object);
 
         var getTask = controller.Get();
         var completed = await Task.WhenAny(getTask, Task.Delay(250));
@@ -119,8 +127,7 @@ public sealed class MeControllerTests
         users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
 
         var homes = new Mock<IHomeRepository>();
-        var email = new Mock<IEmailService>();
-        var controller = CreateController(users.Object, homes.Object, email.Object);
+        var controller = CreateController(users.Object, homes.Object);
 
         var result = await controller.Get();
 
@@ -150,8 +157,7 @@ public sealed class MeControllerTests
         users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
 
         var homes = new Mock<IHomeRepository>();
-        var email = new Mock<IEmailService>();
-        var controller = CreateController(users.Object, homes.Object, email.Object);
+        var controller = CreateController(users.Object, homes.Object);
 
         var result = await controller.Get();
 
@@ -221,8 +227,7 @@ public sealed class MeControllerTests
                 }
             );
 
-        var email = new Mock<IEmailService>();
-        var controller = CreateController(users.Object, homes.Object, email.Object);
+        var controller = CreateController(users.Object, homes.Object);
 
         var result = await controller.Get();
 
@@ -281,8 +286,7 @@ public sealed class MeControllerTests
                 }
             );
 
-        var email = new Mock<IEmailService>();
-        var controller = CreateController(users.Object, homes.Object, email.Object);
+        var controller = CreateController(users.Object, homes.Object);
 
         var result = await controller.Get();
 
@@ -290,5 +294,385 @@ public sealed class MeControllerTests
         Assert.Single(result.OwnedHomes);
         homes.Verify(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()), Times.Once);
         users.Verify(r => r.GetAllAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task ResolveAdminRecipients_matches_by_email()
+    {
+        var homeId = Guid.NewGuid();
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = "admin1",
+                        GivenName = "Admin",
+                        Surname = "One",
+                        Emails = "admin@example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid> { homeId },
+                    },
+                }
+            );
+
+        var homes = new Mock<IHomeRepository>();
+        homes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(new List<Home> { new Home { Id = homeId } });
+
+        var residents = new Mock<IResidentRepository>();
+        residents
+            .Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(
+                new List<Resident>
+                {
+                    new Resident
+                    {
+                        Id = Guid.NewGuid(),
+                        HomeId = homeId,
+                        GivenName = "Different",
+                        Surname = "Name",
+                        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "admin@example.com" } },
+                    },
+                }
+            );
+
+        var controller = CreateController(users.Object, homes.Object, residentRepository: residents.Object);
+
+        var result = await controller.ResolveAdminRecipients();
+
+        Assert.Single(result);
+        Assert.Equal("admin@example.com", result[0].Email);
+        Assert.Equal(homeId, result[0].HomeId);
+    }
+
+    [Fact]
+    public async Task ResolveAdminRecipients_falls_back_to_name_match()
+    {
+        var homeId = Guid.NewGuid();
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = "admin1",
+                        GivenName = "Admin",
+                        Surname = "One",
+                        Emails = "admin@example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid> { homeId },
+                    },
+                }
+            );
+
+        var homes = new Mock<IHomeRepository>();
+        homes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(new List<Home> { new Home { Id = homeId } });
+
+        var residents = new Mock<IResidentRepository>();
+        residents
+            .Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(
+                new List<Resident>
+                {
+                    new Resident
+                    {
+                        Id = Guid.NewGuid(),
+                        HomeId = homeId,
+                        GivenName = "Admin",
+                        Surname = "One",
+                        EmailAddresses = new List<EmailAddress>
+                        {
+                            new EmailAddress { Address = "resident@example.com" },
+                        },
+                    },
+                }
+            );
+
+        var controller = CreateController(users.Object, homes.Object, residentRepository: residents.Object);
+
+        var result = await controller.ResolveAdminRecipients();
+
+        Assert.Single(result);
+        Assert.Equal("resident@example.com", result[0].Email);
+    }
+
+    [Fact]
+    public async Task ResolveAdminRecipients_skips_admin_with_no_matching_resident()
+    {
+        var homeId = Guid.NewGuid();
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = "admin1",
+                        GivenName = "Admin",
+                        Surname = "One",
+                        Emails = "admin@example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid> { homeId },
+                    },
+                }
+            );
+
+        var homes = new Mock<IHomeRepository>();
+        homes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(new List<Home> { new Home { Id = homeId } });
+
+        var residents = new Mock<IResidentRepository>();
+        residents
+            .Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(
+                new List<Resident>
+                {
+                    new Resident
+                    {
+                        Id = Guid.NewGuid(),
+                        HomeId = homeId,
+                        GivenName = "Someone",
+                        Surname = "Else",
+                        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "other@example.com" } },
+                    },
+                }
+            );
+
+        var controller = CreateController(users.Object, homes.Object, residentRepository: residents.Object);
+
+        var result = await controller.ResolveAdminRecipients();
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task ResolveAdminRecipients_skips_admin_with_no_homes()
+    {
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = "admin1",
+                        GivenName = "Admin",
+                        Surname = "One",
+                        Emails = "admin@example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid>(),
+                    },
+                }
+            );
+
+        var homes = new Mock<IHomeRepository>();
+        homes.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync(new List<Home>());
+
+        var controller = CreateController(users.Object, homes.Object);
+
+        var result = await controller.ResolveAdminRecipients();
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task ResolveAdminRecipients_deduplicates_emails()
+    {
+        var homeId1 = Guid.NewGuid();
+        var homeId2 = Guid.NewGuid();
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = "admin1",
+                        GivenName = "Admin",
+                        Surname = "One",
+                        Emails = "shared@example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid> { homeId1 },
+                    },
+                    new User
+                    {
+                        UniqueId = "admin2",
+                        GivenName = "Admin",
+                        Surname = "Two",
+                        Emails = "shared@example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid> { homeId2 },
+                    },
+                }
+            );
+
+        var homes = new Mock<IHomeRepository>();
+        homes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(
+                new List<Home>
+                {
+                    new Home { Id = homeId1 },
+                    new Home { Id = homeId2 },
+                }
+            );
+
+        var residents = new Mock<IResidentRepository>();
+        residents
+            .Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(
+                new List<Resident>
+                {
+                    new Resident
+                    {
+                        Id = Guid.NewGuid(),
+                        HomeId = homeId1,
+                        GivenName = "Admin",
+                        Surname = "One",
+                        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "shared@example.com" } },
+                    },
+                    new Resident
+                    {
+                        Id = Guid.NewGuid(),
+                        HomeId = homeId2,
+                        GivenName = "Admin",
+                        Surname = "Two",
+                        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "shared@example.com" } },
+                    },
+                }
+            );
+
+        var controller = CreateController(users.Object, homes.Object, residentRepository: residents.Object);
+
+        var result = await controller.ResolveAdminRecipients();
+
+        Assert.Single(result);
+        Assert.Equal("shared@example.com", result[0].Email);
+    }
+
+    [Fact]
+    public async Task EnqueueNewUserNotification_creates_job_with_admin_recipients()
+    {
+        var homeId = Guid.NewGuid();
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = "admin1",
+                        GivenName = "Admin",
+                        Surname = "One",
+                        Emails = "admin@example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid> { homeId },
+                    },
+                }
+            );
+
+        var homes = new Mock<IHomeRepository>();
+        homes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(new List<Home> { new Home { Id = homeId } });
+
+        var residents = new Mock<IResidentRepository>();
+        residents
+            .Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(
+                new List<Resident>
+                {
+                    new Resident
+                    {
+                        Id = Guid.NewGuid(),
+                        HomeId = homeId,
+                        GivenName = "Admin",
+                        Surname = "One",
+                        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "admin@example.com" } },
+                    },
+                }
+            );
+
+        var jobRepo = new Mock<IEmailJobRepository>();
+        EmailJob capturedJob = null;
+        jobRepo
+            .Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => capturedJob = j)
+            .Returns(Task.CompletedTask);
+
+        var fileStore = new Mock<IDocumentFileStore>();
+        var queue = new EmailJobQueue();
+
+        var controller = CreateController(
+            users.Object,
+            homes.Object,
+            emailJobRepository: jobRepo.Object,
+            fileStore: fileStore.Object,
+            emailJobQueue: queue,
+            residentRepository: residents.Object
+        );
+
+        var newUser = new User
+        {
+            GivenName = "New",
+            Surname = "User",
+            Emails = "newuser@example.com",
+            StreetAddress = "789 Elm St",
+        };
+
+        await controller.EnqueueNewUserNotification(newUser);
+
+        Assert.NotNull(capturedJob);
+        Assert.Equal("New User Registered", capturedJob.Subject);
+        Assert.Equal("webservice@cohad.org", capturedJob.FromEmail);
+        Assert.Null(capturedJob.Category);
+        Assert.Single(capturedJob.Recipients);
+        Assert.Equal("admin@example.com", capturedJob.Recipients[0].Email);
+        fileStore.Verify(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"), Times.Once);
+    }
+
+    [Fact]
+    public async Task EnqueueNewUserNotification_skips_when_no_admins()
+    {
+        var users = new Mock<IUserRepository>();
+        users.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<User>());
+
+        var homes = new Mock<IHomeRepository>();
+        var jobRepo = new Mock<IEmailJobRepository>();
+        var fileStore = new Mock<IDocumentFileStore>();
+        var queue = new EmailJobQueue();
+
+        var controller = CreateController(
+            users.Object,
+            homes.Object,
+            emailJobRepository: jobRepo.Object,
+            fileStore: fileStore.Object,
+            emailJobQueue: queue
+        );
+
+        var newUser = new User
+        {
+            GivenName = "New",
+            Surname = "User",
+            Emails = "newuser@example.com",
+        };
+
+        await controller.EnqueueNewUserNotification(newUser);
+
+        jobRepo.Verify(r => r.AddAsync(It.IsAny<EmailJob>()), Times.Never);
+        fileStore.Verify(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()), Times.Never);
     }
 }
