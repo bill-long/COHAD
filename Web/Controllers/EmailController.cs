@@ -293,6 +293,9 @@ namespace Web.Controllers
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
+                if (distinctEmails.Count == 0)
+                    return BadRequest(new { error = "At least one test recipient email is required." });
+
                 // Validate that all requested addresses belong to the sender's own homes
                 var allowedRecipients = await GetEmailsForUserHomes(apiUser);
                 var invalidEmails = distinctEmails.Where(e => !allowedRecipients.ContainsKey(e)).ToList();
@@ -306,13 +309,13 @@ namespace Web.Controllers
 
                 recipients = distinctEmails.Select(e => allowedRecipients[e]).ToList();
 
-                // Prefix subject for test emails
+                // Prefix subject for test emails; carry the normalized list forward
                 emailInfo = new EmailInfo
                 {
                     Subject = $"Test: {emailInfo.Subject}",
                     HtmlBody = emailInfo.HtmlBody,
                     IsTestEmail = true,
-                    TestRecipientEmails = emailInfo.TestRecipientEmails,
+                    TestRecipientEmails = distinctEmails,
                 };
             }
             else
