@@ -136,6 +136,9 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   }
 
   editMember(member: CommitteeMemberAdmin): void {
+    if (this.editingMemberId && this.editingMemberId !== member.id) {
+      this.finishEdit();
+    }
     this.editSnapshots.set(member.id, { ...member });
     this.initResidentSearchModel(member);
     this.editingMemberId = member.id;
@@ -204,10 +207,8 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
 
   /** Initialises the search model for a member (called when opening edit). */
   private initResidentSearchModel(member: CommitteeMemberAdmin): void {
-    if (!this.residentSearchModels[member.id]) {
-      this.ensureResidentLookup();
-      this.residentSearchModels[member.id] = this.residentDisplayById.get(member.residentId) ?? '';
-    }
+    this.ensureResidentLookup();
+    this.residentSearchModels[member.id] = this.residentDisplayById.get(member.residentId) ?? '';
   }
 
   /** Returns cached filtered residents for a committee member. */

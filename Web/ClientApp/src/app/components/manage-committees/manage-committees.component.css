@@ -408,7 +408,7 @@
     min-height: 44px;
   }
 
-  ::ng-deep .mat-expansion-panel-header-description {
+  :host ::ng-deep .mat-expansion-panel-header-description {
     display: none;
   }
 
