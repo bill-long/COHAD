@@ -127,7 +127,7 @@
                     <input
                       matInput
                       [(ngModel)]="residentSearchModels[member.id]"
-                      (ngModelChange)="onResidentSearchChange(member, $event)"
+                      (ngModelChange)="onResidentSearchChange(member)"
                       (focus)="onResidentFocus(member)"
                       [matAutocomplete]="residentAuto"
                       placeholder="Search by name or email..."

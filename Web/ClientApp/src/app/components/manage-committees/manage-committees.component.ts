@@ -236,7 +236,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   /** Whether an autocomplete selection is in progress (suppresses focus handler clearing) */
   private selectingResident = false;
 
-  onResidentSearchChange(member: CommitteeMemberAdmin, value: string): void {
+  onResidentSearchChange(member: CommitteeMemberAdmin): void {
     this.invalidateResidentCache(member.id);
   }
 
