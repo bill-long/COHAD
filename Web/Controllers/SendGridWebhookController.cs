@@ -89,11 +89,19 @@ namespace Web.Controllers
                     return Forbid();
                 }
 
-                // Reject stale timestamps to prevent replay attacks
+                // Reject stale or non-parsable timestamps to prevent replay attacks
+                if (!long.TryParse(timestamp, out var epochSeconds))
+                {
+                    _logger.LogWarning(
+                        "SendGrid webhook timestamp {Timestamp} is not a valid integer — rejecting.",
+                        timestamp
+                    );
+                    return Forbid();
+                }
+
                 if (
-                    long.TryParse(timestamp, out var epochSeconds)
-                    && Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - epochSeconds)
-                        > (long)TimestampFreshnessWindow.TotalSeconds
+                    Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - epochSeconds)
+                    > (long)TimestampFreshnessWindow.TotalSeconds
                 )
                 {
                     _logger.LogWarning(
@@ -118,6 +126,7 @@ namespace Web.Controllers
             if (events == null)
                 return Ok();
 
+            var hasFailure = false;
             foreach (var evt in events)
             {
                 try
@@ -128,8 +137,13 @@ namespace Web.Controllers
                 {
                     // Log but continue — don't let one bad event fail the batch
                     _logger.LogError(ex, "Error processing SendGrid webhook event.");
+                    hasFailure = true;
                 }
             }
+
+            // Return 500 so SendGrid retries the entire batch on transient failures
+            if (hasFailure)
+                return StatusCode(500);
 
             return Ok();
         }
@@ -188,39 +202,58 @@ namespace Web.Controllers
             if (evt.TryGetProperty("sg_message_id", out var sgMsgProp))
                 sgMessageId = sgMsgProp.GetString();
 
-            // Update the job recipient
-            var job = await _emailJobRepository.GetByIdAsync(jobId);
-            if (job == null)
+            // Update the job recipient with concurrency retry
+            const int maxRetries = 3;
+            for (var attempt = 1; attempt <= maxRetries; attempt++)
             {
-                _logger.LogDebug("SendGrid event for unknown job {JobId} — skipping.", jobId);
-                return;
-            }
+                var job = await _emailJobRepository.GetByIdAsync(jobId);
+                if (job == null)
+                {
+                    _logger.LogDebug("SendGrid event for unknown job {JobId} — skipping.", jobId);
+                    return;
+                }
 
-            var recipient = job.Recipients?.FirstOrDefault(r =>
-                string.Equals(r.Email, email, StringComparison.OrdinalIgnoreCase)
-            );
-            if (recipient == null)
-            {
-                _logger.LogDebug("SendGrid event for job {JobId} — recipient {Email} not found.", jobId, email);
-                return;
-            }
+                var recipient = job.Recipients?.FirstOrDefault(r =>
+                    string.Equals(r.Email, email, StringComparison.OrdinalIgnoreCase)
+                );
+                if (recipient == null)
+                {
+                    _logger.LogDebug("SendGrid event for job {JobId} — recipient {Email} not found.", jobId, email);
+                    return;
+                }
 
-            // Only update if the new status is "more severe" or it's the first status
-            if (ShouldUpdateDeliveryStatus(recipient.DeliveryStatus, deliveryStatus))
-            {
-                recipient.DeliveryStatus = deliveryStatus;
-                recipient.DeliveryStatusUpdatedUtc = DateTime.UtcNow;
+                try
+                {
+                    // Only update if the new status is "more severe" or it's the first status
+                    if (ShouldUpdateDeliveryStatus(recipient.DeliveryStatus, deliveryStatus))
+                    {
+                        recipient.DeliveryStatus = deliveryStatus;
+                        recipient.DeliveryStatusUpdatedUtc = DateTime.UtcNow;
 
-                if (!string.IsNullOrEmpty(sgMessageId) && string.IsNullOrEmpty(recipient.ProviderMessageId))
-                    recipient.ProviderMessageId = sgMessageId;
+                        if (!string.IsNullOrEmpty(sgMessageId) && string.IsNullOrEmpty(recipient.ProviderMessageId))
+                            recipient.ProviderMessageId = sgMessageId;
 
-                await _emailJobRepository.UpdateAsync(job);
-            }
+                        await _emailJobRepository.UpdateAsync(job);
+                    }
 
-            // Auto opt-out for bounces and spam reports
-            if (deliveryStatus == DeliveryStatus.Bounced || deliveryStatus == DeliveryStatus.SpamReport)
-            {
-                await _deliveryActionService.ProcessDeliveryEventAsync(email, deliveryStatus, job.Category);
+                    // Auto opt-out for bounces and spam reports
+                    if (deliveryStatus == DeliveryStatus.Bounced || deliveryStatus == DeliveryStatus.SpamReport)
+                    {
+                        await _deliveryActionService.ProcessDeliveryEventAsync(email, deliveryStatus, job.Category);
+                    }
+
+                    return;
+                }
+                catch (EmailJobConcurrencyException) when (attempt < maxRetries)
+                {
+                    _logger.LogWarning(
+                        "Concurrency conflict updating delivery status for job {JobId}, recipient {Email}. Retry {Attempt}/{MaxRetries}.",
+                        jobId,
+                        email,
+                        attempt,
+                        maxRetries
+                    );
+                }
             }
         }
 
