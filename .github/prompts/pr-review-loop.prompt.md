@@ -25,7 +25,7 @@ gh pr edit <PR_NUMBER> --add-reviewer "copilot-pull-request-reviewer"
 
 ## Step 3: Poll for review completion
 
-**Poll every 30 seconds**, up to 20 attempts. Do NOT poll more frequently than 30s.
+**Poll every 30 seconds**, up to 20 attempts. Do NOT poll more frequently than 30s. Poll for new comments by timestamp, because Copilot does not always create a new review ID.
 
 Check whether the review is done by counting Copilot reviews:
 

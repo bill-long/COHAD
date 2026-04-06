@@ -189,6 +189,9 @@ namespace Web.Controllers
                 return;
             }
 
+            jobIdStr = jobIdStr.Trim();
+            email = email.Trim();
+
             if (!Guid.TryParse(jobIdStr, out var jobId))
             {
                 _logger.LogWarning("SendGrid event has invalid cohad_job_id: {JobId}", jobIdStr);
