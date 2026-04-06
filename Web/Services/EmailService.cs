@@ -111,20 +111,8 @@ namespace Web.Services
         )
         {
             var subject = emailInfo.Subject;
-            List<EmailRecipient> recipientList = recipients;
 
-            if (emailInfo.IsTestEmail)
-            {
-                var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(user.Claims));
-                var testHomeId = apiUser.OwnedHomeIds?.Count > 0 ? apiUser.OwnedHomeIds[0] : Guid.Empty;
-                recipientList = new List<EmailRecipient>
-                {
-                    new EmailRecipient { Email = apiUser.Emails, HomeId = testHomeId },
-                };
-                subject = $"Test: {subject}";
-            }
-
-            if (recipientList.Count == 0)
+            if (recipients.Count == 0)
                 return;
 
             var protocolLog = new MemoryStream();
@@ -147,7 +135,7 @@ namespace Web.Services
 #if DEBUG
                 // In DEBUG, send a single representative message to test addresses
                 // instead of one per recipient, to avoid spamming debug inboxes.
-                var debugRecipient = recipientList[0];
+                var debugRecipient = recipients[0];
                 var debugToken =
                     (debugRecipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
                         ? _tokenService.GenerateToken(debugRecipient.HomeId, debugRecipient.Email)
@@ -155,7 +143,7 @@ namespace Web.Services
                 var debugFooter = BuildUnsubscribeFooter(categoryDisplayName, debugToken);
                 var debugMessage = new MimeMessage();
                 debugMessage.From.Add(new MailboxAddress(fromDisplay, fromEmail));
-                debugMessage.Subject = $"[DEBUG {recipientList.Count} recipients] {subject}";
+                debugMessage.Subject = $"[DEBUG {recipients.Count} recipients] {subject}";
                 debugMessage.ReplyTo.Add(new MailboxAddress(fromDisplay, fromEmail));
                 debugMessage.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
                 debugMessage.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
@@ -173,7 +161,7 @@ namespace Web.Services
                 }
                 await smtpClient.SendAsync(debugMessage);
 #else
-                foreach (var recipient in recipientList)
+                foreach (var recipient in recipients)
                 {
                     // Reset protocol log between messages to bound memory usage
                     protocolLog.SetLength(0);

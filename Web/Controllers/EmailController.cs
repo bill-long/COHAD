@@ -126,6 +126,52 @@ namespace Web.Controllers
         // Job management endpoints
         // ──────────────────────────────────────────────
 
+        [HttpGet("test-recipients")]
+        [Authorize(Policy = "EmailSender")]
+        public async Task<IActionResult> GetTestRecipients()
+        {
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            if (apiUser == null)
+                return Unauthorized(new { error = "User not found." });
+
+            var homeIds = apiUser.OwnedHomeIds ?? new List<Guid>();
+            if (homeIds.Count == 0)
+                return Ok(Array.Empty<object>());
+
+            var homes = await _homeRepository.GetByIdsAsync(homeIds);
+            var residents = new List<Resident>();
+            foreach (var home in homes)
+            {
+                var homeResidents = await _residentRepository.GetByHomeIdAsync(home.Id);
+                residents.AddRange(homeResidents);
+            }
+
+            var seen = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            foreach (var home in homes)
+            {
+                // Home-level email
+                if (
+                    !string.IsNullOrWhiteSpace(home.EmailAddress?.Address)
+                    && !seen.ContainsKey(home.EmailAddress.Address)
+                )
+                    seen[home.EmailAddress.Address] = new { email = home.EmailAddress.Address, homeId = home.Id };
+
+                // Resident emails
+                foreach (var resident in residents.Where(r => r.HomeId == home.Id))
+                {
+                    if (resident.EmailAddresses == null)
+                        continue;
+                    foreach (var addr in resident.EmailAddresses)
+                    {
+                        if (!string.IsNullOrWhiteSpace(addr.Address) && !seen.ContainsKey(addr.Address))
+                            seen[addr.Address] = new { email = addr.Address, homeId = home.Id };
+                    }
+                }
+            }
+
+            return Ok(seen.Values);
+        }
+
         [HttpGet("jobs")]
         [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> GetRecentJobs([FromQuery] int limit = 50)
@@ -251,30 +297,56 @@ namespace Web.Controllers
             if (apiUser == null)
                 return Unauthorized(new { error = "User not found." });
 
-            // Test emails still use the synchronous path (single recipient, immediate feedback)
+            List<EmailJobRecipient> recipients;
+
             if (emailInfo.IsTestEmail)
             {
-                await AuditEmail(auditFrom, emailInfo, apiUser);
-                await _emailService.SendEmail(fromEmail, fromDisplay, emailInfo, recipientFilter, category, User);
-                return Ok();
-            }
+                if (emailInfo.TestRecipientEmails == null || emailInfo.TestRecipientEmails.Count == 0)
+                    return BadRequest(new { error = "At least one test recipient email is required." });
 
-            // Best-effort retention cleanup (terminal jobs older than configured retention).
-            // This runs on submission because emails are typically sent infrequently.
-            try
-            {
-                await _emailJobCleanup.RunOnceBestEffortAsync();
-            }
-            catch (Exception ex)
-            {
-                // Best-effort only: never block a send because cleanup failed.
-                _logger.LogWarning(ex, "Email job retention cleanup failed during send submission (best-effort).");
-            }
+                // Validate that all requested addresses belong to the sender's own homes
+                var allowedRecipients = await GetEmailsForUserHomes(apiUser);
+                var invalidEmails = emailInfo
+                    .TestRecipientEmails.Where(e => !allowedRecipients.ContainsKey(e))
+                    .ToList();
+                if (invalidEmails.Count > 0)
+                    return BadRequest(
+                        new
+                        {
+                            error = $"These emails are not associated with your home(s): {string.Join(", ", invalidEmails)}",
+                        }
+                    );
 
-            // Resolve recipients (snapshot at job creation time)
-            var recipients = await GetAllEmailsMatchingFilter(recipientFilter);
-            if (recipients.Count == 0)
-                return Ok(new { message = "No recipients matched the filter." });
+                recipients = emailInfo.TestRecipientEmails.Select(e => allowedRecipients[e]).ToList();
+
+                // Prefix subject for test emails
+                emailInfo = new EmailInfo
+                {
+                    Subject = $"Test: {emailInfo.Subject}",
+                    HtmlBody = emailInfo.HtmlBody,
+                    IsTestEmail = true,
+                    TestRecipientEmails = emailInfo.TestRecipientEmails,
+                };
+            }
+            else
+            {
+                // Best-effort retention cleanup (terminal jobs older than configured retention).
+                // This runs on submission because emails are typically sent infrequently.
+                try
+                {
+                    await _emailJobCleanup.RunOnceBestEffortAsync();
+                }
+                catch (Exception ex)
+                {
+                    // Best-effort only: never block a send because cleanup failed.
+                    _logger.LogWarning(ex, "Email job retention cleanup failed during send submission (best-effort).");
+                }
+
+                // Resolve recipients (snapshot at job creation time)
+                recipients = await GetAllEmailsMatchingFilter(recipientFilter);
+                if (recipients.Count == 0)
+                    return Ok(new { message = "No recipients matched the filter." });
+            }
 
             // Create job
             var job = new EmailJob
@@ -399,14 +471,64 @@ namespace Web.Controllers
             return seen.Values.ToList();
         }
 
+        /// <summary>
+        /// Returns a case-insensitive dictionary of all email addresses associated with the user's homes,
+        /// mapped to an <see cref="EmailJobRecipient"/> ready for job creation.
+        /// </summary>
+        private async Task<Dictionary<string, EmailJobRecipient>> GetEmailsForUserHomes(User apiUser)
+        {
+            var homeIds = apiUser.OwnedHomeIds ?? new List<Guid>();
+            var result = new Dictionary<string, EmailJobRecipient>(StringComparer.OrdinalIgnoreCase);
+            if (homeIds.Count == 0)
+                return result;
+
+            var homes = await _homeRepository.GetByIdsAsync(homeIds);
+            foreach (var home in homes)
+            {
+                if (
+                    !string.IsNullOrWhiteSpace(home.EmailAddress?.Address)
+                    && !result.ContainsKey(home.EmailAddress.Address)
+                )
+                    result[home.EmailAddress.Address] = new EmailJobRecipient
+                    {
+                        Email = home.EmailAddress.Address,
+                        HomeId = home.Id,
+                        Status = EmailJobRecipientStatus.Pending,
+                    };
+
+                var residents = await _residentRepository.GetByHomeIdAsync(home.Id);
+                foreach (var resident in residents)
+                {
+                    if (resident.EmailAddresses == null)
+                        continue;
+                    foreach (var addr in resident.EmailAddresses)
+                    {
+                        if (!string.IsNullOrWhiteSpace(addr.Address) && !result.ContainsKey(addr.Address))
+                            result[addr.Address] = new EmailJobRecipient
+                            {
+                                Email = addr.Address,
+                                HomeId = home.Id,
+                                Status = EmailJobRecipientStatus.Pending,
+                            };
+                    }
+                }
+            }
+
+            return result;
+        }
+
         private async Task AuditEmail(string from, EmailInfo emailInfo, User apiUser)
         {
+            var recipientDesc = emailInfo.IsTestEmail
+                ? $"Test: {string.Join(", ", emailInfo.TestRecipientEmails ?? new List<string>())}"
+                : "Neighborhood";
+
             await _auditLogRepository.AddAsync(
                 new NewAuditLogEntry
                 {
                     Id = Guid.NewGuid(),
                     SubjectId = "",
-                    SubjectName = $"Email recipient: {(emailInfo.IsTestEmail ? apiUser.Emails : "Neighborhood")}",
+                    SubjectName = $"Email recipient: {recipientDesc}",
                     Action = $"Sent email from {from}",
                     Time = DateTime.UtcNow,
                     UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",

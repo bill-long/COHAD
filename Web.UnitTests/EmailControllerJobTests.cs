@@ -151,6 +151,8 @@ public sealed class EmailControllerJobTests
         return controller;
     }
 
+    private static readonly Guid TestHomeId = Guid.NewGuid();
+
     private void SetupMockUser()
     {
         _users
@@ -163,9 +165,33 @@ public sealed class EmailControllerJobTests
                     Surname = "User",
                     Emails = "test@example.com",
                     Roles = new List<User.Role> { User.Role.Board },
-                    OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+                    OwnedHomeIds = new List<Guid> { TestHomeId },
                 }
             );
+    }
+
+    private void SetupMockUserHomes(params string[] emails)
+    {
+        var home = new Home
+        {
+            Id = TestHomeId,
+            EmailAddress = new EmailAddress { Address = emails.Length > 0 ? emails[0] : "test@example.com" },
+            Residents = new List<Resident>(),
+        };
+
+        _homes
+            .Setup(r => r.GetByIdsAsync(It.Is<List<Guid>>(ids => ids.Contains(TestHomeId))))
+            .ReturnsAsync(new List<Home> { home });
+
+        var residents = emails
+            .Select(e => new Resident
+            {
+                HomeId = TestHomeId,
+                EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = e } },
+            })
+            .ToList();
+
+        _residents.Setup(r => r.GetByHomeIdAsync(TestHomeId)).ReturnsAsync(residents);
     }
 
     private void SetupHomesWithRecipients(int count = 2)
@@ -196,32 +222,145 @@ public sealed class EmailControllerJobTests
     // ───────────────────────────────────────────────────
 
     [Fact]
-    public async Task SendEmailFromBoard_TestEmail_ReturnsSynchronousOk()
+    public async Task SendEmailFromBoard_TestEmail_CreatesJobAndReturns202()
     {
         SetupMockUser();
+        SetupMockUserHomes("test@example.com", "other@example.com");
+
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo.Setup(r => r.AddAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
         var emailInfo = new EmailInfo
         {
             Subject = "Test",
             HtmlBody = "<p>hi</p>",
             IsTestEmail = true,
+            TestRecipientEmails = new List<string> { "test@example.com" },
         };
 
         var controller = CreateController();
         var result = await controller.SendEmailFromBoard(emailInfo);
 
-        var ok = Assert.IsType<OkResult>(result);
-        _emailService.Verify(
-            s =>
-                s.SendEmail(
-                    "board@cohad.org",
-                    "COHAD Board",
-                    emailInfo,
-                    It.IsAny<Func<EmailAddress, bool>>(),
-                    "board",
-                    It.IsAny<ClaimsPrincipal>()
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        var summary = Assert.IsType<EmailJobSummary>(accepted.Value);
+        Assert.Equal("Test: Test", summary.Subject);
+        Assert.Equal(1, summary.TotalRecipients);
+        Assert.Equal(EmailJobStatus.Queued, summary.Status);
+
+        _jobRepo.Verify(
+            r =>
+                r.AddAsync(
+                    It.Is<EmailJob>(j =>
+                        j.Subject == "Test: Test"
+                        && j.TotalRecipients == 1
+                        && j.Recipients[0].Email == "test@example.com"
+                    )
                 ),
             Times.Once
         );
+
+        // Synchronous email service should NOT be called
+        _emailService.Verify(
+            s =>
+                s.SendEmail(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<EmailInfo>(),
+                    It.IsAny<Func<EmailAddress, bool>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<ClaimsPrincipal>()
+                ),
+            Times.Never
+        );
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_TestEmail_MultipleRecipients_CreatesJob()
+    {
+        SetupMockUser();
+        SetupMockUserHomes("a@example.com", "b@example.com");
+
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo.Setup(r => r.AddAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Multi",
+            HtmlBody = "<p>hi</p>",
+            IsTestEmail = true,
+            TestRecipientEmails = new List<string> { "a@example.com", "b@example.com" },
+        };
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(emailInfo);
+
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        var summary = Assert.IsType<EmailJobSummary>(accepted.Value);
+        Assert.Equal(2, summary.TotalRecipients);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_TestEmail_NoRecipients_Returns400()
+    {
+        SetupMockUser();
+
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Test",
+            HtmlBody = "<p>hi</p>",
+            IsTestEmail = true,
+            TestRecipientEmails = new List<string>(),
+        };
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(emailInfo);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        _jobRepo.Verify(r => r.AddAsync(It.IsAny<EmailJob>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_TestEmail_NullRecipients_Returns400()
+    {
+        SetupMockUser();
+
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Test",
+            HtmlBody = "<p>hi</p>",
+            IsTestEmail = true,
+            TestRecipientEmails = null,
+        };
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(emailInfo);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_TestEmail_InvalidEmail_Returns400()
+    {
+        SetupMockUser();
+        SetupMockUserHomes("test@example.com");
+
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Test",
+            HtmlBody = "<p>hi</p>",
+            IsTestEmail = true,
+            TestRecipientEmails = new List<string> { "hacker@evil.com" },
+        };
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(emailInfo);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("hacker@evil.com", bad.Value?.ToString());
         _jobRepo.Verify(r => r.AddAsync(It.IsAny<EmailJob>()), Times.Never);
     }
 
@@ -736,5 +875,48 @@ public sealed class EmailControllerJobTests
         await controller.GetRecentJobs(input);
 
         _jobRepo.Verify(r => r.GetRecentJobsAsync(expected), Times.Once);
+    }
+
+    // ───────────────────────────────────────────────────
+    // GetTestRecipients tests
+    // ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetTestRecipients_ReturnsEmailsFromUserHomes()
+    {
+        SetupMockUser();
+        SetupMockUserHomes("a@example.com", "b@example.com");
+
+        var controller = CreateController();
+        var result = await controller.GetTestRecipients();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var items = Assert.IsAssignableFrom<IEnumerable<object>>(ok.Value);
+        Assert.Equal(2, items.Count());
+    }
+
+    [Fact]
+    public async Task GetTestRecipients_NoHomes_ReturnsEmpty()
+    {
+        _users
+            .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "google.comu1",
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "test@example.com",
+                    Roles = new List<User.Role> { User.Role.Board },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+
+        var controller = CreateController();
+        var result = await controller.GetTestRecipients();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var items = Assert.IsAssignableFrom<IEnumerable<object>>(ok.Value);
+        Assert.Empty(items);
     }
 }
