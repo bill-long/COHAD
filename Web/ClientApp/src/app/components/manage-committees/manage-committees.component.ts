@@ -359,6 +359,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   }
 
   saveOrder(): void {
+    this.finishEdit();
     this.error = '';
     this.success = '';
     this.savingOrder = true;
