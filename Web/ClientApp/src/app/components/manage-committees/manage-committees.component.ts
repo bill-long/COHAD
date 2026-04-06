@@ -92,8 +92,8 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         }
         this.pendingPhotos.delete(committee.id);
         uploadedMemberIds.forEach(id => this.revokePreview(committee.id, id));
-        // Members returned from the server are no longer "new"
-        updated.members.forEach(m => this.newMemberIds.delete(m.id));
+        this.clearSavedMembers(updated);
+        this.finishEdit();
         this.savingKey = null;
         this.success = `${committee.displayName} saved.`;
       },
@@ -152,6 +152,8 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   finishEdit(): void {
     if (this.editingMemberId) {
       this.editSnapshots.delete(this.editingMemberId);
+      delete this.residentSearchModels[this.editingMemberId];
+      this.filteredResidentsCache.delete(this.editingMemberId);
     }
     this.editingMemberId = null;
   }
@@ -176,6 +178,11 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     delete this.residentSearchModels[member.id];
     this.filteredResidentsCache.clear();
     this.editingMemberId = null;
+  }
+
+  /** Mark members returned from server as no longer "new". */
+  private clearSavedMembers(committee: CommitteeAdmin): void {
+    committee.members.forEach(m => this.newMemberIds.delete(m.id));
   }
 
   addMember(committee: CommitteeAdmin): void {
@@ -371,6 +378,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
           }
           this.pendingPhotos.delete(committee.id);
           uploadedMemberIds.forEach(id => this.revokePreview(committee.id, id));
+          this.clearSavedMembers(updated);
           remaining--;
           if (remaining === 0) {
             this.savingOrder = false;

@@ -83,7 +83,13 @@
                   <span class="member-compact-title" *ngIf="member.title">{{ member.title }}</span>
                 </div>
 
-                <mat-icon class="member-compact-email-icon" *ngIf="member.receivesForwardedEmail" matTooltip="Receives forwarded email"
+                <mat-icon
+                  class="member-compact-email-icon"
+                  *ngIf="member.receivesForwardedEmail"
+                  matTooltip="Receives forwarded email"
+                  aria-label="Receives forwarded email"
+                  aria-hidden="false"
+                  role="img"
                   >mail</mat-icon
                 >
 
