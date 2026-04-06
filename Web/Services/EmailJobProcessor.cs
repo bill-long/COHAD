@@ -451,6 +451,7 @@ namespace Web.Services
             CancellationToken ct
         )
         {
+            htmlBody = EmailMessageBuilder.InlineCss(htmlBody);
             var imageData = EmailMessageBuilder.ExtractInlineImages(htmlBody);
             var categoryDisplayName = EmailSubscriptionCategories.DisplayNames.TryGetValue(
                 job.Category ?? "",

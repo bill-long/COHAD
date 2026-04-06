@@ -2,7 +2,6 @@ import { DOCUMENT } from '@angular/common';
 import { HttpClient, HttpResponse } from '@angular/common/http';
 import { AfterViewInit, Component, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
-import Quill from 'quill';
 import { Observable, Subscription, zip } from 'rxjs';
 import { filter, map, take } from 'rxjs/operators';
 import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
@@ -56,11 +55,6 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(DOCUMENT) private document: Document,
   ) {
-    const Block = Quill.import('blots/block') as any;
-    class MyBlock extends Block {
-      static tagName = 'DIV';
-    }
-    Quill.register(MyBlock, true);
     zip(
       this.canSendFromBoard,
       this.canSendFromGardenClub,

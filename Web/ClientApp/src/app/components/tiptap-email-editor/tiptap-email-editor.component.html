@@ -1,0 +1,224 @@
+<div class="tiptap-email-editor">
+  <!-- Toolbar -->
+  <div class="toolbar" role="toolbar" aria-label="Email formatting" *ngIf="editor">
+    <!-- Text style group -->
+    <div class="toolbar-group">
+      <button
+        mat-icon-button
+        matTooltip="Bold"
+        aria-label="Bold"
+        [class.active]="editor.isActive('bold')"
+        (click)="editor.chain().focus().toggleBold().run()"
+      >
+        <mat-icon>format_bold</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        matTooltip="Italic"
+        aria-label="Italic"
+        [class.active]="editor.isActive('italic')"
+        (click)="editor.chain().focus().toggleItalic().run()"
+      >
+        <mat-icon>format_italic</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        matTooltip="Underline"
+        aria-label="Underline"
+        [class.active]="editor.isActive('underline')"
+        (click)="editor.chain().focus().toggleUnderline().run()"
+      >
+        <mat-icon>format_underlined</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        matTooltip="Strikethrough"
+        aria-label="Strikethrough"
+        [class.active]="editor.isActive('strike')"
+        (click)="editor.chain().focus().toggleStrike().run()"
+      >
+        <mat-icon>strikethrough_s</mat-icon>
+      </button>
+    </div>
+
+    <!-- Font size / family -->
+    <div class="toolbar-group">
+      <select class="toolbar-select" aria-label="Font size" [value]="currentFontSize" (change)="setFontSize($any($event.target).value)">
+        <option value="">Size</option>
+        <option *ngFor="let size of fontSizes" [value]="size">{{ size }}</option>
+      </select>
+      <select
+        class="toolbar-select toolbar-select-wide"
+        aria-label="Font family"
+        [value]="currentFontFamily"
+        (change)="setFontFamily($any($event.target).value)"
+      >
+        <option value="">Font</option>
+        <option *ngFor="let f of fontFamilies" [value]="f">{{ f }}</option>
+      </select>
+    </div>
+
+    <!-- Color -->
+    <div class="toolbar-group">
+      <button mat-icon-button matTooltip="Text color" aria-label="Text color" [matMenuTriggerFor]="textColorMenu">
+        <mat-icon [style.color]="currentTextColor">format_color_text</mat-icon>
+      </button>
+      <mat-menu #textColorMenu>
+        <div
+          class="tiptap-color-grid"
+          role="group"
+          aria-label="Text colors"
+          (click)="$event.stopPropagation()"
+          (keydown)="onColorGridKeydown($event)"
+        >
+          <button
+            type="button"
+            *ngFor="let c of textColors"
+            class="color-swatch"
+            [attr.aria-label]="'Text color ' + c"
+            [style.background]="c"
+            [class.active]="currentTextColor === c"
+            (click)="setTextColor(c)"
+          ></button>
+        </div>
+      </mat-menu>
+
+      <button mat-icon-button matTooltip="Highlight" aria-label="Highlight color" [matMenuTriggerFor]="bgColorMenu">
+        <mat-icon>format_color_fill</mat-icon>
+      </button>
+      <mat-menu #bgColorMenu>
+        <div
+          class="tiptap-color-grid"
+          role="group"
+          aria-label="Highlight colors"
+          (click)="$event.stopPropagation()"
+          (keydown)="onColorGridKeydown($event)"
+        >
+          <button
+            type="button"
+            *ngFor="let c of bgColors"
+            class="color-swatch"
+            [attr.aria-label]="c === 'transparent' ? 'No highlight' : 'Highlight ' + c"
+            [style.background]="c"
+            [class.active]="currentHighlight === c"
+            [class.transparent-swatch]="c === 'transparent'"
+            (click)="setHighlight(c)"
+          ></button>
+        </div>
+      </mat-menu>
+    </div>
+
+    <!-- Headings -->
+    <div class="toolbar-group">
+      <select
+        class="toolbar-select"
+        aria-label="Heading level"
+        (change)="$any($event.target).value === '0' ? clearHeading() : setHeading(+$any($event.target).value)"
+      >
+        <option value="0" [selected]="!editor.isActive('heading')">Normal</option>
+        <option value="1" [selected]="editor.isActive('heading', { level: 1 })">Heading 1</option>
+        <option value="2" [selected]="editor.isActive('heading', { level: 2 })">Heading 2</option>
+        <option value="3" [selected]="editor.isActive('heading', { level: 3 })">Heading 3</option>
+        <option value="4" [selected]="editor.isActive('heading', { level: 4 })">Heading 4</option>
+      </select>
+    </div>
+
+    <!-- Lists & indent -->
+    <div class="toolbar-group">
+      <button
+        mat-icon-button
+        matTooltip="Bullet list"
+        aria-label="Bullet list"
+        [class.active]="editor.isActive('bulletList')"
+        (click)="editor.chain().focus().toggleBulletList().run()"
+      >
+        <mat-icon>format_list_bulleted</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        matTooltip="Ordered list"
+        aria-label="Ordered list"
+        [class.active]="editor.isActive('orderedList')"
+        (click)="editor.chain().focus().toggleOrderedList().run()"
+      >
+        <mat-icon>format_list_numbered</mat-icon>
+      </button>
+    </div>
+
+    <!-- Alignment -->
+    <div class="toolbar-group">
+      <button
+        mat-icon-button
+        matTooltip="Align left"
+        aria-label="Align left"
+        [class.active]="editor.isActive({ textAlign: 'left' })"
+        (click)="editor.chain().focus().setTextAlign('left').run()"
+      >
+        <mat-icon>format_align_left</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        matTooltip="Align center"
+        aria-label="Align center"
+        [class.active]="editor.isActive({ textAlign: 'center' })"
+        (click)="editor.chain().focus().setTextAlign('center').run()"
+      >
+        <mat-icon>format_align_center</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        matTooltip="Align right"
+        aria-label="Align right"
+        [class.active]="editor.isActive({ textAlign: 'right' })"
+        (click)="editor.chain().focus().setTextAlign('right').run()"
+      >
+        <mat-icon>format_align_right</mat-icon>
+      </button>
+    </div>
+
+    <!-- Insert -->
+    <div class="toolbar-group">
+      <button
+        mat-icon-button
+        matTooltip="Insert link"
+        aria-label="Insert link"
+        [class.active]="editor.isActive('link')"
+        (click)="editor.isActive('link') ? removeLink() : insertLink()"
+      >
+        <mat-icon>link</mat-icon>
+      </button>
+      <button mat-icon-button matTooltip="Insert image" aria-label="Insert image" (click)="insertImage()">
+        <mat-icon>image</mat-icon>
+      </button>
+      <button mat-icon-button matTooltip="Insert table" aria-label="Insert table" (click)="insertTable()">
+        <mat-icon>table_chart</mat-icon>
+      </button>
+    </div>
+
+    <!-- Blockquote & clear -->
+    <div class="toolbar-group">
+      <button
+        mat-icon-button
+        matTooltip="Blockquote"
+        aria-label="Blockquote"
+        [class.active]="editor.isActive('blockquote')"
+        (click)="editor.chain().focus().toggleBlockquote().run()"
+      >
+        <mat-icon>format_quote</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        matTooltip="Clear formatting"
+        aria-label="Clear formatting"
+        (click)="editor.chain().focus().clearNodes().unsetAllMarks().run()"
+      >
+        <mat-icon>format_clear</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- Editor -->
+  <div class="editor-content" *ngIf="editor">
+    <tiptap-editor [editor]="editor" [(ngModel)]="value"></tiptap-editor>
+  </div>
+</div>
