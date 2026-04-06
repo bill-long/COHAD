@@ -79,11 +79,29 @@ namespace Web.Controllers
                 var signature = Request.Headers["X-Twilio-Email-Event-Webhook-Signature"].FirstOrDefault();
                 var timestamp = Request.Headers["X-Twilio-Email-Event-Webhook-Timestamp"].FirstOrDefault();
 
-                if (
-                    string.IsNullOrEmpty(signature)
-                    || string.IsNullOrEmpty(timestamp)
-                    || !_verifier.Verify(body, signature, timestamp)
-                )
+                // Temporary diagnostics — remove after webhook verification is confirmed working
+                _logger.LogWarning(
+                    "SendGrid webhook diag: sig={SigPresent}, ts={TsPresent}, bodyLen={BodyLen}, bodyStart={BodyStart}",
+                    !string.IsNullOrEmpty(signature),
+                    !string.IsNullOrEmpty(timestamp),
+                    body.Length,
+                    body.Length > 80 ? body[..80] : body
+                );
+
+                if (string.IsNullOrEmpty(signature) || string.IsNullOrEmpty(timestamp))
+                {
+                    _logger.LogWarning(
+                        "SendGrid webhook missing headers — sig={SigEmpty}, ts={TsEmpty}.",
+                        string.IsNullOrEmpty(signature),
+                        string.IsNullOrEmpty(timestamp)
+                    );
+                    return Forbid();
+                }
+
+                var verifyResult = _verifier.Verify(body, signature, timestamp);
+                _logger.LogWarning("SendGrid webhook verify result: {Result}", verifyResult);
+
+                if (!verifyResult)
                 {
                     _logger.LogWarning("SendGrid webhook signature verification failed.");
                     return Forbid();
