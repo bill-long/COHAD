@@ -146,11 +146,27 @@ namespace Web.UnitTests
             SetupVerifierConfigured(validSignature: true);
             var controller = CreateController("[]");
             controller.HttpContext.Request.Headers["X-Twilio-Email-Event-Webhook-Signature"] = "validbase64==";
-            controller.HttpContext.Request.Headers["X-Twilio-Email-Event-Webhook-Timestamp"] = "12345";
+            controller.HttpContext.Request.Headers["X-Twilio-Email-Event-Webhook-Timestamp"] = DateTimeOffset
+                .UtcNow.ToUnixTimeSeconds()
+                .ToString();
 
             var result = await controller.HandleEvents();
 
             Assert.IsType<OkResult>(result);
+        }
+
+        [Fact]
+        public async Task RejectsStaleTimestamp()
+        {
+            SetupVerifierConfigured(validSignature: true);
+            var controller = CreateController("[]");
+            controller.HttpContext.Request.Headers["X-Twilio-Email-Event-Webhook-Signature"] = "validbase64==";
+            // Timestamp from 2020 — well outside the 5-minute window
+            controller.HttpContext.Request.Headers["X-Twilio-Email-Event-Webhook-Timestamp"] = "1577836800";
+
+            var result = await controller.HandleEvents();
+
+            Assert.IsType<ForbidResult>(result);
         }
 
         // ─── Event processing ───

@@ -36,6 +36,9 @@ namespace Web.Controllers
             "deferred",
         };
 
+        /// <summary>Maximum age of a webhook timestamp before it's rejected (anti-replay).</summary>
+        private static readonly TimeSpan TimestampFreshnessWindow = TimeSpan.FromMinutes(5);
+
         public SendGridWebhookController(
             ISendGridWebhookVerifier verifier,
             IEmailJobRepository emailJobRepository,
@@ -83,6 +86,20 @@ namespace Web.Controllers
                 )
                 {
                     _logger.LogWarning("SendGrid webhook signature verification failed.");
+                    return Forbid();
+                }
+
+                // Reject stale timestamps to prevent replay attacks
+                if (
+                    long.TryParse(timestamp, out var epochSeconds)
+                    && Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - epochSeconds)
+                        > (long)TimestampFreshnessWindow.TotalSeconds
+                )
+                {
+                    _logger.LogWarning(
+                        "SendGrid webhook timestamp {Timestamp} outside freshness window — rejecting.",
+                        timestamp
+                    );
                     return Forbid();
                 }
             }

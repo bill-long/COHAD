@@ -22,9 +22,9 @@ namespace Web.Services
         bool Verify(string payload, string signature, string timestamp);
     }
 
-    public class SendGridWebhookVerifier : ISendGridWebhookVerifier
+    public class SendGridWebhookVerifier : ISendGridWebhookVerifier, IDisposable
     {
-        private readonly ECDsa? _ecdsa;
+        private readonly byte[]? _keyBytes;
         private readonly ILogger<SendGridWebhookVerifier> _logger;
 
         public SendGridWebhookVerifier(IOptions<SendGridOptions> options, ILogger<SendGridWebhookVerifier> logger)
@@ -35,38 +35,49 @@ namespace Web.Services
             {
                 try
                 {
-                    _ecdsa = ECDsa.Create();
-                    // SendGrid provides the verification key as a base64-encoded DER SubjectPublicKeyInfo
-                    _ecdsa.ImportSubjectPublicKeyInfo(Convert.FromBase64String(key), out _);
+                    // Validate the key on startup and cache the raw bytes.
+                    // A fresh ECDsa instance is created per Verify() call for thread safety.
+                    _keyBytes = Convert.FromBase64String(key);
+                    using var probe = ECDsa.Create();
+                    probe.ImportSubjectPublicKeyInfo(_keyBytes, out _);
                 }
                 catch (Exception ex) when (ex is FormatException or CryptographicException)
                 {
                     _logger.LogError(ex, "SendGrid webhook verification key is malformed — verification disabled.");
-                    _ecdsa?.Dispose();
-                    _ecdsa = null;
+                    _keyBytes = null;
                 }
             }
         }
 
-        public bool IsConfigured => _ecdsa != null;
+        public bool IsConfigured => _keyBytes != null;
 
         public bool Verify(string payload, string signature, string timestamp)
         {
-            if (_ecdsa == null)
+            if (_keyBytes == null)
                 return false;
 
             try
             {
-                // SendGrid signs: timestamp + payload
+                using var ecdsa = ECDsa.Create();
+                ecdsa.ImportSubjectPublicKeyInfo(_keyBytes, out _);
+
                 var dataToVerify = Encoding.UTF8.GetBytes(timestamp + payload);
                 var signatureBytes = Convert.FromBase64String(signature);
-                return _ecdsa.VerifyData(dataToVerify, signatureBytes, HashAlgorithmName.SHA256);
+                return ecdsa.VerifyData(dataToVerify, signatureBytes, HashAlgorithmName.SHA256);
             }
             catch (Exception ex) when (ex is FormatException or CryptographicException)
             {
                 _logger.LogWarning(ex, "SendGrid webhook signature verification threw — treating as invalid.");
                 return false;
             }
+        }
+
+        public void Dispose()
+        {
+            // Key bytes are a plain byte array — no unmanaged resources to release.
+            // IDisposable is implemented so the DI container doesn't log warnings
+            // about undisposed singletons.
+            GC.SuppressFinalize(this);
         }
     }
 }

@@ -123,9 +123,9 @@
 }
 
 .job-actions-hint--stale {
-  color: #7a4a1e;
-  background: #fef3e0;
-  border-color: color-mix(in srgb, #e65100 22%, transparent);
+  color: var(--warning);
+  background: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 22%, transparent);
 }
 
 .action-buttons {
@@ -167,8 +167,8 @@
 }
 
 .status-partial {
-  background: #fef3e0;
-  color: #e65100;
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .status-failed {
@@ -193,13 +193,13 @@
 }
 
 .delivery-deferred {
-  background: #fef3e0;
-  color: #e65100;
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .delivery-spam {
-  background: #f3e5f5;
-  color: #7b1fa2;
+  background: var(--info-purple-bg);
+  color: var(--info-purple);
 }
 
 .delivery-rejected {

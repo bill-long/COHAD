@@ -411,7 +411,7 @@ namespace Web
             services.AddScoped<EmailJobCleanupService>();
 
             // SendGrid webhook verification and delivery tracking
-            services.Configure<Configuration.SendGridOptions>(Configuration.GetSection("SendGrid"));
+            services.Configure<SendGridOptions>(Configuration.GetSection("SendGrid"));
             services.AddSingleton<ISendGridWebhookVerifier, SendGridWebhookVerifier>();
             services.AddScoped<IEmailDeliveryActionService, EmailDeliveryActionService>();
         }
