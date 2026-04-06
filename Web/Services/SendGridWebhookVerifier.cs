@@ -63,7 +63,12 @@ namespace Web.Services
 
                 var dataToVerify = Encoding.UTF8.GetBytes(timestamp + payload);
                 var signatureBytes = Convert.FromBase64String(signature);
-                return ecdsa.VerifyData(dataToVerify, signatureBytes, HashAlgorithmName.SHA256);
+                return ecdsa.VerifyData(
+                    dataToVerify,
+                    signatureBytes,
+                    HashAlgorithmName.SHA256,
+                    DSASignatureFormat.Rfc3279DerSequence
+                );
             }
             catch (Exception ex) when (ex is FormatException or CryptographicException)
             {
