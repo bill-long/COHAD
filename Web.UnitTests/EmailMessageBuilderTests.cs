@@ -102,6 +102,7 @@ public class EmailMessageBuilderTests
         Assert.Single(result.Images);
         Assert.Contains("cid:", result.ProcessedHtml);
         Assert.DoesNotContain("data:image", result.ProcessedHtml);
+        Assert.Contains("style=\"border: 1px solid red\"", result.ProcessedHtml);
     }
 
     [Fact]
@@ -123,5 +124,40 @@ public class EmailMessageBuilderTests
 
         // Should not throw — either inlined or original HTML returned
         Assert.Contains("OK", result);
+    }
+
+    [Fact]
+    public void ExtractInlineImages_PreservesNonSrcAttributes()
+    {
+        var base64 = Convert.ToBase64String(new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+        var html =
+            $"<img alt=\"logo\" style=\"width:100px\" src=\"data:image/png;base64,{base64}\" title=\"Logo\" class=\"hero\">";
+
+        var result = EmailMessageBuilder.ExtractInlineImages(html);
+
+        Assert.Single(result.Images);
+        Assert.Contains("cid:", result.ProcessedHtml);
+        Assert.Contains("alt=\"logo\"", result.ProcessedHtml);
+        Assert.Contains("style=\"width:100px\"", result.ProcessedHtml);
+        Assert.Contains("title=\"Logo\"", result.ProcessedHtml);
+        Assert.Contains("class=\"hero\"", result.ProcessedHtml);
+        Assert.DoesNotContain("data:image", result.ProcessedHtml);
+    }
+
+    [Theory]
+    [InlineData("svg+xml", "svg")]
+    [InlineData("jpeg", "jpg")]
+    [InlineData("png", "png")]
+    [InlineData("gif", "gif")]
+    [InlineData("webp", "webp")]
+    public void ExtractInlineImages_NormalizesFileExtension(string mediaSubtype, string expectedExtension)
+    {
+        var base64 = Convert.ToBase64String(new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+        var html = $"<img src=\"data:image/{mediaSubtype};base64,{base64}\">";
+
+        var result = EmailMessageBuilder.ExtractInlineImages(html);
+
+        Assert.Single(result.Images);
+        Assert.Equal($"image0.{expectedExtension}", result.Images[0].FileName);
     }
 }

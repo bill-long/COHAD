@@ -38,11 +38,19 @@ namespace Web.Services
         }
 
         private static readonly Regex DataUriImgRegex = new(
-            @"<img\b[^>]*?\bsrc\s*=\s*""data:image/([^;]+);base64,([^""]+)""[^>]*?>",
+            @"(<img\b[^>]*?)\bsrc\s*=\s*""data:image/([^;]+);base64,([^""]+)""([^>]*?>)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
 
         private const int MaxBase64Length = 10 * 1024 * 1024; // ~7.5 MB decoded
+
+        private static readonly Dictionary<string, string> MediaSubtypeToExtension = new(
+            StringComparer.OrdinalIgnoreCase
+        )
+        {
+            ["svg+xml"] = "svg",
+            ["jpeg"] = "jpg",
+        };
 
         public static ExtractedImages ExtractInlineImages(string htmlBody)
         {
@@ -53,8 +61,8 @@ namespace Web.Services
                 htmlBody,
                 match =>
                 {
-                    var imageExtension = match.Groups[1].Value;
-                    var base64 = match.Groups[2].Value;
+                    var mediaSubtype = match.Groups[2].Value;
+                    var base64 = match.Groups[3].Value;
 
                     if (base64.Length > MaxBase64Length)
                         return match.Value; // leave oversized images as-is
@@ -69,16 +77,21 @@ namespace Web.Services
                         return match.Value; // leave malformed data URIs as-is
                     }
 
+                    var extension = MediaSubtypeToExtension.TryGetValue(mediaSubtype, out var mapped)
+                        ? mapped
+                        : mediaSubtype;
                     var contentId = MimeUtils.GenerateMessageId();
                     images.Add(
                         new InlineImage
                         {
-                            FileName = $"image{imageCount++}.{imageExtension}",
+                            FileName = $"image{imageCount++}.{extension}",
                             ContentId = contentId,
                             Data = imageBytes,
                         }
                     );
-                    return $"<img src=\"cid:{contentId}\">";
+                    var prefix = match.Groups[1].Value;
+                    var suffix = match.Groups[4].Value;
+                    return $"{prefix}src=\"cid:{contentId}\"{suffix}";
                 }
             );
 
