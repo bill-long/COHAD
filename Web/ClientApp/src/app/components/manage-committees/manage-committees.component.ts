@@ -34,8 +34,11 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   /** ID of the member currently being edited, or null when all are collapsed */
   editingMemberId: string | null = null;
 
-  /** Snapshot of member state before editing, for cancel/revert. No entry = new member. */
+  /** Snapshot of member state before editing, for cancel/revert. */
   private editSnapshots = new Map<string, CommitteeMemberAdmin>();
+
+  /** IDs of members added locally but not yet saved to the server. */
+  private newMemberIds = new Set<string>();
 
   /** Original committee ID order from last load/save, used to detect reordering */
   private savedOrder: string[] = [];
@@ -89,6 +92,8 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         }
         this.pendingPhotos.delete(committee.id);
         uploadedMemberIds.forEach(id => this.revokePreview(committee.id, id));
+        // Members returned from the server are no longer "new"
+        updated.members.forEach(m => this.newMemberIds.delete(m.id));
         this.savingKey = null;
         this.success = `${committee.displayName} saved.`;
       },
@@ -152,14 +157,18 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   }
 
   cancelMemberEdit(committee: CommitteeAdmin, member: CommitteeMemberAdmin): void {
-    const snapshot = this.editSnapshots.get(member.id);
-    if (snapshot) {
-      // Existing member: restore from snapshot
-      Object.assign(member, snapshot);
+    if (this.newMemberIds.has(member.id)) {
+      // Unsaved new member: remove from list entirely
+      committee.members = committee.members.filter(m => m.id !== member.id);
+      this.newMemberIds.delete(member.id);
       this.editSnapshots.delete(member.id);
     } else {
-      // New member (no snapshot): remove from list
-      committee.members = committee.members.filter(m => m.id !== member.id);
+      // Existing member: restore from snapshot
+      const snapshot = this.editSnapshots.get(member.id);
+      if (snapshot) {
+        Object.assign(member, snapshot);
+        this.editSnapshots.delete(member.id);
+      }
     }
     // Clean up pending photo/preview added during this edit
     this.pendingPhotos.get(committee.id)?.delete(member.id);
@@ -172,6 +181,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   addMember(committee: CommitteeAdmin): void {
     const nextOrder = committee.members.length > 0 ? Math.max(...committee.members.map(m => m.displayOrder)) + 1 : 0;
     const newId = crypto.randomUUID();
+    this.newMemberIds.add(newId);
     committee.members.push({
       id: newId,
       residentId: '00000000-0000-0000-0000-000000000000',
