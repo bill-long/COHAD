@@ -402,6 +402,13 @@ namespace Web.Services.Cosmos
                             r.LastAttemptUtc != null ? JToken.FromObject(r.LastAttemptUtc) : JValue.CreateNull(),
                         ["Error"] = r.Error != null ? r.Error : JValue.CreateNull(),
                         ["SentUtc"] = r.SentUtc != null ? JToken.FromObject(r.SentUtc) : JValue.CreateNull(),
+                        ["DeliveryStatus"] = r.DeliveryStatus.ToString(),
+                        ["DeliveryStatusUpdatedUtc"] =
+                            r.DeliveryStatusUpdatedUtc != null
+                                ? JToken.FromObject(r.DeliveryStatusUpdatedUtc)
+                                : JValue.CreateNull(),
+                        ["ProviderMessageId"] = r.ProviderMessageId != null ? r.ProviderMessageId : JValue.CreateNull(),
+                        ["Provider"] = r.Provider != null ? r.Provider : JValue.CreateNull(),
                     }
                 );
             }
@@ -453,6 +460,12 @@ namespace Web.Services.Cosmos
                         LastAttemptUtc = r["LastAttemptUtc"]?.ToObject<DateTime?>(),
                         Error = r.Value<string>("Error"),
                         SentUtc = r["SentUtc"]?.ToObject<DateTime?>(),
+                        DeliveryStatus = Enum.TryParse<DeliveryStatus>(r.Value<string>("DeliveryStatus"), out var ds)
+                            ? ds
+                            : DeliveryStatus.Unknown,
+                        DeliveryStatusUpdatedUtc = r["DeliveryStatusUpdatedUtc"]?.ToObject<DateTime?>(),
+                        ProviderMessageId = r.Value<string>("ProviderMessageId"),
+                        Provider = r.Value<string>("Provider"),
                     })
                     .ToList();
             }

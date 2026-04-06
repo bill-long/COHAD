@@ -375,4 +375,91 @@ public sealed class CosmosLegacyDocumentMapperTests
         Assert.Equal(25, m.PhotoOffsetY);
         Assert.Equal(0, m.DisplayOrder);
     }
+
+    // ── EmailJob recipient delivery fields round-trip ──
+
+    [Fact]
+    public void EmailJobRecipient_DeliveryFields_RoundTrip()
+    {
+        var job = new EmailJob
+        {
+            Id = Guid.NewGuid(),
+            Status = EmailJobStatus.Completed,
+            Category = "board",
+            FromEmail = "from@cohad.local",
+            FromDisplay = "Board",
+            Subject = "Test",
+            ContentBlobPath = "email-jobs/test.html",
+            CreatedUtc = DateTime.UtcNow,
+            CreatedByUserId = "system",
+            CreatedByDisplayName = "System",
+            MaxRecipientAttempts = 3,
+            TotalRecipients = 1,
+            SentCount = 1,
+            FailedCount = 0,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "user@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Sent,
+                    SentUtc = DateTime.UtcNow,
+                    DeliveryStatus = DeliveryStatus.Delivered,
+                    DeliveryStatusUpdatedUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc),
+                    ProviderMessageId = "sg-msg-123",
+                    Provider = "SendGrid",
+                },
+            },
+        };
+
+        var doc = CosmosLegacyDocumentMapper.ToEmailJobDocument(job);
+        var roundTripped = CosmosLegacyDocumentMapper.ToEmailJob(doc);
+
+        var r = roundTripped.Recipients[0];
+        Assert.Equal(DeliveryStatus.Delivered, r.DeliveryStatus);
+        Assert.Equal(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc), r.DeliveryStatusUpdatedUtc);
+        Assert.Equal("sg-msg-123", r.ProviderMessageId);
+        Assert.Equal("SendGrid", r.Provider);
+    }
+
+    [Fact]
+    public void EmailJobRecipient_MissingDeliveryFields_DefaultsGracefully()
+    {
+        // Simulates a legacy document without the new delivery fields
+        var recipientJson = new JObject
+        {
+            ["Email"] = "old@example.com",
+            ["HomeId"] = Guid.NewGuid().ToString("D"),
+            ["Status"] = "Sent",
+            ["AttemptCount"] = 1,
+            ["SentUtc"] = JToken.FromObject(DateTime.UtcNow),
+        };
+        var doc = new JObject
+        {
+            ["id"] = "EmailJob|" + Guid.NewGuid().ToString("D"),
+            ["Status"] = "Completed",
+            ["Category"] = "board",
+            ["FromEmail"] = "from@cohad.local",
+            ["FromDisplay"] = "Board",
+            ["Subject"] = "Test",
+            ["ContentBlobPath"] = "email-jobs/test.html",
+            ["CreatedUtc"] = JToken.FromObject(DateTime.UtcNow),
+            ["CreatedByUserId"] = "system",
+            ["CreatedByDisplayName"] = "System",
+            ["MaxRecipientAttempts"] = 3,
+            ["TotalRecipients"] = 1,
+            ["SentCount"] = 1,
+            ["FailedCount"] = 0,
+            ["Recipients"] = new JArray { recipientJson },
+        };
+
+        var job = CosmosLegacyDocumentMapper.ToEmailJob(doc);
+
+        var r = job.Recipients[0];
+        Assert.Equal(DeliveryStatus.Unknown, r.DeliveryStatus);
+        Assert.Null(r.DeliveryStatusUpdatedUtc);
+        Assert.Null(r.ProviderMessageId);
+        Assert.Null(r.Provider);
+    }
 }
