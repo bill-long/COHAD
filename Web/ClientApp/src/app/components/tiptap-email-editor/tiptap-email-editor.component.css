@@ -1,0 +1,236 @@
+/* ── TipTap Email Editor ── */
+
+.tiptap-email-editor {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* Toolbar */
+.tiptap-email-editor .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-muted);
+  align-items: center;
+}
+
+.tiptap-email-editor .toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-right: 6px;
+  border-right: 1px solid var(--border-faint);
+}
+
+.tiptap-email-editor .toolbar-group:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+
+.tiptap-email-editor .toolbar button.mat-mdc-icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 4px;
+  line-height: 1;
+  font-size: 18px;
+}
+
+.tiptap-email-editor .toolbar button.mat-mdc-icon-button .mat-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+  line-height: 20px;
+}
+
+.tiptap-email-editor .toolbar button.active {
+  background: var(--surface-chip);
+  border-radius: 4px;
+}
+
+/* Dropdowns */
+.tiptap-email-editor .toolbar-select {
+  height: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 0 4px;
+  cursor: pointer;
+  max-width: 70px;
+}
+
+.tiptap-email-editor .toolbar-select-wide {
+  max-width: 110px;
+}
+
+.tiptap-email-editor .toolbar-select:focus {
+  outline: 2px solid var(--primary-sage);
+  outline-offset: -1px;
+}
+
+/* Color picker grid — scoped via unique class to avoid mat-menu conflicts */
+.tiptap-color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 28px);
+  gap: 3px;
+  padding: 8px;
+}
+
+.tiptap-color-grid .color-swatch {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tiptap-color-grid .color-swatch.active {
+  outline: 2px solid var(--primary-sage);
+  outline-offset: 1px;
+}
+
+.tiptap-color-grid .color-swatch.transparent-swatch {
+  background: linear-gradient(135deg, #fff 45%, #ff0000 45%, #ff0000 55%, #fff 55%) !important;
+}
+
+.tiptap-color-grid .color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.tiptap-color-grid .color-swatch:focus-visible {
+  outline: 2px solid var(--primary-sage);
+  outline-offset: 1px;
+}
+
+/* Editor content area */
+.tiptap-email-editor .editor-content {
+  min-height: 200px;
+  padding: 0;
+}
+
+/* TipTap ProseMirror styles (ViewEncapsulation.None required) */
+.tiptap-email-editor .tiptap {
+  min-height: 200px;
+  padding: 12px 16px;
+  outline: none;
+  font-family: sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.tiptap-email-editor .tiptap p {
+  margin: 0 0 0.5em;
+}
+
+.tiptap-email-editor .tiptap h1,
+.tiptap-email-editor .tiptap h2,
+.tiptap-email-editor .tiptap h3,
+.tiptap-email-editor .tiptap h4 {
+  margin: 0.75em 0 0.25em;
+}
+
+.tiptap-email-editor .tiptap blockquote {
+  border-left: 3px solid var(--border-subtle);
+  margin: 0.5em 0;
+  padding-left: 1em;
+  color: var(--text-secondary);
+}
+
+.tiptap-email-editor .tiptap ul,
+.tiptap-email-editor .tiptap ol {
+  padding-left: 1.5em;
+  margin: 0.25em 0;
+}
+
+.tiptap-email-editor .tiptap img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.tiptap-email-editor .tiptap a {
+  color: var(--primary-sage);
+  text-decoration: underline;
+}
+
+/* Table styles */
+.tiptap-email-editor .tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.tiptap-email-editor .tiptap th,
+.tiptap-email-editor .tiptap td {
+  border: 1px solid var(--border-subtle);
+  padding: 6px 10px;
+  min-width: 60px;
+  vertical-align: top;
+}
+
+.tiptap-email-editor .tiptap th {
+  background: var(--surface-muted);
+  font-weight: 600;
+}
+
+/* ── Mobile: ≤600px ── */
+@media (max-width: 600px) {
+  .tiptap-email-editor .toolbar {
+    gap: 1px;
+    padding: 3px 4px;
+  }
+
+  .tiptap-email-editor .toolbar-group {
+    padding-right: 4px;
+  }
+
+  .tiptap-email-editor .toolbar button.mat-mdc-icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tiptap-email-editor .toolbar-select {
+    max-width: 60px;
+    font-size: 11px;
+    height: 44px;
+    padding: 0 6px;
+  }
+
+  .tiptap-email-editor .toolbar-select-wide {
+    max-width: 90px;
+  }
+
+  .tiptap-email-editor .tiptap {
+    padding: 10px 12px;
+    min-height: 160px;
+  }
+
+  .tiptap-color-grid {
+    grid-template-columns: repeat(6, 44px);
+    gap: 4px;
+  }
+
+  .tiptap-color-grid .color-swatch {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* ── Mobile: ≤480px ── */
+@media (max-width: 480px) {
+  .tiptap-email-editor .toolbar-group {
+    padding-right: 3px;
+    border-right: none;
+  }
+
+  .tiptap-email-editor .tiptap {
+    padding: 8px;
+  }
+}
