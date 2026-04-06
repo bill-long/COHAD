@@ -138,6 +138,12 @@ export interface EmailInfo {
   subject: string;
   htmlBody: string;
   isTestEmail: boolean;
+  testRecipientEmails?: string[];
+}
+
+export interface TestRecipientOption {
+  email: string;
+  homeId: string;
 }
 
 // Email job queue types
