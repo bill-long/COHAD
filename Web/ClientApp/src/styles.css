@@ -17,6 +17,10 @@
   --success-bg: rgba(74, 124, 89, 0.12);
   --error: #b5403a;
   --error-bg: rgba(181, 64, 58, 0.1);
+  --warning: #e65100;
+  --warning-bg: #fef3e0;
+  --info-purple: #7b1fa2;
+  --info-purple-bg: #f3e5f5;
   --primary-sage: #6b8f71;
   --secondary-terracotta: #c4704e;
   --accent-gold: #b8860b;
@@ -59,6 +63,10 @@ body.dark-theme {
   --success-bg: rgba(143, 191, 139, 0.15);
   --error: #e0918c;
   --error-bg: rgba(224, 145, 140, 0.15);
+  --warning: #ffb74d;
+  --warning-bg: rgba(255, 183, 77, 0.15);
+  --info-purple: #ce93d8;
+  --info-purple-bg: rgba(206, 147, 216, 0.15);
   --primary-sage: #9cbba1;
   --secondary-terracotta: #d99a7e;
   --accent-gold: #d4a843;

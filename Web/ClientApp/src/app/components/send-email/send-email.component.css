@@ -109,6 +109,54 @@
   text-decoration: underline;
 }
 
+/* Test email recipient picker */
+.test-email-section {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.test-email-header {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.test-recipient-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 0.75rem;
+}
+
+.test-recipient-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.test-recipient-option input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.test-recipient-email {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.test-send-button {
+  min-height: 36px;
+}
+
+.test-job-progress {
+  margin-top: 12px;
+}
+
 /* ── Mobile: large phones (≤600px) ── */
 @media (max-width: 600px) {
   .send-email-page {
@@ -131,6 +179,15 @@
 
   .editor-wrapper {
     min-height: 160px;
+  }
+
+  .test-recipient-option {
+    min-height: 44px;
+  }
+
+  .test-send-button {
+    min-height: 44px;
+    width: 100%;
   }
 }
 

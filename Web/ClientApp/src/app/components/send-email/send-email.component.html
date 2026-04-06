@@ -24,18 +24,74 @@
       </div>
 
       <div class="actions">
-        <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(true)" [disabled]="!editEnabled">
-          Send Test Email To {{ apiUserEmail | async }}
-        </button>
         <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(false)" [disabled]="!editEnabled">
           Send Email To Neighborhood
         </button>
         <button *ngIf="sendSucceeded" mat-flat-button color="primary" (click)="sendNew()">Compose a new email</button>
       </div>
 
-      <div *ngIf="testSucceeded" class="cohad-inline-alert cohad-inline-alert--success">Test email was sent!</div>
+      <div *ngIf="!sendSucceeded && testRecipients.length > 0" class="test-email-section">
+        <div class="test-email-header">Send Test Email</div>
+        <div class="test-recipient-list">
+          <label *ngFor="let r of testRecipients" class="test-recipient-option">
+            <input
+              type="checkbox"
+              [checked]="selectedTestRecipients.has(r.email)"
+              (change)="toggleTestRecipient(r.email)"
+              [disabled]="!editEnabled"
+            />
+            <span class="test-recipient-email">{{ r.email }}</span>
+          </label>
+        </div>
+        <button
+          mat-stroked-button
+          color="primary"
+          (click)="sendEmail(true)"
+          [disabled]="!editEnabled || !hasSelectedTestRecipients"
+          class="test-send-button"
+        >
+          Send Test Email
+        </button>
 
-      <!-- Job queued (non-test) -->
+        <!-- Test job progress (inline, form stays editable) -->
+        <ng-container *ngIf="activeTestJob">
+          <div class="test-job-progress">
+            <div class="job-progress-header">
+              <span class="job-status-label">{{ jobStatusLabel(activeTestJob.status) }}</span>
+              <span class="job-progress-text">{{ activeTestJob.sentCount }} of {{ activeTestJob.totalRecipients }} sent</span>
+            </div>
+            <div class="job-progress-bar-container">
+              <div
+                class="job-progress-bar-fill"
+                [style.width.%]="
+                  activeTestJob.totalRecipients
+                    ? ((activeTestJob.sentCount + activeTestJob.failedCount) / activeTestJob.totalRecipients) * 100
+                    : 0
+                "
+              ></div>
+            </div>
+            <div *ngIf="testJobCompleted" class="job-final-status">
+              <ng-container [ngSwitch]="activeTestJob.status">
+                <span *ngSwitchCase="'Completed'" class="cohad-inline-alert cohad-inline-alert--success">
+                  Test email sent successfully.
+                </span>
+                <span *ngSwitchCase="'PartiallyCompleted'" class="cohad-inline-alert cohad-inline-alert--warning">
+                  Test completed with {{ activeTestJob.failedCount }} failures.
+                </span>
+                <span *ngSwitchCase="'Failed'" class="cohad-inline-alert cohad-inline-alert--error">
+                  Test email failed. {{ activeTestJob.lastError }}
+                </span>
+                <span *ngSwitchCase="'Cancelled'" class="cohad-inline-alert cohad-inline-alert--warning"> Test email was cancelled. </span>
+                <span *ngSwitchDefault class="cohad-inline-alert cohad-inline-alert--warning">
+                  Test email finished with status "{{ activeTestJob.status }}".
+                </span>
+              </ng-container>
+            </div>
+          </div>
+        </ng-container>
+      </div>
+
+      <!-- Job queued -->
       <ng-container *ngIf="sendSucceeded && activeJob">
         <div class="cohad-inline-alert cohad-inline-alert--success">Email queued — {{ activeJob.totalRecipients }} recipients</div>
 
@@ -68,8 +124,8 @@
         </div>
       </ng-container>
 
-      <!-- Synchronous send success (fallback / legacy) -->
-      <div *ngIf="sendSucceeded && !activeJob" class="cohad-inline-alert cohad-inline-alert--success">Email was sent!</div>
+      <!-- Synchronous send success (fallback) -->
+      <div *ngIf="sendSucceeded && !activeJob" class="cohad-inline-alert cohad-inline-alert--success">Email queued.</div>
 
       <div *ngIf="errorText != null" class="cohad-inline-alert cohad-inline-alert--error">
         <div>Error occurred. Detailed error information:</div>

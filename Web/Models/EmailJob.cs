@@ -89,6 +89,17 @@ namespace Web.Models
         public string ETag { get; set; }
     }
 
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum DeliveryStatus
+    {
+        Unknown = 0,
+        Delivered = 1,
+        Bounced = 2,
+        Deferred = 3,
+        SpamReport = 4,
+        Rejected = 5,
+    }
+
     public class EmailJobRecipient
     {
         public string Email { get; set; }
@@ -104,5 +115,24 @@ namespace Web.Models
         public string Error { get; set; }
 
         public DateTime? SentUtc { get; set; }
+
+        /// <summary>
+        /// Post-delivery status reported by the email provider's webhook (e.g. delivered, bounced).
+        /// Separate from <see cref="Status"/> which tracks relay acceptance.
+        /// </summary>
+        public DeliveryStatus DeliveryStatus { get; set; }
+
+        public DateTime? DeliveryStatusUpdatedUtc { get; set; }
+
+        /// <summary>
+        /// Provider-specific message ID for debugging and correlation.
+        /// For SendGrid, populated from the <c>sg_message_id</c> field in webhook events.
+        /// </summary>
+        public string? ProviderMessageId { get; set; }
+
+        /// <summary>
+        /// Which email provider sent this message (e.g. "SendGrid", "Ses").
+        /// </summary>
+        public string? Provider { get; set; }
     }
 }

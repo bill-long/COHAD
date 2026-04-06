@@ -17,6 +17,8 @@ namespace Web.Services.Repositories
 
         Task<List<Resident>> GetByHomeIdsAsync(IEnumerable<Guid> homeIds);
 
+        Task<List<Resident>> GetByEmailAsync(string email);
+
         Task<Resident> UpsertAsync(Resident resident);
 
         Task DeleteAsync(Guid id);

@@ -4,11 +4,12 @@ import { AfterViewInit, Component, Inject, OnDestroy, OnInit, ViewChild } from '
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { Observable, Subscription, zip } from 'rxjs';
 import { filter, map, take } from 'rxjs/operators';
-import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
+import { EmailJobSummary, EmailJobStatus, TestRecipientOption } from 'src/app/models';
 import { EmailJobListComponent } from 'src/app/components/email-job-list/email-job-list.component';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
+import { EmailJobService } from 'src/app/services/email-job.service';
 import { applicationState, ApplicationState } from 'src/app/state';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
 import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
@@ -36,15 +37,23 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
   subject!: string;
   htmlBody!: string;
   editEnabled = true;
-  testSucceeded = false;
   sendSucceeded = false;
   errorText!: string | null;
 
-  // Email job queue state
+  // Test recipient picker
+  testRecipients: TestRecipientOption[] = [];
+  selectedTestRecipients: Set<string> = new Set();
+
+  // Email job queue state (real send)
   activeJob: EmailJobSummary | null = null;
   jobCompleted = false;
 
+  // Test send job (separate so the form stays intact)
+  activeTestJob: EmailJobSummary | null = null;
+  testJobCompleted = false;
+
   private jobSubscriptions: Subscription[] = [];
+  private testJobSubscriptions: Subscription[] = [];
 
   constructor(
     private httpClient: HttpClient,
@@ -52,6 +61,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     private router: Router,
     private telemetry: ApplicationInsightsService,
     private emailJobNotifications: EmailJobNotificationsService,
+    private emailJobService: EmailJobService,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(DOCUMENT) private document: Document,
   ) {
@@ -84,6 +94,17 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
       .subscribe(id => {
         this.focusJobId = id;
       });
+
+    this.emailJobService.getTestRecipients().subscribe({
+      next: recipients => {
+        this.testRecipients = recipients;
+        // Pre-select all by default
+        this.selectedTestRecipients = new Set(recipients.map(r => r.email));
+      },
+      error: () => {
+        this.testRecipients = [];
+      },
+    });
   }
 
   ngAfterViewInit(): void {
@@ -101,6 +122,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.routeQuerySub?.unsubscribe();
     this.routerEventsSub?.unsubscribe();
     this.teardownJobSubscriptions();
+    this.teardownTestJobSubscriptions();
   }
 
   /** Ensures the jobs block is in view when landing with #email-jobs (runs after RouterScroller). */
@@ -164,10 +186,6 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
-  get apiUserEmail(): Observable<string> {
-    return this.appState.pipe(map(s => s.apiUser?.email || ''));
-  }
-
   get jobProgressPercent(): number {
     if (!this.activeJob || this.activeJob.totalRecipients === 0) return 0;
     const processed = this.activeJob.sentCount + this.activeJob.failedCount;
@@ -185,54 +203,76 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  toggleTestRecipient(email: string): void {
+    if (this.selectedTestRecipients.has(email)) {
+      this.selectedTestRecipients.delete(email);
+    } else {
+      this.selectedTestRecipients.add(email);
+    }
+    // Trigger change detection by replacing the Set reference
+    this.selectedTestRecipients = new Set(this.selectedTestRecipients);
+  }
+
+  get hasSelectedTestRecipients(): boolean {
+    return this.selectedTestRecipients.size > 0;
+  }
+
   sendEmail(isTest: boolean) {
     this.editEnabled = false;
+    this.errorText = null;
+
     if (isTest) {
-      this.testSucceeded = false;
+      this.activeTestJob = null;
+      this.testJobCompleted = false;
+      this.teardownTestJobSubscriptions();
     }
 
-    this.httpClient
-      .put(
-        `api/email/${this.senderEndpoint}`,
-        {
-          subject: this.subject,
-          htmlBody: this.htmlBody,
-          isTestEmail: isTest,
-        },
-        { observe: 'response' },
-      )
-      .subscribe({
-        next: (resp: HttpResponse<object>) => {
-          this.errorText = null;
+    const payload: Record<string, unknown> = {
+      subject: this.subject,
+      htmlBody: this.htmlBody,
+      isTestEmail: isTest,
+    };
+    if (isTest) {
+      payload['testRecipientEmails'] = Array.from(this.selectedTestRecipients);
+    }
+
+    this.httpClient.put(`api/email/${this.senderEndpoint}`, payload, { observe: 'response' }).subscribe({
+      next: (resp: HttpResponse<object>) => {
+        if (resp.status === 202) {
+          const jobSummary = resp.body as EmailJobSummary;
+          this.telemetry.trackEvent('EmailSent', {
+            sender: this.senderEndpoint,
+            jobId: jobSummary.id,
+            isTest: String(isTest),
+          });
           if (isTest) {
-            // Test email: synchronous 200 OK
-            this.testSucceeded = true;
+            this.activeTestJob = jobSummary;
+            this.testJobCompleted = false;
+            this.subscribeToTestJobUpdates(jobSummary.id);
             this.editEnabled = true;
-          } else if (resp.status === 202) {
-            // Non-test: 202 Accepted with EmailJobSummary
-            const jobSummary = resp.body as EmailJobSummary;
-            this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint, jobId: jobSummary.id });
+          } else {
             this.activeJob = jobSummary;
             this.jobCompleted = false;
             this.sendSucceeded = true;
             this.subscribeToJobUpdates(jobSummary.id);
-            this.emailJobList?.loadJobs();
-          } else if (resp.status === 200 && resp.body && (resp.body as any).message) {
-            // 200 OK with a message means no matching recipients
-            this.errorText = (resp.body as any).message;
-            this.editEnabled = true;
-          } else {
-            // Fallback for unexpected success responses
-            this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint });
-            this.sendSucceeded = true;
-            this.editEnabled = true;
           }
-        },
-        error: err => {
-          this.errorText = httpErrorMessage(err, 'Failed to send email.');
+          this.emailJobList?.loadJobs();
+        } else if (resp.status === 200 && resp.body && (resp.body as any).message) {
+          // 200 OK with a message means no matching recipients
+          this.errorText = (resp.body as any).message;
           this.editEnabled = true;
-        },
-      });
+        } else {
+          // Fallback for unexpected success responses
+          this.telemetry.trackEvent('EmailSent', { sender: this.senderEndpoint });
+          this.sendSucceeded = true;
+          this.editEnabled = true;
+        }
+      },
+      error: err => {
+        this.errorText = httpErrorMessage(err, 'Failed to send email.');
+        this.editEnabled = true;
+      },
+    });
   }
 
   sendNew() {
@@ -240,10 +280,13 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.htmlBody = '';
     this.editEnabled = true;
     this.sendSucceeded = false;
-    this.testSucceeded = false;
     this.activeJob = null;
     this.jobCompleted = false;
+    this.activeTestJob = null;
+    this.testJobCompleted = false;
+    this.selectedTestRecipients = new Set(this.testRecipients.map(r => r.email));
     this.teardownJobSubscriptions();
+    this.teardownTestJobSubscriptions();
   }
 
   private subscribeToJobUpdates(jobId: string): void {
@@ -277,8 +320,44 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
+  private subscribeToTestJobUpdates(jobId: string): void {
+    this.teardownTestJobSubscriptions();
+
+    this.testJobSubscriptions.push(
+      this.emailJobNotifications.progress$.subscribe(event => {
+        if (event.jobId === jobId && this.activeTestJob) {
+          this.activeTestJob = {
+            ...this.activeTestJob,
+            status: event.status,
+            sentCount: event.sentCount,
+            failedCount: event.failedCount,
+            totalRecipients: event.totalRecipients,
+          };
+        }
+      }),
+      this.emailJobNotifications.completed$.subscribe(event => {
+        if (event.jobId === jobId && this.activeTestJob) {
+          this.activeTestJob = {
+            ...this.activeTestJob,
+            status: event.status,
+            sentCount: event.sentCount,
+            failedCount: event.failedCount,
+            totalRecipients: event.totalRecipients,
+            lastError: event.lastError,
+          };
+          this.testJobCompleted = true;
+        }
+      }),
+    );
+  }
+
   private teardownJobSubscriptions(): void {
     this.jobSubscriptions.forEach(s => s.unsubscribe());
     this.jobSubscriptions = [];
+  }
+
+  private teardownTestJobSubscriptions(): void {
+    this.testJobSubscriptions.forEach(s => s.unsubscribe());
+    this.testJobSubscriptions = [];
   }
 }
