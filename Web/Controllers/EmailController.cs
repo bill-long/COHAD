@@ -27,7 +27,6 @@ namespace Web.Controllers
         private readonly IDocumentFileStore _fileStore;
         private readonly EmailJobQueue _emailJobQueue;
         private readonly EmailJobProcessor _emailJobProcessor;
-        private readonly IEmailService _emailService;
         private readonly EmailJobCleanupService _emailJobCleanup;
         private readonly ILogger<EmailController> _logger;
 
@@ -40,7 +39,6 @@ namespace Web.Controllers
             IDocumentFileStore fileStore,
             EmailJobQueue emailJobQueue,
             EmailJobProcessor emailJobProcessor,
-            IEmailService emailService,
             EmailJobCleanupService emailJobCleanup,
             ILogger<EmailController> logger
         )
@@ -53,7 +51,6 @@ namespace Web.Controllers
             _fileStore = fileStore;
             _emailJobQueue = emailJobQueue;
             _emailJobProcessor = emailJobProcessor;
-            _emailService = emailService;
             _emailJobCleanup = emailJobCleanup;
             _logger = logger;
         }

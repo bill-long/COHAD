@@ -34,7 +34,6 @@ public sealed class EmailControllerJobTests
     private readonly Mock<IAuditLogRepository> _audit = new();
     private readonly Mock<IEmailJobRepository> _jobRepo = new();
     private readonly Mock<IDocumentFileStore> _fileStore = new();
-    private readonly Mock<IEmailService> _emailService = new();
     private readonly EmailJobCleanupService _cleanup;
     private readonly EmailJobQueue _queue = new();
 
@@ -125,7 +124,6 @@ public sealed class EmailControllerJobTests
             _fileStore.Object,
             _queue,
             processor,
-            _emailService.Object,
             _cleanup,
             NullLogger<EmailController>.Instance
         )
@@ -259,20 +257,6 @@ public sealed class EmailControllerJobTests
                     )
                 ),
             Times.Once
-        );
-
-        // Synchronous email service should NOT be called
-        _emailService.Verify(
-            s =>
-                s.SendEmail(
-                    It.IsAny<string>(),
-                    It.IsAny<string>(),
-                    It.IsAny<EmailInfo>(),
-                    It.IsAny<Func<EmailAddress, bool>>(),
-                    It.IsAny<string>(),
-                    It.IsAny<ClaimsPrincipal>()
-                ),
-            Times.Never
         );
     }
 

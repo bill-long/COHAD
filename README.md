@@ -181,7 +181,7 @@ When `ASPNETCORE_ENVIRONMENT=MockData`, bulk sends are **simulated** (no SMTP). 
 | `EmailJobs:Mock:FailAllRecipients` | `EmailJobs__Mock__FailAllRecipients` | `true` — every simulated send fails (exercise **Failed** / **Retry**). |
 | `EmailJobs:Mock:JobFatalError` | `EmailJobs__Mock__JobFatalError` | Non-empty string — job fails **immediately** with this `LastError` (no per-recipient simulation). |
 
-**Test email** from the Send Email page still uses **`NoOpEmailService`** in MockData (instant success, no SMTP).
+**Test email** from the Send Email page goes through the job queue in all environments (MockData uses simulated delays, no SMTP).
 
 **Cancel / retry**: Use **Manage → Email Jobs** and the job detail page; behavior is the same as production (SignalR progress + REST APIs).
 

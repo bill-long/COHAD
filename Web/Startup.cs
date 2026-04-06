@@ -263,7 +263,7 @@ namespace Web
 
             // Unsubscribe token service — only registered when a signing key is configured.
             // Without a key, the UnsubscribeController still works (returns 400 for all tokens)
-            // and EmailService sends emails without unsubscribe headers/footer.
+            // and EmailJobProcessor sends emails without unsubscribe headers/footer.
             var unsubKey = Configuration.GetSection("UnsubscribeToken")["SigningKey"];
             if (!string.IsNullOrWhiteSpace(unsubKey) && Encoding.UTF8.GetByteCount(unsubKey) >= 32)
             {
@@ -300,7 +300,6 @@ namespace Web
                 services.AddSingleton<IDocumentFileStore>(sp => new CachedDocumentFileStore(
                     new MockDocumentFileStore()
                 ));
-                services.AddScoped<IEmailService, NoOpEmailService>();
                 // Seeds sample completed jobs + HTML blobs for Manage → Email testing.
                 services.AddSingleton<IEmailJobRepository>(sp => new MockEmailJobRepository(
                     sp.GetRequiredService<IDocumentFileStore>()
@@ -379,7 +378,6 @@ namespace Web
                     new AzureBlobDocumentFileStore(sp.GetRequiredService<IOptions<DocumentStorageOptions>>())
                 ));
 
-                services.AddScoped<IEmailService, EmailService>();
                 services.AddScoped<IEmailJobRepository>(sp => new CosmosEmailJobRepository(
                     sp.GetRequiredService<CosmosClient>().GetContainer(db, "EmailJobs")
                 ));
