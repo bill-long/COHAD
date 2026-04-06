@@ -102,6 +102,24 @@ namespace Web.Services
                             (int)response.StatusCode,
                             body
                         );
+
+                        // PayPal returns 404 INVALID_REQUEST when the reporting data for the
+                        // requested date range is not yet available (recent transactions can take
+                        // up to 48 hours to appear) or the range is too old. Treat this as an
+                        // empty result for the current window rather than a fatal error.
+                        if (
+                            response.StatusCode == System.Net.HttpStatusCode.NotFound
+                            && body.Contains("INVALID_REQUEST", StringComparison.OrdinalIgnoreCase)
+                        )
+                        {
+                            _logger.LogWarning(
+                                "PayPal returned 404 INVALID_REQUEST for window [{Start}, {End}]; treating as empty.",
+                                startParam,
+                                endParam
+                            );
+                            break;
+                        }
+
                         response.EnsureSuccessStatusCode();
                     }
 
