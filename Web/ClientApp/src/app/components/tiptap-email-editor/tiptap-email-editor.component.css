@@ -8,7 +8,7 @@
 }
 
 /* Toolbar */
-.toolbar {
+.tiptap-email-editor .toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
@@ -18,7 +18,7 @@
   align-items: center;
 }
 
-.toolbar-group {
+.tiptap-email-editor .toolbar-group {
   display: flex;
   align-items: center;
   gap: 1px;
@@ -26,12 +26,12 @@
   border-right: 1px solid var(--border-faint);
 }
 
-.toolbar-group:last-child {
+.tiptap-email-editor .toolbar-group:last-child {
   border-right: none;
   padding-right: 0;
 }
 
-.toolbar button.mat-mdc-icon-button {
+.tiptap-email-editor .toolbar button.mat-mdc-icon-button {
   width: 32px;
   height: 32px;
   padding: 4px;
@@ -39,20 +39,20 @@
   font-size: 18px;
 }
 
-.toolbar button.mat-mdc-icon-button .mat-icon {
+.tiptap-email-editor .toolbar button.mat-mdc-icon-button .mat-icon {
   width: 20px;
   height: 20px;
   font-size: 20px;
   line-height: 20px;
 }
 
-.toolbar button.active {
+.tiptap-email-editor .toolbar button.active {
   background: var(--surface-chip);
   border-radius: 4px;
 }
 
 /* Dropdowns */
-.toolbar-select {
+.tiptap-email-editor .toolbar-select {
   height: 28px;
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
@@ -64,24 +64,24 @@
   max-width: 70px;
 }
 
-.toolbar-select-wide {
+.tiptap-email-editor .toolbar-select-wide {
   max-width: 110px;
 }
 
-.toolbar-select:focus {
+.tiptap-email-editor .toolbar-select:focus {
   outline: 2px solid var(--primary-sage);
   outline-offset: -1px;
 }
 
-/* Color picker grid */
-.color-grid {
+/* Color picker grid — scoped via unique class to avoid mat-menu conflicts */
+.tiptap-color-grid {
   display: grid;
   grid-template-columns: repeat(6, 28px);
   gap: 3px;
   padding: 8px;
 }
 
-.color-swatch {
+.tiptap-color-grid .color-swatch {
   width: 28px;
   height: 28px;
   border: 1px solid var(--border-subtle);
@@ -90,21 +90,26 @@
   padding: 0;
 }
 
-.color-swatch.active {
+.tiptap-color-grid .color-swatch.active {
   outline: 2px solid var(--primary-sage);
   outline-offset: 1px;
 }
 
-.color-swatch.transparent-swatch {
+.tiptap-color-grid .color-swatch.transparent-swatch {
   background: linear-gradient(135deg, #fff 45%, #ff0000 45%, #ff0000 55%, #fff 55%) !important;
 }
 
-.color-swatch:hover {
+.tiptap-color-grid .color-swatch:hover {
   transform: scale(1.15);
 }
 
+.tiptap-color-grid .color-swatch:focus-visible {
+  outline: 2px solid var(--primary-sage);
+  outline-offset: 1px;
+}
+
 /* Editor content area */
-.editor-content {
+.tiptap-email-editor .editor-content {
   min-height: 200px;
   padding: 0;
 }
@@ -186,26 +191,28 @@
 
 /* ── Mobile: ≤600px ── */
 @media (max-width: 600px) {
-  .toolbar {
+  .tiptap-email-editor .toolbar {
     gap: 1px;
     padding: 3px 4px;
   }
 
-  .toolbar-group {
+  .tiptap-email-editor .toolbar-group {
     padding-right: 4px;
   }
 
-  .toolbar button.mat-mdc-icon-button {
+  .tiptap-email-editor .toolbar button.mat-mdc-icon-button {
     width: 44px;
     height: 44px;
   }
 
-  .toolbar-select {
+  .tiptap-email-editor .toolbar-select {
     max-width: 60px;
     font-size: 11px;
+    height: 44px;
+    padding: 0 6px;
   }
 
-  .toolbar-select-wide {
+  .tiptap-email-editor .toolbar-select-wide {
     max-width: 90px;
   }
 
@@ -214,37 +221,22 @@
     min-height: 160px;
   }
 
-  .color-grid {
-    grid-template-columns: repeat(6, 32px);
+  .tiptap-color-grid {
+    grid-template-columns: repeat(6, 44px);
     gap: 4px;
   }
 
-  .color-swatch {
-    width: 32px;
-    height: 32px;
+  .tiptap-color-grid .color-swatch {
+    width: 44px;
+    height: 44px;
   }
 }
 
 /* ── Mobile: ≤480px ── */
 @media (max-width: 480px) {
-  .toolbar-group {
+  .tiptap-email-editor .toolbar-group {
     padding-right: 3px;
     border-right: none;
-  }
-
-  .toolbar button.mat-mdc-icon-button {
-    width: 44px;
-    height: 44px;
-  }
-
-  .color-grid {
-    grid-template-columns: repeat(6, 36px);
-    gap: 6px;
-  }
-
-  .color-swatch {
-    width: 36px;
-    height: 36px;
   }
 
   .tiptap-email-editor .tiptap {

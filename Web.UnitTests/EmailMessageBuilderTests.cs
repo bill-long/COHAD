@@ -25,9 +25,9 @@ public class EmailMessageBuilderTests
     }
 
     [Fact]
-    public void InlineCss_ReturnsEmptyForNullOrWhitespace()
+    public void InlineCss_ReturnsEmptyForNull_PreservesWhitespace()
     {
-        Assert.Null(EmailMessageBuilder.InlineCss(null));
+        Assert.Equal("", EmailMessageBuilder.InlineCss(null));
         Assert.Equal("", EmailMessageBuilder.InlineCss(""));
         Assert.Equal("   ", EmailMessageBuilder.InlineCss("   "));
     }
@@ -66,5 +66,27 @@ public class EmailMessageBuilderTests
 
         Assert.Equal(html, result.ProcessedHtml);
         Assert.Empty(result.Images);
+    }
+
+    [Fact]
+    public void InlineCss_ThenExtractInlineImages_PreservesDataUriImages()
+    {
+        var base64 = Convert.ToBase64String(new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+        var html =
+            $"<html><head><style>p {{ color: red; }}</style></head>"
+            + $"<body><p>Hello</p><img src=\"data:image/png;base64,{base64}\"></body></html>";
+
+        var inlined = EmailMessageBuilder.InlineCss(html);
+
+        // CSS inlining should not alter the img data URI
+        Assert.Contains($"data:image/png;base64,{base64}", inlined);
+
+        var result = EmailMessageBuilder.ExtractInlineImages(inlined);
+
+        Assert.Single(result.Images);
+        Assert.Contains("cid:", result.ProcessedHtml);
+        Assert.DoesNotContain("data:image", result.ProcessedHtml);
+        // Verify the paragraph got its style inlined
+        Assert.Contains("color: red", result.ProcessedHtml);
     }
 }

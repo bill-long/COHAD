@@ -13,10 +13,10 @@ namespace Web.Services
         /// Moves CSS from &lt;style&gt; blocks into inline style attributes so that
         /// email clients (Gmail, Outlook, etc.) render styles correctly.
         /// </summary>
-        public static string InlineCss(string html)
+        public static string InlineCss(string? html)
         {
             if (string.IsNullOrWhiteSpace(html))
-                return html;
+                return html ?? string.Empty;
 
             var result = PreMailer.Net.PreMailer.MoveCssInline(
                 html,

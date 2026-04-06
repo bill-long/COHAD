@@ -113,7 +113,7 @@ export class TiptapEmailEditorComponent implements OnInit, OnDestroy, ControlVal
         Highlight.configure({ multicolor: true }),
         TextAlign.configure({ types: ['heading', 'paragraph'] }),
         Image.configure({ allowBase64: true, inline: true }),
-        Link.configure({ openOnClick: false }),
+        Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'] }),
         Table.configure({ resizable: false }),
         TableRow,
         TableCell,
@@ -231,11 +231,17 @@ export class TiptapEmailEditorComponent implements OnInit, OnDestroy, ControlVal
     input.click();
   }
 
+  private static readonly ALLOWED_PROTOCOLS = /^(https?:|mailto:)/i;
+
   insertLink(): void {
     const url = window.prompt('Enter URL:');
-    if (url) {
-      this.editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    if (!url) return;
+    const trimmed = url.trim();
+    if (!TiptapEmailEditorComponent.ALLOWED_PROTOCOLS.test(trimmed)) {
+      window.alert('Only http, https, and mailto links are allowed.');
+      return;
     }
+    this.editor.chain().focus().extendMarkRange('link').setLink({ href: trimmed }).run();
   }
 
   removeLink(): void {
@@ -244,5 +250,36 @@ export class TiptapEmailEditorComponent implements OnInit, OnDestroy, ControlVal
 
   insertTable(): void {
     this.editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  }
+
+  onColorGridKeydown(event: KeyboardEvent, type: 'text' | 'bg'): void {
+    const grid = event.currentTarget as HTMLElement;
+    const buttons = Array.from(grid.querySelectorAll<HTMLButtonElement>('.color-swatch'));
+    const current = grid.querySelector<HTMLButtonElement>('.color-swatch:focus');
+    if (!current || buttons.length === 0) return;
+
+    const cols = 6;
+    const idx = buttons.indexOf(current);
+    let next = -1;
+
+    switch (event.key) {
+      case 'ArrowRight':
+        next = idx + 1 < buttons.length ? idx + 1 : idx;
+        break;
+      case 'ArrowLeft':
+        next = idx - 1 >= 0 ? idx - 1 : idx;
+        break;
+      case 'ArrowDown':
+        next = idx + cols < buttons.length ? idx + cols : idx;
+        break;
+      case 'ArrowUp':
+        next = idx - cols >= 0 ? idx - cols : idx;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    buttons[next]?.focus();
   }
 }
