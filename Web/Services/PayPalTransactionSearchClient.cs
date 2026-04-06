@@ -97,6 +97,28 @@ namespace Web.Services
                     var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                     if (!response.IsSuccessStatusCode)
                     {
+                        // PayPal returns 404 INVALID_REQUEST with a specific message when the
+                        // reporting data for the requested date range is not yet available
+                        // (recent transactions can take up to 48 hours to appear). Treat only
+                        // this specific case as an empty result for the current window; other
+                        // INVALID_REQUEST variants (malformed params, unsupported ranges) still
+                        // throw so they surface as errors.
+                        if (
+                            response.StatusCode == System.Net.HttpStatusCode.NotFound
+                            && body.Contains(
+                                "Data for the given start date is not available",
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                        )
+                        {
+                            _logger.LogWarning(
+                                "PayPal returned 404 INVALID_REQUEST for window [{Start}, {End}]; treating as empty.",
+                                startParam,
+                                endParam
+                            );
+                            break;
+                        }
+
                         _logger.LogError(
                             "PayPal Transaction Search failed: {Status} {Body}",
                             (int)response.StatusCode,
