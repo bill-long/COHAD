@@ -180,15 +180,6 @@
   font-weight: 600;
 }
 
-/* Placeholder when empty */
-.tiptap-email-editor .tiptap p.is-editor-empty:first-child::before {
-  color: var(--text-tertiary);
-  content: 'Write your email content here…';
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
-
 /* ── Mobile: ≤600px ── */
 @media (max-width: 600px) {
   .tiptap-email-editor .toolbar {

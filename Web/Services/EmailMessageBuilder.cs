@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Text.RegularExpressions;
 using MimeKit;
 using MimeKit.Utils;
-using PreMailer.Net;
 
 namespace Web.Services
 {

@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
 import { Editor } from '@tiptap/core';
@@ -64,16 +63,7 @@ const BG_COLORS = [
 @Component({
   selector: 'app-tiptap-email-editor',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    MatButtonModule,
-    MatIconModule,
-    MatSelectModule,
-    MatTooltipModule,
-    MatMenuModule,
-    TiptapEditorDirective,
-  ],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, MatMenuModule, TiptapEditorDirective],
   templateUrl: './tiptap-email-editor.component.html',
   styleUrls: ['./tiptap-email-editor.component.css'],
   encapsulation: ViewEncapsulation.None,
