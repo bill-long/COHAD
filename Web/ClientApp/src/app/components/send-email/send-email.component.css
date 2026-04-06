@@ -153,6 +153,10 @@
   min-height: 36px;
 }
 
+.test-job-progress {
+  margin-top: 12px;
+}
+
 /* ── Mobile: large phones (≤600px) ── */
 @media (max-width: 600px) {
   .send-email-page {

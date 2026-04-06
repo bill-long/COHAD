@@ -44,11 +44,16 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
   testRecipients: TestRecipientOption[] = [];
   selectedTestRecipients: Set<string> = new Set();
 
-  // Email job queue state
+  // Email job queue state (real send)
   activeJob: EmailJobSummary | null = null;
   jobCompleted = false;
 
+  // Test send job (separate so the form stays intact)
+  activeTestJob: EmailJobSummary | null = null;
+  testJobCompleted = false;
+
   private jobSubscriptions: Subscription[] = [];
+  private testJobSubscriptions: Subscription[] = [];
 
   constructor(
     private httpClient: HttpClient,
@@ -117,6 +122,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.routeQuerySub?.unsubscribe();
     this.routerEventsSub?.unsubscribe();
     this.teardownJobSubscriptions();
+    this.teardownTestJobSubscriptions();
   }
 
   /** Ensures the jobs block is in view when landing with #email-jobs (runs after RouterScroller). */
@@ -233,10 +239,17 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
             jobId: jobSummary.id,
             isTest: String(isTest),
           });
-          this.activeJob = jobSummary;
-          this.jobCompleted = false;
-          this.sendSucceeded = true;
-          this.subscribeToJobUpdates(jobSummary.id);
+          if (isTest) {
+            this.activeTestJob = jobSummary;
+            this.testJobCompleted = false;
+            this.subscribeToTestJobUpdates(jobSummary.id);
+            this.editEnabled = true;
+          } else {
+            this.activeJob = jobSummary;
+            this.jobCompleted = false;
+            this.sendSucceeded = true;
+            this.subscribeToJobUpdates(jobSummary.id);
+          }
           this.emailJobList?.loadJobs();
         } else if (resp.status === 200 && resp.body && (resp.body as any).message) {
           // 200 OK with a message means no matching recipients
@@ -263,8 +276,11 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sendSucceeded = false;
     this.activeJob = null;
     this.jobCompleted = false;
+    this.activeTestJob = null;
+    this.testJobCompleted = false;
     this.selectedTestRecipients = new Set(this.testRecipients.map(r => r.email));
     this.teardownJobSubscriptions();
+    this.teardownTestJobSubscriptions();
   }
 
   private subscribeToJobUpdates(jobId: string): void {
@@ -298,8 +314,44 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
+  private subscribeToTestJobUpdates(jobId: string): void {
+    this.teardownTestJobSubscriptions();
+
+    this.testJobSubscriptions.push(
+      this.emailJobNotifications.progress$.subscribe(event => {
+        if (event.jobId === jobId && this.activeTestJob) {
+          this.activeTestJob = {
+            ...this.activeTestJob,
+            status: event.status,
+            sentCount: event.sentCount,
+            failedCount: event.failedCount,
+            totalRecipients: event.totalRecipients,
+          };
+        }
+      }),
+      this.emailJobNotifications.completed$.subscribe(event => {
+        if (event.jobId === jobId && this.activeTestJob) {
+          this.activeTestJob = {
+            ...this.activeTestJob,
+            status: event.status,
+            sentCount: event.sentCount,
+            failedCount: event.failedCount,
+            totalRecipients: event.totalRecipients,
+            lastError: event.lastError,
+          };
+          this.testJobCompleted = true;
+        }
+      }),
+    );
+  }
+
   private teardownJobSubscriptions(): void {
     this.jobSubscriptions.forEach(s => s.unsubscribe());
     this.jobSubscriptions = [];
+  }
+
+  private teardownTestJobSubscriptions(): void {
+    this.testJobSubscriptions.forEach(s => s.unsubscribe());
+    this.testJobSubscriptions = [];
   }
 }
