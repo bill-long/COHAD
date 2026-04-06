@@ -23,13 +23,6 @@
         <app-tiptap-email-editor [readOnly]="!editEnabled" [(ngModel)]="htmlBody"></app-tiptap-email-editor>
       </div>
 
-      <div class="actions">
-        <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(false)" [disabled]="!editEnabled">
-          Send Email To Neighborhood
-        </button>
-        <button *ngIf="sendSucceeded" mat-flat-button color="primary" (click)="sendNew()">Compose a new email</button>
-      </div>
-
       <div *ngIf="!sendSucceeded && testRecipients.length > 0" class="test-email-section">
         <div class="test-email-header">Send Test Email</div>
         <div class="test-recipient-list">
@@ -89,6 +82,13 @@
             </div>
           </div>
         </ng-container>
+      </div>
+
+      <div class="actions">
+        <button *ngIf="!sendSucceeded" mat-flat-button color="primary" (click)="sendEmail(false)" [disabled]="!editEnabled">
+          Send Email To Neighborhood
+        </button>
+        <button *ngIf="sendSucceeded" mat-flat-button color="primary" (click)="sendNew()">Compose a new email</button>
       </div>
 
       <!-- Job queued -->
