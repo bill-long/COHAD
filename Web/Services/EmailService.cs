@@ -127,16 +127,19 @@ namespace Web.Services
             if (recipientList.Count == 0)
                 return;
 
-            var htmlBody = EmailMessageBuilder.InlineCss(emailInfo.HtmlBody ?? string.Empty);
-            var imageData = EmailMessageBuilder.ExtractInlineImages(htmlBody);
-            var categoryDisplayName = EmailSubscriptionCategories.DisplayNames.TryGetValue(category ?? "", out var name)
-                ? name
-                : category;
-
             var protocolLog = new MemoryStream();
             var logger = new ProtocolLogger(protocolLog);
             try
             {
+                var htmlBody = EmailMessageBuilder.InlineCss(emailInfo.HtmlBody ?? string.Empty);
+                var imageData = EmailMessageBuilder.ExtractInlineImages(htmlBody);
+                var categoryDisplayName = EmailSubscriptionCategories.DisplayNames.TryGetValue(
+                    category ?? "",
+                    out var name
+                )
+                    ? name
+                    : category;
+
                 using var smtpClient = new SmtpClient(logger);
                 await smtpClient.ConnectAsync(_options.SmtpHost, 587, MailKit.Security.SecureSocketOptions.StartTls);
                 await smtpClient.AuthenticateAsync(_options.SmtpUser, _options.SmtpPassword);
@@ -337,12 +340,21 @@ namespace Web.Services
 
         /// <summary>
         /// Legacy single-pass image conversion (used by direct sends without per-recipient tokens).
+        /// Falls back to plain HTML body if CSS inlining or image extraction fails.
         /// </summary>
         private static MimeEntity ConvertImageFormat(string htmlBody)
         {
-            var inlinedHtml = EmailMessageBuilder.InlineCss(htmlBody ?? string.Empty);
-            var extracted = EmailMessageBuilder.ExtractInlineImages(inlinedHtml);
-            return EmailMessageBuilder.BuildBodyWithImages(extracted.ProcessedHtml, extracted.Images);
+            try
+            {
+                var inlinedHtml = EmailMessageBuilder.InlineCss(htmlBody ?? string.Empty);
+                var extracted = EmailMessageBuilder.ExtractInlineImages(inlinedHtml);
+                return EmailMessageBuilder.BuildBodyWithImages(extracted.ProcessedHtml, extracted.Images);
+            }
+            catch
+            {
+                var bodyBuilder = new BodyBuilder { HtmlBody = htmlBody ?? string.Empty };
+                return bodyBuilder.ToMessageBody();
+            }
         }
 
         internal class EmailRecipient

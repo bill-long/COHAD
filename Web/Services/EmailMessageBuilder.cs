@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using MimeKit;
 using MimeKit.Utils;
 using PreMailer.Net;
@@ -12,71 +13,64 @@ namespace Web.Services
         /// <summary>
         /// Moves CSS from &lt;style&gt; blocks into inline style attributes so that
         /// email clients (Gmail, Outlook, etc.) render styles correctly.
+        /// If no &lt;style&gt; blocks are present or inlining fails, the original HTML is returned.
         /// </summary>
         public static string InlineCss(string? html)
         {
             if (string.IsNullOrWhiteSpace(html))
                 return html ?? string.Empty;
 
-            var result = PreMailer.Net.PreMailer.MoveCssInline(
-                html,
-                removeStyleElements: true,
-                ignoreElements: "#ignore"
-            );
-            return result.Html;
+            if (html.IndexOf("<style", StringComparison.OrdinalIgnoreCase) < 0)
+                return html;
+
+            try
+            {
+                var result = PreMailer.Net.PreMailer.MoveCssInline(
+                    html,
+                    removeStyleElements: true,
+                    ignoreElements: "#ignore"
+                );
+                return result.Html;
+            }
+            catch
+            {
+                // Fall back to original HTML so email delivery is not blocked
+                return html;
+            }
         }
+
+        private static readonly Regex DataUriImgRegex = new(
+            @"<img\b[^>]*?\bsrc\s*=\s*""data:image/([^;]+);base64,([^""]+)""[^>]*?>",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled
+        );
 
         public static ExtractedImages ExtractInlineImages(string htmlBody)
         {
-            var imageStart = "<img src=\"data:";
-            var imageEnd = "\">";
             var images = new List<InlineImage>();
-            var sb = new StringBuilder();
-
             int imageCount = 0;
-            int position = 0;
-            while (position < htmlBody.Length)
-            {
-                var nextImageStart = htmlBody.IndexOf(imageStart, position);
-                if (nextImageStart < 0)
+
+            var processed = DataUriImgRegex.Replace(
+                htmlBody,
+                match =>
                 {
-                    sb.Append(htmlBody.AsSpan(position));
-                    break;
+                    var imageExtension = match.Groups[1].Value;
+                    var base64 = match.Groups[2].Value;
+                    var imageBytes = Convert.FromBase64String(base64);
+
+                    var contentId = MimeUtils.GenerateMessageId();
+                    images.Add(
+                        new InlineImage
+                        {
+                            FileName = $"image{imageCount++}.{imageExtension}",
+                            ContentId = contentId,
+                            Data = imageBytes,
+                        }
+                    );
+                    return $"<img src=\"cid:{contentId}\">";
                 }
+            );
 
-                sb.Append(htmlBody.AsSpan(position, nextImageStart - position));
-
-                var imageTypeStartPos = nextImageStart + imageStart.Length;
-                var imageTypeEndPos = htmlBody.IndexOf(';', imageTypeStartPos);
-                var imageType = htmlBody[imageTypeStartPos..imageTypeEndPos];
-                var imageExtension = imageType[(imageType.IndexOf('/') + 1)..];
-
-                var encodingStartPos = imageTypeEndPos + 1;
-                var encodingEndPos = htmlBody.IndexOf(',', encodingStartPos);
-                var encoding = htmlBody[encodingStartPos..encodingEndPos];
-                if (encoding != "base64")
-                    throw new InvalidOperationException($"Unsupported image encoding: {encoding}");
-
-                var base64Start = encodingEndPos + 1;
-                var base64End = htmlBody.IndexOf(imageEnd, base64Start);
-                var base64 = htmlBody[base64Start..base64End];
-                var imageBytes = Convert.FromBase64String(base64);
-
-                var contentId = MimeUtils.GenerateMessageId();
-                images.Add(
-                    new InlineImage
-                    {
-                        FileName = $"image{imageCount++}.{imageExtension}",
-                        ContentId = contentId,
-                        Data = imageBytes,
-                    }
-                );
-                sb.Append($"<img src=\"cid:{contentId}\">");
-
-                position = base64End + imageEnd.Length;
-            }
-
-            return new ExtractedImages { ProcessedHtml = sb.ToString(), Images = images };
+            return new ExtractedImages { ProcessedHtml = processed, Images = images };
         }
 
         public static MimeEntity BuildBodyWithImages(string html, List<InlineImage> images)

@@ -86,7 +86,16 @@ const BG_COLORS = [
   ],
 })
 export class TiptapEmailEditorComponent implements OnInit, OnDestroy, ControlValueAccessor {
-  @Input() readOnly = false;
+  private _readOnly = false;
+
+  @Input()
+  set readOnly(val: boolean) {
+    this._readOnly = val;
+    this.editor?.setEditable(!val);
+  }
+  get readOnly(): boolean {
+    return this._readOnly;
+  }
 
   editor!: Editor;
   value = '';
@@ -120,7 +129,7 @@ export class TiptapEmailEditorComponent implements OnInit, OnDestroy, ControlVal
         TableHeader,
       ],
       content: this.value,
-      editable: !this.readOnly,
+      editable: !this._readOnly,
       onUpdate: ({ editor }) => {
         const html = editor.getHTML();
         this.value = html;
@@ -154,7 +163,6 @@ export class TiptapEmailEditorComponent implements OnInit, OnDestroy, ControlVal
 
   setDisabledState(isDisabled: boolean): void {
     this.readOnly = isDisabled;
-    this.editor?.setEditable(!isDisabled);
   }
 
   // Toolbar actions

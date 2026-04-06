@@ -89,4 +89,39 @@ public class EmailMessageBuilderTests
         // Verify the paragraph got its style inlined
         Assert.Contains("color: red", result.ProcessedHtml);
     }
+
+    [Fact]
+    public void ExtractInlineImages_HandlesReorderedAttributes()
+    {
+        var base64 = Convert.ToBase64String(new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+        // src comes after style — the old string parser would miss this
+        var html = $"<img style=\"border: 1px solid red\" src=\"data:image/png;base64,{base64}\">";
+
+        var result = EmailMessageBuilder.ExtractInlineImages(html);
+
+        Assert.Single(result.Images);
+        Assert.Contains("cid:", result.ProcessedHtml);
+        Assert.DoesNotContain("data:image", result.ProcessedHtml);
+    }
+
+    [Fact]
+    public void InlineCss_ShortCircuitsWhenNoStyleBlock()
+    {
+        var html = "<p style=\"color: red\">Already inline</p>";
+        var result = EmailMessageBuilder.InlineCss(html);
+
+        // Should return the exact same string (no PreMailer processing)
+        Assert.Equal(html, result);
+    }
+
+    [Fact]
+    public void InlineCss_FallsBackOnMalformedCss()
+    {
+        // Intentionally weird HTML that might trip up PreMailer
+        var html = "<html><head><style>{{{{</style></head><body><p>OK</p></body></html>";
+        var result = EmailMessageBuilder.InlineCss(html);
+
+        // Should not throw — either inlined or original HTML returned
+        Assert.Contains("OK", result);
+    }
 }
