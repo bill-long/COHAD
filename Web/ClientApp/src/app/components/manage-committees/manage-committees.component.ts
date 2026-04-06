@@ -105,10 +105,13 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   }
 
   removeMember(committee: CommitteeAdmin, member: CommitteeMemberAdmin): void {
+    const isNew = this.newMemberIds.has(member.id);
     const ref = this.dialog.open(ConfirmDialogComponent, {
       data: {
         title: 'Remove member?',
-        body: `Remove "${member.displayName}" from ${committee.displayName}?\n\nThis can't be undone.`,
+        body: isNew
+          ? `Remove "${member.displayName || '(new member)'}" from ${committee.displayName}?`
+          : `Remove "${member.displayName}" from ${committee.displayName}?\n\nThis can't be undone.`,
         confirmText: 'Remove',
         cancelText: 'Cancel',
         confirmColor: 'warn',
@@ -119,16 +122,32 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       if (confirmed !== true) {
         return;
       }
+
+      const cleanupLocal = () => {
+        committee.members = committee.members.filter(m => m.id !== member.id);
+        this.pendingPhotos.get(committee.id)?.delete(member.id);
+        this.revokePreview(committee.id, member.id);
+        delete this.residentSearchModels[member.id];
+        this.filteredResidentsCache.clear();
+        this.newMemberIds.delete(member.id);
+        this.editSnapshots.delete(member.id);
+        if (this.editingMemberId === member.id) {
+          this.editingMemberId = null;
+        }
+      };
+
+      if (isNew) {
+        // Unsaved member: remove locally without hitting the server
+        cleanupLocal();
+        return;
+      }
+
       this.error = '';
       this.success = '';
       this.deletingMember = { key: committee.id, memberId: member.id };
       this.committeeService.deleteMember(committee.id, member.id).subscribe({
         next: () => {
-          committee.members = committee.members.filter(m => m.id !== member.id);
-          this.pendingPhotos.get(committee.id)?.delete(member.id);
-          this.revokePreview(committee.id, member.id);
-          delete this.residentSearchModels[member.id];
-          this.filteredResidentsCache.clear();
+          cleanupLocal();
           this.deletingMember = null;
           this.success = `${member.displayName} removed from ${committee.displayName}.`;
         },
@@ -359,7 +378,6 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   }
 
   saveOrder(): void {
-    this.finishEdit();
     this.error = '';
     this.success = '';
     this.savingOrder = true;
@@ -384,6 +402,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
           if (remaining === 0) {
             this.savingOrder = false;
             if (!failed) {
+              this.finishEdit();
               this.savedOrder = this.committees.map(c => c.id);
               this.success = 'Committee order saved.';
             }
