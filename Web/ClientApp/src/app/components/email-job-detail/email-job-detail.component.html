@@ -120,7 +120,7 @@
                 <td>
                   <span class="status-badge" [ngClass]="recipientStatusClass(r.status)">{{ r.status }}</span>
                 </td>
-                <td>
+                <td class="col-delivery">
                   <span
                     *ngIf="r.deliveryStatus && r.deliveryStatus !== 'Unknown'"
                     class="status-badge"

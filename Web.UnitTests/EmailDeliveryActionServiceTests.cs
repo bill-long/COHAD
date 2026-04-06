@@ -29,12 +29,36 @@ namespace Web.UnitTests
 
         private void SetupHomes(params Home[] homes)
         {
-            _homes.Setup(r => r.GetAllAsync()).ReturnsAsync(homes.ToList());
+            _homes
+                .Setup(r => r.GetByEmailAsync(It.IsAny<string>()))
+                .ReturnsAsync(
+                    (string email) =>
+                        homes
+                            .Where(h =>
+                                string.Equals(
+                                    h.EmailAddress?.Address?.Trim(),
+                                    email,
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            )
+                            .ToList()
+                );
         }
 
         private void SetupResidents(params Resident[] residents)
         {
-            _residents.Setup(r => r.GetAllAsync()).ReturnsAsync(residents.ToList());
+            _residents
+                .Setup(r => r.GetByEmailAsync(It.IsAny<string>()))
+                .ReturnsAsync(
+                    (string email) =>
+                        residents
+                            .Where(r =>
+                                r.EmailAddresses?.Any(ea =>
+                                    string.Equals(ea.Address?.Trim(), email, StringComparison.OrdinalIgnoreCase)
+                                ) == true
+                            )
+                            .ToList()
+                );
         }
 
         // ─── Bounce opt-out ───
@@ -132,8 +156,8 @@ namespace Web.UnitTests
             var service = CreateService();
             await service.ProcessDeliveryEventAsync("user@example.com", status, null);
 
-            _homes.Verify(r => r.GetAllAsync(), Times.Never);
-            _residents.Verify(r => r.GetAllAsync(), Times.Never);
+            _homes.Verify(r => r.GetByEmailAsync(It.IsAny<string>()), Times.Never);
+            _residents.Verify(r => r.GetByEmailAsync(It.IsAny<string>()), Times.Never);
         }
 
         // ─── Case-insensitive matching ───

@@ -111,6 +111,21 @@ namespace Web.MockData
             }
         }
 
+        public Task<List<Home>> GetByEmailAsync(string email)
+        {
+            lock (_homes)
+            {
+                return Task.FromResult(
+                    _homes
+                        .Values.Where(h =>
+                            string.Equals(h.EmailAddress?.Address?.Trim(), email, StringComparison.OrdinalIgnoreCase)
+                        )
+                        .Select(CloneHome)
+                        .ToList()
+                );
+            }
+        }
+
         public Task<Home> UpsertAsync(Home home)
         {
             lock (_homes)

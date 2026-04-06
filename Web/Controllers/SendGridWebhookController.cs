@@ -6,7 +6,9 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.Services;
@@ -23,6 +25,7 @@ namespace Web.Controllers
         private readonly IEmailJobRepository _emailJobRepository;
         private readonly IEmailDeliveryActionService _deliveryActionService;
         private readonly ILogger<SendGridWebhookController> _logger;
+        private readonly bool _isDevelopment;
 
         private static readonly HashSet<string> TrackedEventTypes = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -37,6 +40,7 @@ namespace Web.Controllers
             ISendGridWebhookVerifier verifier,
             IEmailJobRepository emailJobRepository,
             IEmailDeliveryActionService deliveryActionService,
+            IWebHostEnvironment env,
             ILogger<SendGridWebhookController> logger
         )
         {
@@ -44,6 +48,7 @@ namespace Web.Controllers
             _emailJobRepository = emailJobRepository;
             _deliveryActionService = deliveryActionService;
             _logger = logger;
+            _isDevelopment = env.IsDevelopment() || env.IsEnvironment("MockData");
         }
 
         [HttpPost]
@@ -55,8 +60,18 @@ namespace Web.Controllers
                 body = await reader.ReadToEndAsync();
             }
 
-            // Verify signature if configured
-            if (_verifier.IsConfigured)
+            // Verify signature — fail closed in production when key is not configured
+            if (!_verifier.IsConfigured)
+            {
+                if (!_isDevelopment)
+                {
+                    _logger.LogWarning("SendGrid webhook verification key not configured — rejecting request.");
+                    return Forbid();
+                }
+
+                _logger.LogDebug("SendGrid webhook verification not configured — accepting in development mode.");
+            }
+            else
             {
                 var signature = Request.Headers["X-Twilio-Email-Event-Webhook-Signature"].FirstOrDefault();
                 var timestamp = Request.Headers["X-Twilio-Email-Event-Webhook-Timestamp"].FirstOrDefault();
@@ -207,28 +222,23 @@ namespace Web.Controllers
 
         /// <summary>
         /// Determines whether the new delivery status should replace the existing one.
-        /// Severity order: Unknown &lt; Deferred &lt; Delivered &lt; Rejected &lt; SpamReport &lt; Bounced.
+        /// Severity order: Unknown (0) &lt; Deferred (1) &lt; Delivered (2) &lt; Rejected (3) &lt; SpamReport (4) &lt; Bounced (5).
         /// </summary>
         internal static bool ShouldUpdateDeliveryStatus(DeliveryStatus current, DeliveryStatus incoming)
         {
-            if (current == DeliveryStatus.Unknown)
-                return true;
-            // Already terminal — don't downgrade
-            if (
-                current == DeliveryStatus.Bounced
-                || current == DeliveryStatus.SpamReport
-                || current == DeliveryStatus.Rejected
-            )
-                return false;
-            // Deferred can be overridden by anything except Unknown
-            if (current == DeliveryStatus.Deferred)
-                return incoming != DeliveryStatus.Unknown;
-            // Delivered can be overridden by terminal statuses
-            if (current == DeliveryStatus.Delivered)
-                return incoming == DeliveryStatus.Bounced
-                    || incoming == DeliveryStatus.SpamReport
-                    || incoming == DeliveryStatus.Rejected;
-            return true;
+            return GetDeliveryStatusSeverity(incoming) > GetDeliveryStatusSeverity(current);
         }
+
+        internal static int GetDeliveryStatusSeverity(DeliveryStatus status) =>
+            status switch
+            {
+                DeliveryStatus.Unknown => 0,
+                DeliveryStatus.Deferred => 1,
+                DeliveryStatus.Delivered => 2,
+                DeliveryStatus.Rejected => 3,
+                DeliveryStatus.SpamReport => 4,
+                DeliveryStatus.Bounced => 5,
+                _ => 0,
+            };
     }
 }

@@ -597,12 +597,13 @@ namespace Web.Services
                                 )
                             );
 
+                            recipient.Provider = "SendGrid";
+
                             await smtpClient.SendAsync(message, ct);
 
                             recipient.Status = EmailJobRecipientStatus.Sent;
                             recipient.SentUtc = DateTime.UtcNow;
                             recipient.Error = null;
-                            recipient.Provider = "SendGrid";
                             job.LastProgressUtc = DateTime.UtcNow;
                         }
                         catch (OperationCanceledException)

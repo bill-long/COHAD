@@ -125,14 +125,14 @@ namespace Web.Models
         public DateTime? DeliveryStatusUpdatedUtc { get; set; }
 
         /// <summary>
-        /// Provider-specific message ID set at send time, used for webhook event correlation.
-        /// For SendGrid SMTP, the X-Message-Id header; populated via X-SMTPAPI unique_args.
+        /// Provider-specific message ID for debugging and correlation.
+        /// For SendGrid, populated from the <c>sg_message_id</c> field in webhook events.
         /// </summary>
-        public string ProviderMessageId { get; set; }
+        public string? ProviderMessageId { get; set; }
 
         /// <summary>
         /// Which email provider sent this message (e.g. "SendGrid", "Ses").
         /// </summary>
-        public string Provider { get; set; }
+        public string? Provider { get; set; }
     }
 }

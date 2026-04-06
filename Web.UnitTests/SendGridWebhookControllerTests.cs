@@ -4,8 +4,10 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Web.Controllers;
@@ -21,6 +23,13 @@ namespace Web.UnitTests
         private readonly Mock<ISendGridWebhookVerifier> _verifier = new();
         private readonly Mock<IEmailJobRepository> _jobRepo = new();
         private readonly Mock<IEmailDeliveryActionService> _deliveryAction = new();
+        private readonly Mock<IWebHostEnvironment> _env = new();
+
+        public SendGridWebhookControllerTests()
+        {
+            // Default to MockData environment (development-like, accepts unconfigured verifier)
+            _env.Setup(e => e.EnvironmentName).Returns("MockData");
+        }
 
         private SendGridWebhookController CreateController(string body)
         {
@@ -28,6 +37,7 @@ namespace Web.UnitTests
                 _verifier.Object,
                 _jobRepo.Object,
                 _deliveryAction.Object,
+                _env.Object,
                 NullLogger<SendGridWebhookController>.Instance
             );
 
@@ -108,7 +118,7 @@ namespace Web.UnitTests
         }
 
         [Fact]
-        public async Task AcceptsWhenVerifierNotConfigured()
+        public async Task AcceptsWhenVerifierNotConfigured_InDevelopment()
         {
             SetupVerifierNotConfigured();
             var controller = CreateController("[]");
@@ -116,6 +126,18 @@ namespace Web.UnitTests
             var result = await controller.HandleEvents();
 
             Assert.IsType<OkResult>(result);
+        }
+
+        [Fact]
+        public async Task RejectsWhenVerifierNotConfigured_InProduction()
+        {
+            _env.Setup(e => e.EnvironmentName).Returns("Production");
+            SetupVerifierNotConfigured();
+            var controller = CreateController("[]");
+
+            var result = await controller.HandleEvents();
+
+            Assert.IsType<ForbidResult>(result);
         }
 
         [Fact]

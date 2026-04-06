@@ -48,10 +48,7 @@ namespace Web.Services
             var reason = status == DeliveryStatus.Bounced ? "hard bounce" : "spam report";
             _logger.LogInformation("Auto-opting-out email {Email} due to {Reason}.", email, reason);
 
-            var allHomes = await _homeRepository.GetAllAsync();
-            var matchingHomes = allHomes
-                .Where(h => string.Equals(h.EmailAddress?.Address?.Trim(), email, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var matchingHomes = await _homeRepository.GetByEmailAsync(email);
 
             foreach (var home in matchingHomes)
             {
@@ -60,14 +57,7 @@ namespace Web.Services
                 _logger.LogInformation("Opted-out home email for home {HomeId}.", home.Id);
             }
 
-            var allResidents = await _residentRepository.GetAllAsync();
-            var matchingResidents = allResidents
-                .Where(r =>
-                    r.EmailAddresses?.Any(ea =>
-                        string.Equals(ea.Address?.Trim(), email, StringComparison.OrdinalIgnoreCase)
-                    ) == true
-                )
-                .ToList();
+            var matchingResidents = await _residentRepository.GetByEmailAsync(email);
 
             foreach (var resident in matchingResidents)
             {
@@ -99,7 +89,7 @@ namespace Web.Services
                         Time = DateTime.UtcNow,
                         UserId = "system",
                         UserDisplayName = "System (auto)",
-                        SubjectId = email,
+                        SubjectId = redacted,
                         SubjectName = redacted,
                         Action = $"Auto-opted-out due to {reason}. {totalOptOuts} address(es) updated.",
                     }
