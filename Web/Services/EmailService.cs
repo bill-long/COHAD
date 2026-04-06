@@ -127,7 +127,7 @@ namespace Web.Services
             if (recipientList.Count == 0)
                 return;
 
-            var htmlBody = emailInfo.HtmlBody ?? string.Empty;
+            var htmlBody = EmailMessageBuilder.InlineCss(emailInfo.HtmlBody ?? string.Empty);
             var imageData = EmailMessageBuilder.ExtractInlineImages(htmlBody);
             var categoryDisplayName = EmailSubscriptionCategories.DisplayNames.TryGetValue(category ?? "", out var name)
                 ? name
@@ -340,7 +340,8 @@ namespace Web.Services
         /// </summary>
         private static MimeEntity ConvertImageFormat(string htmlBody)
         {
-            var extracted = EmailMessageBuilder.ExtractInlineImages(htmlBody ?? string.Empty);
+            var inlinedHtml = EmailMessageBuilder.InlineCss(htmlBody ?? string.Empty);
+            var extracted = EmailMessageBuilder.ExtractInlineImages(inlinedHtml);
             return EmailMessageBuilder.BuildBodyWithImages(extracted.ProcessedHtml, extracted.Images);
         }
 

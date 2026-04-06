@@ -31,8 +31,6 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { provideNativeDateAdapter } from '@angular/material/core';
 
-import { QuillModule } from 'ngx-quill';
-
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { HomeComponent } from './components/home/home.component';
@@ -92,6 +90,7 @@ import { EmailJobDetailComponent } from './components/email-job-detail/email-job
 import { GlobalErrorHandler } from './services/global-error-handler';
 import { CommitteesComponent } from './components/committees/committees.component';
 import { ManageCommitteesComponent } from './components/manage-committees/manage-committees.component';
+import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tiptap-email-editor.component';
 
 @NgModule({
   declarations: [
@@ -158,24 +157,7 @@ import { ManageCommitteesComponent } from './components/manage-committees/manage
         allowedUrls: ['api/'],
       },
     }),
-    QuillModule.forRoot({
-      modules: {
-        toolbar: [
-          ['bold', 'italic', 'underline', 'strike'], // toggled buttons
-          ['blockquote', 'code-block'],
-          [{ header: 1 }, { header: 2 }], // custom button values
-          [{ list: 'ordered' }, { list: 'bullet' }],
-          [{ indent: '-1' }, { indent: '+1' }], // outdent/indent
-          [{ size: ['small', false, 'large', 'huge'] }], // custom dropdown
-          [{ header: [1, 2, 3, 4, 5, 6, false] }],
-          [{ color: [] }, { background: [] }], // dropdown with defaults from theme
-          [{ font: [] }],
-          [{ align: [] }],
-          ['clean'], // remove formatting button
-          ['link', 'image'],
-        ],
-      },
-    }),
+
     NgxMaskModule.forRoot(),
     MatToolbarModule,
     MatButtonModule,
@@ -205,6 +187,7 @@ import { ManageCommitteesComponent } from './components/manage-committees/manage
     MatDatepickerModule,
     MatBadgeModule,
     DragDropModule,
+    TiptapEmailEditorComponent,
   ],
   providers: [
     provideNativeDateAdapter(),

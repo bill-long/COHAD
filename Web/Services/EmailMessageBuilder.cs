@@ -3,11 +3,29 @@ using System.Collections.Generic;
 using System.Text;
 using MimeKit;
 using MimeKit.Utils;
+using PreMailer.Net;
 
 namespace Web.Services
 {
     internal static class EmailMessageBuilder
     {
+        /// <summary>
+        /// Moves CSS from &lt;style&gt; blocks into inline style attributes so that
+        /// email clients (Gmail, Outlook, etc.) render styles correctly.
+        /// </summary>
+        public static string InlineCss(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+                return html;
+
+            var result = PreMailer.Net.PreMailer.MoveCssInline(
+                html,
+                removeStyleElements: true,
+                ignoreElements: "#ignore"
+            );
+            return result.Html;
+        }
+
         public static ExtractedImages ExtractInlineImages(string htmlBody)
         {
             var imageStart = "<img src=\"data:";
