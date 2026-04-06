@@ -237,12 +237,16 @@ namespace Web.Controllers
                             recipient.ProviderMessageId = sgMessageId;
 
                         await _emailJobRepository.UpdateAsync(job);
+                    }
 
-                        // Auto opt-out only on actual status transitions to bounce/spam
-                        if (deliveryStatus == DeliveryStatus.Bounced || deliveryStatus == DeliveryStatus.SpamReport)
-                        {
-                            await _deliveryActionService.ProcessDeliveryEventAsync(email, deliveryStatus, job.Category);
-                        }
+                    // Auto opt-out for bounce/spam regardless of status transition —
+                    // if UpdateAsync succeeded but a prior opt-out attempt failed, SendGrid
+                    // retries and ShouldUpdateDeliveryStatus would be false; running the
+                    // action unconditionally ensures the opt-out isn't permanently missed.
+                    // The action service is idempotent (no-op if already opted out).
+                    if (deliveryStatus == DeliveryStatus.Bounced || deliveryStatus == DeliveryStatus.SpamReport)
+                    {
+                        await _deliveryActionService.ProcessDeliveryEventAsync(email, deliveryStatus, job.Category);
                     }
 
                     return;
