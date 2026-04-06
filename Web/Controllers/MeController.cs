@@ -276,11 +276,13 @@ namespace Web.Controllers
 
                     if (seen.Add(resolvedEmail))
                     {
+                        // Use Guid.Empty for HomeId — this is a transactional notification,
+                        // not a subscription email, so unsubscribe headers should be suppressed.
                         result.Add(
                             new EmailJobRecipient
                             {
                                 Email = resolvedEmail,
-                                HomeId = homeId,
+                                HomeId = Guid.Empty,
                                 Status = EmailJobRecipientStatus.Pending,
                             }
                         );

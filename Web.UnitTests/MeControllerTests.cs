@@ -346,7 +346,7 @@ public sealed class MeControllerTests
 
         Assert.Single(result);
         Assert.Equal("admin@example.com", result[0].Email);
-        Assert.Equal(homeId, result[0].HomeId);
+        Assert.Equal(Guid.Empty, result[0].HomeId);
     }
 
     [Fact]
