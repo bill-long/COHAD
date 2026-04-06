@@ -109,6 +109,7 @@
               <tr>
                 <th class="col-email">Email</th>
                 <th class="col-r-status">Status</th>
+                <th class="col-delivery">Delivery</th>
                 <th class="col-error">Error</th>
                 <th class="col-sent-time">Sent</th>
               </tr>
@@ -118,6 +119,17 @@
                 <td class="cell-truncate">{{ r.email }}</td>
                 <td>
                   <span class="status-badge" [ngClass]="recipientStatusClass(r.status)">{{ r.status }}</span>
+                </td>
+                <td class="col-delivery">
+                  <span
+                    *ngIf="r.deliveryStatus && r.deliveryStatus !== 'Unknown'"
+                    class="status-badge"
+                    [ngClass]="deliveryStatusClass(r.deliveryStatus)"
+                    [title]="r.deliveryStatusUpdatedUtc ? (r.deliveryStatusUpdatedUtc | date: 'medium') : ''"
+                  >
+                    {{ deliveryStatusLabel(r.deliveryStatus) }}
+                  </span>
+                  <span *ngIf="!r.deliveryStatus || r.deliveryStatus === 'Unknown'" class="delivery-unknown">—</span>
                 </td>
                 <td class="cell-truncate error-text">{{ r.error }}</td>
                 <td class="cell-date">{{ r.sentUtc | date: 'mediumTime' }}</td>

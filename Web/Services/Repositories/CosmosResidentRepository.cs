@@ -122,6 +122,30 @@ namespace Web.Services.Repositories
             return results;
         }
 
+        public async Task<List<Resident>> GetByEmailAsync(string email)
+        {
+            // EmailAddresses is stored as a serialized JSON string in legacy documents,
+            // so we use CONTAINS as a server-side pre-filter, then exact-match client-side.
+            var query = new CosmosQueryDefinition(
+                "SELECT * FROM c WHERE CONTAINS(c.EmailAddresses, @email, true)"
+            ).WithParameter("@email", email);
+            var iterator = _container.GetItemQueryIterator<JObject>(query);
+            var candidates = new List<Resident>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                candidates.AddRange(response.Select(CosmosLegacyDocumentMapper.ToResidentEntity));
+            }
+
+            return candidates
+                .Where(r =>
+                    r.EmailAddresses?.Any(ea =>
+                        string.Equals(ea.Address?.Trim(), email, StringComparison.OrdinalIgnoreCase)
+                    ) == true
+                )
+                .ToList();
+        }
+
         public async Task<Resident> UpsertAsync(Resident resident)
         {
             var doc = CosmosLegacyDocumentMapper.ToResidentEntityDocument(resident);

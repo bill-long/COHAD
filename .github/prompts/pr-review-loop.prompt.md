@@ -25,7 +25,7 @@ gh pr edit <PR_NUMBER> --add-reviewer "copilot-pull-request-reviewer"
 
 ## Step 3: Poll for review completion
 
-**Poll every 30 seconds**, up to 20 attempts. Do NOT poll more frequently than 30s.
+**Poll every 30 seconds**, up to 20 attempts. Do NOT poll more frequently than 30s. Poll for new comments by timestamp, because Copilot does not always create a new review ID.
 
 Check whether the review is done by counting Copilot reviews:
 
@@ -69,7 +69,7 @@ For every actionable inline comment:
    ```bash
    git add <files> && git commit -m "<descriptive message>" && git push
    ```
-4. Reply to each inline comment with the fix:
+4. Reply to each inline comment with the fix. DO NOT reply on the PR itself, only do inline comments:
    ```bash
    gh api repos/bill-long/COHAD/pulls/<PR>/comments/<COMMENT_ID>/replies \
      -f body="Fixed in <short-hash>. <brief description of what changed>"
@@ -90,6 +90,6 @@ Then go back to **Step 3** (poll for the next review). Repeat until the review p
 
 - **Polling interval: 30 seconds minimum.** Never poll faster than this.
 - **Max poll attempts per round: 20.** Stop and inform the user if exceeded.
-- **Reply convention:** Always include the short commit hash and a brief description in reply bodies.
+- **Reply convention:** Always include the short commit hash and a brief description in reply bodies. Only reply inline, not on the PR.
 - **Do not skip verification.** Always build (and test when appropriate) before pushing fixes.
 - **Stop when approved** or when there are no actionable comments remaining.

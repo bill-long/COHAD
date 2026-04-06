@@ -18,6 +18,7 @@ namespace Web.Services.Repositories
         Task<List<Home>> GetAllAsync();
         Task<Home> GetByIdAsync(Guid id);
         Task<List<Home>> GetByIdsAsync(List<Guid> ids);
+        Task<List<Home>> GetByEmailAsync(string email);
         Task<Home> UpsertAsync(Home home);
     }
 
@@ -73,6 +74,26 @@ namespace Web.Services.Repositories
             }
 
             return results;
+        }
+
+        public async Task<List<Home>> GetByEmailAsync(string email)
+        {
+            // EmailAddress is stored as a serialized JSON string in legacy documents,
+            // so we use CONTAINS as a server-side pre-filter, then exact-match client-side.
+            var query = new CosmosQueryDefinition(
+                "SELECT * FROM c WHERE CONTAINS(c.EmailAddress, @email, true)"
+            ).WithParameter("@email", email);
+            var iterator = _homesContainer.GetItemQueryIterator<JObject>(query);
+            var candidates = new List<Home>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                candidates.AddRange(response.Select(CosmosLegacyDocumentMapper.ToHome));
+            }
+
+            return candidates
+                .Where(h => string.Equals(h.EmailAddress?.Address?.Trim(), email, StringComparison.OrdinalIgnoreCase))
+                .ToList();
         }
 
         public async Task<Home> UpsertAsync(Home home)

@@ -582,6 +582,23 @@ namespace Web.Services
                                 message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                             }
 
+                            // SendGrid custom args for webhook event correlation
+                            message.Headers.Add(
+                                "X-SMTPAPI",
+                                System.Text.Json.JsonSerializer.Serialize(
+                                    new
+                                    {
+                                        unique_args = new
+                                        {
+                                            cohad_job_id = job.Id.ToString(),
+                                            cohad_email = recipient.Email,
+                                        },
+                                    }
+                                )
+                            );
+
+                            recipient.Provider = "SendGrid";
+
                             await smtpClient.SendAsync(message, ct);
 
                             recipient.Status = EmailJobRecipientStatus.Sent;
