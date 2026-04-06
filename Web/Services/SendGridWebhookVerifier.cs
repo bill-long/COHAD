@@ -22,7 +22,7 @@ namespace Web.Services
         bool Verify(string payload, string signature, string timestamp);
     }
 
-    public class SendGridWebhookVerifier : ISendGridWebhookVerifier, IDisposable
+    public class SendGridWebhookVerifier : ISendGridWebhookVerifier
     {
         private readonly byte[]? _keyBytes;
         private readonly ILogger<SendGridWebhookVerifier> _logger;
@@ -70,14 +70,6 @@ namespace Web.Services
                 _logger.LogWarning(ex, "SendGrid webhook signature verification threw — treating as invalid.");
                 return false;
             }
-        }
-
-        public void Dispose()
-        {
-            // Key bytes are a plain byte array — no unmanaged resources to release.
-            // IDisposable is implemented so the DI container doesn't log warnings
-            // about undisposed singletons.
-            GC.SuppressFinalize(this);
         }
     }
 }
