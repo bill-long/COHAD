@@ -91,7 +91,8 @@ namespace Web.Services
                         UserDisplayName = "System (auto)",
                         SubjectId = redacted,
                         SubjectName = redacted,
-                        Action = $"Auto-opted-out due to {reason}. {totalOptOuts} address(es) updated.",
+                        Action =
+                            $"Auto-opted-out due to {reason}. {totalOptOuts} record(s) updated ({matchingHomes.Count} home(s), {matchingResidents.Count} resident(s)).",
                     }
                 );
             }
