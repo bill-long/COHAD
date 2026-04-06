@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
@@ -126,9 +127,9 @@ namespace Web.Controllers
             }
 
             var htmlBody =
-                $"<div>Name: {newUser.GivenName} {newUser.Surname}</div>"
-                + $"<div>Email: {newUser.Emails}</div>"
-                + $"<div>Address: {newUser.StreetAddress}</div>";
+                $"<div>Name: {WebUtility.HtmlEncode(newUser.GivenName)} {WebUtility.HtmlEncode(newUser.Surname)}</div>"
+                + $"<div>Email: {WebUtility.HtmlEncode(newUser.Emails)}</div>"
+                + $"<div>Address: {WebUtility.HtmlEncode(newUser.StreetAddress)}</div>";
 
             var job = new EmailJob
             {
@@ -173,7 +174,33 @@ namespace Web.Controllers
                 throw;
             }
 
-            await _emailJobQueue.EnqueueAsync(job.Id);
+            try
+            {
+                await _emailJobQueue.EnqueueAsync(job.Id);
+            }
+            catch
+            {
+                try
+                {
+                    await _emailJobRepository.DeleteAsync(job.Id);
+                }
+                catch
+                { /* best-effort cleanup */
+                }
+
+                if (!string.IsNullOrEmpty(job.ContentBlobPath))
+                {
+                    try
+                    {
+                        await _fileStore.DeleteAsync(job.ContentBlobPath);
+                    }
+                    catch
+                    { /* best-effort cleanup */
+                    }
+                }
+
+                throw;
+            }
         }
 
         internal async Task<List<EmailJobRecipient>> ResolveAdminRecipients()
@@ -193,7 +220,6 @@ namespace Web.Controllers
                 .ToList();
 
             var homes = allHomeIds.Count > 0 ? await _homeRepository.GetByIdsAsync(allHomeIds) : new List<Home>();
-            var homesById = homes.ToDictionary(h => h.Id);
 
             var residentHomeIds = homes.Select(h => h.Id).ToList();
             var residents =
@@ -215,31 +241,49 @@ namespace Web.Controllers
                     if (!residentsByHome.TryGetValue(homeId, out var homeResidents))
                         continue;
 
-                    // Try matching by email first
-                    var matched = !string.IsNullOrWhiteSpace(admin.Emails)
-                        ? homeResidents.FirstOrDefault(r =>
+                    // Try matching by email first — if matched, use the matched address directly
+                    string? resolvedEmail = null;
+                    if (!string.IsNullOrWhiteSpace(admin.Emails))
+                    {
+                        var emailMatch = homeResidents.FirstOrDefault(r =>
                             r.EmailAddresses != null
                             && r.EmailAddresses.Any(e =>
-                                string.Equals(e.Address, admin.Emails, StringComparison.OrdinalIgnoreCase)
+                                string.Equals(
+                                    e.Address?.Trim(),
+                                    admin.Emails.Trim(),
+                                    StringComparison.OrdinalIgnoreCase
+                                )
                             )
-                        )
-                        : null;
+                        );
+                        if (emailMatch != null)
+                            resolvedEmail = admin.Emails.Trim();
+                    }
 
-                    // Fall back to name matching
-                    matched ??= homeResidents.FirstOrDefault(r =>
-                        string.Equals(r.GivenName, admin.GivenName, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(r.Surname, admin.Surname, StringComparison.OrdinalIgnoreCase)
-                    );
+                    // Fall back to name matching — use the resident's first non-empty email
+                    if (resolvedEmail == null)
+                    {
+                        var nameMatch = homeResidents.FirstOrDefault(r =>
+                            string.Equals(r.GivenName, admin.GivenName, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(r.Surname, admin.Surname, StringComparison.OrdinalIgnoreCase)
+                        );
+                        resolvedEmail = nameMatch
+                            ?.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Address))
+                            ?.Address?.Trim();
+                    }
 
-                    if (matched == null)
+                    if (string.IsNullOrWhiteSpace(resolvedEmail))
                         continue;
 
-                    var email = matched
-                        .EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Address))
-                        ?.Address;
-                    if (email != null && seen.Add(email))
+                    if (seen.Add(resolvedEmail))
                     {
-                        result.Add(new EmailJobRecipient { Email = email, HomeId = homeId });
+                        result.Add(
+                            new EmailJobRecipient
+                            {
+                                Email = resolvedEmail,
+                                HomeId = homeId,
+                                Status = EmailJobRecipientStatus.Pending,
+                            }
+                        );
                     }
 
                     break; // Found a match for this admin, no need to check other homes

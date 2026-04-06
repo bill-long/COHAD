@@ -79,11 +79,13 @@ namespace Web.Controllers
                 var signature = Request.Headers["X-Twilio-Email-Event-Webhook-Signature"].FirstOrDefault();
                 var timestamp = Request.Headers["X-Twilio-Email-Event-Webhook-Timestamp"].FirstOrDefault();
 
-                if (
-                    string.IsNullOrEmpty(signature)
-                    || string.IsNullOrEmpty(timestamp)
-                    || !_verifier.Verify(body, signature, timestamp)
-                )
+                if (string.IsNullOrEmpty(signature) || string.IsNullOrEmpty(timestamp))
+                {
+                    _logger.LogWarning("SendGrid webhook missing required signature or timestamp header.");
+                    return Forbid();
+                }
+
+                if (!_verifier.Verify(body, signature, timestamp))
                 {
                     _logger.LogWarning("SendGrid webhook signature verification failed.");
                     return Forbid();

@@ -607,7 +607,7 @@ public sealed class MeControllerTests
             );
 
         var jobRepo = new Mock<IEmailJobRepository>();
-        EmailJob capturedJob = null;
+        EmailJob? capturedJob = null;
         jobRepo
             .Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
             .Callback<EmailJob>(j => capturedJob = j)
