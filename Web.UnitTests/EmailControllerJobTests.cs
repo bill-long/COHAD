@@ -191,7 +191,7 @@ public sealed class EmailControllerJobTests
             })
             .ToList();
 
-        _residents.Setup(r => r.GetByHomeIdAsync(TestHomeId)).ReturnsAsync(residents);
+        _residents.Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>())).ReturnsAsync(residents);
     }
 
     private void SetupHomesWithRecipients(int count = 2)
@@ -891,8 +891,10 @@ public sealed class EmailControllerJobTests
         var result = await controller.GetTestRecipients();
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var items = Assert.IsAssignableFrom<IEnumerable<object>>(ok.Value);
-        Assert.Equal(2, items.Count());
+        var items = Assert.IsAssignableFrom<List<TestRecipientOption>>(ok.Value);
+        Assert.Equal(2, items.Count);
+        Assert.Contains(items, i => i.Email == "a@example.com" && i.HomeId == TestHomeId);
+        Assert.Contains(items, i => i.Email == "b@example.com" && i.HomeId == TestHomeId);
     }
 
     [Fact]
@@ -916,7 +918,7 @@ public sealed class EmailControllerJobTests
         var result = await controller.GetTestRecipients();
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var items = Assert.IsAssignableFrom<IEnumerable<object>>(ok.Value);
+        var items = Assert.IsAssignableFrom<List<TestRecipientOption>>(ok.Value);
         Assert.Empty(items);
     }
 }

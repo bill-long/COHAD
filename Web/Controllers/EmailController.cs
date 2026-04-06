@@ -286,11 +286,16 @@ namespace Web.Controllers
                 if (emailInfo.TestRecipientEmails == null || emailInfo.TestRecipientEmails.Count == 0)
                     return BadRequest(new { error = "At least one test recipient email is required." });
 
+                // Normalize: deduplicate and trim (case-insensitive)
+                var distinctEmails = emailInfo
+                    .TestRecipientEmails.Select(e => e?.Trim())
+                    .Where(e => !string.IsNullOrEmpty(e))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
                 // Validate that all requested addresses belong to the sender's own homes
                 var allowedRecipients = await GetEmailsForUserHomes(apiUser);
-                var invalidEmails = emailInfo
-                    .TestRecipientEmails.Where(e => !allowedRecipients.ContainsKey(e))
-                    .ToList();
+                var invalidEmails = distinctEmails.Where(e => !allowedRecipients.ContainsKey(e)).ToList();
                 if (invalidEmails.Count > 0)
                     return BadRequest(
                         new
@@ -299,7 +304,7 @@ namespace Web.Controllers
                         }
                     );
 
-                recipients = emailInfo.TestRecipientEmails.Select(e => allowedRecipients[e]).ToList();
+                recipients = distinctEmails.Select(e => allowedRecipients[e]).ToList();
 
                 // Prefix subject for test emails
                 emailInfo = new EmailInfo
@@ -453,6 +458,9 @@ namespace Web.Controllers
                 return result;
 
             var homes = await _homeRepository.GetByIdsAsync(homeIds);
+            var allResidents = await _residentRepository.GetByHomeIdsAsync(homeIds);
+            var residentsByHome = allResidents.GroupBy(r => r.HomeId).ToDictionary(g => g.Key, g => g.ToList());
+
             foreach (var home in homes)
             {
                 if (
@@ -466,20 +474,22 @@ namespace Web.Controllers
                         Status = EmailJobRecipientStatus.Pending,
                     };
 
-                var residents = await _residentRepository.GetByHomeIdAsync(home.Id);
-                foreach (var resident in residents)
+                if (residentsByHome.TryGetValue(home.Id, out var residents))
                 {
-                    if (resident.EmailAddresses == null)
-                        continue;
-                    foreach (var addr in resident.EmailAddresses)
+                    foreach (var resident in residents)
                     {
-                        if (!string.IsNullOrWhiteSpace(addr.Address) && !result.ContainsKey(addr.Address))
-                            result[addr.Address] = new EmailJobRecipient
-                            {
-                                Email = addr.Address,
-                                HomeId = home.Id,
-                                Status = EmailJobRecipientStatus.Pending,
-                            };
+                        if (resident.EmailAddresses == null)
+                            continue;
+                        foreach (var addr in resident.EmailAddresses)
+                        {
+                            if (!string.IsNullOrWhiteSpace(addr.Address) && !result.ContainsKey(addr.Address))
+                                result[addr.Address] = new EmailJobRecipient
+                                {
+                                    Email = addr.Address,
+                                    HomeId = home.Id,
+                                    Status = EmailJobRecipientStatus.Pending,
+                                };
+                        }
                     }
                 }
             }
