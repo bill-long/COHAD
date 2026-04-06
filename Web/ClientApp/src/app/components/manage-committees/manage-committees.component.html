@@ -11,9 +11,7 @@
     <div class="loading-state" *ngIf="loading">Loading committees...</div>
 
     <div class="order-actions" *ngIf="isAdmin && orderChanged">
-      <button type="button" mat-flat-button color="primary"
-              [disabled]="savingOrder"
-              (click)="saveOrder()">
+      <button type="button" mat-flat-button color="primary" [disabled]="savingOrder" (click)="saveOrder()">
         <mat-icon>save</mat-icon>
         {{ savingOrder ? 'Saving...' : 'Save Order' }}
       </button>
@@ -27,15 +25,20 @@
               <button mat-icon-button [disabled]="i === 0" (click)="moveCommittee(i, -1)" matTooltip="Move up" class="order-btn">
                 <mat-icon>arrow_upward</mat-icon>
               </button>
-              <button mat-icon-button [disabled]="i === committees.length - 1" (click)="moveCommittee(i, 1)" matTooltip="Move down" class="order-btn">
+              <button
+                mat-icon-button
+                [disabled]="i === committees.length - 1"
+                (click)="moveCommittee(i, 1)"
+                matTooltip="Move down"
+                class="order-btn"
+              >
                 <mat-icon>arrow_downward</mat-icon>
               </button>
             </span>
             {{ committee.displayName }}
           </mat-panel-title>
           <mat-panel-description>
-            {{ committee.members.length }} {{ committee.members.length === 1 ? 'member' : 'members' }}
-            · {{ committee.committeeEmail }}
+            {{ committee.members.length }} {{ committee.members.length === 1 ? 'member' : 'members' }} · {{ committee.committeeEmail }}
           </mat-panel-description>
         </mat-expansion-panel-header>
 
@@ -50,81 +53,134 @@
         <h3 class="members-heading">Members</h3>
 
         <div cdkDropList (cdkDropListDropped)="dropMember($event, committee)" class="members-list">
-          <div class="member-row" *ngFor="let member of committee.members" cdkDrag>
-            <mat-icon class="drag-handle" cdkDragHandle>drag_indicator</mat-icon>
+          <div
+            class="member-row"
+            *ngFor="let member of committee.members"
+            cdkDrag
+            [cdkDragDisabled]="editingMemberId !== null"
+            [class.member-row--editing]="editingMemberId === member.id"
+          >
+            <!-- ===== Compact (read-only) view ===== -->
+            <ng-container *ngIf="editingMemberId !== member.id">
+              <mat-icon class="drag-handle" cdkDragHandle [class.drag-handle--hidden]="editingMemberId !== null">drag_indicator</mat-icon>
 
-            <div class="member-fields">
-              <mat-form-field appearance="outline" class="field-name">
-                <mat-label>Resident</mat-label>
-                <input matInput
-                       [value]="getResidentSearchText(member)"
-                       (input)="onResidentSearch(member, $event)"
-                       (focus)="onResidentFocus(member, $event)"
-                       [matAutocomplete]="residentAuto"
-                       placeholder="Search by name or email...">
-                <mat-autocomplete #residentAuto="matAutocomplete"
-                                  (optionSelected)="onResidentSelected(member, $event.option.value)"
-                                  [displayWith]="residentDisplayFn">
-                  <mat-option *ngFor="let r of getFilteredResidents(committee, member)" [value]="r.id">
-                    {{ r.displayName }}<span class="resident-email" *ngIf="r.email"> — {{ r.email }}</span>
-                  </mat-option>
-                </mat-autocomplete>
-              </mat-form-field>
-              <span class="resolved-info" *ngIf="member.residentId && member.displayName">
-                {{ member.displayName }}<span *ngIf="member.email"> · {{ member.email }}</span>
-              </span>
+              <div class="member-compact">
+                <div class="member-compact-photo">
+                  <img
+                    *ngIf="getPhotoPreviewUrl(committee.id, member) as previewUrl; else noPhoto"
+                    class="member-compact-photo-img"
+                    [src]="previewUrl"
+                    [style.object-position]="'center ' + member.photoOffsetY + '%'"
+                    [alt]="member.displayName || 'Member'"
+                  />
+                  <ng-template #noPhoto>
+                    <mat-icon class="member-compact-photo-placeholder">person</mat-icon>
+                  </ng-template>
+                </div>
 
-              <mat-form-field appearance="outline" class="field-title">
-                <mat-label>Title</mat-label>
-                <input matInput [(ngModel)]="member.title">
-              </mat-form-field>
+                <div class="member-compact-info">
+                  <span class="member-compact-name">{{ member.displayName || '(no resident)' }}</span>
+                  <span class="member-compact-title" *ngIf="member.title">{{ member.title }}</span>
+                </div>
 
-              <mat-form-field appearance="outline" class="field-full">
-                <mat-label>Bio</mat-label>
-                <textarea matInput [(ngModel)]="member.bio" rows="2"></textarea>
-              </mat-form-field>
+                <mat-icon class="member-compact-email-icon" *ngIf="member.receivesForwardedEmail" matTooltip="Receives forwarded email"
+                  >mail</mat-icon
+                >
 
-              <div class="member-options">
-                <mat-checkbox [(ngModel)]="member.receivesForwardedEmail">
-                  Receives forwarded email
-                </mat-checkbox>
-              </div>
-
-              <div class="member-photo-upload">
-                <button type="button" mat-stroked-button (click)="photoInput.click()">
-                  <mat-icon>photo_camera</mat-icon>
-                  {{ member.hasPhoto || hasPendingPhoto(committee.id, member.id) ? 'Change photo' : 'Upload photo' }}
+                <button type="button" mat-icon-button class="member-compact-action" (click)="editMember(member)" matTooltip="Edit member">
+                  <mat-icon>edit</mat-icon>
                 </button>
-                <input #photoInput type="file" accept="image/*" hidden (change)="onPhotoSelected($event, committee, member)">
-                <span class="photo-pending" *ngIf="hasPendingPhoto(committee.id, member.id)">
-                  {{ getPendingPhotoName(committee.id, member.id) }}
-                </span>
+                <button
+                  type="button"
+                  mat-icon-button
+                  color="warn"
+                  class="member-compact-action"
+                  [disabled]="isDeletingMember(committee.id, member.id)"
+                  (click)="removeMember(committee, member)"
+                  matTooltip="Remove member"
+                >
+                  <mat-icon>close</mat-icon>
+                </button>
               </div>
+            </ng-container>
 
-              <div class="photo-position" *ngIf="member.hasPhoto || hasPendingPhoto(committee.id, member.id)">
-                <div class="photo-preview-frame">
-                  <img *ngIf="getPhotoPreviewUrl(committee.id, member) as previewUrl"
-                       class="photo-preview-img"
-                       [src]="previewUrl"
-                       [style.object-position]="'center ' + member.photoOffsetY + '%'"
-                       [alt]="member.displayName ? member.displayName + ' photo preview' : 'Member photo preview'">
+            <!-- ===== Expanded (edit) view ===== -->
+            <ng-container *ngIf="editingMemberId === member.id">
+              <div class="member-fields">
+                <div class="field-resident-group">
+                  <mat-form-field appearance="outline" class="field-name">
+                    <mat-label>Resident</mat-label>
+                    <input
+                      matInput
+                      [(ngModel)]="residentSearchModels[member.id]"
+                      (ngModelChange)="onResidentSearchChange(member, $event)"
+                      (focus)="onResidentFocus(member)"
+                      [matAutocomplete]="residentAuto"
+                      placeholder="Search by name or email..."
+                    />
+                    <mat-autocomplete #residentAuto="matAutocomplete" (optionSelected)="onResidentSelected(member, $event.option.value)">
+                      <mat-option *ngFor="let r of getFilteredResidents(committee, member)" [value]="r.id">
+                        {{ r.displayName }}<span class="resident-email" *ngIf="r.email"> — {{ r.email }}</span>
+                      </mat-option>
+                    </mat-autocomplete>
+                  </mat-form-field>
+                  <span class="resolved-info" *ngIf="member.residentId && member.displayName">
+                    {{ member.displayName }}<span *ngIf="member.email"> · {{ member.email }}</span>
+                  </span>
                 </div>
-                <div class="photo-slider-group">
-                  <label class="photo-slider-label">Vertical position</label>
-                  <mat-slider min="0" max="100" step="1" discrete class="photo-slider">
-                    <input matSliderThumb [(ngModel)]="member.photoOffsetY">
-                  </mat-slider>
+
+                <div class="field-title-row">
+                  <mat-form-field appearance="outline" class="field-title">
+                    <mat-label>Title</mat-label>
+                    <input matInput [(ngModel)]="member.title" />
+                  </mat-form-field>
+                  <mat-checkbox [(ngModel)]="member.receivesForwardedEmail" class="field-email-checkbox">
+                    Receives forwarded email
+                  </mat-checkbox>
+                </div>
+
+                <mat-form-field appearance="outline" class="field-full">
+                  <mat-label>Bio</mat-label>
+                  <textarea matInput [(ngModel)]="member.bio" rows="3"></textarea>
+                </mat-form-field>
+
+                <div class="member-photo-section">
+                  <div class="member-photo-upload">
+                    <button type="button" mat-stroked-button (click)="photoInput.click()">
+                      <mat-icon>photo_camera</mat-icon>
+                      {{ member.hasPhoto || hasPendingPhoto(committee.id, member.id) ? 'Change photo' : 'Upload photo' }}
+                    </button>
+                    <input #photoInput type="file" accept="image/*" hidden (change)="onPhotoSelected($event, committee, member)" />
+                    <span class="photo-pending" *ngIf="hasPendingPhoto(committee.id, member.id)">
+                      {{ getPendingPhotoName(committee.id, member.id) }}
+                    </span>
+                  </div>
+
+                  <div class="photo-position" *ngIf="member.hasPhoto || hasPendingPhoto(committee.id, member.id)">
+                    <div class="photo-preview-frame">
+                      <img
+                        *ngIf="getPhotoPreviewUrl(committee.id, member) as previewUrl"
+                        class="photo-preview-img"
+                        [src]="previewUrl"
+                        [style.object-position]="'center ' + member.photoOffsetY + '%'"
+                        [alt]="member.displayName ? member.displayName + ' photo preview' : 'Member photo preview'"
+                      />
+                    </div>
+                    <div class="photo-slider-group">
+                      <label class="photo-slider-label">Vertical position</label>
+                      <mat-slider min="0" max="100" step="1" discrete class="photo-slider">
+                        <input matSliderThumb [(ngModel)]="member.photoOffsetY" />
+                      </mat-slider>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="member-edit-actions">
+                  <button type="button" mat-stroked-button (click)="cancelMemberEdit(committee, member)">Cancel</button>
+                  <button type="button" mat-flat-button color="primary" (click)="finishEdit()"><mat-icon>check</mat-icon> Done</button>
                 </div>
               </div>
-            </div>
-
-            <button type="button" mat-icon-button color="warn"
-                    class="remove-member-btn"
-                    [disabled]="isDeletingMember(committee.id, member.id)"
-                    (click)="removeMember(committee, member)"
-                    matTooltip="Remove member">
-              <mat-icon>close</mat-icon>
-            </button>
+            </ng-container>
           </div>
         </div>
 
@@ -134,16 +190,18 @@
           </button>
 
           <div class="panel-actions-right">
-            <button type="button" mat-stroked-button
-                    [disabled]="syncingKey === committee.id"
-                    (click)="syncForwarding(committee)">
+            <button type="button" mat-stroked-button [disabled]="syncingKey === committee.id" (click)="syncForwarding(committee)">
               <mat-icon>sync</mat-icon>
               {{ syncingKey === committee.id ? 'Syncing...' : 'Sync Forwarding to O365' }}
             </button>
 
-            <button type="button" mat-flat-button color="primary"
-                    [disabled]="savingKey === committee.id"
-                    (click)="saveCommittee(committee)">
+            <button
+              type="button"
+              mat-flat-button
+              color="primary"
+              [disabled]="savingKey === committee.id"
+              (click)="saveCommittee(committee)"
+            >
               {{ savingKey === committee.id ? 'Saving...' : 'Save' }}
             </button>
           </div>
@@ -152,12 +210,11 @@
         <div class="sync-status" *ngIf="getSyncStatus(committee.id) as status">
           <div class="sync-status-row" *ngIf="status.lastSyncedUtc">
             <span class="sync-label">Last synced:</span>
-            <span>{{ status.lastSyncedUtc | date:'medium' }}</span>
+            <span>{{ status.lastSyncedUtc | date: 'medium' }}</span>
           </div>
           <div class="sync-status-row" *ngIf="status.lastSyncStatus">
             <span class="sync-label">Status:</span>
-            <span [class.sync-success]="status.lastSyncStatus === 'Success'"
-                  [class.sync-error]="status.lastSyncStatus !== 'Success'">
+            <span [class.sync-success]="status.lastSyncStatus === 'Success'" [class.sync-error]="status.lastSyncStatus !== 'Success'">
               {{ status.lastSyncStatus }}
             </span>
           </div>
@@ -168,8 +225,6 @@
       </mat-expansion-panel>
     </mat-accordion>
 
-    <div *ngIf="!loading && committees.length === 0 && !error" class="empty-state">
-      No committees found.
-    </div>
+    <div *ngIf="!loading && committees.length === 0 && !error" class="empty-state">No committees found.</div>
   </section>
 </div>

@@ -31,6 +31,12 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   syncingKey: string | null = null;
   deletingMember: { key: string; memberId: string } | null = null;
 
+  /** ID of the member currently being edited, or null when all are collapsed */
+  editingMemberId: string | null = null;
+
+  /** Snapshot of member state before editing, for cancel/revert. No entry = new member. */
+  private editSnapshots = new Map<string, CommitteeMemberAdmin>();
+
   /** Original committee ID order from last load/save, used to detect reordering */
   private savedOrder: string[] = [];
 
@@ -116,7 +122,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
           committee.members = committee.members.filter(m => m.id !== member.id);
           this.pendingPhotos.get(committee.id)?.delete(member.id);
           this.revokePreview(committee.id, member.id);
-          this.residentSearchText.delete(member.id);
+          delete this.residentSearchModels[member.id];
           this.filteredResidentsCache.clear();
           this.deletingMember = null;
           this.success = `${member.displayName} removed from ${committee.displayName}.`;
@@ -129,10 +135,42 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     });
   }
 
+  editMember(member: CommitteeMemberAdmin): void {
+    this.editSnapshots.set(member.id, { ...member });
+    this.initResidentSearchModel(member);
+    this.editingMemberId = member.id;
+  }
+
+  finishEdit(): void {
+    if (this.editingMemberId) {
+      this.editSnapshots.delete(this.editingMemberId);
+    }
+    this.editingMemberId = null;
+  }
+
+  cancelMemberEdit(committee: CommitteeAdmin, member: CommitteeMemberAdmin): void {
+    const snapshot = this.editSnapshots.get(member.id);
+    if (snapshot) {
+      // Existing member: restore from snapshot
+      Object.assign(member, snapshot);
+      this.editSnapshots.delete(member.id);
+    } else {
+      // New member (no snapshot): remove from list
+      committee.members = committee.members.filter(m => m.id !== member.id);
+    }
+    // Clean up pending photo/preview added during this edit
+    this.pendingPhotos.get(committee.id)?.delete(member.id);
+    this.revokePreview(committee.id, member.id);
+    delete this.residentSearchModels[member.id];
+    this.filteredResidentsCache.clear();
+    this.editingMemberId = null;
+  }
+
   addMember(committee: CommitteeAdmin): void {
     const nextOrder = committee.members.length > 0 ? Math.max(...committee.members.map(m => m.displayOrder)) + 1 : 0;
+    const newId = crypto.randomUUID();
     committee.members.push({
-      id: crypto.randomUUID(),
+      id: newId,
       residentId: '00000000-0000-0000-0000-000000000000',
       displayName: '',
       title: null,
@@ -144,19 +182,14 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       displayOrder: nextOrder,
     });
     this.filteredResidentsCache.clear();
+    this.editingMemberId = newId;
   }
 
   /** Tracks per-member search text, keyed by member.id */
-  private residentSearchText = new Map<string, string>();
+  residentSearchModels: Record<string, string> = {};
 
   /** Cached filtered results per member, keyed by member.id */
   private filteredResidentsCache = new Map<string, ResidentPickerItem[]>();
-
-  /** Stable arrow-function reference for mat-autocomplete [displayWith]. */
-  residentDisplayFn = (residentId: string): string => {
-    this.ensureResidentLookup();
-    return this.residentDisplayById.get(residentId) ?? '';
-  };
 
   private residentDisplayById = new Map<string, string>();
   private residentLookupSize = -1;
@@ -169,33 +202,36 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     this.residentLookupSize = this.allResidents.length;
   }
 
+  /** Initialises the search model for a member (called when opening edit). */
+  private initResidentSearchModel(member: CommitteeMemberAdmin): void {
+    if (!this.residentSearchModels[member.id]) {
+      this.ensureResidentLookup();
+      this.residentSearchModels[member.id] = this.residentDisplayById.get(member.residentId) ?? '';
+    }
+  }
+
   /** Returns cached filtered residents for a committee member. */
   getFilteredResidents(committee: CommitteeAdmin, currentMember: CommitteeMemberAdmin): ResidentPickerItem[] {
     return this.filteredResidentsCache.get(currentMember.id) ?? this.recomputeFilteredResidents(committee, currentMember);
   }
 
-  onResidentSearch(member: CommitteeMemberAdmin, event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.residentSearchText.set(member.id, value);
+  /** Whether an autocomplete selection is in progress (suppresses focus handler clearing) */
+  private selectingResident = false;
+
+  onResidentSearchChange(member: CommitteeMemberAdmin, value: string): void {
     this.invalidateResidentCache(member.id);
   }
 
-  onResidentFocus(member: CommitteeMemberAdmin, event: Event): void {
-    const input = event.target as HTMLInputElement;
-    input.value = '';
-    this.residentSearchText.set(member.id, '');
-    this.invalidateResidentCache(member.id);
-  }
-
-  getResidentSearchText(member: CommitteeMemberAdmin): string {
-    if (this.residentSearchText.has(member.id)) {
-      return this.residentSearchText.get(member.id)!;
+  onResidentFocus(member: CommitteeMemberAdmin): void {
+    if (this.selectingResident) {
+      return;
     }
-    this.ensureResidentLookup();
-    return this.residentDisplayById.get(member.residentId) ?? '';
+    this.residentSearchModels[member.id] = '';
+    this.invalidateResidentCache(member.id);
   }
 
   onResidentSelected(member: CommitteeMemberAdmin, residentId: string): void {
+    this.selectingResident = true;
     member.residentId = residentId;
     this.ensureResidentLookup();
     const displayName = this.residentDisplayById.get(residentId);
@@ -206,15 +242,16 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     if (resident) {
       member.email = resident.email ?? '';
     }
-    this.residentSearchText.delete(member.id);
+    this.residentSearchModels[member.id] = member.displayName;
     this.filteredResidentsCache.clear();
+    setTimeout(() => (this.selectingResident = false));
   }
 
   private recomputeFilteredResidents(committee: CommitteeAdmin, currentMember: CommitteeMemberAdmin): ResidentPickerItem[] {
     const usedIds = new Set(committee.members.filter(m => m.id !== currentMember.id && m.residentId).map(m => m.residentId));
     const available = this.allResidents.filter(r => r.id === currentMember.residentId || !usedIds.has(r.id));
 
-    const query = (this.residentSearchText.get(currentMember.id) ?? '').replace(/\s+/g, ' ').toLowerCase().trim();
+    const query = (this.residentSearchModels[currentMember.id] ?? '').replace(/\s+/g, ' ').toLowerCase().trim();
     if (!query) {
       this.filteredResidentsCache.set(currentMember.id, available);
       return available;
@@ -387,7 +424,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       next: ({ committees, residents }) => {
         this.committees = committees ?? [];
         this.allResidents = residents ?? [];
-        this.residentSearchText.clear();
+        this.residentSearchModels = {};
         this.filteredResidentsCache.clear();
         this.residentLookupSize = -1;
         this.savedOrder = this.committees.map(c => c.id);
@@ -399,7 +436,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       error: () => {
         this.committees = [];
         this.allResidents = [];
-        this.residentSearchText.clear();
+        this.residentSearchModels = {};
         this.filteredResidentsCache.clear();
         this.residentLookupSize = -1;
         this.loading = false;

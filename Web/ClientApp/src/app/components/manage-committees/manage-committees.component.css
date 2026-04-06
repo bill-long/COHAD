@@ -87,7 +87,7 @@
   gap: 0.5rem;
   border: 1px solid var(--border-faint);
   border-radius: 8px;
-  padding: 0.75rem;
+  padding: 0.5rem 0.75rem;
   background: var(--surface);
   transition: box-shadow 200ms ease;
 }
@@ -96,31 +96,143 @@
   box-shadow: 0 2px 8px var(--surface-subtle);
 }
 
+.member-row--editing {
+  padding: 0.75rem;
+}
+
+/* --- Compact (read-only) view --- */
+
+.member-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.member-compact-photo {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface-section);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.member-compact-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.member-compact-photo-placeholder {
+  color: var(--text-muted);
+  font-size: 24px;
+  width: 24px;
+  height: 24px;
+}
+
+.member-compact-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.member-compact-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-compact-title {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-compact-email-icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+
+.member-compact-action {
+  flex-shrink: 0;
+}
+
+/* --- Drag handle --- */
+
 .drag-handle {
   cursor: grab;
   color: var(--text-muted);
-  margin-top: 0.7rem;
+  margin-top: 0.35rem;
   flex-shrink: 0;
 }
+
+.drag-handle--hidden {
+  visibility: hidden;
+}
+
+/* --- Expanded (edit) view --- */
 
 .member-fields {
   flex: 1;
   min-width: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-resident-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.field-resident-group .field-name {
+  width: 100%;
+}
+
+.field-resident-group .resolved-info {
+  margin-top: -0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.field-title-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.field-title-row .field-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-email-checkbox {
+  flex-shrink: 0;
+}
+
+.member-photo-section {
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
 .member-fields .field-full {
-  grid-column: 1 / -1;
-}
-
-.member-options {
-  grid-column: 1 / -1;
+  width: 100%;
 }
 
 .member-photo-upload {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 0.65rem;
@@ -133,7 +245,6 @@
 }
 
 .photo-position {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -175,9 +286,12 @@
   max-width: 220px;
 }
 
-.remove-member-btn {
-  flex-shrink: 0;
-  margin-top: 0.5rem;
+.member-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
 }
 
 .panel-actions {
@@ -246,8 +360,56 @@
 }
 
 @media (max-width: 600px) {
-  .member-fields {
-    grid-template-columns: 1fr;
+  .field-title-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+
+  .member-compact-info {
+    flex-direction: column;
+  }
+
+  .member-compact-name,
+  .member-compact-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .member-compact {
+    gap: 0.75rem;
+  }
+
+  .member-compact-action {
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .order-btn {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+  }
+
+  .order-btn mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+
+  .drag-handle {
+    padding: 12px 10px;
+    margin: -12px -10px;
+  }
+
+  .member-edit-actions button {
+    min-height: 44px;
+  }
+
+  ::ng-deep .mat-expansion-panel-header-description {
+    display: none;
   }
 
   .panel-actions {
@@ -260,11 +422,54 @@
   }
 }
 
+@media (max-width: 480px) {
+  .manage-committees-shell {
+    padding: 0.75rem;
+    border-radius: 8px;
+  }
+
+  .member-row {
+    padding: 0.5rem;
+  }
+
+  .member-compact {
+    gap: 0.35rem;
+  }
+
+  .member-compact-photo {
+    width: 32px;
+    height: 32px;
+  }
+
+  .photo-position {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .photo-preview-frame {
+    width: 56px;
+    height: 56px;
+    align-self: center;
+  }
+
+  .photo-slider {
+    max-width: none;
+  }
+
+  .panel-actions button,
+  .panel-actions-right button {
+    white-space: normal;
+    min-width: 0;
+    font-size: 0.85rem;
+  }
+}
+
 .resolved-info {
   display: block;
   font-size: 0.85rem;
   color: var(--text-secondary, #666);
   margin: -0.5rem 0 0.5rem 0;
+  overflow-wrap: anywhere;
 }
 
 .resident-email {
