@@ -227,15 +227,26 @@ namespace Web.Controllers
 
                 try
                 {
-                    // Only update if the new status is "more severe" or it's the first status
-                    if (ShouldUpdateDeliveryStatus(recipient.DeliveryStatus, deliveryStatus))
+                    // Update delivery status only when the new status is more severe,
+                    // but allow ProviderMessageId to be populated independently when
+                    // a later webhook event includes sg_message_id.
+                    var shouldUpdateStatus = ShouldUpdateDeliveryStatus(recipient.DeliveryStatus, deliveryStatus);
+                    var shouldSetProviderMessageId =
+                        !string.IsNullOrEmpty(sgMessageId) && string.IsNullOrEmpty(recipient.ProviderMessageId);
+
+                    if (shouldUpdateStatus)
                     {
                         recipient.DeliveryStatus = deliveryStatus;
                         recipient.DeliveryStatusUpdatedUtc = DateTime.UtcNow;
+                    }
 
-                        if (!string.IsNullOrEmpty(sgMessageId) && string.IsNullOrEmpty(recipient.ProviderMessageId))
-                            recipient.ProviderMessageId = sgMessageId;
+                    if (shouldSetProviderMessageId)
+                    {
+                        recipient.ProviderMessageId = sgMessageId;
+                    }
 
+                    if (shouldUpdateStatus || shouldSetProviderMessageId)
+                    {
                         await _emailJobRepository.UpdateAsync(job);
                     }
 

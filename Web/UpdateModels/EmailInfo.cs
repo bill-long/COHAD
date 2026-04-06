@@ -14,6 +14,6 @@ namespace Web.UpdateModels
         /// When <see cref="IsTestEmail"/> is true, the specific email addresses to send
         /// the test to. Must be addresses associated with the sender's own home(s).
         /// </summary>
-        public List<string> TestRecipientEmails { get; set; }
+        public List<string> TestRecipientEmails { get; set; } = new();
     }
 }
