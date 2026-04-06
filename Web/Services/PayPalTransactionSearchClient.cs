@@ -97,12 +97,6 @@ namespace Web.Services
                     var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                     if (!response.IsSuccessStatusCode)
                     {
-                        _logger.LogError(
-                            "PayPal Transaction Search failed: {Status} {Body}",
-                            (int)response.StatusCode,
-                            body
-                        );
-
                         // PayPal returns 404 INVALID_REQUEST when the reporting data for the
                         // requested date range is not yet available (recent transactions can take
                         // up to 48 hours to appear) or the range is too old. Treat this as an
@@ -120,6 +114,11 @@ namespace Web.Services
                             break;
                         }
 
+                        _logger.LogError(
+                            "PayPal Transaction Search failed: {Status} {Body}",
+                            (int)response.StatusCode,
+                            body
+                        );
                         response.EnsureSuccessStatusCode();
                     }
 
