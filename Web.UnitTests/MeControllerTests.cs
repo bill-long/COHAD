@@ -6,7 +6,9 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Web.Controllers;
 using Web.Models;
@@ -43,6 +45,27 @@ public sealed class MeControllerTests
         emailJobRepository ??= Mock.Of<IEmailJobRepository>();
         fileStore ??= Mock.Of<IDocumentFileStore>();
         emailJobQueue ??= new EmailJobQueue();
+
+        var cleanupJobRepo = new Mock<IEmailJobRepository>();
+        cleanupJobRepo
+            .Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<EmailJob>());
+        var cleanupConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["EmailJobs:RetentionDays"] = "30",
+                    ["EmailJobs:CleanupBatchSize"] = "25",
+                }
+            )
+            .Build();
+        var cleanup = new EmailJobCleanupService(
+            cleanupJobRepo.Object,
+            fileStore,
+            cleanupConfig,
+            NullLogger<EmailJobCleanupService>.Instance
+        );
+
         var controller = new MeController(
             userRepository,
             homeRepository,
@@ -50,6 +73,7 @@ public sealed class MeControllerTests
             emailJobRepository,
             fileStore,
             emailJobQueue,
+            cleanup,
             Mock.Of<ILogger<MeController>>()
         )
         {
@@ -638,7 +662,7 @@ public sealed class MeControllerTests
         Assert.NotNull(capturedJob);
         Assert.Equal("New User Registered", capturedJob.Subject);
         Assert.Equal("webservice@cohad.org", capturedJob.FromEmail);
-        Assert.Null(capturedJob.Category);
+        Assert.Equal("registration", capturedJob.Category);
         Assert.Single(capturedJob.Recipients);
         Assert.Equal("admin@example.com", capturedJob.Recipients[0].Email);
         fileStore.Verify(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"), Times.Once);

@@ -27,6 +27,7 @@ namespace Web.Controllers
         private readonly IEmailJobRepository _emailJobRepository;
         private readonly IDocumentFileStore _fileStore;
         private readonly EmailJobQueue _emailJobQueue;
+        private readonly EmailJobCleanupService _emailJobCleanup;
         private readonly ILogger<MeController> _logger;
 
         public MeController(
@@ -36,6 +37,7 @@ namespace Web.Controllers
             IEmailJobRepository emailJobRepository,
             IDocumentFileStore fileStore,
             EmailJobQueue emailJobQueue,
+            EmailJobCleanupService emailJobCleanup,
             ILogger<MeController> logger
         )
         {
@@ -45,6 +47,7 @@ namespace Web.Controllers
             _emailJobRepository = emailJobRepository;
             _fileStore = fileStore;
             _emailJobQueue = emailJobQueue;
+            _emailJobCleanup = emailJobCleanup;
             _logger = logger;
         }
 
@@ -131,11 +134,23 @@ namespace Web.Controllers
                 + $"<div>Email: {WebUtility.HtmlEncode(newUser.Emails)}</div>"
                 + $"<div>Address: {WebUtility.HtmlEncode(newUser.StreetAddress)}</div>";
 
+            try
+            {
+                await _emailJobCleanup.RunOnceBestEffortAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Email job retention cleanup failed during new user notification (best-effort)."
+                );
+            }
+
             var job = new EmailJob
             {
                 Id = Guid.NewGuid(),
                 Status = EmailJobStatus.Queued,
-                Category = null,
+                Category = "registration",
                 FromEmail = "webservice@cohad.org",
                 FromDisplay = "COHAD Web",
                 Subject = "New User Registered",
