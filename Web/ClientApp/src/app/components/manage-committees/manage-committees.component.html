@@ -18,7 +18,7 @@
     </div>
 
     <mat-accordion *ngIf="!loading && committees.length > 0" multi>
-      <mat-expansion-panel *ngFor="let committee of committees; let i = index" class="committee-panel">
+      <mat-expansion-panel *ngFor="let committee of committees; let i = index" class="committee-panel" (closed)="finishEdit()">
         <mat-expansion-panel-header>
           <mat-panel-title>
             <span class="committee-order-controls" *ngIf="isAdmin" (click)="$event.stopPropagation()">
