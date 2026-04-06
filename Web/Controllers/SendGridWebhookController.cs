@@ -234,12 +234,12 @@ namespace Web.Controllers
                             recipient.ProviderMessageId = sgMessageId;
 
                         await _emailJobRepository.UpdateAsync(job);
-                    }
 
-                    // Auto opt-out for bounces and spam reports
-                    if (deliveryStatus == DeliveryStatus.Bounced || deliveryStatus == DeliveryStatus.SpamReport)
-                    {
-                        await _deliveryActionService.ProcessDeliveryEventAsync(email, deliveryStatus, job.Category);
+                        // Auto opt-out only on actual status transitions to bounce/spam
+                        if (deliveryStatus == DeliveryStatus.Bounced || deliveryStatus == DeliveryStatus.SpamReport)
+                        {
+                            await _deliveryActionService.ProcessDeliveryEventAsync(email, deliveryStatus, job.Category);
+                        }
                     }
 
                     return;

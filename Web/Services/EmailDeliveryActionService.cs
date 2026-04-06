@@ -49,35 +49,50 @@ namespace Web.Services
             _logger.LogInformation("Auto-opting-out email {Email} due to {Reason}.", email, reason);
 
             var matchingHomes = await _homeRepository.GetByEmailAsync(email);
+            var homesUpdated = 0;
 
             foreach (var home in matchingHomes)
             {
-                OptOutEmailAddress(home.EmailAddress);
-                await _homeRepository.UpsertAsync(home);
-                _logger.LogInformation("Opted-out home email for home {HomeId}.", home.Id);
+                if (!IsAlreadyOptedOut(home.EmailAddress))
+                {
+                    OptOutEmailAddress(home.EmailAddress);
+                    await _homeRepository.UpsertAsync(home);
+                    homesUpdated++;
+                    _logger.LogInformation("Opted-out home email for home {HomeId}.", home.Id);
+                }
             }
 
             var matchingResidents = await _residentRepository.GetByEmailAsync(email);
+            var residentsUpdated = 0;
 
             foreach (var resident in matchingResidents)
             {
+                var changed = false;
                 foreach (
                     var ea in resident.EmailAddresses.Where(ea =>
                         string.Equals(ea.Address?.Trim(), email, StringComparison.OrdinalIgnoreCase)
                     )
                 )
                 {
-                    OptOutEmailAddress(ea);
+                    if (!IsAlreadyOptedOut(ea))
+                    {
+                        OptOutEmailAddress(ea);
+                        changed = true;
+                    }
                 }
-                await _residentRepository.UpsertAsync(resident);
-                _logger.LogInformation(
-                    "Opted-out resident email for resident {ResidentId} on home {HomeId}.",
-                    resident.Id,
-                    resident.HomeId
-                );
+                if (changed)
+                {
+                    await _residentRepository.UpsertAsync(resident);
+                    residentsUpdated++;
+                    _logger.LogInformation(
+                        "Opted-out resident email for resident {ResidentId} on home {HomeId}.",
+                        resident.Id,
+                        resident.HomeId
+                    );
+                }
             }
 
-            var totalOptOuts = matchingHomes.Count + matchingResidents.Count;
+            var totalOptOuts = homesUpdated + residentsUpdated;
             if (totalOptOuts > 0)
             {
                 // Redact email in audit log (show first 3 chars + domain)
@@ -92,10 +107,19 @@ namespace Web.Services
                         SubjectId = redacted,
                         SubjectName = redacted,
                         Action =
-                            $"Auto-opted-out due to {reason}{(category != null ? $" (category: {category})" : "")}. {totalOptOuts} record(s) updated ({matchingHomes.Count} home(s), {matchingResidents.Count} resident(s)).",
+                            $"Auto-opted-out due to {reason}{(category != null ? $" (category: {category})" : "")}. {totalOptOuts} record(s) updated ({homesUpdated} home(s), {residentsUpdated} resident(s)).",
                     }
                 );
             }
+        }
+
+        private static bool IsAlreadyOptedOut(EmailAddress ea)
+        {
+            return !ea.BoardEmailOptedIn
+                && !ea.WelcomeEmailOptedIn
+                && !ea.GardenClubEmailOptedIn
+                && !ea.SocialCommitteeEmailOptedIn
+                && !ea.SunshineCommitteeEmailOptedIn;
         }
 
         private static void OptOutEmailAddress(EmailAddress ea)
