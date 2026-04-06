@@ -6,7 +6,7 @@ namespace Web.Services
 {
     /// <summary>
     /// Shared category definitions for email subscription management.
-    /// Referenced by both EmailService (footer rendering) and UnsubscribeController (API endpoints).
+    /// Referenced by EmailJobProcessor (footer rendering) and UnsubscribeController (API endpoints).
     /// </summary>
     public static class EmailSubscriptionCategories
     {
