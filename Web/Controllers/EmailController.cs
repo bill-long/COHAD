@@ -134,42 +134,12 @@ namespace Web.Controllers
             if (apiUser == null)
                 return Unauthorized(new { error = "User not found." });
 
-            var homeIds = apiUser.OwnedHomeIds ?? new List<Guid>();
-            if (homeIds.Count == 0)
-                return Ok(Array.Empty<object>());
+            var allowed = await GetEmailsForUserHomes(apiUser);
+            var result = allowed
+                .Values.Select(r => new TestRecipientOption { Email = r.Email, HomeId = r.HomeId })
+                .ToList();
 
-            var homes = await _homeRepository.GetByIdsAsync(homeIds);
-            var residents = new List<Resident>();
-            foreach (var home in homes)
-            {
-                var homeResidents = await _residentRepository.GetByHomeIdAsync(home.Id);
-                residents.AddRange(homeResidents);
-            }
-
-            var seen = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-            foreach (var home in homes)
-            {
-                // Home-level email
-                if (
-                    !string.IsNullOrWhiteSpace(home.EmailAddress?.Address)
-                    && !seen.ContainsKey(home.EmailAddress.Address)
-                )
-                    seen[home.EmailAddress.Address] = new { email = home.EmailAddress.Address, homeId = home.Id };
-
-                // Resident emails
-                foreach (var resident in residents.Where(r => r.HomeId == home.Id))
-                {
-                    if (resident.EmailAddresses == null)
-                        continue;
-                    foreach (var addr in resident.EmailAddresses)
-                    {
-                        if (!string.IsNullOrWhiteSpace(addr.Address) && !seen.ContainsKey(addr.Address))
-                            seen[addr.Address] = new { email = addr.Address, homeId = home.Id };
-                    }
-                }
-            }
-
-            return Ok(seen.Values);
+            return Ok(result);
         }
 
         [HttpGet("jobs")]
@@ -297,6 +267,18 @@ namespace Web.Controllers
             if (apiUser == null)
                 return Unauthorized(new { error = "User not found." });
 
+            // Best-effort retention cleanup (terminal jobs older than configured retention).
+            // This runs on submission because emails are typically sent infrequently.
+            try
+            {
+                await _emailJobCleanup.RunOnceBestEffortAsync();
+            }
+            catch (Exception ex)
+            {
+                // Best-effort only: never block a send because cleanup failed.
+                _logger.LogWarning(ex, "Email job retention cleanup failed during send submission (best-effort).");
+            }
+
             List<EmailJobRecipient> recipients;
 
             if (emailInfo.IsTestEmail)
@@ -330,18 +312,6 @@ namespace Web.Controllers
             }
             else
             {
-                // Best-effort retention cleanup (terminal jobs older than configured retention).
-                // This runs on submission because emails are typically sent infrequently.
-                try
-                {
-                    await _emailJobCleanup.RunOnceBestEffortAsync();
-                }
-                catch (Exception ex)
-                {
-                    // Best-effort only: never block a send because cleanup failed.
-                    _logger.LogWarning(ex, "Email job retention cleanup failed during send submission (best-effort).");
-                }
-
                 // Resolve recipients (snapshot at job creation time)
                 recipients = await GetAllEmailsMatchingFilter(recipientFilter);
                 if (recipients.Count == 0)
