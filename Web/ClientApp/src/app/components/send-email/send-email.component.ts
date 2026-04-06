@@ -219,6 +219,13 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
 
   sendEmail(isTest: boolean) {
     this.editEnabled = false;
+    this.errorText = null;
+
+    if (isTest) {
+      this.activeTestJob = null;
+      this.testJobCompleted = false;
+      this.teardownTestJobSubscriptions();
+    }
 
     const payload: Record<string, unknown> = {
       subject: this.subject,
@@ -231,7 +238,6 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.httpClient.put(`api/email/${this.senderEndpoint}`, payload, { observe: 'response' }).subscribe({
       next: (resp: HttpResponse<object>) => {
-        this.errorText = null;
         if (resp.status === 202) {
           const jobSummary = resp.body as EmailJobSummary;
           this.telemetry.trackEvent('EmailSent', {

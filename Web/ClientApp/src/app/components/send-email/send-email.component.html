@@ -71,15 +71,21 @@
               ></div>
             </div>
             <div *ngIf="testJobCompleted" class="job-final-status">
-              <span *ngIf="activeTestJob.status === 'Completed'" class="cohad-inline-alert cohad-inline-alert--success">
-                Test email sent successfully.
-              </span>
-              <span *ngIf="activeTestJob.status === 'PartiallyCompleted'" class="cohad-inline-alert cohad-inline-alert--warning">
-                Test completed with {{ activeTestJob.failedCount }} failures.
-              </span>
-              <span *ngIf="activeTestJob.status === 'Failed'" class="cohad-inline-alert cohad-inline-alert--error">
-                Test email failed. {{ activeTestJob.lastError }}
-              </span>
+              <ng-container [ngSwitch]="activeTestJob.status">
+                <span *ngSwitchCase="'Completed'" class="cohad-inline-alert cohad-inline-alert--success">
+                  Test email sent successfully.
+                </span>
+                <span *ngSwitchCase="'PartiallyCompleted'" class="cohad-inline-alert cohad-inline-alert--warning">
+                  Test completed with {{ activeTestJob.failedCount }} failures.
+                </span>
+                <span *ngSwitchCase="'Failed'" class="cohad-inline-alert cohad-inline-alert--error">
+                  Test email failed. {{ activeTestJob.lastError }}
+                </span>
+                <span *ngSwitchCase="'Cancelled'" class="cohad-inline-alert cohad-inline-alert--warning"> Test email was cancelled. </span>
+                <span *ngSwitchDefault class="cohad-inline-alert cohad-inline-alert--warning">
+                  Test email finished with status "{{ activeTestJob.status }}".
+                </span>
+              </ng-container>
             </div>
           </div>
         </ng-container>
