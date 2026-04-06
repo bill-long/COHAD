@@ -42,6 +42,8 @@ namespace Web.Services
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
 
+        private const int MaxBase64Length = 10 * 1024 * 1024; // ~7.5 MB decoded
+
         public static ExtractedImages ExtractInlineImages(string htmlBody)
         {
             var images = new List<InlineImage>();
@@ -53,7 +55,19 @@ namespace Web.Services
                 {
                     var imageExtension = match.Groups[1].Value;
                     var base64 = match.Groups[2].Value;
-                    var imageBytes = Convert.FromBase64String(base64);
+
+                    if (base64.Length > MaxBase64Length)
+                        return match.Value; // leave oversized images as-is
+
+                    byte[] imageBytes;
+                    try
+                    {
+                        imageBytes = Convert.FromBase64String(base64);
+                    }
+                    catch (FormatException)
+                    {
+                        return match.Value; // leave malformed data URIs as-is
+                    }
 
                     var contentId = MimeUtils.GenerateMessageId();
                     images.Add(

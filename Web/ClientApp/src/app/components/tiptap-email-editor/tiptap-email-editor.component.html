@@ -69,9 +69,10 @@
           role="group"
           aria-label="Text colors"
           (click)="$event.stopPropagation()"
-          (keydown)="onColorGridKeydown($event, 'text')"
+          (keydown)="onColorGridKeydown($event)"
         >
           <button
+            type="button"
             *ngFor="let c of textColors"
             class="color-swatch"
             [attr.aria-label]="'Text color ' + c"
@@ -91,9 +92,10 @@
           role="group"
           aria-label="Highlight colors"
           (click)="$event.stopPropagation()"
-          (keydown)="onColorGridKeydown($event, 'bg')"
+          (keydown)="onColorGridKeydown($event)"
         >
           <button
+            type="button"
             *ngFor="let c of bgColors"
             class="color-swatch"
             [attr.aria-label]="c === 'transparent' ? 'No highlight' : 'Highlight ' + c"

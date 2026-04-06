@@ -219,6 +219,11 @@ export class TiptapEmailEditorComponent implements OnInit, OnDestroy, ControlVal
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return;
+      const maxSize = 5 * 1024 * 1024; // 5 MB
+      if (file.size > maxSize) {
+        window.alert('Image must be under 5 MB.');
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => {
         const dataUri = reader.result as string;
@@ -250,7 +255,7 @@ export class TiptapEmailEditorComponent implements OnInit, OnDestroy, ControlVal
     this.editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   }
 
-  onColorGridKeydown(event: KeyboardEvent, type: 'text' | 'bg'): void {
+  onColorGridKeydown(event: KeyboardEvent): void {
     const grid = event.currentTarget as HTMLElement;
     const buttons = Array.from(grid.querySelectorAll<HTMLButtonElement>('.color-swatch'));
     const current = grid.querySelector<HTMLButtonElement>('.color-swatch:focus');

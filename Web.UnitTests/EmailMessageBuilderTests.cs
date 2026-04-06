@@ -12,7 +12,7 @@ public class EmailMessageBuilderTests
         var result = EmailMessageBuilder.InlineCss(html);
 
         Assert.Contains("color: red", result);
-        Assert.DoesNotContain("<style>", result);
+        Assert.DoesNotContain("<style", result, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
