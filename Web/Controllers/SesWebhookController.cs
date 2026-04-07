@@ -57,7 +57,9 @@ namespace Web.Controllers
             _isDevelopment = env.IsDevelopment() || env.IsEnvironment("MockData");
             var opts = sesOptions.Value;
             _allowedTopicArns = new HashSet<string>(
-                opts.AllowedTopicArns ?? Enumerable.Empty<string>(),
+                (opts.AllowedTopicArns ?? Enumerable.Empty<string>())
+                    .Select(a => a.Trim())
+                    .Where(a => a.Length > 0),
                 StringComparer.Ordinal
             );
         }
@@ -113,15 +115,29 @@ namespace Web.Controllers
                 }
             }
 
-            // Reject stale messages to reduce replay risk
-            if (message.TryGetProperty("Timestamp", out var tsProp)
-                && DateTime.TryParse(tsProp.GetString(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var msgTime))
+            // Reject messages without a valid timestamp to prevent bypassing replay-age checks
+            if (!message.TryGetProperty("Timestamp", out var tsProp))
             {
-                if (DateTime.UtcNow - msgTime > MaxMessageAge)
+                if (!_isDevelopment)
                 {
-                    _logger.LogWarning("SNS message timestamp too old ({Timestamp}) — rejecting.", tsProp.GetString());
+                    _logger.LogWarning("SNS message missing Timestamp property — rejecting.");
                     return BadRequest();
                 }
+                _logger.LogDebug("SNS message missing Timestamp — accepting in development mode.");
+            }
+            else if (!DateTime.TryParse(tsProp.GetString(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var msgTime))
+            {
+                if (!_isDevelopment)
+                {
+                    _logger.LogWarning("SNS message has invalid Timestamp '{Timestamp}' — rejecting.", tsProp.GetString());
+                    return BadRequest();
+                }
+                _logger.LogDebug("SNS message has invalid Timestamp — accepting in development mode.");
+            }
+            else if (DateTime.UtcNow - msgTime > MaxMessageAge)
+            {
+                _logger.LogWarning("SNS message timestamp too old ({Timestamp}) — rejecting.", tsProp.GetString());
+                return BadRequest();
             }
 
             switch (messageType)
@@ -475,6 +491,13 @@ namespace Web.Controllers
 
             sb.Append("Timestamp\n");
             sb.Append(GetStringProp(message, "Timestamp") + "\n");
+
+            if (type == "SubscriptionConfirmation" || type == "UnsubscribeConfirmation")
+            {
+                sb.Append("Token\n");
+                sb.Append(GetStringProp(message, "Token") + "\n");
+            }
+
             sb.Append("TopicArn\n");
             sb.Append(GetStringProp(message, "TopicArn") + "\n");
             sb.Append("Type\n");
