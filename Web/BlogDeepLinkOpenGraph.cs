@@ -42,18 +42,18 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
 
     private static async Task WriteBlogPageAsync(HttpContext context, IWebHostEnvironment env, string segment)
     {
+        // HEAD requests only need status + content-type; skip DB lookup and HTML generation.
+        if (HttpMethods.IsHead(context.Request.Method))
+        {
+            context.Response.ContentType = "text/html; charset=utf-8";
+            return;
+        }
+
         BlogPost post;
         using (var scope = context.RequestServices.CreateScope())
         {
             var repo = scope.ServiceProvider.GetRequiredService<IBlogPostRepository>();
             post = await repo.GetByRouteSegmentAsync(segment);
-        }
-
-        // HEAD requests only need status + content-type; skip HTML generation.
-        if (HttpMethods.IsHead(context.Request.Method))
-        {
-            context.Response.ContentType = "text/html; charset=utf-8";
-            return;
         }
 
         var indexPath = ResolveIndexHtmlPath(env);
