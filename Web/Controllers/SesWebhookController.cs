@@ -394,7 +394,14 @@ namespace Web.Controllers
                 }
             }
 
-            return Ok();
+            // All retries exhausted — log and return 500 so SNS retries the notification.
+            _logger.LogWarning(
+                "Exhausted concurrency retries updating delivery status for job {JobId}, recipient {Email}, status {DeliveryStatus}.",
+                jobId,
+                email,
+                deliveryStatus
+            );
+            return StatusCode(500);
         }
 
         private static (string? jobId, string? email) ExtractCorrelationTags(JsonElement sesEvent)

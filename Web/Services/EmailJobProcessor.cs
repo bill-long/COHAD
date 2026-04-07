@@ -692,6 +692,15 @@ namespace Web.Services
 
             if (stoppedEarly)
             {
+                // Re-read the job to check if it was cancelled or deleted (not just contention).
+                var latest = await repo.GetByIdAsync(job.Id);
+                if (latest == null || latest.Status == EmailJobStatus.Cancelled)
+                {
+                    if (latest != null)
+                        await NotifyCompletedAsync(latest);
+                    return;
+                }
+
                 _logger.LogWarning(
                     "Email job {JobId} stopped early due to persistent concurrency conflicts (sent {Sent}/{Total}) — re-queuing for remaining recipients",
                     job.Id,
@@ -699,9 +708,7 @@ namespace Web.Services
                     job.TotalRecipients
                 );
                 await _queue.EnqueueAsync(job.Id, ct);
-                var latest = await repo.GetByIdAsync(job.Id);
-                if (latest != null)
-                    await NotifyProgressAsync(latest);
+                await NotifyProgressAsync(latest);
                 return;
             }
 
@@ -834,14 +841,20 @@ namespace Web.Services
 
             if (stoppedEarly)
             {
+                var latest = await repo.GetByIdAsync(job.Id);
+                if (latest == null || latest.Status == EmailJobStatus.Cancelled)
+                {
+                    if (latest != null)
+                        await NotifyCompletedAsync(latest);
+                    return;
+                }
+
                 _logger.LogWarning(
                     "Mock email job {JobId} stopped early due to persistent concurrency conflicts — re-queuing",
                     job.Id
                 );
                 await _queue.EnqueueAsync(job.Id, ct);
-                var latest = await repo.GetByIdAsync(job.Id);
-                if (latest != null)
-                    await NotifyProgressAsync(latest);
+                await NotifyProgressAsync(latest);
                 return;
             }
 

@@ -295,6 +295,16 @@ namespace Web.Controllers
                     );
                 }
             }
+
+            // All retries exhausted — throw so the outer handler returns 500 and SendGrid
+            // retries the entire batch.
+            _logger.LogWarning(
+                "Exhausted concurrency retries updating delivery status for job {JobId}, recipient {Email}, status {DeliveryStatus}.",
+                jobId,
+                email,
+                deliveryStatus
+            );
+            throw new EmailJobConcurrencyException();
         }
 
         internal static DeliveryStatus MapEventToDeliveryStatus(string eventType)
