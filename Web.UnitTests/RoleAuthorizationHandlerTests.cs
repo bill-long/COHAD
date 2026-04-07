@@ -24,12 +24,13 @@ public sealed class RoleAuthorizationHandlerTests
         );
 
     [Fact]
-    public async Task Does_not_succeed_when_unique_id_cannot_be_built_from_claims()
+    public async Task Does_not_succeed_when_local_account_not_in_database()
     {
         var user = new ClaimsPrincipal(
             new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, "only-name-id") }, "Test")
         );
         var mockRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        mockRepo.Setup(r => r.GetByUniqueIdAsync("localonly-name-id")).ReturnsAsync((User?)null);
         var handler = new RoleAuthorizationHandler(mockRepo.Object, Mock.Of<ILogger<RoleAuthorizationHandler>>());
         var requirement = new RoleAuthorizationRequirement(User.Role.Resident);
         var context = new AuthorizationHandlerContext(
@@ -41,7 +42,7 @@ public sealed class RoleAuthorizationHandlerTests
         await ((IAuthorizationHandler)handler).HandleAsync(context);
 
         Assert.False(context.HasSucceeded);
-        mockRepo.Verify(r => r.GetByUniqueIdAsync(It.IsAny<string>()), Times.Never);
+        mockRepo.Verify(r => r.GetByUniqueIdAsync("localonly-name-id"), Times.Once);
     }
 
     [Fact]

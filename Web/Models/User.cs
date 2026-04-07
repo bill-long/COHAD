@@ -63,15 +63,18 @@ namespace Web.Models
         {
             var claimsList = claims.ToList();
             var nameId = claimsList.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-            var idProvider = claimsList
-                .FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")
-                ?.Value;
-            if (nameId == null || idProvider == null)
+            if (nameId == null)
             {
                 throw new InvalidOperationException(
-                    "Cannot build a unique user ID: one or more required claims (NameIdentifier, identityprovider) are missing."
+                    "Cannot build a unique user ID: the NameIdentifier claim is missing."
                 );
             }
+
+            var idProvider =
+                claimsList
+                    .FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/identity/claims/identityprovider")
+                    ?.Value
+                ?? "local";
 
             return idProvider + nameId;
         }
