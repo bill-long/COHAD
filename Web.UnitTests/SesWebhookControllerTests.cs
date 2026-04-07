@@ -29,15 +29,15 @@ public sealed class SesWebhookControllerTests
     private readonly Mock<IEmailDeliveryActionService> _deliveryAction = new();
     private readonly Mock<IHttpClientFactory> _httpFactory = new();
 
-    private SesWebhookController CreateController(string environment = "MockData", List<string>? allowedTopicArns = null)
+    private SesWebhookController CreateController(
+        string environment = "MockData",
+        List<string>? allowedTopicArns = null
+    )
     {
         var env = new Mock<IWebHostEnvironment>();
         env.Setup(e => e.EnvironmentName).Returns(environment);
 
-        var sesOpts = Options.Create(new SesOptions
-        {
-            AllowedTopicArns = allowedTopicArns ?? new List<string>(),
-        });
+        var sesOpts = Options.Create(new SesOptions { AllowedTopicArns = allowedTopicArns ?? new List<string>() });
 
         var controller = new SesWebhookController(
             _jobRepo.Object,

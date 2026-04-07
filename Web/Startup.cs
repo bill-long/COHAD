@@ -443,13 +443,13 @@ namespace Web
                 {
                     throw new InvalidOperationException(
                         "SES is enabled, but Ses:Region is missing or empty. "
-                        + "Configure a valid AWS region system name such as 'us-west-2'."
+                            + "Configure a valid AWS region system name such as 'us-west-2'."
                     );
                 }
 
-                var sesRegion = Amazon.RegionEndpoint.EnumerableAllRegions
-                    .FirstOrDefault(r => string.Equals(
-                        r.SystemName, sesOptions.Region, StringComparison.OrdinalIgnoreCase));
+                var sesRegion = Amazon.RegionEndpoint.EnumerableAllRegions.FirstOrDefault(r =>
+                    string.Equals(r.SystemName, sesOptions.Region, StringComparison.OrdinalIgnoreCase)
+                );
 
                 if (sesRegion == null)
                 {
