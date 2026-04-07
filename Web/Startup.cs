@@ -566,6 +566,7 @@ namespace Web
                         if (b2cOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
                         {
                             ctx.Context.Response.Headers["Access-Control-Allow-Origin"] = origin;
+                            ctx.Context.Response.Headers.Append("Vary", "Origin");
                         }
                     }
                 }
