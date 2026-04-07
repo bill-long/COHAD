@@ -434,10 +434,28 @@ namespace Web
             var sesOptions = Configuration.GetSection("Ses").Get<SesOptions>() ?? new SesOptions();
             if (sesOptions.Enabled)
             {
+                if (string.IsNullOrWhiteSpace(sesOptions.Region))
+                {
+                    throw new InvalidOperationException(
+                        "SES is enabled, but Ses:Region is missing or empty. "
+                        + "Configure a valid AWS region system name such as 'us-west-2'."
+                    );
+                }
+
+                var sesRegion = Amazon.RegionEndpoint.EnumerableAllRegions
+                    .FirstOrDefault(r => string.Equals(
+                        r.SystemName, sesOptions.Region, StringComparison.OrdinalIgnoreCase));
+
+                if (sesRegion == null)
+                {
+                    throw new InvalidOperationException(
+                        $"SES is enabled, but Ses:Region '{sesOptions.Region}' is not a valid AWS region system name."
+                    );
+                }
+
                 services.AddSingleton<IAmazonSimpleEmailServiceV2>(sp =>
                 {
-                    var region = Amazon.RegionEndpoint.GetBySystemName(sesOptions.Region);
-                    return new Amazon.SimpleEmailV2.AmazonSimpleEmailServiceV2Client(region);
+                    return new Amazon.SimpleEmailV2.AmazonSimpleEmailServiceV2Client(sesRegion);
                 });
                 services.AddSingleton<SesEmailTransport>();
             }

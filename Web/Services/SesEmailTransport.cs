@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Amazon.SimpleEmailV2;
@@ -51,6 +52,14 @@ namespace Web.Services
                 var request = new SendEmailRequest
                 {
                     Content = new EmailContent { Raw = new RawMessage { Data = memoryStream } },
+                    // Explicit From so SES doesn't have to parse the raw MIME envelope
+                    FromEmailAddress = message.From.Mailboxes.FirstOrDefault()?.Address,
+                    Destination = new Destination
+                    {
+                        ToAddresses = message.To.Mailboxes.Select(m => m.Address).ToList(),
+                        CcAddresses = message.Cc.Mailboxes.Select(m => m.Address).ToList(),
+                        BccAddresses = message.Bcc.Mailboxes.Select(m => m.Address).ToList(),
+                    },
                     EmailTags = new()
                     {
                         new MessageTag { Name = "cohad_job_id", Value = jobId },

@@ -24,7 +24,6 @@ namespace Web.Services
 
         private SmtpClient _smtpClient;
         private MemoryStream _protocolLog;
-        private ProtocolLogger _protocolLogger;
 
         private const int MaxSmtpTranscriptCharsToLog = 32 * 1024;
         private static readonly Regex Base64LikeRedaction = new(@"[A-Za-z0-9+/=]{40,}", RegexOptions.Compiled);
@@ -86,6 +85,9 @@ namespace Web.Services
                     );
                 }
 
+                // Dispose the client so the next send forces a fresh connection
+                DisposeSmtpClient();
+
                 return new EmailSendResult
                 {
                     Success = false,
@@ -101,15 +103,18 @@ namespace Web.Services
                 return;
 
             // Dispose previous client if it exists but is disconnected
-            if (_smtpClient != null)
+            DisposeSmtpClient();
+
+            if (_logSmtpProtocolOnFailure)
             {
-                _smtpClient.Dispose();
-                _smtpClient = null;
+                _protocolLog = new MemoryStream();
+                _smtpClient = new SmtpClient(new ProtocolLogger(_protocolLog));
+            }
+            else
+            {
+                _smtpClient = new SmtpClient();
             }
 
-            _protocolLog = new MemoryStream();
-            _protocolLogger = new ProtocolLogger(_protocolLog);
-            _smtpClient = new SmtpClient(_protocolLogger);
             await _smtpClient.ConnectAsync(
                 _smtpOptions.SmtpHost,
                 587,
@@ -119,7 +124,7 @@ namespace Web.Services
             await _smtpClient.AuthenticateAsync(_smtpOptions.SmtpUser, _smtpOptions.SmtpPassword, ct);
         }
 
-        public void Dispose()
+        private void DisposeSmtpClient()
         {
             if (_smtpClient != null)
             {
@@ -128,13 +133,17 @@ namespace Web.Services
                     if (_smtpClient.IsConnected)
                         _smtpClient.Disconnect(true);
                 }
-                catch
-                { /* best-effort disconnect */
-                }
+                catch { /* best-effort disconnect */ }
                 _smtpClient.Dispose();
                 _smtpClient = null;
             }
             _protocolLog?.Dispose();
+            _protocolLog = null;
+        }
+
+        public void Dispose()
+        {
+            DisposeSmtpClient();
         }
 
         private static string FormatSmtpTranscriptForLogs(MemoryStream protocolLog)

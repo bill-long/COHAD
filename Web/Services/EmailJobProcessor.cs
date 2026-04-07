@@ -447,7 +447,9 @@ namespace Web.Services
                         debugMessage.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                     }
 
-                    var transport = _transportRouter.GetTransportForRecipient(debugRecipient.Email);
+                    // In DEBUG, always use SMTP transport (debug sends go to hard-coded Bcc
+                    // addresses, not the actual recipient, so per-recipient routing would be misleading)
+                    var transport = _transportRouter.GetTransportForRecipient(string.Empty);
                     var result = await transport.SendAsync(debugMessage, job.Id.ToString(), debugRecipient.Email, ct);
 
                     // Mark all recipients as sent in DEBUG mode

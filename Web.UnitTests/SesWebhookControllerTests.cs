@@ -13,7 +13,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
+using Web.Configuration;
 using Web.Controllers;
 using Web.Models;
 using Web.Services;
@@ -27,15 +29,21 @@ public sealed class SesWebhookControllerTests
     private readonly Mock<IEmailDeliveryActionService> _deliveryAction = new();
     private readonly Mock<IHttpClientFactory> _httpFactory = new();
 
-    private SesWebhookController CreateController(string environment = "MockData")
+    private SesWebhookController CreateController(string environment = "MockData", List<string>? allowedTopicArns = null)
     {
         var env = new Mock<IWebHostEnvironment>();
         env.Setup(e => e.EnvironmentName).Returns(environment);
+
+        var sesOpts = Options.Create(new SesOptions
+        {
+            AllowedTopicArns = allowedTopicArns ?? new List<string>(),
+        });
 
         var controller = new SesWebhookController(
             _jobRepo.Object,
             _deliveryAction.Object,
             _httpFactory.Object,
+            sesOpts,
             env.Object,
             NullLogger<SesWebhookController>.Instance
         );
@@ -84,7 +92,7 @@ public sealed class SesWebhookControllerTests
                 SubscribeURL = "https://evil.com/confirm",
                 MessageId = "msg-1",
                 Message = "Please confirm",
-                Timestamp = "2025-01-01T00:00:00Z",
+                Timestamp = DateTime.UtcNow.ToString("o"),
                 TopicArn = "arn:aws:sns:us-west-2:123:test",
             }
         );
@@ -133,7 +141,7 @@ public sealed class SesWebhookControllerTests
                 Type = "Notification",
                 MessageId = "sns-1",
                 Message = sesMessage,
-                Timestamp = "2025-01-01T00:00:00Z",
+                Timestamp = DateTime.UtcNow.ToString("o"),
                 TopicArn = "arn:aws:sns:us-west-2:123:test",
             }
         );
@@ -192,7 +200,7 @@ public sealed class SesWebhookControllerTests
                 Type = "Notification",
                 MessageId = "sns-2",
                 Message = sesMessage,
-                Timestamp = "2025-01-01T00:00:00Z",
+                Timestamp = DateTime.UtcNow.ToString("o"),
                 TopicArn = "arn:aws:sns:us-west-2:123:test",
             }
         );
@@ -247,7 +255,7 @@ public sealed class SesWebhookControllerTests
                 Type = "Notification",
                 MessageId = "sns-3",
                 Message = sesMessage,
-                Timestamp = "2025-01-01T00:00:00Z",
+                Timestamp = DateTime.UtcNow.ToString("o"),
                 TopicArn = "arn:aws:sns:us-west-2:123:test",
             }
         );
@@ -306,7 +314,7 @@ public sealed class SesWebhookControllerTests
                 Type = "Notification",
                 MessageId = "sns-4",
                 Message = sesMessage,
-                Timestamp = "2025-01-01T00:00:00Z",
+                Timestamp = DateTime.UtcNow.ToString("o"),
                 TopicArn = "arn:aws:sns:us-west-2:123:test",
             }
         );
@@ -344,7 +352,7 @@ public sealed class SesWebhookControllerTests
                 Type = "Notification",
                 MessageId = "sns-5",
                 Message = sesMessage,
-                Timestamp = "2025-01-01T00:00:00Z",
+                Timestamp = DateTime.UtcNow.ToString("o"),
                 TopicArn = "arn:aws:sns:us-west-2:123:test",
             }
         );

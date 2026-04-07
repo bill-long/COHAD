@@ -29,7 +29,9 @@ namespace Web.Services
             var opts = sesOptions.Value;
             _sesEnabled = opts.Enabled;
             _sesRecipients = new HashSet<string>(
-                opts.RoutedRecipients ?? Enumerable.Empty<string>(),
+                (opts.RoutedRecipients ?? Enumerable.Empty<string>())
+                    .Select(r => r.Trim())
+                    .Where(r => r.Length > 0),
                 StringComparer.OrdinalIgnoreCase
             );
         }

@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -13,6 +14,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Web.Configuration;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
@@ -29,13 +32,20 @@ namespace Web.Controllers
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<SesWebhookController> _logger;
         private readonly bool _isDevelopment;
+        private readonly HashSet<string> _allowedTopicArns;
 
         private static readonly string[] AllowedSigningCertDomains = { ".amazonaws.com" };
+
+        /// <summary>
+        /// Maximum age of an SNS message before it is rejected (replay prevention).
+        /// </summary>
+        private static readonly TimeSpan MaxMessageAge = TimeSpan.FromMinutes(10);
 
         public SesWebhookController(
             IEmailJobRepository emailJobRepository,
             IEmailDeliveryActionService deliveryActionService,
             IHttpClientFactory httpClientFactory,
+            IOptions<SesOptions> sesOptions,
             IWebHostEnvironment env,
             ILogger<SesWebhookController> logger
         )
@@ -45,6 +55,11 @@ namespace Web.Controllers
             _httpClientFactory = httpClientFactory;
             _logger = logger;
             _isDevelopment = env.IsDevelopment() || env.IsEnvironment("MockData");
+            var opts = sesOptions.Value;
+            _allowedTopicArns = new HashSet<string>(
+                opts.AllowedTopicArns ?? Enumerable.Empty<string>(),
+                StringComparer.Ordinal
+            );
         }
 
         [HttpPost]
@@ -77,7 +92,7 @@ namespace Web.Controllers
             var messageType = typeProp.GetString();
 
             // Verify SNS signature
-            if (!VerifySnsSignature(message))
+            if (!await VerifySnsSignatureAsync(message))
             {
                 if (!_isDevelopment)
                 {
@@ -85,6 +100,28 @@ namespace Web.Controllers
                     return Forbid();
                 }
                 _logger.LogDebug("SNS signature verification failed — accepting in development mode.");
+            }
+
+            // Validate TopicArn allowlist (prevents rogue SNS topics from triggering opt-outs)
+            if (_allowedTopicArns.Count > 0)
+            {
+                var topicArn = message.TryGetProperty("TopicArn", out var arnProp) ? arnProp.GetString() : null;
+                if (string.IsNullOrEmpty(topicArn) || !_allowedTopicArns.Contains(topicArn))
+                {
+                    _logger.LogWarning("SNS message from unexpected TopicArn: {TopicArn} — rejecting.", topicArn);
+                    return Forbid();
+                }
+            }
+
+            // Reject stale messages to reduce replay risk
+            if (message.TryGetProperty("Timestamp", out var tsProp)
+                && DateTime.TryParse(tsProp.GetString(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var msgTime))
+            {
+                if (DateTime.UtcNow - msgTime > MaxMessageAge)
+                {
+                    _logger.LogWarning("SNS message timestamp too old ({Timestamp}) — rejecting.", tsProp.GetString());
+                    return BadRequest();
+                }
             }
 
             switch (messageType)
@@ -332,7 +369,7 @@ namespace Web.Controllers
         /// Verifies the SNS message signature by downloading the signing certificate
         /// from the URL specified in the message and validating the signature.
         /// </summary>
-        private bool VerifySnsSignature(JsonElement message)
+        private async Task<bool> VerifySnsSignatureAsync(JsonElement message)
         {
             try
             {
@@ -371,7 +408,7 @@ namespace Web.Controllers
 
                 // Download the signing certificate
                 var client = _httpClientFactory.CreateClient();
-                var certPem = client.GetStringAsync(certUrl).GetAwaiter().GetResult();
+                var certPem = await client.GetStringAsync(certUrl, HttpContext.RequestAborted);
 
                 var cert = X509Certificate2.CreateFromPem(certPem);
                 using var rsa = cert.GetRSAPublicKey();

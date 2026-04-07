@@ -24,5 +24,12 @@ namespace Web.Configuration
         /// Matched case-insensitively.
         /// </summary>
         public List<string> RoutedRecipients { get; set; } = new();
+
+        /// <summary>
+        /// SNS Topic ARNs allowed to send webhook notifications. When non-empty,
+        /// messages from any other TopicArn are rejected. Leave empty to skip the check
+        /// (e.g. during initial setup before the ARN is known).
+        /// </summary>
+        public List<string> AllowedTopicArns { get; set; } = new();
     }
 }
