@@ -39,8 +39,9 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
             return endpoints;
         }
 
-        endpoints.MapGet(
+        endpoints.MapMethods(
             "/events/{segment}",
+            ["GET", "HEAD"],
             (HttpContext http, string segment) => WriteEventPageAsync(http, env, segment)
         );
         return endpoints;

@@ -32,8 +32,9 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
             return endpoints;
         }
 
-        endpoints.MapGet(
+        endpoints.MapMethods(
             "/news/{segment}",
+            ["GET", "HEAD"],
             (HttpContext http, string segment) => WriteBlogPageAsync(http, env, segment)
         );
         return endpoints;
