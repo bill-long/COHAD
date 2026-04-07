@@ -110,6 +110,7 @@
     margin: 0 0 0.75rem;
     color: var(--text-primary);
     white-space: pre-line;
+    overflow-wrap: anywhere;
     display: -webkit-box;
     -webkit-line-clamp: 5;
     -webkit-box-orient: vertical;
