@@ -21,15 +21,21 @@ function decodeHtmlEntities(text: string): string {
   return text;
 }
 
-/** Strip markdown syntax to produce plain text (for summaries / card descriptions). */
+/** Strip markdown syntax to produce plain text (for summaries / card descriptions).
+ *  Preserves paragraph breaks so callers can render them with white-space: pre-line. */
 export function stripMarkdownToPlainText(markdown: string): string {
   const renderer = new Renderer();
   renderer.html = () => '';
   renderer.image = () => '';
   const html = marked.parse(markdown, { async: false, renderer }) as string;
   const stripped = html
+    .replace(/<\/(?:p|h[1-6]|li|blockquote|div|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
+    .split('\n')
+    .map(line => line.replace(/\s+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
   return decodeHtmlEntities(stripped);
 }

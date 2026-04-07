@@ -78,4 +78,9 @@ describe('stripMarkdownToPlainText', () => {
   it('handles empty input', () => {
     expect(stripMarkdownToPlainText('')).toBe('');
   });
+
+  it('preserves paragraph breaks', () => {
+    const result = stripMarkdownToPlainText('First paragraph.\n\nSecond paragraph.');
+    expect(result).toBe('First paragraph.\n\nSecond paragraph.');
+  });
 });
