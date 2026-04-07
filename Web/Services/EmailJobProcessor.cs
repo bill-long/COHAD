@@ -565,16 +565,6 @@ namespace Web.Services
                     foreach (var r in pendingRecipients)
                         message.To.Add(new MailboxAddress("", r.Email));
 
-#if DEBUG
-                    message.Subject = $"[DEBUG {job.TotalRecipients} recipients] {message.Subject}";
-                    message.To.Clear();
-                    message.To.Add(new GroupAddress("Private Recipients"));
-                    var debugSink = Environment.GetEnvironmentVariable("Email__DebugSinkAddress")
-                        ?? Environment.GetEnvironmentVariable("EmailDebugSinkAddress");
-                    if (!string.IsNullOrWhiteSpace(debugSink))
-                        message.Bcc.Add(new MailboxAddress("", debugSink));
-#endif
-
                     // Persist attempt start before sending so a crash during in-flight send
                     // doesn't result in the job being re-sent with AttemptCount still at 0.
                     var attemptStartedUtc = DateTime.UtcNow;
@@ -629,60 +619,6 @@ namespace Web.Services
                 }
                 else
                 {
-#if DEBUG
-                // In DEBUG, send a single representative message via the transport router
-                if (pendingRecipients.Count > 0)
-                {
-                    var debugRecipient = pendingRecipients[0];
-                    var debugToken =
-                        (debugRecipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
-                            ? _tokenService.GenerateToken(debugRecipient.HomeId, debugRecipient.Email)
-                            : null;
-                    var debugFooter = EmailMessageBuilder.BuildUnsubscribeFooter(
-                        _appBaseUrl,
-                        categoryDisplayName,
-                        debugToken
-                    );
-                    var debugMessage = new MimeMessage();
-                    debugMessage.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
-                    debugMessage.Subject = $"[DEBUG {job.TotalRecipients} recipients] {job.Subject}";
-                    debugMessage.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
-                    debugMessage.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
-                    debugMessage.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
-                    debugMessage.To.Add(new GroupAddress("Private Recipients"));
-                    debugMessage.Body = EmailMessageBuilder.BuildBodyWithImages(
-                        imageData.ProcessedHtml + debugFooter,
-                        imageData.Images
-                    );
-                    if (debugToken != null && !string.IsNullOrEmpty(_appBaseUrl))
-                    {
-                        var unsubUrl =
-                            $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?token={Uri.EscapeDataString(debugToken)}";
-                        debugMessage.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
-                        debugMessage.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
-                    }
-
-                    // In DEBUG, always use SMTP transport (debug sends go to hard-coded Bcc
-                    // addresses, not the actual recipient, so per-recipient routing and
-                    // recipient correlation metadata would be misleading)
-                    var transport = _transportRouter.GetTransportForRecipient(string.Empty);
-                    var result = await transport.SendAsync(debugMessage, job.Id.ToString(), string.Empty, ct);
-
-                    // Mark all recipients as sent in DEBUG mode
-                    foreach (var r in pendingRecipients)
-                    {
-                        r.Status = result.Success ? EmailJobRecipientStatus.Sent : EmailJobRecipientStatus.Failed;
-                        r.SentUtc = result.Success ? DateTime.UtcNow : null;
-                        r.Error = result.Error;
-                        r.Provider = result.ProviderName;
-                        r.ProviderMessageId = result.ProviderMessageId;
-                    }
-                    job.LastProgressUtc = DateTime.UtcNow;
-                    RecalculateCounts(job);
-                    if (!await TryPersistJobAsync(repo, job))
-                        stoppedEarly = true;
-                }
-#else
                 foreach (var recipient in pendingRecipients)
                 {
                     ct.ThrowIfCancellationRequested();
@@ -791,7 +727,6 @@ namespace Web.Services
 
                     await NotifyProgressAsync(job);
                 }
-#endif
                 }
             }
 
