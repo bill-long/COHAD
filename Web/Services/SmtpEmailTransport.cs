@@ -24,6 +24,7 @@ namespace Web.Services
 
         private SmtpClient _smtpClient;
         private MemoryStream _protocolLog;
+        private DateTime _lastActivityUtc;
 
         /// <summary>Maximum bytes the protocol log stream will buffer before silently discarding writes.</summary>
         private const int MaxProtocolLogBytes = 64 * 1024;
@@ -66,6 +67,7 @@ namespace Web.Services
                 );
 
                 await _smtpClient.SendAsync(message, ct);
+                _lastActivityUtc = DateTime.UtcNow;
 
                 return new EmailSendResult { Success = true, ProviderName = ProviderName };
             }
@@ -102,6 +104,24 @@ namespace Web.Services
 
         private async Task EnsureConnectedAsync(CancellationToken ct)
         {
+            // Force reconnect if the connection has been idle too long.
+            // SendGrid load balancers can silently drop idle TCP connections,
+            // and MailKit's IsConnected only checks local state — it won't
+            // detect a half-open socket until the next read/write times out.
+            if (
+                _smtpClient != null
+                && _smtpClient.IsConnected
+                && _smtpOptions.MaxIdleSeconds > 0
+                && (DateTime.UtcNow - _lastActivityUtc).TotalSeconds > _smtpOptions.MaxIdleSeconds
+            )
+            {
+                _logger.LogInformation(
+                    "SMTP connection idle for >{MaxIdle}s — reconnecting",
+                    _smtpOptions.MaxIdleSeconds
+                );
+                DisposeSmtpClient();
+            }
+
             if (_smtpClient != null && _smtpClient.IsConnected)
                 return;
 
@@ -118,6 +138,9 @@ namespace Web.Services
                 _smtpClient = new SmtpClient();
             }
 
+            if (_smtpOptions.TimeoutSeconds > 0)
+                _smtpClient.Timeout = _smtpOptions.TimeoutSeconds * 1000;
+
             await _smtpClient.ConnectAsync(
                 _smtpOptions.SmtpHost,
                 587,
@@ -125,6 +148,7 @@ namespace Web.Services
                 ct
             );
             await _smtpClient.AuthenticateAsync(_smtpOptions.SmtpUser, _smtpOptions.SmtpPassword, ct);
+            _lastActivityUtc = DateTime.UtcNow;
         }
 
         private void DisposeSmtpClient()
