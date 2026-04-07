@@ -11,24 +11,49 @@
     <div class="event-editor-field-row">
       <mat-form-field appearance="outline" subscriptSizing="dynamic" class="event-editor-mat-field">
         <mat-label>Title</mat-label>
-        <input
-          matInput
-          id="event-editor-title"
-          [(ngModel)]="title"
-          maxlength="160"
-          placeholder="Neighborhood Potluck">
+        <input matInput id="event-editor-title" [(ngModel)]="title" maxlength="160" placeholder="Neighborhood Potluck" />
         <mat-hint align="end">{{ title.length }}/160</mat-hint>
       </mat-form-field>
     </div>
-    <div class="event-editor-field-row">
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="event-editor-mat-field">
-        <mat-label>Description</mat-label>
+    <div class="event-editor-field-row event-editor-description-row">
+      <div class="event-editor-content-header">
+        <label class="event-editor-content-label" id="event-editor-description-label">Description</label>
+        <mat-button-toggle-group
+          [value]="editorMode"
+          (change)="editorMode = $event.value"
+          class="event-editor-mode-toggle"
+          aria-label="Editor mode"
+        >
+          <mat-button-toggle value="visual">Visual</mat-button-toggle>
+          <mat-button-toggle value="markdown">Markdown</mat-button-toggle>
+        </mat-button-toggle-group>
+      </div>
+      <app-milkdown-editor
+        *ngIf="editorMode === 'visual'"
+        [value]="description"
+        (valueChange)="description = $event"
+        [placeholder]="'Describe the event…'"
+        [imageUploader]="false"
+        [ariaLabel]="'Description'"
+        class="event-editor-milkdown"
+      >
+      </app-milkdown-editor>
+      <mat-form-field
+        *ngIf="editorMode === 'markdown'"
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="event-editor-mat-field event-editor-source-field"
+      >
+        <mat-label>Markdown source</mat-label>
         <textarea
           matInput
           id="event-editor-description"
-          rows="3"
           [(ngModel)]="description"
-          placeholder="What residents should know"></textarea>
+          rows="8"
+          class="event-editor-source-textarea"
+          placeholder="What residents should know…"
+          spellcheck="true"
+        ></textarea>
       </mat-form-field>
     </div>
     <div class="event-editor-field-row event-editor-datetime-row">
@@ -36,13 +61,13 @@
       <div class="event-editor-datetime-fields" aria-labelledby="event-editor-start-label">
         <mat-form-field appearance="outline" subscriptSizing="dynamic" class="event-editor-date-field">
           <mat-label>Date</mat-label>
-          <input matInput [matDatepicker]="startPicker" [(ngModel)]="startDate" id="event-editor-start-date">
+          <input matInput [matDatepicker]="startPicker" [(ngModel)]="startDate" id="event-editor-start-date" />
           <mat-datepicker-toggle matIconSuffix [for]="startPicker"></mat-datepicker-toggle>
           <mat-datepicker #startPicker></mat-datepicker>
         </mat-form-field>
         <mat-form-field appearance="outline" subscriptSizing="dynamic" class="event-editor-time-field">
           <mat-label>Time</mat-label>
-          <input matInput type="time" [(ngModel)]="startTime" id="event-editor-start-time" step="60">
+          <input matInput type="time" [(ngModel)]="startTime" id="event-editor-start-time" step="60" />
         </mat-form-field>
       </div>
     </div>
@@ -58,6 +83,7 @@
           <mat-option value="HouseholdOnly">Household only</mat-option>
           <mat-option value="ChildrenOnly">Children only</mat-option>
           <mat-option value="AdultsOnly">Adults only</mat-option>
+          <mat-option value="PeopleOnly">People</mat-option>
         </mat-select>
       </mat-form-field>
     </div>
@@ -65,16 +91,15 @@
 
   <section class="event-editor-section event-editor-section-promo">
     <h3 class="event-editor-section-title">Promotional media</h3>
-    <p class="event-editor-section-hint">Optional flyer image (PNG, JPEG, GIF, or WebP) shown on the public Events page and in social link previews.</p>
+    <p class="event-editor-section-hint">
+      Optional flyer image (PNG, JPEG, GIF, or WebP) shown on the public Events page and in social link previews.
+    </p>
 
     <div class="promo-media-grid" [class.promo-media-grid--with-preview]="showPromoPreview">
       <div class="promo-media-preview-column" *ngIf="showPromoPreview">
         <div class="dialog-promo-label">Current file preview</div>
         <div class="dialog-promo-frame" *ngIf="data.event as ev">
-          <img
-            [src]="ev.promoMediaDownloadUrl"
-            [alt]="ev.title"
-            class="dialog-promo-img">
+          <img [src]="ev.promoMediaDownloadUrl" [alt]="ev.title" class="dialog-promo-img" />
         </div>
       </div>
 
@@ -85,7 +110,8 @@
           class="event-editor-file-input-hidden"
           type="file"
           accept=".png,.jpg,.jpeg,.gif,.webp"
-          (change)="onFileSelected($event)">
+          (change)="onFileSelected($event)"
+        />
 
         <div class="promo-file-actions">
           <button type="button" mat-stroked-button class="event-editor-file-btn" (click)="fileInput.click()">Choose file…</button>
@@ -106,7 +132,9 @@
         </div>
 
         <div class="event-editor-checkbox-row" *ngIf="existingPromoFileName && !selectedFile">
-          <mat-checkbox [(ngModel)]="removePromoMedia" color="primary" id="event-editor-remove-promo">Remove current promotional media</mat-checkbox>
+          <mat-checkbox [(ngModel)]="removePromoMedia" color="primary" id="event-editor-remove-promo"
+            >Remove current promotional media</mat-checkbox
+          >
         </div>
       </div>
     </div>

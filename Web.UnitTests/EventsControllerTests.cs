@@ -1093,6 +1093,115 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
+    public async Task SignUp_PeopleOnly_requires_at_least_one_person()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Resident",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Block Party",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            SignupMode = EventSignupMode.PeopleOnly,
+            Signups = new List<EventSignup>(),
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockEvents.Object,
+            Mock.Of<IDocumentFileStore>(),
+            Mock.Of<IAuditLogRepository>()
+        );
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 0, Children = 0 });
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task SignUp_PeopleOnly_sanitizes_child_fields()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Resident",
+                    Emails = "mock@cohad.local",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Block Party",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            SignupMode = EventSignupMode.PeopleOnly,
+            Signups = new List<EventSignup>(),
+        };
+
+        CommunityEvent replaced = null;
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .Callback<CommunityEvent, string>((e, _) => replaced = e)
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object);
+        var result = await c.SignUp(
+            eventId.ToString("D"),
+            new EventSignupRequest
+            {
+                Adults = 4,
+                Children = 2,
+                AdultNames = new List<string> { "Alex", "Jordan", "Sam", "Pat" },
+                ChildNames = new List<string> { "Riley" },
+            }
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(replaced);
+        var signup = Assert.Single(replaced!.Signups);
+        Assert.Equal(4, signup.Adults);
+        Assert.Equal(0, signup.Children);
+        Assert.Equal(new List<string> { "Alex", "Jordan", "Sam", "Pat" }, signup.AdultNames);
+        Assert.Empty(signup.ChildNames);
+    }
+
+    [Fact]
     public async Task UpsertManage_png_promo_media_is_converted_to_jpeg()
     {
         var uniqueId = UniqueId("u1");

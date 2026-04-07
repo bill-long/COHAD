@@ -8,6 +8,7 @@ import { marked, Renderer } from 'marked';
 import { ApiUser } from 'src/app/models';
 import { BlogComment, BlogPostDetail, BlogService } from 'src/app/services/blog.service';
 import { Login, Action, dispatcher, applicationState, ApplicationState } from 'src/app/state';
+import { renderMarkdownToHtml } from 'src/app/utils/markdown';
 
 @Component({
   selector: 'app-blog-detail',
@@ -190,10 +191,6 @@ export class BlogDetailComponent implements OnInit {
   }
 
   private renderMarkdown(markdown: string): SafeHtml {
-    const renderer = new Renderer();
-    renderer.html = () => '';
-    const rawHtml = marked.parse(markdown, { async: false, renderer }) as string;
-    const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, rawHtml) ?? '';
-    return this.sanitizer.bypassSecurityTrustHtml(sanitized);
+    return renderMarkdownToHtml(markdown, this.sanitizer);
   }
 }
