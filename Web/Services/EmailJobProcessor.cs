@@ -66,6 +66,30 @@ namespace Web.Services
         }
 
         /// <summary>
+        /// Promotes recipients that are still Pending but have a non-Unknown DeliveryStatus
+        /// to Sent, since a delivery event from the provider proves the email was sent.
+        /// This normalizes state before filtering so the processor does not re-send them.
+        /// </summary>
+        private static bool NormalizePendingDelivered(EmailJob job)
+        {
+            var changed = false;
+            foreach (var r in job.Recipients ?? new())
+            {
+                if (r.Status == EmailJobRecipientStatus.Pending && r.DeliveryStatus != DeliveryStatus.Unknown)
+                {
+                    r.Status = EmailJobRecipientStatus.Sent;
+                    r.SentUtc ??= DateTime.UtcNow;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                RecalculateCounts(job);
+
+            return changed;
+        }
+
+        /// <summary>
         /// Recipients still Pending/Failed but at or over the attempt cap cannot be sent; mark them Failed
         /// so terminal status reflects reality. Preserves any existing per-recipient error text.
         /// </summary>
@@ -480,6 +504,11 @@ namespace Web.Services
                 ? name
                 : job.Category;
 
+            // Promote Pending recipients that already have a delivery event to Sent,
+            // so the filter below correctly excludes them and they are not re-sent.
+            if (NormalizePendingDelivered(job))
+                await TryPersistJobAsync(repo, job);
+
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
                     (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
@@ -729,6 +758,10 @@ namespace Web.Services
                 _logger.LogWarning("Email job {JobId} failed in mock mode (JobFatalError)", job.Id);
                 return;
             }
+
+            // Promote Pending recipients that already have a delivery event to Sent.
+            if (NormalizePendingDelivered(job))
+                await TryPersistJobAsync(repo, job);
 
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>

@@ -258,6 +258,7 @@ namespace Web.Controllers
                     {
                         recipient.Status = EmailJobRecipientStatus.Sent;
                         recipient.SentUtc ??= DateTime.UtcNow;
+                        job.SentCount = (job.Recipients ?? new()).Count(r => r.Status == EmailJobRecipientStatus.Sent);
                     }
 
                     if (shouldUpdateStatus || shouldSetProviderMessageId || shouldFixPendingStatus)
