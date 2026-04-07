@@ -44,24 +44,43 @@
 
             function reorder() {
                 var social = api.querySelector(':scope > .social');
+                if (!social) return false;
+
                 var divider = api.querySelector(':scope > .divider');
-                if (social && divider) {
-                    // prepend moves the node; no duplication
-                    api.prepend(divider);
-                    api.prepend(social);
-                    return true;
-                }
-                return false;
+                // prepend moves the node; no duplication
+                if (divider) api.prepend(divider);
+                api.prepend(social);
+                return true;
+            }
+
+            // B2C may not inject .social at all (e.g. no social IdPs
+            // configured). Consider the UI "settled" once .localAccount
+            // is present without .social — nothing to reorder.
+            function isSettled() {
+                var localAccount = api.querySelector(':scope > .localAccount');
+                if (!localAccount) return false;
+                var social = api.querySelector(':scope > .social');
+                return !social;
             }
 
             // If B2C content is already present (unlikely but safe)
-            if (reorder()) return;
+            if (reorder() || isSettled()) return;
+
+            var timeoutId;
+            function stopObserving() {
+                observer.disconnect();
+                if (timeoutId) clearTimeout(timeoutId);
+            }
 
             // Watch for B2C to inject its children
             var observer = new MutationObserver(function () {
-                if (reorder()) observer.disconnect();
+                if (reorder() || isSettled()) stopObserving();
             });
             observer.observe(api, { childList: true });
+
+            // Safety net: disconnect after 5 s even if expected
+            // elements never appear.
+            timeoutId = setTimeout(function () { stopObserving(); }, 5000);
         })();
     </script>
 </body>
