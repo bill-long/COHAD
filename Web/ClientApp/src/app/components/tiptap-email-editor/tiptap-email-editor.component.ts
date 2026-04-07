@@ -236,37 +236,40 @@ export class TiptapEmailEditorComponent implements OnInit, OnDestroy, ControlVal
 
   private static readonly ALLOWED_PROTOCOLS = /^(https?:|mailto:)/i;
 
+  private promptForUrl(): string | null {
+    const url = window.prompt('Enter URL:');
+    if (!url) return null;
+    const trimmed = url.trim();
+    if (!TiptapEmailEditorComponent.ALLOWED_PROTOCOLS.test(trimmed)) {
+      window.alert('Only http, https, and mailto links are allowed.');
+      return null;
+    }
+    return trimmed;
+  }
+
   insertLink(): void {
     const { from, to } = this.editor.state.selection;
     const hasSelection = from !== to;
 
     if (!hasSelection) {
-      const displayText = window.prompt('Enter display text:');
+      const raw = window.prompt('Enter display text:');
+      if (!raw) return;
+      const displayText = raw.trim();
       if (!displayText) return;
 
-      const url = window.prompt('Enter URL:');
-      if (!url) return;
-      const trimmed = url.trim();
-      if (!TiptapEmailEditorComponent.ALLOWED_PROTOCOLS.test(trimmed)) {
-        window.alert('Only http, https, and mailto links are allowed.');
-        return;
-      }
+      const href = this.promptForUrl();
+      if (!href) return;
 
       this.editor
         .chain()
         .focus()
-        .insertContent({ type: 'text', text: displayText, marks: [{ type: 'link', attrs: { href: trimmed } }] })
+        .insertContent({ type: 'text', text: displayText, marks: [{ type: 'link', attrs: { href } }] })
         .run();
     } else {
-      const url = window.prompt('Enter URL:');
-      if (!url) return;
-      const trimmed = url.trim();
-      if (!TiptapEmailEditorComponent.ALLOWED_PROTOCOLS.test(trimmed)) {
-        window.alert('Only http, https, and mailto links are allowed.');
-        return;
-      }
+      const href = this.promptForUrl();
+      if (!href) return;
 
-      this.editor.chain().focus().extendMarkRange('link').setLink({ href: trimmed }).run();
+      this.editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
     }
   }
 
