@@ -222,7 +222,7 @@ namespace Web.Controllers
 
                 try
                 {
-                    var shouldUpdateStatus = SendGridWebhookController.ShouldUpdateDeliveryStatus(
+                    var shouldUpdateStatus = DeliveryStatusHelper.ShouldUpdate(
                         recipient.DeliveryStatus,
                         deliveryStatus
                     );

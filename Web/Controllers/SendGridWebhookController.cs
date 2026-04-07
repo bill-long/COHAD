@@ -232,7 +232,7 @@ namespace Web.Controllers
                     // Update delivery status only when the new status is more severe,
                     // but allow ProviderMessageId to be populated independently when
                     // a later webhook event includes sg_message_id.
-                    var shouldUpdateStatus = ShouldUpdateDeliveryStatus(recipient.DeliveryStatus, deliveryStatus);
+                    var shouldUpdateStatus = DeliveryStatusHelper.ShouldUpdate(recipient.DeliveryStatus, deliveryStatus);
                     var shouldSetProviderMessageId =
                         !string.IsNullOrEmpty(sgMessageId) && string.IsNullOrEmpty(recipient.ProviderMessageId);
 
@@ -254,7 +254,7 @@ namespace Web.Controllers
 
                     // Auto opt-out for bounce/spam regardless of status transition —
                     // if UpdateAsync succeeded but a prior opt-out attempt failed, SendGrid
-                    // retries and ShouldUpdateDeliveryStatus would be false; running the
+                    // retries and DeliveryStatusHelper.ShouldUpdate would be false; running the
                     // action unconditionally ensures the opt-out isn't permanently missed.
                     // The action service is idempotent (no-op if already opted out).
                     if (deliveryStatus == DeliveryStatus.Bounced || deliveryStatus == DeliveryStatus.SpamReport)
@@ -290,25 +290,5 @@ namespace Web.Controllers
             };
         }
 
-        /// <summary>
-        /// Determines whether the new delivery status should replace the existing one.
-        /// Severity order: Unknown (0) &lt; Deferred (1) &lt; Delivered (2) &lt; Rejected (3) &lt; SpamReport (4) &lt; Bounced (5).
-        /// </summary>
-        internal static bool ShouldUpdateDeliveryStatus(DeliveryStatus current, DeliveryStatus incoming)
-        {
-            return GetDeliveryStatusSeverity(incoming) > GetDeliveryStatusSeverity(current);
-        }
-
-        internal static int GetDeliveryStatusSeverity(DeliveryStatus status) =>
-            status switch
-            {
-                DeliveryStatus.Unknown => 0,
-                DeliveryStatus.Deferred => 1,
-                DeliveryStatus.Delivered => 2,
-                DeliveryStatus.Rejected => 3,
-                DeliveryStatus.SpamReport => 4,
-                DeliveryStatus.Bounced => 5,
-                _ => 0,
-            };
     }
 }

@@ -408,21 +408,28 @@ namespace Web
 
             // Email transport abstraction (SMTP / SES per-recipient routing)
             services.Configure<SesOptions>(Configuration.GetSection("Ses"));
-            services.AddSingleton<IEmailTransport>(sp =>
+            if (useMockData)
             {
-                var smtpOptions = new SmtpOptions
+                services.AddSingleton<IEmailTransport>(new MockData.MockEmailTransport());
+            }
+            else
+            {
+                services.AddSingleton<IEmailTransport>(sp =>
                 {
-                    SmtpHost = Configuration["SmtpHost"],
-                    SmtpUser = Configuration["SmtpUser"],
-                    SmtpPassword = Configuration["SmtpPassword"],
-                };
-                var logProtocol = Configuration.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
-                return new SmtpEmailTransport(
-                    smtpOptions,
-                    logProtocol,
-                    sp.GetRequiredService<ILogger<SmtpEmailTransport>>()
-                );
-            });
+                    var smtpOptions = new SmtpOptions
+                    {
+                        SmtpHost = Configuration["SmtpHost"],
+                        SmtpUser = Configuration["SmtpUser"],
+                        SmtpPassword = Configuration["SmtpPassword"],
+                    };
+                    var logProtocol = Configuration.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
+                    return new SmtpEmailTransport(
+                        smtpOptions,
+                        logProtocol,
+                        sp.GetRequiredService<ILogger<SmtpEmailTransport>>()
+                    );
+                });
+            }
 
             var sesOptions = Configuration.GetSection("Ses").Get<SesOptions>() ?? new SesOptions();
             if (sesOptions.Enabled)
