@@ -28,7 +28,7 @@
       <mat-divider *ngIf="event.hasPromoMedia && hasDescription(event)"></mat-divider>
 
       <mat-card-content *ngIf="hasDescription(event)" class="event-detail-section">
-        <p class="mat-body-large event-detail-description">{{ event.description }}</p>
+        <div class="event-detail-description" [innerHTML]="renderedDescriptionHtml"></div>
       </mat-card-content>
     </mat-card>
 

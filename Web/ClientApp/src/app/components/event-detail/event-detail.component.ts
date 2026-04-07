@@ -1,9 +1,10 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, Inject, OnInit, SecurityContext } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Location } from '@angular/common';
-import { Title } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml, Title } from '@angular/platform-browser';
 import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { marked, Renderer } from 'marked';
 import { ApiUser } from 'src/app/models';
 import { Login, Action, dispatcher, applicationState, ApplicationState } from 'src/app/state';
 import { EventDetail, EventsService } from 'src/app/services/events.service';
@@ -18,6 +19,7 @@ import { httpErrorMessage } from 'src/app/utils/http-error-message';
 })
 export class EventDetailComponent implements OnInit {
   eventItem: EventDetail | null = null;
+  renderedDescriptionHtml: SafeHtml = '';
   loading = false;
   saving = false;
   error = '';
@@ -36,6 +38,7 @@ export class EventDetailComponent implements OnInit {
     private readonly titleService: Title,
     private readonly eventsService: EventsService,
     private readonly telemetry: ApplicationInsightsService,
+    private readonly sanitizer: DomSanitizer,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>,
   ) {}
@@ -104,6 +107,14 @@ export class EventDetailComponent implements OnInit {
     return (event.description ?? '').trim().length > 0;
   }
 
+  private renderMarkdown(markdown: string): SafeHtml {
+    const renderer = new Renderer();
+    renderer.html = () => '';
+    const rawHtml = marked.parse(markdown, { async: false, renderer }) as string;
+    const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, rawHtml) ?? '';
+    return this.sanitizer.bypassSecurityTrustHtml(sanitized);
+  }
+
   private loadEvent(segment: string): void {
     this.loading = true;
     this.error = '';
@@ -112,6 +123,7 @@ export class EventDetailComponent implements OnInit {
     this.eventsService.getByRouteSegment(segment).subscribe({
       next: eventItem => {
         this.eventItem = eventItem;
+        this.renderedDescriptionHtml = this.renderMarkdown(eventItem.description ?? '');
         this.loading = false;
         this.titleService.setTitle(eventItem.title ? `COHAD | ${eventItem.title}` : 'COHAD | Events');
         this.applyExistingSignup(eventItem);
