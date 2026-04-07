@@ -140,15 +140,18 @@
             display: flex !important;
             flex-direction: column;
         }
+        .unified_container .row .panel-default #api > .intro {
+            order: -3;                   /* "Sign in" heading first */
+        }
         .unified_container .row .panel-default #api > .social {
             display: block !important;   /* override table-footer-group */
-            order: -2;                   /* first visually */
+            order: -2;                   /* Google button second */
         }
         .unified_container .row .panel-default #api > .divider {
-            order: -1;                   /* between social and localAccount */
+            order: -1;                   /* "OR" separator third */
         }
         .unified_container .row .panel-default #api > .localAccount {
-            order: 0;                    /* last (default) */
+            order: 0;                    /* email/password form last */
         }
     </style>
 
