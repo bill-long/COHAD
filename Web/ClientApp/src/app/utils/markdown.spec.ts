@@ -78,4 +78,14 @@ describe('stripMarkdownToPlainText', () => {
   it('handles empty input', () => {
     expect(stripMarkdownToPlainText('')).toBe('');
   });
+
+  it('preserves paragraph breaks', () => {
+    const result = stripMarkdownToPlainText('First paragraph.\n\nSecond paragraph.');
+    expect(result).toBe('First paragraph.\nSecond paragraph.');
+  });
+
+  it('collapses soft line breaks within a paragraph to spaces', () => {
+    const result = stripMarkdownToPlainText('First line\nSecond line');
+    expect(result).toBe('First line Second line');
+  });
 });
