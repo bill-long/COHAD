@@ -549,6 +549,65 @@ namespace Web.Services
 
             if (pendingRecipients.Count > 0)
             {
+                if (job.GroupRecipients)
+                {
+                    // Group send: single message with all recipients in To:
+                    // (for admin notifications where Reply All is useful)
+                    var message = new MimeMessage();
+                    message.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                    message.Subject = job.Subject;
+                    message.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                    message.Body = EmailMessageBuilder.BuildBodyWithImages(
+                        imageData.ProcessedHtml,
+                        imageData.Images
+                    );
+
+                    foreach (var r in pendingRecipients)
+                        message.To.Add(new MailboxAddress("", r.Email));
+
+#if DEBUG
+                    message.Subject = $"[DEBUG {job.TotalRecipients} recipients] {message.Subject}";
+                    message.To.Clear();
+                    message.To.Add(new GroupAddress("Private Recipients"));
+                    message.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
+                    message.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
+#endif
+
+                    var transport = _transportRouter.GetTransportForRecipient(string.Empty);
+                    var result = await transport.SendAsync(
+                        message,
+                        job.Id.ToString(),
+                        string.Empty,
+                        ct
+                    );
+
+                    var now = DateTime.UtcNow;
+                    foreach (var r in pendingRecipients)
+                    {
+                        r.AttemptCount++;
+                        r.LastAttemptUtc = now;
+                        r.Provider = result.ProviderName;
+                        if (!string.IsNullOrEmpty(result.ProviderMessageId))
+                            r.ProviderMessageId = result.ProviderMessageId;
+                        if (result.Success)
+                        {
+                            r.Status = EmailJobRecipientStatus.Sent;
+                            r.SentUtc = now;
+                            r.Error = null;
+                        }
+                        else
+                        {
+                            r.Status = EmailJobRecipientStatus.Failed;
+                            r.Error = result.Error;
+                        }
+                    }
+                    job.LastProgressUtc = now;
+                    RecalculateCounts(job);
+                    if (!await TryPersistJobAsync(repo, job))
+                        stoppedEarly = true;
+                }
+                else
+                {
 #if DEBUG
                 // In DEBUG, send a single representative message via the transport router
                 if (pendingRecipients.Count > 0)
@@ -712,6 +771,7 @@ namespace Web.Services
                     await NotifyProgressAsync(job);
                 }
 #endif
+                }
             }
 
             if (stoppedEarly)
@@ -817,6 +877,46 @@ namespace Web.Services
                 .ToList();
 
             var stoppedEarly = false;
+            if (job.GroupRecipients && pendingRecipients.Count > 0)
+            {
+                // Group send: mark all recipients together (single logical send)
+                foreach (var r in pendingRecipients)
+                {
+                    r.AttemptCount++;
+                    r.LastAttemptUtc = DateTime.UtcNow;
+                }
+
+                if (_mockDelayMilliseconds > 0)
+                    await Task.Delay(_mockDelayMilliseconds, ct);
+
+                var mockFailed =
+                    _mockFailAllRecipients
+                    || (_mockRandomFailureProbability > 0 && _mockRandom.NextDouble() < _mockRandomFailureProbability);
+
+                var now = DateTime.UtcNow;
+                foreach (var r in pendingRecipients)
+                {
+                    if (mockFailed)
+                    {
+                        r.Status = EmailJobRecipientStatus.Failed;
+                        r.Error = "Mock send failure (simulated).";
+                        r.SentUtc = null;
+                    }
+                    else
+                    {
+                        r.Status = EmailJobRecipientStatus.Sent;
+                        r.SentUtc = now;
+                        r.Error = null;
+                    }
+                }
+
+                job.LastProgressUtc = now;
+                RecalculateCounts(job);
+                if (!await TryPersistJobAsync(repo, job))
+                    stoppedEarly = true;
+            }
+            else
+            {
             foreach (var recipient in pendingRecipients)
             {
                 ct.ThrowIfCancellationRequested();
@@ -862,6 +962,7 @@ namespace Web.Services
 
                 await NotifyProgressAsync(job);
             }
+            } // end else (per-recipient mock send)
 
             if (stoppedEarly)
             {

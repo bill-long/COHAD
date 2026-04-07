@@ -246,6 +246,79 @@ public sealed class EmailJobProcessorTests
     }
 
     [Fact]
+    public async Task MockMode_GroupRecipients_SendsSingleMessage_MarksAllSent()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "registration",
+            FromEmail = "webservice@cohad.org",
+            FromDisplay = "COHAD Web",
+            Subject = "New User Registered",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            TotalRecipients = 3,
+            GroupRecipients = true,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "admin1@test.com",
+                    HomeId = Guid.Empty,
+                    Status = EmailJobRecipientStatus.Pending,
+                },
+                new EmailJobRecipient
+                {
+                    Email = "admin2@test.com",
+                    HomeId = Guid.Empty,
+                    Status = EmailJobRecipientStatus.Pending,
+                },
+                new EmailJobRecipient
+                {
+                    Email = "admin3@test.com",
+                    HomeId = Guid.Empty,
+                    Status = EmailJobRecipientStatus.Pending,
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        _fileStore
+            .Setup(f => f.DownloadAsync(job.ContentBlobPath))
+            .ReturnsAsync(
+                new DocumentFileResult
+                {
+                    Stream = new MemoryStream("<p>New user info</p>"u8.ToArray()),
+                    ContentType = "text/html",
+                }
+            );
+
+        var processor = CreateProcessor();
+        await RunProcessorForSingleJob(processor, jobId);
+
+        // All recipients marked sent
+        Assert.Equal(EmailJobStatus.Completed, job.Status);
+        Assert.Equal(3, job.SentCount);
+        Assert.All(
+            job.Recipients,
+            r =>
+            {
+                Assert.Equal(EmailJobRecipientStatus.Sent, r.Status);
+                Assert.NotNull(r.SentUtc);
+                Assert.Equal(1, r.AttemptCount);
+            }
+        );
+
+        // All recipients should have the same SentUtc (single logical send)
+        var sentTimes = job.Recipients.Select(r => r.SentUtc).Distinct().ToList();
+        Assert.Single(sentTimes);
+    }
+
+    [Fact]
     public async Task MockMode_FailAllRecipients_MarksEveryRecipientFailed()
     {
         var jobId = Guid.NewGuid();
