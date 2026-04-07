@@ -22,12 +22,14 @@ namespace Web.MockData
             CancellationToken ct
         )
         {
-            return Task.FromResult(new EmailSendResult
-            {
-                Success = true,
-                ProviderMessageId = $"mock-{Guid.NewGuid():N}",
-                ProviderName = ProviderName,
-            });
+            return Task.FromResult(
+                new EmailSendResult
+                {
+                    Success = true,
+                    ProviderMessageId = $"mock-{Guid.NewGuid():N}",
+                    ProviderName = ProviderName,
+                }
+            );
         }
     }
 }

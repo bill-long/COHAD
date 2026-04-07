@@ -663,6 +663,7 @@ public sealed class MeControllerTests
         Assert.Equal("New User Registered", capturedJob.Subject);
         Assert.Equal("webservice@cohad.org", capturedJob.FromEmail);
         Assert.Equal("registration", capturedJob.Category);
+        Assert.True(capturedJob.GroupRecipients);
         Assert.Single(capturedJob.Recipients);
         Assert.Equal("admin@example.com", capturedJob.Recipients[0].Email);
         fileStore.Verify(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"), Times.Once);

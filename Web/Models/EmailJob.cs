@@ -79,6 +79,13 @@ namespace Web.Models
         /// </summary>
         public string LastError { get; set; }
 
+        /// <summary>
+        /// When true, all recipients are placed in a single message's To: field
+        /// instead of sending individual messages. Useful for admin notifications
+        /// where Reply All is desirable.
+        /// </summary>
+        public bool GroupRecipients { get; set; }
+
         public List<EmailJobRecipient> Recipients { get; set; } = new();
 
         /// <summary>

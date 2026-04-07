@@ -75,12 +75,7 @@ namespace Web.Services
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(
-                    ex,
-                    "SMTP send failed for {Email} in job {JobId}",
-                    recipientEmail,
-                    jobId
-                );
+                _logger.LogWarning(ex, "SMTP send failed for {Email} in job {JobId}", recipientEmail, jobId);
 
                 if (_logSmtpProtocolOnFailure && _protocolLog != null)
                 {
@@ -141,7 +136,9 @@ namespace Web.Services
                     if (_smtpClient.IsConnected)
                         _smtpClient.Disconnect(true);
                 }
-                catch { /* best-effort disconnect */ }
+                catch
+                { /* best-effort disconnect */
+                }
                 _smtpClient.Dispose();
                 _smtpClient = null;
             }
@@ -231,14 +228,16 @@ namespace Web.Services
         public override void Write(byte[] buffer, int offset, int count)
         {
             var remaining = _maxBytes - (int)Length;
-            if (remaining <= 0) return;
+            if (remaining <= 0)
+                return;
             base.Write(buffer, offset, Math.Min(count, remaining));
         }
 
         public override void Write(ReadOnlySpan<byte> buffer)
         {
             var remaining = _maxBytes - (int)Length;
-            if (remaining <= 0) return;
+            if (remaining <= 0)
+                return;
             base.Write(buffer.Length <= remaining ? buffer : buffer.Slice(0, remaining));
         }
 
@@ -251,14 +250,16 @@ namespace Web.Services
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct)
         {
             var remaining = _maxBytes - (int)Length;
-            if (remaining <= 0) return Task.CompletedTask;
+            if (remaining <= 0)
+                return Task.CompletedTask;
             return base.WriteAsync(buffer, offset, Math.Min(count, remaining), ct);
         }
 
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
         {
             var remaining = _maxBytes - (int)Length;
-            if (remaining <= 0) return ValueTask.CompletedTask;
+            if (remaining <= 0)
+                return ValueTask.CompletedTask;
             return base.WriteAsync(buffer.Length <= remaining ? buffer : buffer.Slice(0, remaining), ct);
         }
     }

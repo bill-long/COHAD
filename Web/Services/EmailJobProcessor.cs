@@ -204,8 +204,10 @@ namespace Web.Services
                 // If the server copy already shows this recipient as Sent (e.g. by a previous
                 // attempt that succeeded but whose persist we conflicted with), adopt that status
                 // so the send loop skips it and avoids a duplicate send.
-                if (localRecipient.Status != EmailJobRecipientStatus.Sent
-                    && serverRecipient.Status == EmailJobRecipientStatus.Sent)
+                if (
+                    localRecipient.Status != EmailJobRecipientStatus.Sent
+                    && serverRecipient.Status == EmailJobRecipientStatus.Sent
+                )
                 {
                     localRecipient.Status = serverRecipient.Status;
                     localRecipient.SentUtc = serverRecipient.SentUtc;
@@ -549,169 +551,181 @@ namespace Web.Services
 
             if (pendingRecipients.Count > 0)
             {
-#if DEBUG
-                // In DEBUG, send a single representative message via the transport router
-                if (pendingRecipients.Count > 0)
+                if (job.GroupRecipients)
                 {
-                    var debugRecipient = pendingRecipients[0];
-                    var debugToken =
-                        (debugRecipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
-                            ? _tokenService.GenerateToken(debugRecipient.HomeId, debugRecipient.Email)
-                            : null;
-                    var debugFooter = EmailMessageBuilder.BuildUnsubscribeFooter(
-                        _appBaseUrl,
-                        categoryDisplayName,
-                        debugToken
-                    );
-                    var debugMessage = new MimeMessage();
-                    debugMessage.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
-                    debugMessage.Subject = $"[DEBUG {job.TotalRecipients} recipients] {job.Subject}";
-                    debugMessage.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
-                    debugMessage.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
-                    debugMessage.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
-                    debugMessage.To.Add(new GroupAddress("Private Recipients"));
-                    debugMessage.Body = EmailMessageBuilder.BuildBodyWithImages(
-                        imageData.ProcessedHtml + debugFooter,
-                        imageData.Images
-                    );
-                    if (debugToken != null && !string.IsNullOrEmpty(_appBaseUrl))
-                    {
-                        var unsubUrl =
-                            $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?token={Uri.EscapeDataString(debugToken)}";
-                        debugMessage.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
-                        debugMessage.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
-                    }
+                    // Group send: single message with all recipients in To:
+                    // (for admin notifications where Reply All is useful)
+                    var message = new MimeMessage();
+                    message.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                    message.Subject = job.Subject;
+                    message.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                    message.Body = EmailMessageBuilder.BuildBodyWithImages(imageData.ProcessedHtml, imageData.Images);
 
-                    // In DEBUG, always use SMTP transport (debug sends go to hard-coded Bcc
-                    // addresses, not the actual recipient, so per-recipient routing and
-                    // recipient correlation metadata would be misleading)
-                    var transport = _transportRouter.GetTransportForRecipient(string.Empty);
-                    var result = await transport.SendAsync(debugMessage, job.Id.ToString(), string.Empty, ct);
+                    foreach (var r in pendingRecipients)
+                        message.To.Add(new MailboxAddress("", r.Email));
 
-                    // Mark all recipients as sent in DEBUG mode
+                    // Persist attempt start before sending so a crash during in-flight send
+                    // doesn't result in the job being re-sent with AttemptCount still at 0.
+                    var attemptStartedUtc = DateTime.UtcNow;
                     foreach (var r in pendingRecipients)
                     {
-                        r.Status = result.Success ? EmailJobRecipientStatus.Sent : EmailJobRecipientStatus.Failed;
-                        r.SentUtc = result.Success ? DateTime.UtcNow : null;
-                        r.Error = result.Error;
-                        r.Provider = result.ProviderName;
-                        r.ProviderMessageId = result.ProviderMessageId;
+                        r.AttemptCount++;
+                        r.LastAttemptUtc = attemptStartedUtc;
                     }
-                    job.LastProgressUtc = DateTime.UtcNow;
+                    job.LastProgressUtc = attemptStartedUtc;
                     RecalculateCounts(job);
                     if (!await TryPersistJobAsync(repo, job))
-                        stoppedEarly = true;
-                }
-#else
-                foreach (var recipient in pendingRecipients)
-                {
-                    ct.ThrowIfCancellationRequested();
-
-                    var attemptStartedUtc = DateTime.UtcNow;
-                    recipient.AttemptCount++;
-                    recipient.LastAttemptUtc = attemptStartedUtc;
-                    job.LastProgressUtc = attemptStartedUtc;
-                    if (!await TryPersistJobAsync(repo, job))
                     {
                         stoppedEarly = true;
-                        break;
                     }
-
-                    // After persist (which may have merged webhook updates on conflict),
-                    // skip this recipient if it was already sent by a previous attempt.
-                    if (recipient.Status == EmailJobRecipientStatus.Sent)
+                    else
                     {
+                        // Always use SMTP for group sends — SES routing is per-recipient
+                        // and group sends intentionally do not support per-recipient webhook
+                        // correlation. Use a sentinel so transports emit a non-empty
+                        // cohad_email tag (empty string would be indistinguishable from
+                        // a bug and would be silently ignored by webhook handlers).
+                        const string groupedSendCorrelation = "__grouped_send__";
+                        var transport = _transportRouter.GetTransportForRecipient(groupedSendCorrelation);
+                        var result = await transport.SendAsync(message, job.Id.ToString(), groupedSendCorrelation, ct);
+
+                        var now = DateTime.UtcNow;
+                        foreach (var r in pendingRecipients)
+                        {
+                            r.Provider = result.ProviderName;
+                            if (!string.IsNullOrEmpty(result.ProviderMessageId))
+                                r.ProviderMessageId = result.ProviderMessageId;
+                            if (result.Success)
+                            {
+                                r.Status = EmailJobRecipientStatus.Sent;
+                                r.SentUtc = now;
+                                r.Error = null;
+                            }
+                            else
+                            {
+                                r.Status = EmailJobRecipientStatus.Failed;
+                                r.Error = result.Error;
+                            }
+                        }
+                        job.LastProgressUtc = now;
                         RecalculateCounts(job);
-                        await NotifyProgressAsync(job);
-                        continue;
-                    }
-
-                    try
-                    {
-                        var token =
-                            (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
-                                ? _tokenService.GenerateToken(recipient.HomeId, recipient.Email)
-                                : null;
-
-                        var footer = EmailMessageBuilder.BuildUnsubscribeFooter(
-                            _appBaseUrl,
-                            categoryDisplayName,
-                            token
-                        );
-                        var htmlWithFooter = imageData.ProcessedHtml + footer;
-
-                        var message = new MimeMessage();
-                        message.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
-                        message.Subject = job.Subject;
-                        message.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
-                        message.To.Add(new MailboxAddress("", recipient.Email));
-                        message.Body = EmailMessageBuilder.BuildBodyWithImages(htmlWithFooter, imageData.Images);
-
-                        if (token != null && !string.IsNullOrEmpty(_appBaseUrl))
-                        {
-                            var unsubUrl =
-                                $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?token={Uri.EscapeDataString(token)}";
-                            message.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
-                            message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
-                        }
-
-                        var transport = _transportRouter.GetTransportForRecipient(recipient.Email);
-                        var result = await transport.SendAsync(message, job.Id.ToString(), recipient.Email, ct);
-
-                        recipient.Provider = result.ProviderName;
-                        if (!string.IsNullOrEmpty(result.ProviderMessageId))
-                            recipient.ProviderMessageId = result.ProviderMessageId;
-
-                        if (result.Success)
-                        {
-                            recipient.Status = EmailJobRecipientStatus.Sent;
-                            recipient.SentUtc = DateTime.UtcNow;
-                            recipient.Error = null;
-                        }
+                        if (!await TryPersistJobAsync(repo, job))
+                            stoppedEarly = true;
                         else
+                            await NotifyProgressAsync(job);
+                    }
+                }
+                else
+                {
+                    foreach (var recipient in pendingRecipients)
+                    {
+                        ct.ThrowIfCancellationRequested();
+
+                        var attemptStartedUtc = DateTime.UtcNow;
+                        recipient.AttemptCount++;
+                        recipient.LastAttemptUtc = attemptStartedUtc;
+                        job.LastProgressUtc = attemptStartedUtc;
+                        if (!await TryPersistJobAsync(repo, job))
+                        {
+                            stoppedEarly = true;
+                            break;
+                        }
+
+                        // After persist (which may have merged webhook updates on conflict),
+                        // skip this recipient if it was already sent by a previous attempt.
+                        if (recipient.Status == EmailJobRecipientStatus.Sent)
+                        {
+                            RecalculateCounts(job);
+                            await NotifyProgressAsync(job);
+                            continue;
+                        }
+
+                        try
+                        {
+                            var token =
+                                (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
+                                    ? _tokenService.GenerateToken(recipient.HomeId, recipient.Email)
+                                    : null;
+
+                            var footer = EmailMessageBuilder.BuildUnsubscribeFooter(
+                                _appBaseUrl,
+                                categoryDisplayName,
+                                token
+                            );
+                            var htmlWithFooter = imageData.ProcessedHtml + footer;
+
+                            var message = new MimeMessage();
+                            message.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                            message.Subject = job.Subject;
+                            message.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                            message.To.Add(new MailboxAddress("", recipient.Email));
+                            message.Body = EmailMessageBuilder.BuildBodyWithImages(htmlWithFooter, imageData.Images);
+
+                            if (token != null && !string.IsNullOrEmpty(_appBaseUrl))
+                            {
+                                var unsubUrl =
+                                    $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?token={Uri.EscapeDataString(token)}";
+                                message.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
+                                message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+                            }
+
+                            var transport = _transportRouter.GetTransportForRecipient(recipient.Email);
+                            var result = await transport.SendAsync(message, job.Id.ToString(), recipient.Email, ct);
+
+                            recipient.Provider = result.ProviderName;
+                            if (!string.IsNullOrEmpty(result.ProviderMessageId))
+                                recipient.ProviderMessageId = result.ProviderMessageId;
+
+                            if (result.Success)
+                            {
+                                recipient.Status = EmailJobRecipientStatus.Sent;
+                                recipient.SentUtc = DateTime.UtcNow;
+                                recipient.Error = null;
+                            }
+                            else
+                            {
+                                _logger.LogWarning(
+                                    "Failed to send email to {Email} in job {JobId} via {Provider}: {Error}",
+                                    recipient.Email,
+                                    job.Id,
+                                    result.ProviderName,
+                                    result.Error
+                                );
+                                recipient.Status = EmailJobRecipientStatus.Failed;
+                                recipient.Error = result.Error;
+                            }
+                            job.LastProgressUtc = DateTime.UtcNow;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw; // Let cancellation propagate
+                        }
+                        catch (Exception ex)
                         {
                             _logger.LogWarning(
-                                "Failed to send email to {Email} in job {JobId} via {Provider}: {Error}",
+                                ex,
+                                "Unexpected error sending email to {Email} in job {JobId}",
                                 recipient.Email,
-                                job.Id,
-                                result.ProviderName,
-                                result.Error
+                                job.Id
                             );
                             recipient.Status = EmailJobRecipientStatus.Failed;
-                            recipient.Error = result.Error;
+                            recipient.Error = ex.Message;
+                            job.LastProgressUtc = DateTime.UtcNow;
                         }
-                        job.LastProgressUtc = DateTime.UtcNow;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw; // Let cancellation propagate
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(
-                            ex,
-                            "Unexpected error sending email to {Email} in job {JobId}",
-                            recipient.Email,
-                            job.Id
-                        );
-                        recipient.Status = EmailJobRecipientStatus.Failed;
-                        recipient.Error = ex.Message;
-                        job.LastProgressUtc = DateTime.UtcNow;
-                    }
 
-                    RecalculateCounts(job);
-                    // Check cancellation before persisting to avoid overwriting a Cancelled status
-                    ct.ThrowIfCancellationRequested();
-                    // Persist progress after every recipient for maximum recovery granularity
-                    if (!await TryPersistJobAsync(repo, job))
-                    {
-                        stoppedEarly = true;
-                        break;
-                    }
+                        RecalculateCounts(job);
+                        // Check cancellation before persisting to avoid overwriting a Cancelled status
+                        ct.ThrowIfCancellationRequested();
+                        // Persist progress after every recipient for maximum recovery granularity
+                        if (!await TryPersistJobAsync(repo, job))
+                        {
+                            stoppedEarly = true;
+                            break;
+                        }
 
-                    await NotifyProgressAsync(job);
+                        await NotifyProgressAsync(job);
+                    }
                 }
-#endif
             }
 
             if (stoppedEarly)
@@ -817,51 +831,110 @@ namespace Web.Services
                 .ToList();
 
             var stoppedEarly = false;
-            foreach (var recipient in pendingRecipients)
+            if (job.GroupRecipients && pendingRecipients.Count > 0)
             {
-                ct.ThrowIfCancellationRequested();
+                // Group send: mark all recipients together (single logical send).
+                // Persist attempt start before the delay so a restart doesn't re-send.
                 var attemptStartedUtc = DateTime.UtcNow;
-                recipient.AttemptCount++;
-                recipient.LastAttemptUtc = attemptStartedUtc;
+                foreach (var r in pendingRecipients)
+                {
+                    r.AttemptCount++;
+                    r.LastAttemptUtc = attemptStartedUtc;
+                }
                 job.LastProgressUtc = attemptStartedUtc;
+                RecalculateCounts(job);
                 if (!await TryPersistJobAsync(repo, job))
                 {
                     stoppedEarly = true;
-                    break;
-                }
-
-                if (_mockDelayMilliseconds > 0)
-                    await Task.Delay(_mockDelayMilliseconds, ct);
-
-                var mockFailed =
-                    _mockFailAllRecipients
-                    || (_mockRandomFailureProbability > 0 && _mockRandom.NextDouble() < _mockRandomFailureProbability);
-
-                if (mockFailed)
-                {
-                    recipient.Status = EmailJobRecipientStatus.Failed;
-                    recipient.Error = "Mock send failure (simulated).";
-                    recipient.SentUtc = null;
                 }
                 else
                 {
-                    recipient.Status = EmailJobRecipientStatus.Sent;
-                    recipient.SentUtc = DateTime.UtcNow;
-                    recipient.Error = null;
+                    if (_mockDelayMilliseconds > 0)
+                        await Task.Delay(_mockDelayMilliseconds, ct);
+
+                    var mockFailed =
+                        _mockFailAllRecipients
+                        || (
+                            _mockRandomFailureProbability > 0
+                            && _mockRandom.NextDouble() < _mockRandomFailureProbability
+                        );
+
+                    var now = DateTime.UtcNow;
+                    foreach (var r in pendingRecipients)
+                    {
+                        if (mockFailed)
+                        {
+                            r.Status = EmailJobRecipientStatus.Failed;
+                            r.Error = "Mock send failure (simulated).";
+                            r.SentUtc = null;
+                        }
+                        else
+                        {
+                            r.Status = EmailJobRecipientStatus.Sent;
+                            r.SentUtc = now;
+                            r.Error = null;
+                        }
+                    }
+
+                    job.LastProgressUtc = now;
+                    RecalculateCounts(job);
+                    if (!await TryPersistJobAsync(repo, job))
+                        stoppedEarly = true;
+                    else
+                        await NotifyProgressAsync(job);
                 }
-
-                job.LastProgressUtc = DateTime.UtcNow;
-
-                RecalculateCounts(job);
-                ct.ThrowIfCancellationRequested();
-                if (!await TryPersistJobAsync(repo, job))
-                {
-                    stoppedEarly = true;
-                    break;
-                }
-
-                await NotifyProgressAsync(job);
             }
+            else
+            {
+                foreach (var recipient in pendingRecipients)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var attemptStartedUtc = DateTime.UtcNow;
+                    recipient.AttemptCount++;
+                    recipient.LastAttemptUtc = attemptStartedUtc;
+                    job.LastProgressUtc = attemptStartedUtc;
+                    if (!await TryPersistJobAsync(repo, job))
+                    {
+                        stoppedEarly = true;
+                        break;
+                    }
+
+                    if (_mockDelayMilliseconds > 0)
+                        await Task.Delay(_mockDelayMilliseconds, ct);
+
+                    var mockFailed =
+                        _mockFailAllRecipients
+                        || (
+                            _mockRandomFailureProbability > 0
+                            && _mockRandom.NextDouble() < _mockRandomFailureProbability
+                        );
+
+                    if (mockFailed)
+                    {
+                        recipient.Status = EmailJobRecipientStatus.Failed;
+                        recipient.Error = "Mock send failure (simulated).";
+                        recipient.SentUtc = null;
+                    }
+                    else
+                    {
+                        recipient.Status = EmailJobRecipientStatus.Sent;
+                        recipient.SentUtc = DateTime.UtcNow;
+                        recipient.Error = null;
+                    }
+
+                    job.LastProgressUtc = DateTime.UtcNow;
+
+                    RecalculateCounts(job);
+                    ct.ThrowIfCancellationRequested();
+                    if (!await TryPersistJobAsync(repo, job))
+                    {
+                        stoppedEarly = true;
+                        break;
+                    }
+
+                    await NotifyProgressAsync(job);
+                }
+            } // end else (per-recipient mock send)
 
             if (stoppedEarly)
             {

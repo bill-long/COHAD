@@ -159,6 +159,7 @@ namespace Web.Controllers
                 CreatedByDisplayName = "System",
                 TotalRecipients = recipients.Count,
                 Recipients = recipients,
+                GroupRecipients = true,
             };
 
             job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
