@@ -412,6 +412,7 @@ public sealed class SesWebhookControllerTests
     [InlineData("https://sns.us-east-1.evilamazonaws.com/SimpleNotificationService-abc.pem")] // suffix-spoofed host
     [InlineData("https://sns.evil.us-east-1.amazonaws.com/SimpleNotificationService-abc.pem")] // extra host segment
     [InlineData("https://sns.ap-southeast-2.amazonaws.com/path/SimpleNotificationService-xyz.pem")] // extra path segment
+    [InlineData("https://sns.us-east-1.amazonaws.com/SimpleNotificationService-abc.pem/extra.pem")] // trailing path segment
     [InlineData("not-a-url")] // not a valid URI
     [InlineData("")] // empty string
     public void IsValidSnsCertUrl_rejects_invalid_urls(string url)
@@ -488,8 +489,14 @@ public sealed class SesWebhookControllerTests
 
         var result = SesWebhookController.BuildSnsStringToSign(message);
 
-        Assert.NotNull(result);
-        Assert.Contains("Subject\nTest Subject\n", result);
+        var expected =
+            "Message\nHello\n" +
+            "MessageId\nmsg-123\n" +
+            "Subject\nTest Subject\n" +
+            "Timestamp\n2025-01-01T00:00:00.000Z\n" +
+            "TopicArn\narn:aws:sns:us-west-2:123:test\n" +
+            "Type\nNotification\n";
+        Assert.Equal(expected, result);
     }
 
     [Fact]

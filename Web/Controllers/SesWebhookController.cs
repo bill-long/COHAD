@@ -58,7 +58,8 @@ namespace Web.Controllers
             // Path must be a single segment: /SimpleNotificationService-{hash}.pem
             var path = uri.AbsolutePath;
             if (
-                !path.StartsWith("/SimpleNotificationService-", StringComparison.Ordinal)
+                path.IndexOf('/', 1) >= 0
+                || !path.StartsWith("/SimpleNotificationService-", StringComparison.Ordinal)
                 || !path.EndsWith(".pem", StringComparison.OrdinalIgnoreCase)
             )
                 return false;
