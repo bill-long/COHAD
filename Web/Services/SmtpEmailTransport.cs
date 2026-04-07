@@ -162,10 +162,30 @@ namespace Web.Services
             var sb = new StringBuilder(raw.Length);
             using var reader = new StringReader(raw);
             string line;
+            var inDataSection = false;
             while ((line = reader.ReadLine()) != null)
             {
                 var trimmed = line.TrimStart();
                 var lower = trimmed.ToLowerInvariant();
+
+                // Skip email body content to avoid logging PII/message content
+                if (lower.StartsWith("c: data") || lower == "data")
+                {
+                    sb.AppendLine(line);
+                    inDataSection = true;
+                    continue;
+                }
+                if (inDataSection)
+                {
+                    // DATA section ends with a line that is just "."
+                    if (trimmed == "c: ." || trimmed == ".")
+                    {
+                        sb.AppendLine("[DATA content redacted]");
+                        sb.AppendLine(line);
+                        inDataSection = false;
+                    }
+                    continue;
+                }
 
                 if (lower.StartsWith("auth "))
                 {

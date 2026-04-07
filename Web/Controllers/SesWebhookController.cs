@@ -34,7 +34,33 @@ namespace Web.Controllers
         private readonly bool _isDevelopment;
         private readonly HashSet<string> _allowedTopicArns;
 
-        private static readonly string[] AllowedSigningCertDomains = { ".amazonaws.com" };
+        /// <summary>
+        /// Validates that the SNS signing cert URL matches the documented SNS format:
+        /// https://sns.{region}.amazonaws.com/SimpleNotificationService-*.pem
+        /// </summary>
+        private static bool IsValidSnsCertUrl(string url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+            if (uri.Scheme != "https")
+                return false;
+            // Host must be sns.{region}.amazonaws.com
+            var host = uri.Host;
+            if (!host.StartsWith("sns.", StringComparison.OrdinalIgnoreCase)
+                || !host.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase))
+                return false;
+            // Path must contain SimpleNotificationService and end with .pem
+            var path = uri.AbsolutePath;
+            if (!path.Contains("SimpleNotificationService", StringComparison.Ordinal)
+                || !path.EndsWith(".pem", StringComparison.OrdinalIgnoreCase))
+                return false;
+            // No query string or fragment
+            if (!string.IsNullOrEmpty(uri.Query) && uri.Query != "?")
+                return false;
+            if (!string.IsNullOrEmpty(uri.Fragment))
+                return false;
+            return true;
+        }
 
         /// <summary>
         /// Maximum age of an SNS message before it is rejected (replay prevention).
@@ -418,14 +444,10 @@ namespace Web.Controllers
                 if (string.IsNullOrEmpty(certUrl))
                     return false;
 
-                // Validate the certificate URL is from amazonaws.com (SSRF prevention)
-                if (
-                    !Uri.TryCreate(certUrl, UriKind.Absolute, out var certUri)
-                    || certUri.Scheme != "https"
-                    || !AllowedSigningCertDomains.Any(d => certUri.Host.EndsWith(d, StringComparison.OrdinalIgnoreCase))
-                )
+                // Validate the certificate URL matches the documented SNS cert format
+                if (!IsValidSnsCertUrl(certUrl))
                 {
-                    _logger.LogWarning("SNS signing cert URL has unexpected host: {Url}", certUrl);
+                    _logger.LogWarning("SNS signing cert URL has unexpected format: {Url}", certUrl);
                     return false;
                 }
 
