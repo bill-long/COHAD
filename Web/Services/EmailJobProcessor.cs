@@ -582,9 +582,10 @@ namespace Web.Services
                     }
 
                     // In DEBUG, always use SMTP transport (debug sends go to hard-coded Bcc
-                    // addresses, not the actual recipient, so per-recipient routing would be misleading)
+                    // addresses, not the actual recipient, so per-recipient routing and
+                    // recipient correlation metadata would be misleading)
                     var transport = _transportRouter.GetTransportForRecipient(string.Empty);
-                    var result = await transport.SendAsync(debugMessage, job.Id.ToString(), debugRecipient.Email, ct);
+                    var result = await transport.SendAsync(debugMessage, job.Id.ToString(), string.Empty, ct);
 
                     // Mark all recipients as sent in DEBUG mode
                     foreach (var r in pendingRecipients)
