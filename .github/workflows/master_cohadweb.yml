@@ -7,32 +7,65 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-cohadweb
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up .NET 10
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '10.0.x'
+      - name: Check if still latest commit
+        id: latest-check
+        run: |
+          git fetch origin master
+          if [ "${{ github.sha }}" != "$(git rev-parse origin/master)" ]; then
+            echo "Skipping — newer commit exists on master"
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+          fi
 
-    - name: Build Web
-      run: dotnet build Web/Web.csproj --configuration Release
+      - name: Set up .NET 10
+        if: steps.latest-check.outputs.is_latest == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
 
-    - name: Test with dotnet
-      run: dotnet test Web.UnitTests/Web.UnitTests.csproj --configuration Release
+      - name: Build Web
+        if: steps.latest-check.outputs.is_latest == 'true'
+        run: dotnet build Web/Web.csproj --configuration Release
 
-    - name: dotnet publish
-      run: dotnet publish Web/Web.csproj --configuration Release --output ./publish
+      - name: Test with dotnet
+        if: steps.latest-check.outputs.is_latest == 'true'
+        run: dotnet test Web.UnitTests/Web.UnitTests.csproj --configuration Release
 
-    - name: Deploy to Azure Web App
-      uses: azure/webapps-deploy@v3
-      with:
-        app-name: 'cohadweb'
-        slot-name: 'production'
-        publish-profile: ${{ secrets.AzureAppService_PublishProfile_4cc98d8b282841d0a4715655839f3079 }}
-        package: ./publish
+      - name: dotnet publish
+        if: steps.latest-check.outputs.is_latest == 'true'
+        run: dotnet publish Web/Web.csproj --configuration Release --output ./publish
+
+      - name: Re-check if still latest commit
+        if: steps.latest-check.outputs.is_latest == 'true'
+        id: pre-deploy-check
+        run: |
+          git fetch origin master
+          if [ "${{ github.sha }}" != "$(git rev-parse origin/master)" ]; then
+            echo "Skipping deploy — newer commit landed during build"
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to Azure Web App
+        if: steps.pre-deploy-check.outputs.is_latest == 'true'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'cohadweb'
+          slot-name: 'production'
+          publish-profile: ${{ secrets.AzureAppService_PublishProfile_4cc98d8b282841d0a4715655839f3079 }}
+          package: ./publish
