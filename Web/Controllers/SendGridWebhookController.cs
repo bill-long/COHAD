@@ -208,7 +208,7 @@ namespace Web.Controllers
                 sgMessageId = sgMsgProp.GetString();
 
             // Update the job recipient with concurrency retry
-            const int maxRetries = 3;
+            const int maxRetries = 5;
             for (var attempt = 1; attempt <= maxRetries; attempt++)
             {
                 var job = await _emailJobRepository.GetByIdAsync(jobId);
@@ -232,7 +232,10 @@ namespace Web.Controllers
                     // Update delivery status only when the new status is more severe,
                     // but allow ProviderMessageId to be populated independently when
                     // a later webhook event includes sg_message_id.
-                    var shouldUpdateStatus = DeliveryStatusHelper.ShouldUpdate(recipient.DeliveryStatus, deliveryStatus);
+                    var shouldUpdateStatus = DeliveryStatusHelper.ShouldUpdate(
+                        recipient.DeliveryStatus,
+                        deliveryStatus
+                    );
                     var shouldSetProviderMessageId =
                         !string.IsNullOrEmpty(sgMessageId) && string.IsNullOrEmpty(recipient.ProviderMessageId);
 
@@ -247,7 +250,24 @@ namespace Web.Controllers
                         recipient.ProviderMessageId = sgMessageId;
                     }
 
-                    if (shouldUpdateStatus || shouldSetProviderMessageId)
+                    // Any delivery event from SendGrid proves the email was sent —
+                    // fix Status if the processor's post-send persist was lost to a
+                    // concurrency conflict and left the recipient stuck as Pending
+                    // or Failed.
+                    var shouldFixRecipientStatus =
+                        recipient.Status == EmailJobRecipientStatus.Pending
+                        || recipient.Status == EmailJobRecipientStatus.Failed;
+                    if (shouldFixRecipientStatus)
+                    {
+                        recipient.Status = EmailJobRecipientStatus.Sent;
+                        recipient.SentUtc ??= DateTime.UtcNow;
+                        job.SentCount = (job.Recipients ?? new()).Count(r => r.Status == EmailJobRecipientStatus.Sent);
+                        job.FailedCount = (job.Recipients ?? new()).Count(r =>
+                            r.Status == EmailJobRecipientStatus.Failed
+                        );
+                    }
+
+                    if (shouldUpdateStatus || shouldSetProviderMessageId || shouldFixRecipientStatus)
                     {
                         await _emailJobRepository.UpdateAsync(job);
                     }
@@ -275,6 +295,16 @@ namespace Web.Controllers
                     );
                 }
             }
+
+            // All retries exhausted — throw so the outer handler returns 500 and SendGrid
+            // retries the entire batch.
+            _logger.LogWarning(
+                "Exhausted concurrency retries updating delivery status for job {JobId}, recipient {Email}, status {DeliveryStatus}.",
+                jobId,
+                email,
+                deliveryStatus
+            );
+            throw new EmailJobConcurrencyException();
         }
 
         internal static DeliveryStatus MapEventToDeliveryStatus(string eventType)
@@ -289,6 +319,5 @@ namespace Web.Controllers
                 _ => DeliveryStatus.Unknown,
             };
         }
-
     }
 }

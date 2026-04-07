@@ -941,6 +941,8 @@ public sealed class EmailJobProcessorTests
                     Email = "pending@test.com",
                     HomeId = Guid.NewGuid(),
                     Status = EmailJobRecipientStatus.Pending,
+                    // Delivery event confirms email was sent; nothing productive left to do.
+                    DeliveryStatus = DeliveryStatus.Deferred,
                 },
             },
         };
@@ -959,7 +961,7 @@ public sealed class EmailJobProcessorTests
         while (DateTime.UtcNow < deadline)
         {
             await Task.Delay(25);
-            if (stalled.Status == EmailJobStatus.PartiallyCompleted)
+            if (stalled.Status == EmailJobStatus.Completed)
                 break;
         }
 
@@ -970,7 +972,9 @@ public sealed class EmailJobProcessorTests
         }
         catch (OperationCanceledException) { }
 
-        Assert.Equal(EmailJobStatus.PartiallyCompleted, stalled.Status);
+        // NormalizePendingDelivered promotes the Deferred recipient to Sent,
+        // so both recipients are Sent and the job is Completed.
+        Assert.Equal(EmailJobStatus.Completed, stalled.Status);
         Assert.NotNull(stalled.CompletedUtc);
         Assert.Contains("stalled", stalled.LastError, StringComparison.OrdinalIgnoreCase);
         _fileStore.Verify(f => f.DownloadAsync(It.IsAny<string>()), Times.Never);
@@ -998,6 +1002,8 @@ public sealed class EmailJobProcessorTests
                     Email = "pending@test.com",
                     HomeId = Guid.NewGuid(),
                     Status = EmailJobRecipientStatus.Pending,
+                    // Delivery event confirms email was sent; stall watchdog should terminate.
+                    DeliveryStatus = DeliveryStatus.Delivered,
                 },
             },
         };
@@ -1016,7 +1022,7 @@ public sealed class EmailJobProcessorTests
         while (DateTime.UtcNow < deadline)
         {
             await Task.Delay(25);
-            if (stalled.Status == EmailJobStatus.Failed)
+            if (stalled.Status == EmailJobStatus.Completed)
                 break;
         }
 
@@ -1027,11 +1033,86 @@ public sealed class EmailJobProcessorTests
         }
         catch (OperationCanceledException) { }
 
-        Assert.Equal(EmailJobStatus.Failed, stalled.Status);
+        // NormalizePendingDelivered promotes the Delivered recipient to Sent,
+        // so the single recipient is Sent and the job is Completed.
+        Assert.Equal(EmailJobStatus.Completed, stalled.Status);
         Assert.NotNull(stalled.CompletedUtc);
         Assert.Contains("stalled", stalled.LastError, StringComparison.OrdinalIgnoreCase);
         _fileStore.Verify(f => f.DownloadAsync(It.IsAny<string>()), Times.Never);
         _jobRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Resume_StalledInProgressJob_WithUnsentRecipients_ReEnqueues()
+    {
+        var jobId = Guid.NewGuid();
+        var stalled = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.InProgress,
+            Category = "board",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            CreatedUtc = DateTime.UtcNow.AddHours(-2),
+            StartedUtc = DateTime.UtcNow.AddHours(-2),
+            LastProgressUtc = DateTime.UtcNow.AddMinutes(-10),
+            TotalRecipients = 2,
+            MaxRecipientAttempts = 3,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "done@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Sent,
+                    SentUtc = DateTime.UtcNow.AddMinutes(-30),
+                },
+                new EmailJobRecipient
+                {
+                    Email = "unsent@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Pending,
+                    // DeliveryStatus is Unknown (default) — email was never sent.
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob> { stalled });
+
+        // Wire up GetByIdAsync + UpdateAsync so the re-enqueued job can be processed.
+        var htmlBytes = System.Text.Encoding.UTF8.GetBytes("<html>test</html>");
+        _fileStore
+            .Setup(f => f.DownloadAsync(stalled.ContentBlobPath))
+            .ReturnsAsync(new DocumentFileResult { Stream = new MemoryStream(htmlBytes), ContentType = "text/html" });
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(stalled);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var processor = CreateProcessor(
+            configOverrides: new Dictionary<string, string?> { ["EmailJobs:StallAfterMinutes"] = "1" }
+        );
+
+        using var cts = new CancellationTokenSource();
+        await processor.StartAsync(cts.Token);
+
+        // Wait for the re-enqueued job to be processed (recipient marked Sent)
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+            if (stalled.Recipients[1].Status == EmailJobRecipientStatus.Sent)
+                break;
+        }
+
+        cts.Cancel();
+        try
+        {
+            await processor.StopAsync(CancellationToken.None);
+        }
+        catch (OperationCanceledException) { }
+
+        // The unsent recipient should now be Sent (mock mode processes it)
+        Assert.Equal(EmailJobRecipientStatus.Sent, stalled.Recipients[1].Status);
+        // Job should not have been terminated by the stall watchdog
+        Assert.Null(stalled.LastError);
     }
 
     // ───────────────────────────────────────────────────
@@ -1205,5 +1286,167 @@ public sealed class EmailJobProcessorTests
             c => c.SendCoreAsync("EmailJobCompleted", It.IsAny<object[]>(), It.IsAny<CancellationToken>()),
             Times.Once
         );
+    }
+
+    [Fact]
+    public void MergeWebhookFields_copies_delivery_status_from_server()
+    {
+        var local = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new() { Email = "a@test.com", DeliveryStatus = DeliveryStatus.Unknown },
+                new() { Email = "b@test.com", DeliveryStatus = DeliveryStatus.Unknown },
+            },
+        };
+        var server = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    DeliveryStatus = DeliveryStatus.Delivered,
+                    DeliveryStatusUpdatedUtc = new DateTime(2026, 4, 7, 3, 36, 0, DateTimeKind.Utc),
+                },
+                new() { Email = "b@test.com", DeliveryStatus = DeliveryStatus.Unknown },
+            },
+        };
+
+        EmailJobProcessor.MergeWebhookFields(local, server);
+
+        Assert.Equal(DeliveryStatus.Delivered, local.Recipients[0].DeliveryStatus);
+        Assert.Equal(
+            new DateTime(2026, 4, 7, 3, 36, 0, DateTimeKind.Utc),
+            local.Recipients[0].DeliveryStatusUpdatedUtc
+        );
+        Assert.Equal(DeliveryStatus.Unknown, local.Recipients[1].DeliveryStatus);
+    }
+
+    [Fact]
+    public void MergeWebhookFields_copies_provider_message_id_from_server()
+    {
+        var local = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new() { Email = "a@test.com", ProviderMessageId = null },
+            },
+        };
+        var server = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new() { Email = "a@test.com", ProviderMessageId = "sg-msg-123" },
+            },
+        };
+
+        EmailJobProcessor.MergeWebhookFields(local, server);
+
+        Assert.Equal("sg-msg-123", local.Recipients[0].ProviderMessageId);
+    }
+
+    [Fact]
+    public void MergeWebhookFields_does_not_overwrite_local_provider_message_id()
+    {
+        var local = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new() { Email = "a@test.com", ProviderMessageId = "local-id" },
+            },
+        };
+        var server = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new() { Email = "a@test.com", ProviderMessageId = "server-id" },
+            },
+        };
+
+        EmailJobProcessor.MergeWebhookFields(local, server);
+
+        Assert.Equal("local-id", local.Recipients[0].ProviderMessageId);
+    }
+
+    [Fact]
+    public void MergeWebhookFields_handles_case_insensitive_email_match()
+    {
+        var local = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new() { Email = "User@Test.COM", DeliveryStatus = DeliveryStatus.Unknown },
+            },
+        };
+        var server = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new() { Email = "user@test.com", DeliveryStatus = DeliveryStatus.Bounced },
+            },
+        };
+
+        EmailJobProcessor.MergeWebhookFields(local, server);
+
+        Assert.Equal(DeliveryStatus.Bounced, local.Recipients[0].DeliveryStatus);
+    }
+
+    [Fact]
+    public void MergeWebhookFields_handles_null_recipients()
+    {
+        var local = new EmailJob { Recipients = null };
+        var server = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new() { Email = "a@test.com", DeliveryStatus = DeliveryStatus.Delivered },
+            },
+        };
+
+        // Should not throw
+        EmailJobProcessor.MergeWebhookFields(local, server);
+
+        EmailJobProcessor.MergeWebhookFields(server, new EmailJob { Recipients = null });
+    }
+
+    [Fact]
+    public void MergeWebhookFields_preserves_local_status_fields()
+    {
+        var local = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    SentUtc = new DateTime(2026, 4, 7, 3, 36, 0, DateTimeKind.Utc),
+                    AttemptCount = 1,
+                    DeliveryStatus = DeliveryStatus.Unknown,
+                },
+            },
+        };
+        var server = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    Status = EmailJobRecipientStatus.Pending,
+                    AttemptCount = 0,
+                    DeliveryStatus = DeliveryStatus.Delivered,
+                },
+            },
+        };
+
+        EmailJobProcessor.MergeWebhookFields(local, server);
+
+        // Processor-owned fields must not be overwritten
+        Assert.Equal(EmailJobRecipientStatus.Sent, local.Recipients[0].Status);
+        Assert.Equal(1, local.Recipients[0].AttemptCount);
+        // Webhook-owned field should be merged
+        Assert.Equal(DeliveryStatus.Delivered, local.Recipients[0].DeliveryStatus);
     }
 }

@@ -66,6 +66,35 @@ namespace Web.Services
         }
 
         /// <summary>
+        /// Promotes recipients that are still Pending or Failed but have a non-Unknown
+        /// DeliveryStatus to Sent, since a delivery event from the provider proves the
+        /// email was sent. This normalizes state before filtering so the processor does
+        /// not re-send them.
+        /// </summary>
+        private static bool NormalizePendingDelivered(EmailJob job)
+        {
+            var changed = false;
+            foreach (var r in job.Recipients ?? new())
+            {
+                if (
+                    (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
+                    && r.DeliveryStatus != DeliveryStatus.Unknown
+                )
+                {
+                    r.Status = EmailJobRecipientStatus.Sent;
+                    r.SentUtc ??= r.DeliveryStatusUpdatedUtc ?? DateTime.UtcNow;
+                    r.Error = null;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                RecalculateCounts(job);
+
+            return changed;
+        }
+
+        /// <summary>
         /// Recipients still Pending/Failed but at or over the attempt cap cannot be sent; mark them Failed
         /// so terminal status reflects reality. Preserves any existing per-recipient error text.
         /// </summary>
@@ -79,6 +108,15 @@ namespace Web.Services
                     && r.AttemptCount >= job.MaxRecipientAttempts
                 )
                 {
+                    // If the webhook already confirmed delivery, honour that rather than marking Failed.
+                    if (r.DeliveryStatus != DeliveryStatus.Unknown)
+                    {
+                        r.Status = EmailJobRecipientStatus.Sent;
+                        r.SentUtc ??= r.DeliveryStatusUpdatedUtc ?? DateTime.UtcNow;
+                        r.Error = null;
+                        continue;
+                    }
+
                     r.Status = EmailJobRecipientStatus.Failed;
                     if (string.IsNullOrWhiteSpace(r.Error))
                         r.Error = capMessage;
@@ -90,7 +128,8 @@ namespace Web.Services
 
         /// <summary>
         /// Persists job state with optimistic concurrency (If-Match / ETag).
-        /// On conflict, refreshes the ETag and retries up to <paramref name="maxAttempts"/> times.
+        /// On conflict, merges webhook-owned fields from the server copy (so delivery
+        /// status updates are not lost) then retries up to <paramref name="maxAttempts"/> times.
         /// Returns false when the server copy is cancelled, missing, or contention persists.
         /// </summary>
         private static async Task<bool> TryPersistJobAsync(IEmailJobRepository repo, EmailJob job, int maxAttempts = 3)
@@ -109,11 +148,58 @@ namespace Web.Services
                         return false;
                     if (latest.Status == EmailJobStatus.Cancelled)
                         return false;
+                    MergeWebhookFields(job, latest);
+                    // Re-derive Status from the merged DeliveryStatus so the next write
+                    // does not revert webhook self-healing (Pending/Failed → Sent).
+                    NormalizePendingDelivered(job);
                     job.ETag = latest.ETag;
                 }
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Copies webhook-owned fields (DeliveryStatus, DeliveryStatusUpdatedUtc, ProviderMessageId)
+        /// from the server copy into the processor's in-memory job so the next write does not
+        /// overwrite changes made by the webhook controller.
+        /// </summary>
+        internal static void MergeWebhookFields(EmailJob local, EmailJob server)
+        {
+            if (local.Recipients == null || server.Recipients == null)
+                return;
+
+            var serverLookup = new Dictionary<string, EmailJobRecipient>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in server.Recipients)
+            {
+                if (!string.IsNullOrEmpty(r.Email))
+                    serverLookup[r.Email] = r;
+            }
+
+            foreach (var localRecipient in local.Recipients)
+            {
+                if (string.IsNullOrEmpty(localRecipient.Email))
+                    continue;
+
+                if (!serverLookup.TryGetValue(localRecipient.Email, out var serverRecipient))
+                    continue;
+
+                // Adopt the server's delivery status when it is non-Unknown (webhook-owned field).
+                // The processor never writes delivery status, so the server copy is authoritative.
+                if (serverRecipient.DeliveryStatus != DeliveryStatus.Unknown)
+                {
+                    localRecipient.DeliveryStatus = serverRecipient.DeliveryStatus;
+                    localRecipient.DeliveryStatusUpdatedUtc = serverRecipient.DeliveryStatusUpdatedUtc;
+                }
+
+                if (
+                    !string.IsNullOrEmpty(serverRecipient.ProviderMessageId)
+                    && string.IsNullOrEmpty(localRecipient.ProviderMessageId)
+                )
+                {
+                    localRecipient.ProviderMessageId = serverRecipient.ProviderMessageId;
+                }
+            }
         }
 
         public EmailJobProcessor(
@@ -204,6 +290,35 @@ namespace Web.Services
                         if (DateTime.UtcNow - lastProgress >= TimeSpan.FromMinutes(thresholdMinutes))
                         {
                             var recipients = job.Recipients ?? new List<EmailJobRecipient>();
+
+                            // If there are genuinely unsent recipients (Pending/Failed with no
+                            // delivery confirmation), re-enqueue rather than declaring the job
+                            // terminal — the processor was interrupted, not permanently stuck.
+                            var hasUnsentRecipients = recipients.Any(r =>
+                                (
+                                    r.Status == EmailJobRecipientStatus.Pending
+                                    || r.Status == EmailJobRecipientStatus.Failed
+                                )
+                                && r.DeliveryStatus == DeliveryStatus.Unknown
+                                && r.AttemptCount
+                                    < (
+                                        job.MaxRecipientAttempts > 0
+                                            ? job.MaxRecipientAttempts
+                                            : _defaultMaxRecipientAttempts
+                                    )
+                            );
+                            if (hasUnsentRecipients)
+                            {
+                                _logger.LogWarning(
+                                    "Email job {JobId} stalled since {LastProgressUtc} but has unsent recipients — re-queuing instead of terminating",
+                                    job.Id,
+                                    lastProgress
+                                );
+                                await _queue.EnqueueAsync(job.Id, ct);
+                                continue;
+                            }
+
+                            NormalizePendingDelivered(job);
                             RecalculateCounts(job);
                             if (recipients.Count > 0 && recipients.All(r => r.Status == EmailJobRecipientStatus.Sent))
                             {
@@ -403,10 +518,16 @@ namespace Web.Services
                 ? name
                 : job.Category;
 
+            // Promote Pending recipients that already have a delivery event to Sent,
+            // so the filter below correctly excludes them and they are not re-sent.
+            if (NormalizePendingDelivered(job))
+                await TryPersistJobAsync(repo, job);
+
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
                     (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
                     && r.AttemptCount < job.MaxRecipientAttempts
+                    && r.DeliveryStatus == DeliveryStatus.Unknown
                 )
                 .ToList();
 
@@ -571,9 +692,23 @@ namespace Web.Services
 
             if (stoppedEarly)
             {
+                // Re-read the job to check if it was cancelled or deleted (not just contention).
                 var latest = await repo.GetByIdAsync(job.Id);
-                if (latest != null)
-                    await NotifyCompletedAsync(latest);
+                if (latest == null || latest.Status == EmailJobStatus.Cancelled)
+                {
+                    if (latest != null)
+                        await NotifyCompletedAsync(latest);
+                    return;
+                }
+
+                _logger.LogWarning(
+                    "Email job {JobId} stopped early due to persistent concurrency conflicts (sent {Sent}/{Total}) — re-queuing for remaining recipients",
+                    job.Id,
+                    job.SentCount,
+                    job.TotalRecipients
+                );
+                await _queue.EnqueueAsync(job.Id, ct);
+                await NotifyProgressAsync(latest);
                 return;
             }
 
@@ -645,10 +780,15 @@ namespace Web.Services
                 return;
             }
 
+            // Promote Pending recipients that already have a delivery event to Sent.
+            if (NormalizePendingDelivered(job))
+                await TryPersistJobAsync(repo, job);
+
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
                     (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
                     && r.AttemptCount < job.MaxRecipientAttempts
+                    && r.DeliveryStatus == DeliveryStatus.Unknown
                 )
                 .ToList();
 
@@ -702,8 +842,19 @@ namespace Web.Services
             if (stoppedEarly)
             {
                 var latest = await repo.GetByIdAsync(job.Id);
-                if (latest != null)
-                    await NotifyCompletedAsync(latest);
+                if (latest == null || latest.Status == EmailJobStatus.Cancelled)
+                {
+                    if (latest != null)
+                        await NotifyCompletedAsync(latest);
+                    return;
+                }
+
+                _logger.LogWarning(
+                    "Mock email job {JobId} stopped early due to persistent concurrency conflicts — re-queuing",
+                    job.Id
+                );
+                await _queue.EnqueueAsync(job.Id, ct);
+                await NotifyProgressAsync(latest);
                 return;
             }
 

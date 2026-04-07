@@ -46,13 +46,17 @@ namespace Web.Controllers
                 return false;
             // Host must be sns.{region}.amazonaws.com
             var host = uri.Host;
-            if (!host.StartsWith("sns.", StringComparison.OrdinalIgnoreCase)
-                || !host.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase))
+            if (
+                !host.StartsWith("sns.", StringComparison.OrdinalIgnoreCase)
+                || !host.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase)
+            )
                 return false;
             // Path must contain SimpleNotificationService and end with .pem
             var path = uri.AbsolutePath;
-            if (!path.Contains("SimpleNotificationService", StringComparison.Ordinal)
-                || !path.EndsWith(".pem", StringComparison.OrdinalIgnoreCase))
+            if (
+                !path.Contains("SimpleNotificationService", StringComparison.Ordinal)
+                || !path.EndsWith(".pem", StringComparison.OrdinalIgnoreCase)
+            )
                 return false;
             // No query string or fragment
             if (!string.IsNullOrEmpty(uri.Query) && uri.Query != "?")
@@ -72,7 +76,8 @@ namespace Web.Controllers
         /// certificate on every webhook request. Entries live for the process lifetime
         /// which is acceptable — SNS rotates certs infrequently and new URLs get new entries.
         /// </summary>
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, RSAParameters> _certCache = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, RSAParameters> _certCache =
+            new();
 
         public SesWebhookController(
             IEmailJobRepository emailJobRepository,
@@ -90,9 +95,7 @@ namespace Web.Controllers
             _isDevelopment = env.IsDevelopment() || env.IsEnvironment("MockData");
             var opts = sesOptions.Value;
             _allowedTopicArns = new HashSet<string>(
-                (opts.AllowedTopicArns ?? Enumerable.Empty<string>())
-                    .Select(a => a.Trim())
-                    .Where(a => a.Length > 0),
+                (opts.AllowedTopicArns ?? Enumerable.Empty<string>()).Select(a => a.Trim()).Where(a => a.Length > 0),
                 StringComparer.Ordinal
             );
         }
@@ -158,11 +161,21 @@ namespace Web.Controllers
                 }
                 _logger.LogDebug("SNS message missing Timestamp — accepting in development mode.");
             }
-            else if (!DateTime.TryParse(tsProp.GetString(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var msgTime))
+            else if (
+                !DateTime.TryParse(
+                    tsProp.GetString(),
+                    null,
+                    System.Globalization.DateTimeStyles.RoundtripKind,
+                    out var msgTime
+                )
+            )
             {
                 if (!_isDevelopment)
                 {
-                    _logger.LogWarning("SNS message has invalid Timestamp '{Timestamp}' — rejecting.", tsProp.GetString());
+                    _logger.LogWarning(
+                        "SNS message has invalid Timestamp '{Timestamp}' — rejecting.",
+                        tsProp.GetString()
+                    );
                     return BadRequest();
                 }
                 _logger.LogDebug("SNS message has invalid Timestamp — accepting in development mode.");
@@ -173,7 +186,10 @@ namespace Web.Controllers
                 var futureClockSkewTolerance = TimeSpan.FromMinutes(5);
                 if (msgTime - nowUtc > futureClockSkewTolerance)
                 {
-                    _logger.LogWarning("SNS message timestamp too far in the future ({Timestamp}) — rejecting.", tsProp.GetString());
+                    _logger.LogWarning(
+                        "SNS message timestamp too far in the future ({Timestamp}) — rejecting.",
+                        tsProp.GetString()
+                    );
                     return BadRequest();
                 }
                 if (nowUtc - msgTime > MaxMessageAge)
@@ -337,7 +353,24 @@ namespace Web.Controllers
                         recipient.ProviderMessageId = sesMessageId;
                     }
 
-                    if (shouldUpdateStatus || shouldSetProviderMessageId)
+                    // Any delivery event from the provider proves the email was sent —
+                    // fix Status if the processor's post-send persist was lost to a
+                    // concurrency conflict and left the recipient stuck as Pending
+                    // or Failed.
+                    var shouldFixRecipientStatus =
+                        recipient.Status == EmailJobRecipientStatus.Pending
+                        || recipient.Status == EmailJobRecipientStatus.Failed;
+                    if (shouldFixRecipientStatus)
+                    {
+                        recipient.Status = EmailJobRecipientStatus.Sent;
+                        recipient.SentUtc ??= DateTime.UtcNow;
+                        job.SentCount = (job.Recipients ?? new()).Count(r => r.Status == EmailJobRecipientStatus.Sent);
+                        job.FailedCount = (job.Recipients ?? new()).Count(r =>
+                            r.Status == EmailJobRecipientStatus.Failed
+                        );
+                    }
+
+                    if (shouldUpdateStatus || shouldSetProviderMessageId || shouldFixRecipientStatus)
                     {
                         await _emailJobRepository.UpdateAsync(job);
                     }
@@ -361,7 +394,14 @@ namespace Web.Controllers
                 }
             }
 
-            return Ok();
+            // All retries exhausted — log and return 500 so SNS retries the notification.
+            _logger.LogWarning(
+                "Exhausted concurrency retries updating delivery status for job {JobId}, recipient {Email}, status {DeliveryStatus}.",
+                jobId,
+                email,
+                deliveryStatus
+            );
+            return StatusCode(500);
         }
 
         private static (string? jobId, string? email) ExtractCorrelationTags(JsonElement sesEvent)
@@ -480,7 +520,8 @@ namespace Web.Controllers
 
                 // Determine hash algorithm from SignatureVersion (v1=SHA1, v2=SHA256)
                 var sigVersion = message.TryGetProperty("SignatureVersion", out var sigVerProp)
-                    ? sigVerProp.GetString() : "1";
+                    ? sigVerProp.GetString()
+                    : "1";
                 HashAlgorithmName hashAlg;
                 switch (sigVersion)
                 {
