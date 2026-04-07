@@ -28,6 +28,7 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
 
   @Input() value = '';
   @Input() placeholder = 'Write your post…';
+  @Input() ariaLabel = '';
   /** Pass a custom upload handler, or false to disable image uploads entirely. */
   @Input() imageUploader: MilkdownImageUploader | false | null = null;
   @Output() valueChange = new EventEmitter<string>();
