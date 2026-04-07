@@ -164,7 +164,7 @@ namespace Web.Controllers
             else if (
                 !DateTime.TryParse(
                     tsProp.GetString(),
-                    null,
+                    System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.RoundtripKind,
                     out var msgTime
                 )
