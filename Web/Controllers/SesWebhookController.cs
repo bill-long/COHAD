@@ -38,23 +38,28 @@ namespace Web.Controllers
         /// Validates that the SNS signing cert URL matches the documented SNS format:
         /// https://sns.{region}.amazonaws.com/SimpleNotificationService-*.pem
         /// </summary>
-        private static bool IsValidSnsCertUrl(string url)
+        internal static bool IsValidSnsCertUrl(string url)
         {
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
             if (uri.Scheme != "https")
                 return false;
-            // Host must be sns.{region}.amazonaws.com
+            // Host must be exactly sns.{region}.amazonaws.com (4 dot-separated parts)
             var host = uri.Host;
+            var parts = host.Split('.');
             if (
-                !host.StartsWith("sns.", StringComparison.OrdinalIgnoreCase)
-                || !host.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase)
+                parts.Length != 4
+                || !string.Equals(parts[0], "sns", StringComparison.OrdinalIgnoreCase)
+                || parts[1].Length == 0
+                || !string.Equals(parts[2], "amazonaws", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(parts[3], "com", StringComparison.OrdinalIgnoreCase)
             )
                 return false;
-            // Path must contain SimpleNotificationService and end with .pem
+            // Path must be a single segment: /SimpleNotificationService-{hash}.pem
             var path = uri.AbsolutePath;
             if (
-                !path.Contains("SimpleNotificationService", StringComparison.Ordinal)
+                path.IndexOf('/', 1) >= 0
+                || !path.StartsWith("/SimpleNotificationService-", StringComparison.Ordinal)
                 || !path.EndsWith(".pem", StringComparison.OrdinalIgnoreCase)
             )
                 return false;
@@ -553,7 +558,7 @@ namespace Web.Controllers
         /// Builds the canonical string-to-sign for SNS message signature verification.
         /// See: https://docs.aws.amazon.com/sns/latest/dg/sns-verify-signature-of-message.html
         /// </summary>
-        private static string? BuildSnsStringToSign(JsonElement message)
+        internal static string? BuildSnsStringToSign(JsonElement message)
         {
             if (!message.TryGetProperty("Type", out var typeProp))
                 return null;
