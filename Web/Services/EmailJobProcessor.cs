@@ -569,42 +569,63 @@ namespace Web.Services
                     message.Subject = $"[DEBUG {job.TotalRecipients} recipients] {message.Subject}";
                     message.To.Clear();
                     message.To.Add(new GroupAddress("Private Recipients"));
-                    message.Bcc.Add(new MailboxAddress(null, "bill@cohad.org"));
-                    message.Bcc.Add(new MailboxAddress(null, "bilongtest@gmail.com"));
+                    var debugSink = Environment.GetEnvironmentVariable("Email__DebugSinkAddress")
+                        ?? Environment.GetEnvironmentVariable("EmailDebugSinkAddress");
+                    if (!string.IsNullOrWhiteSpace(debugSink))
+                        message.Bcc.Add(new MailboxAddress("", debugSink));
 #endif
 
-                    var transport = _transportRouter.GetTransportForRecipient(string.Empty);
-                    var result = await transport.SendAsync(
-                        message,
-                        job.Id.ToString(),
-                        string.Empty,
-                        ct
-                    );
-
-                    var now = DateTime.UtcNow;
+                    // Persist attempt start before sending so a crash during in-flight send
+                    // doesn't result in the job being re-sent with AttemptCount still at 0.
+                    var attemptStartedUtc = DateTime.UtcNow;
                     foreach (var r in pendingRecipients)
                     {
                         r.AttemptCount++;
-                        r.LastAttemptUtc = now;
-                        r.Provider = result.ProviderName;
-                        if (!string.IsNullOrEmpty(result.ProviderMessageId))
-                            r.ProviderMessageId = result.ProviderMessageId;
-                        if (result.Success)
-                        {
-                            r.Status = EmailJobRecipientStatus.Sent;
-                            r.SentUtc = now;
-                            r.Error = null;
-                        }
-                        else
-                        {
-                            r.Status = EmailJobRecipientStatus.Failed;
-                            r.Error = result.Error;
-                        }
+                        r.LastAttemptUtc = attemptStartedUtc;
                     }
-                    job.LastProgressUtc = now;
+                    job.LastProgressUtc = attemptStartedUtc;
                     RecalculateCounts(job);
                     if (!await TryPersistJobAsync(repo, job))
+                    {
                         stoppedEarly = true;
+                    }
+                    else
+                    {
+                        // Always use SMTP for group sends — SES routing is per-recipient
+                        // and group sends have no per-recipient correlation payload.
+                        var transport = _transportRouter.GetTransportForRecipient(string.Empty);
+                        var result = await transport.SendAsync(
+                            message,
+                            job.Id.ToString(),
+                            string.Empty,
+                            ct
+                        );
+
+                        var now = DateTime.UtcNow;
+                        foreach (var r in pendingRecipients)
+                        {
+                            r.Provider = result.ProviderName;
+                            if (!string.IsNullOrEmpty(result.ProviderMessageId))
+                                r.ProviderMessageId = result.ProviderMessageId;
+                            if (result.Success)
+                            {
+                                r.Status = EmailJobRecipientStatus.Sent;
+                                r.SentUtc = now;
+                                r.Error = null;
+                            }
+                            else
+                            {
+                                r.Status = EmailJobRecipientStatus.Failed;
+                                r.Error = result.Error;
+                            }
+                        }
+                        job.LastProgressUtc = now;
+                        RecalculateCounts(job);
+                        if (!await TryPersistJobAsync(repo, job))
+                            stoppedEarly = true;
+                        else
+                            await NotifyProgressAsync(job);
+                    }
                 }
                 else
                 {
@@ -879,41 +900,51 @@ namespace Web.Services
             var stoppedEarly = false;
             if (job.GroupRecipients && pendingRecipients.Count > 0)
             {
-                // Group send: mark all recipients together (single logical send)
+                // Group send: mark all recipients together (single logical send).
+                // Persist attempt start before the delay so a restart doesn't re-send.
+                var attemptStartedUtc = DateTime.UtcNow;
                 foreach (var r in pendingRecipients)
                 {
                     r.AttemptCount++;
-                    r.LastAttemptUtc = DateTime.UtcNow;
+                    r.LastAttemptUtc = attemptStartedUtc;
                 }
-
-                if (_mockDelayMilliseconds > 0)
-                    await Task.Delay(_mockDelayMilliseconds, ct);
-
-                var mockFailed =
-                    _mockFailAllRecipients
-                    || (_mockRandomFailureProbability > 0 && _mockRandom.NextDouble() < _mockRandomFailureProbability);
-
-                var now = DateTime.UtcNow;
-                foreach (var r in pendingRecipients)
-                {
-                    if (mockFailed)
-                    {
-                        r.Status = EmailJobRecipientStatus.Failed;
-                        r.Error = "Mock send failure (simulated).";
-                        r.SentUtc = null;
-                    }
-                    else
-                    {
-                        r.Status = EmailJobRecipientStatus.Sent;
-                        r.SentUtc = now;
-                        r.Error = null;
-                    }
-                }
-
-                job.LastProgressUtc = now;
+                job.LastProgressUtc = attemptStartedUtc;
                 RecalculateCounts(job);
                 if (!await TryPersistJobAsync(repo, job))
+                {
                     stoppedEarly = true;
+                }
+                else
+                {
+                    if (_mockDelayMilliseconds > 0)
+                        await Task.Delay(_mockDelayMilliseconds, ct);
+
+                    var mockFailed =
+                        _mockFailAllRecipients
+                        || (_mockRandomFailureProbability > 0 && _mockRandom.NextDouble() < _mockRandomFailureProbability);
+
+                    var now = DateTime.UtcNow;
+                    foreach (var r in pendingRecipients)
+                    {
+                        if (mockFailed)
+                        {
+                            r.Status = EmailJobRecipientStatus.Failed;
+                            r.Error = "Mock send failure (simulated).";
+                            r.SentUtc = null;
+                        }
+                        else
+                        {
+                            r.Status = EmailJobRecipientStatus.Sent;
+                            r.SentUtc = now;
+                            r.Error = null;
+                        }
+                    }
+
+                    job.LastProgressUtc = now;
+                    RecalculateCounts(job);
+                    if (!await TryPersistJobAsync(repo, job))
+                        stoppedEarly = true;
+                }
             }
             else
             {

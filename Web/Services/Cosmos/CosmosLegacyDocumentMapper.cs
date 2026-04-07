@@ -382,6 +382,7 @@ namespace Web.Services.Cosmos
                 SentCount = doc.Value<int?>("SentCount") ?? 0,
                 FailedCount = doc.Value<int?>("FailedCount") ?? 0,
                 LastError = doc.Value<string>("LastError"),
+                GroupRecipients = doc.Value<bool?>("GroupRecipients") ?? false,
                 Recipients = ToEmailJobRecipients(doc["Recipients"]),
             };
         }
@@ -434,6 +435,7 @@ namespace Web.Services.Cosmos
                 ["SentCount"] = job.SentCount,
                 ["FailedCount"] = job.FailedCount,
                 ["LastError"] = job.LastError != null ? job.LastError : JValue.CreateNull(),
+                ["GroupRecipients"] = job.GroupRecipients,
                 ["Recipients"] = recipientsArray,
             };
         }

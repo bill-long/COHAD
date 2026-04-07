@@ -397,6 +397,7 @@ public sealed class CosmosLegacyDocumentMapperTests
             TotalRecipients = 1,
             SentCount = 1,
             FailedCount = 0,
+            GroupRecipients = true,
             Recipients = new List<EmailJobRecipient>
             {
                 new()
@@ -417,6 +418,7 @@ public sealed class CosmosLegacyDocumentMapperTests
         var roundTripped = CosmosLegacyDocumentMapper.ToEmailJob(doc);
 
         var r = roundTripped.Recipients[0];
+        Assert.True(roundTripped.GroupRecipients);
         Assert.Equal(DeliveryStatus.Delivered, r.DeliveryStatus);
         Assert.Equal(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc), r.DeliveryStatusUpdatedUtc);
         Assert.Equal("sg-msg-123", r.ProviderMessageId);
@@ -461,5 +463,6 @@ public sealed class CosmosLegacyDocumentMapperTests
         Assert.Null(r.DeliveryStatusUpdatedUtc);
         Assert.Null(r.ProviderMessageId);
         Assert.Null(r.Provider);
+        Assert.False(job.GroupRecipients); // absent in legacy docs → false
     }
 }
