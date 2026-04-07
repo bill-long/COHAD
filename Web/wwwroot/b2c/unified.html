@@ -22,11 +22,15 @@
          * buttons below the fold.
          */
 
+        /* Prevent browser dark-mode from inverting colours */
+        :root { color-scheme: light; }
+
         html, body {
             margin: 0;
             padding: 0;
             font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
             background-color: #f5f5f5;
+            color: #1a1a1a;
         }
 
         /* Centre the B2C-injected content */
@@ -34,11 +38,11 @@
             display: flex;
             flex-direction: column;
             max-width: 440px;
-            margin: 2rem auto;
-            padding: 2rem;
+            margin: 3rem auto;
+            padding: 2.5rem 2rem;
             background: #fff;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
         }
 
         /* Social providers first, then divider, then local account */
@@ -46,22 +50,170 @@
         #api > .divider  { order: 2; }
         #api > .localAccount { order: 3; }
 
-        /* Give social buttons some breathing room */
+        /* ---- Headings ---- */
+        #api h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0 0 1.25rem;
+            color: #1a1a1a;
+        }
+
+        /* ---- Social / IdP buttons ---- */
         #api > .social {
             margin-bottom: 0.5rem;
         }
 
-        /* Style the "OR" divider */
-        #api > .divider {
-            text-align: center;
-            margin: 1rem 0;
-            color: #666;
+        #api .social button,
+        #api .social .accountButton {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 0.7rem 1rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            background: #fff;
+            color: #3c4043;
+            cursor: pointer;
+            transition: background-color 0.15s, box-shadow 0.15s;
         }
 
+        #api .social button:hover,
+        #api .social .accountButton:hover {
+            background-color: #f7f8f8;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        /* ---- "OR" divider ---- */
+        #api > .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 1.25rem 0;
+            color: #666;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        #api > .divider::before,
+        #api > .divider::after {
+            content: "";
+            flex: 1;
+            border-bottom: 1px solid #dadce0;
+        }
+
+        #api > .divider::before { margin-right: 0.75rem; }
+        #api > .divider::after  { margin-left: 0.75rem; }
+
+        /* ---- Labels ---- */
+        #api label {
+            display: block;
+            margin-bottom: 0.3rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #333;
+        }
+
+        /* ---- Text inputs ---- */
+        #api input[type="text"],
+        #api input[type="email"],
+        #api input[type="password"] {
+            display: block;
+            width: 100%;
+            padding: 0.65rem 0.75rem;
+            margin-bottom: 1rem;
+            font-size: 0.95rem;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            background: #fff;
+            color: #1a1a1a;
+            box-sizing: border-box;
+            transition: border-color 0.15s;
+        }
+
+        #api input[type="text"]:focus,
+        #api input[type="email"]:focus,
+        #api input[type="password"]:focus {
+            outline: none;
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+        }
+
+        /* ---- Entry item spacing (B2C wraps each label+input pair) ---- */
+        #api .entry-item {
+            margin-bottom: 0.25rem;
+        }
+
+        /* ---- Primary action buttons (Sign in, Sign up, etc.) ---- */
+        #api button[type="submit"],
+        #api #next {
+            display: block;
+            width: 100%;
+            padding: 0.7rem 1rem;
+            margin-top: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #fff;
+            background-color: #1a73e8;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+
+        #api button[type="submit"]:hover,
+        #api #next:hover {
+            background-color: #1558b0;
+        }
+
+        /* ---- Links (forgot password, sign up) ---- */
+        #api a {
+            color: #1a73e8;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        #api a:hover {
+            text-decoration: underline;
+        }
+
+        /* ---- Forgot-password link beside password label ---- */
+        #api .entry-item .password-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        /* ---- Sign-up prompt at the bottom ---- */
+        #api .create {
+            text-align: center;
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid #eee;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        /* ---- Error messages ---- */
+        #api .error {
+            color: #d93025;
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+        }
+
+        /* ---- Responsive ---- */
         @media (max-width: 480px) {
             #api {
                 margin: 1rem;
-                padding: 1.25rem;
+                padding: 1.5rem 1.25rem;
+            }
+
+            #api h2 {
+                font-size: 1.25rem;
             }
         }
     </style>
