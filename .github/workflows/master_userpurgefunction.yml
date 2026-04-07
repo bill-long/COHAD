@@ -4,12 +4,21 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-userpurgefunction
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Cooldown (wait for more merges)
+        if: github.event_name == 'push'
+        run: sleep 180
+
       - uses: actions/checkout@v4
 
       - name: Set up .NET 10
