@@ -38,7 +38,7 @@ namespace Web.Controllers
         /// Validates that the SNS signing cert URL matches the documented SNS format:
         /// https://sns.{region}.amazonaws.com/SimpleNotificationService-*.pem
         /// </summary>
-        private static bool IsValidSnsCertUrl(string url)
+        internal static bool IsValidSnsCertUrl(string url)
         {
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
                 return false;
@@ -553,7 +553,7 @@ namespace Web.Controllers
         /// Builds the canonical string-to-sign for SNS message signature verification.
         /// See: https://docs.aws.amazon.com/sns/latest/dg/sns-verify-signature-of-message.html
         /// </summary>
-        private static string? BuildSnsStringToSign(JsonElement message)
+        internal static string? BuildSnsStringToSign(JsonElement message)
         {
             if (!message.TryGetProperty("Type", out var typeProp))
                 return null;
