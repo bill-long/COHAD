@@ -10,7 +10,9 @@
         </p>
         <p class="mat-label-small event-detail-overline">Event</p>
         <h1 class="mat-headline-medium">{{ event.title }}</h1>
-        <p class="mat-body-large event-detail-datetime">{{ event.startUtc | date:'fullDate' }} at {{ event.startUtc | date:'shortTime' }}</p>
+        <p class="mat-body-large event-detail-datetime">
+          {{ event.startUtc | date: 'fullDate' }} at {{ event.startUtc | date: 'shortTime' }}
+        </p>
       </mat-card-content>
 
       <mat-divider *ngIf="event.hasPromoMedia || hasDescription(event)"></mat-divider>
@@ -18,7 +20,7 @@
       <mat-card-content *ngIf="event.hasPromoMedia" class="event-detail-section">
         <div class="promo-wrap">
           <div class="promo-flyer-frame">
-            <img [src]="event.promoMediaDownloadUrl" [alt]="event.title" class="promo-image">
+            <img [src]="event.promoMediaDownloadUrl" [alt]="event.title" class="promo-image" />
           </div>
         </div>
       </mat-card-content>
@@ -37,35 +39,116 @@
         <ng-container *ngIf="event.allowSignups">
           <p class="mat-body-medium signup-helper">
             <ng-container [ngSwitch]="event.signupMode">
-              <ng-container *ngSwitchCase="'HouseholdOnly'">Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }}</ng-container>
-              <ng-container *ngSwitchCase="'ChildrenOnly'">Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }} · {{ event.totalChildren }} {{ event.totalChildren === 1 ? 'child' : 'children' }}</ng-container>
-              <ng-container *ngSwitchCase="'AdultsOnly'">Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }} · {{ event.totalAdults }} {{ event.totalAdults === 1 ? 'adult' : 'adults' }}</ng-container>
-              <ng-container *ngSwitchDefault>Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }} · {{ event.totalAdults }} adults · {{ event.totalChildren }} children</ng-container>
+              <ng-container *ngSwitchCase="'HouseholdOnly'"
+                >Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }}</ng-container
+              >
+              <ng-container *ngSwitchCase="'ChildrenOnly'"
+                >Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }} ·
+                {{ event.totalChildren }} {{ event.totalChildren === 1 ? 'child' : 'children' }}</ng-container
+              >
+              <ng-container *ngSwitchCase="'AdultsOnly'"
+                >Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }} ·
+                {{ event.totalAdults }} {{ event.totalAdults === 1 ? 'adult' : 'adults' }}</ng-container
+              >
+              <ng-container *ngSwitchCase="'PeopleOnly'"
+                >Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }} ·
+                {{ event.totalAdults }} {{ event.totalAdults === 1 ? 'person' : 'people' }}</ng-container
+              >
+              <ng-container *ngSwitchDefault
+                >Current signups: {{ event.totalSignups }} {{ event.totalSignups === 1 ? 'household' : 'households' }} ·
+                {{ event.totalAdults }} adults · {{ event.totalChildren }} children</ng-container
+              >
             </ng-container>
           </p>
 
           <ng-container *ngIf="isSignedIn$ | async; else loginToSignup">
             <div class="signup-form-fields" *ngIf="event.signupMode !== 'HouseholdOnly'">
               <div class="signup-form-counts">
-                <mat-form-field appearance="outline" class="event-detail-field" subscriptSizing="dynamic" *ngIf="event.signupMode !== 'ChildrenOnly'">
-                  <mat-label>Adults</mat-label>
-                  <input matInput id="signup-adults" name="signupAdults" type="number" min="0" [(ngModel)]="adults">
+                <mat-form-field
+                  appearance="outline"
+                  class="event-detail-field"
+                  subscriptSizing="dynamic"
+                  *ngIf="event.signupMode === 'PeopleOnly'"
+                >
+                  <mat-label>People</mat-label>
+                  <input matInput id="signup-people" name="signupPeople" type="number" min="1" [(ngModel)]="adults" />
                 </mat-form-field>
-                <mat-form-field appearance="outline" class="event-detail-field" subscriptSizing="dynamic" *ngIf="event.signupMode !== 'AdultsOnly'">
+                <mat-form-field
+                  appearance="outline"
+                  class="event-detail-field"
+                  subscriptSizing="dynamic"
+                  *ngIf="event.signupMode !== 'ChildrenOnly' && event.signupMode !== 'PeopleOnly'"
+                >
+                  <mat-label>Adults</mat-label>
+                  <input matInput id="signup-adults" name="signupAdults" type="number" min="0" [(ngModel)]="adults" />
+                </mat-form-field>
+                <mat-form-field
+                  appearance="outline"
+                  class="event-detail-field"
+                  subscriptSizing="dynamic"
+                  *ngIf="event.signupMode !== 'AdultsOnly' && event.signupMode !== 'PeopleOnly'"
+                >
                   <mat-label>Children</mat-label>
-                  <input matInput id="signup-children" name="signupChildren" type="number" min="0" [(ngModel)]="children">
+                  <input matInput id="signup-children" name="signupChildren" type="number" min="0" [(ngModel)]="children" />
                 </mat-form-field>
               </div>
-              <mat-form-field appearance="outline" class="event-detail-field event-detail-field--textarea" subscriptSizing="dynamic" *ngIf="event.signupMode !== 'ChildrenOnly'">
-                <mat-label>Adult names (optional)</mat-label>
-                <textarea matInput id="signup-adult-names" name="signupAdultNames" rows="3" [(ngModel)]="adultNames" placeholder="Comma or newline separated"></textarea>
+              <mat-form-field
+                appearance="outline"
+                class="event-detail-field event-detail-field--textarea"
+                subscriptSizing="dynamic"
+                *ngIf="event.signupMode === 'PeopleOnly'"
+              >
+                <mat-label>Names (optional)</mat-label>
+                <textarea
+                  matInput
+                  id="signup-people-names"
+                  name="signupPeopleNames"
+                  rows="3"
+                  [(ngModel)]="adultNames"
+                  placeholder="Comma or newline separated"
+                ></textarea>
               </mat-form-field>
-              <mat-form-field appearance="outline" class="event-detail-field event-detail-field--textarea" subscriptSizing="dynamic" *ngIf="event.signupMode !== 'AdultsOnly'">
+              <mat-form-field
+                appearance="outline"
+                class="event-detail-field event-detail-field--textarea"
+                subscriptSizing="dynamic"
+                *ngIf="event.signupMode !== 'ChildrenOnly' && event.signupMode !== 'PeopleOnly'"
+              >
+                <mat-label>Adult names (optional)</mat-label>
+                <textarea
+                  matInput
+                  id="signup-adult-names"
+                  name="signupAdultNames"
+                  rows="3"
+                  [(ngModel)]="adultNames"
+                  placeholder="Comma or newline separated"
+                ></textarea>
+              </mat-form-field>
+              <mat-form-field
+                appearance="outline"
+                class="event-detail-field event-detail-field--textarea"
+                subscriptSizing="dynamic"
+                *ngIf="event.signupMode !== 'AdultsOnly' && event.signupMode !== 'PeopleOnly'"
+              >
                 <mat-label>Child names (optional)</mat-label>
-                <textarea matInput id="signup-child-names" name="signupChildNames" rows="3" [(ngModel)]="childNames" placeholder="Comma or newline separated"></textarea>
+                <textarea
+                  matInput
+                  id="signup-child-names"
+                  name="signupChildNames"
+                  rows="3"
+                  [(ngModel)]="childNames"
+                  placeholder="Comma or newline separated"
+                ></textarea>
               </mat-form-field>
             </div>
-            <button type="button" mat-flat-button color="primary" class="event-detail-signup-btn" (click)="submitSignup()" [disabled]="saving">
+            <button
+              type="button"
+              mat-flat-button
+              color="primary"
+              class="event-detail-signup-btn"
+              (click)="submitSignup()"
+              [disabled]="saving"
+            >
               <mat-spinner *ngIf="saving" class="event-detail-signup-spinner" diameter="20" mode="indeterminate"></mat-spinner>
               <span *ngIf="!saving">{{ event.mySignup ? 'Update signup' : 'Sign up' }}</span>
               <span *ngIf="saving">Saving…</span>
@@ -76,7 +159,12 @@
                 <p class="mat-body-medium event-detail-feedback-text">{{ error }}</p>
               </mat-card-content>
             </mat-card>
-            <mat-card *ngIf="success" appearance="outlined" class="event-detail-feedback-card event-detail-feedback-card--success" role="status">
+            <mat-card
+              *ngIf="success"
+              appearance="outlined"
+              class="event-detail-feedback-card event-detail-feedback-card--success"
+              role="status"
+            >
               <mat-card-content>
                 <p class="mat-body-medium event-detail-feedback-text">{{ success }}</p>
               </mat-card-content>

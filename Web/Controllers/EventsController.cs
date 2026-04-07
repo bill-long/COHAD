@@ -617,6 +617,7 @@ namespace Web.Controllers
                 EventSignupMode.HouseholdOnly => string.Empty,
                 EventSignupMode.ChildrenOnly => $" ({request.Children} children)",
                 EventSignupMode.AdultsOnly => $" ({request.Adults} adults)",
+                EventSignupMode.PeopleOnly => $" ({request.Adults} people)",
                 _ => $" ({request.Adults} adults, {request.Children} children)",
             };
             var actionPrefix = isNewSignup ? "Signed up for event." : "Updated event signup.";
@@ -670,6 +671,12 @@ namespace Web.Controllers
                     existingSignup.AdultNames = NormalizeNames(request.AdultNames);
                     existingSignup.ChildNames = new List<string>();
                     break;
+                case EventSignupMode.PeopleOnly:
+                    existingSignup.Adults = request.Adults;
+                    existingSignup.Children = 0;
+                    existingSignup.AdultNames = NormalizeNames(request.AdultNames);
+                    existingSignup.ChildNames = new List<string>();
+                    break;
                 default:
                     existingSignup.Adults = request.Adults;
                     existingSignup.Children = request.Children;
@@ -717,6 +724,18 @@ namespace Web.Controllers
                     if (request.Adults > MaxSignupAdultsPerHousehold)
                     {
                         return $"Please enter no more than {MaxSignupAdultsPerHousehold} adults per household.";
+                    }
+
+                    return null;
+                case EventSignupMode.PeopleOnly:
+                    if (request.Adults < 1)
+                    {
+                        return "Please provide at least one person.";
+                    }
+
+                    if (request.Adults > MaxSignupAdultsPerHousehold)
+                    {
+                        return $"Please enter no more than {MaxSignupAdultsPerHousehold} people per household.";
                     }
 
                     return null;

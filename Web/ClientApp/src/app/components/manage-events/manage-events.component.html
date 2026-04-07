@@ -23,9 +23,7 @@
         </ng-container>
       </section>
 
-      <p class="manage-events-no-upcoming" *ngIf="upcomingEvents.length === 0 && pastEvents.length > 0">
-        No upcoming events.
-      </p>
+      <p class="manage-events-no-upcoming" *ngIf="upcomingEvents.length === 0 && pastEvents.length > 0">No upcoming events.</p>
 
       <h2 class="list-heading list-heading--past" *ngIf="pastEvents.length > 0">Past events</h2>
       <section class="events-list" *ngIf="pastEvents.length > 0">
@@ -46,12 +44,12 @@
     <div class="event-row-main">
       <div class="event-row-title-wrap">
         <h3>{{ eventItem.title }}</h3>
-        <span class="event-row-time">{{ eventItem.startUtc | date:'medium' }}</span>
+        <span class="event-row-time">{{ eventItem.startUtc | date: 'medium' }}</span>
       </div>
 
       <div class="event-row-flyer" *ngIf="eventItem.hasPromoMedia">
         <div class="event-row-flyer-frame">
-          <img [src]="eventItem.promoMediaDownloadUrl" [alt]="eventItem.title" class="event-row-flyer-img">
+          <img [src]="eventItem.promoMediaDownloadUrl" [alt]="eventItem.title" class="event-row-flyer-img" />
         </div>
       </div>
 
@@ -64,7 +62,16 @@
 
     <div class="event-row-actions">
       <button type="button" mat-stroked-button color="primary" class="event-row-action-btn" (click)="openEditor(eventItem)">Edit</button>
-      <button type="button" mat-stroked-button color="warn" class="event-row-action-btn" [disabled]="deletingId === eventItem.id" (click)="deleteEvent(eventItem)">Delete</button>
+      <button
+        type="button"
+        mat-stroked-button
+        color="warn"
+        class="event-row-action-btn"
+        [disabled]="deletingId === eventItem.id"
+        (click)="deleteEvent(eventItem)"
+      >
+        Delete
+      </button>
     </div>
 
     <div class="signup-summary-panel" *ngIf="showSignupSection(eventItem)">
@@ -76,16 +83,20 @@
               {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}
             </span>
             <span class="signup-totals" *ngSwitchCase="'ChildrenOnly'">
-              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}
-              · {{ eventItem.totalChildren }} {{ eventItem.totalChildren === 1 ? 'child' : 'children' }}
+              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }} · {{ eventItem.totalChildren }}
+              {{ eventItem.totalChildren === 1 ? 'child' : 'children' }}
             </span>
             <span class="signup-totals" *ngSwitchCase="'AdultsOnly'">
-              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}
-              · {{ eventItem.totalAdults }} {{ eventItem.totalAdults === 1 ? 'adult' : 'adults' }}
+              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }} · {{ eventItem.totalAdults }}
+              {{ eventItem.totalAdults === 1 ? 'adult' : 'adults' }}
+            </span>
+            <span class="signup-totals" *ngSwitchCase="'PeopleOnly'">
+              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }} · {{ eventItem.totalAdults }}
+              {{ eventItem.totalAdults === 1 ? 'person' : 'people' }}
             </span>
             <span class="signup-totals" *ngSwitchDefault>
-              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}
-              · {{ eventItem.totalAdults }} adults · {{ eventItem.totalChildren }} children
+              {{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }} ·
+              {{ eventItem.totalAdults }} adults · {{ eventItem.totalChildren }} children
             </span>
           </ng-container>
         </div>
@@ -100,13 +111,20 @@
             <div class="signup-name">{{ signup.userDisplayName || '—' }}</div>
             <ng-container [ngSwitch]="eventItem.signupMode">
               <div class="signup-counts" *ngSwitchCase="'HouseholdOnly'">&nbsp;</div>
-              <div class="signup-counts" *ngSwitchCase="'ChildrenOnly'">{{ signup.children }} {{ signup.children === 1 ? 'child' : 'children' }}</div>
-              <div class="signup-counts" *ngSwitchCase="'AdultsOnly'">{{ signup.adults }} {{ signup.adults === 1 ? 'adult' : 'adults' }}</div>
+              <div class="signup-counts" *ngSwitchCase="'ChildrenOnly'">
+                {{ signup.children }} {{ signup.children === 1 ? 'child' : 'children' }}
+              </div>
+              <div class="signup-counts" *ngSwitchCase="'AdultsOnly'">
+                {{ signup.adults }} {{ signup.adults === 1 ? 'adult' : 'adults' }}
+              </div>
+              <div class="signup-counts" *ngSwitchCase="'PeopleOnly'">
+                {{ signup.adults }} {{ signup.adults === 1 ? 'person' : 'people' }}
+              </div>
               <div class="signup-counts" *ngSwitchDefault>{{ signup.adults }} adults · {{ signup.children }} children</div>
             </ng-container>
           </div>
           <div class="signup-email" *ngIf="signup.userEmail">{{ signup.userEmail }}</div>
-          <div class="signup-when" *ngIf="signup.signedUpUtc">Signed up {{ signup.signedUpUtc | date:'medium' }}</div>
+          <div class="signup-when" *ngIf="signup.signedUpUtc">Signed up {{ signup.signedUpUtc | date: 'medium' }}</div>
           <div class="signup-names" *ngIf="signup.adultNames.length > 0 || signup.childNames.length > 0">
             <span *ngIf="signup.adultNames.length > 0">Named adults: {{ signup.adultNames.join(', ') }}</span>
             <span *ngIf="signup.childNames.length > 0">Named children: {{ signup.childNames.join(', ') }}</span>

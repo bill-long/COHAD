@@ -75,12 +75,16 @@ export class EventDetailComponent implements OnInit {
     this.success = '';
     this.saving = true;
 
+    const mode = this.eventItem.signupMode ?? 'AdultsAndChildren';
+    const sendChildren = mode !== 'AdultsOnly' && mode !== 'PeopleOnly' && mode !== 'HouseholdOnly';
+    const sendAdults = mode !== 'ChildrenOnly' && mode !== 'HouseholdOnly';
+
     this.eventsService
       .signUp(this.eventItem.publicSlug, {
-        adults: this.adults,
-        children: this.children,
-        adultNames: this.parseNames(this.adultNames),
-        childNames: this.parseNames(this.childNames),
+        adults: sendAdults ? this.adults : 0,
+        children: sendChildren ? this.children : 0,
+        adultNames: sendAdults ? this.parseNames(this.adultNames) : [],
+        childNames: sendChildren ? this.parseNames(this.childNames) : [],
       })
       .subscribe({
         next: updated => {
