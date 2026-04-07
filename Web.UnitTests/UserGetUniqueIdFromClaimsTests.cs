@@ -30,9 +30,10 @@ public sealed class UserGetUniqueIdFromClaimsTests
     }
 
     [Fact]
-    public void Returns_null_when_identity_provider_missing()
+    public void Falls_back_to_local_when_identity_provider_missing()
     {
         var claims = new List<Claim> { new Claim(ClaimTypes.NameIdentifier, "abc") };
-        Assert.Throws<InvalidOperationException>(() => User.GetUniqueIdFromClaims(claims));
+        var id = User.GetUniqueIdFromClaims(claims);
+        Assert.Equal("localabc", id);
     }
 }
