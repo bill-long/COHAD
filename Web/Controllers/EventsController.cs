@@ -617,7 +617,7 @@ namespace Web.Controllers
                 EventSignupMode.HouseholdOnly => string.Empty,
                 EventSignupMode.ChildrenOnly => $" ({request.Children} children)",
                 EventSignupMode.AdultsOnly => $" ({request.Adults} adults)",
-                EventSignupMode.PeopleOnly => $" ({request.Adults} people)",
+                EventSignupMode.PeopleOnly => $" ({request.Adults} {(request.Adults == 1 ? "person" : "people")})",
                 _ => $" ({request.Adults} adults, {request.Children} children)",
             };
             var actionPrefix = isNewSignup ? "Signed up for event." : "Updated event signup.";

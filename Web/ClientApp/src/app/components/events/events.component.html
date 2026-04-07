@@ -12,17 +12,36 @@
       <a class="event-card" *ngFor="let eventItem of events" [routerLink]="['/events', eventItem.publicSlug]">
         <div class="event-card-grid">
           <div class="event-flyer-frame" *ngIf="eventItem.hasPromoMedia">
-            <img class="event-flyer-img" loading="lazy" [src]="eventItem.promoMediaDownloadUrl" [alt]="eventItem.title">
+            <img class="event-flyer-img" loading="lazy" [src]="eventItem.promoMediaDownloadUrl" [alt]="eventItem.title" />
           </div>
 
           <div class="event-body">
             <h2>{{ eventItem.title }}</h2>
-            <p class="event-time">{{ eventItem.startUtc | date:'fullDate' }} at {{ eventItem.startUtc | date:'shortTime' }}</p>
+            <p class="event-time">{{ eventItem.startUtc | date: 'fullDate' }} at {{ eventItem.startUtc | date: 'shortTime' }}</p>
             <p class="event-description">{{ eventItem.description }}</p>
             <div class="signup-summary" *ngIf="eventItem.allowSignups">
-              <span>{{ eventItem.totalSignups }} signups</span>
-              <span>{{ eventItem.totalAdults }} adults</span>
-              <span>{{ eventItem.totalChildren }} children</span>
+              <ng-container [ngSwitch]="eventItem.signupMode">
+                <ng-container *ngSwitchCase="'HouseholdOnly'">
+                  <span>{{ eventItem.totalSignups }} {{ eventItem.totalSignups === 1 ? 'household' : 'households' }}</span>
+                </ng-container>
+                <ng-container *ngSwitchCase="'ChildrenOnly'">
+                  <span>{{ eventItem.totalSignups }} signups</span>
+                  <span>{{ eventItem.totalChildren }} {{ eventItem.totalChildren === 1 ? 'child' : 'children' }}</span>
+                </ng-container>
+                <ng-container *ngSwitchCase="'AdultsOnly'">
+                  <span>{{ eventItem.totalSignups }} signups</span>
+                  <span>{{ eventItem.totalAdults }} {{ eventItem.totalAdults === 1 ? 'adult' : 'adults' }}</span>
+                </ng-container>
+                <ng-container *ngSwitchCase="'PeopleOnly'">
+                  <span>{{ eventItem.totalSignups }} signups</span>
+                  <span>{{ eventItem.totalAdults }} {{ eventItem.totalAdults === 1 ? 'person' : 'people' }}</span>
+                </ng-container>
+                <ng-container *ngSwitchDefault>
+                  <span>{{ eventItem.totalSignups }} signups</span>
+                  <span>{{ eventItem.totalAdults }} adults</span>
+                  <span>{{ eventItem.totalChildren }} children</span>
+                </ng-container>
+              </ng-container>
             </div>
             <div class="no-signup-label" *ngIf="!eventItem.allowSignups">No signups required</div>
           </div>
@@ -30,8 +49,6 @@
       </a>
     </section>
 
-    <div *ngIf="!loading && events.length === 0" class="empty-state">
-      No upcoming events are scheduled right now.
-    </div>
+    <div *ngIf="!loading && events.length === 0" class="empty-state">No upcoming events are scheduled right now.</div>
   </section>
 </div>
