@@ -11,6 +11,16 @@ export function renderMarkdownToHtml(markdown: string, sanitizer: DomSanitizer):
   return sanitizer.bypassSecurityTrustHtml(sanitized);
 }
 
+const entityDecoder = typeof document !== 'undefined' ? document.createElement('textarea') : null;
+
+function decodeHtmlEntities(text: string): string {
+  if (entityDecoder) {
+    entityDecoder.innerHTML = text;
+    return entityDecoder.value;
+  }
+  return text;
+}
+
 /** Strip markdown syntax to produce plain text (for summaries / card descriptions). */
 export function stripMarkdownToPlainText(markdown: string): string {
   const renderer = new Renderer();
@@ -21,8 +31,5 @@ export function stripMarkdownToPlainText(markdown: string): string {
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  // Decode HTML entities (e.g. &amp; → &)
-  const el = document.createElement('textarea');
-  el.innerHTML = stripped;
-  return el.value;
+  return decodeHtmlEntities(stripped);
 }
