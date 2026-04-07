@@ -126,7 +126,9 @@
           <div class="signup-email" *ngIf="signup.userEmail">{{ signup.userEmail }}</div>
           <div class="signup-when" *ngIf="signup.signedUpUtc">Signed up {{ signup.signedUpUtc | date: 'medium' }}</div>
           <div class="signup-names" *ngIf="signup.adultNames.length > 0 || signup.childNames.length > 0">
-            <span *ngIf="signup.adultNames.length > 0">Named adults: {{ signup.adultNames.join(', ') }}</span>
+            <span *ngIf="signup.adultNames.length > 0"
+              >{{ eventItem.signupMode === 'PeopleOnly' ? 'Named people:' : 'Named adults:' }} {{ signup.adultNames.join(', ') }}</span
+            >
             <span *ngIf="signup.childNames.length > 0">Named children: {{ signup.childNames.join(', ') }}</span>
           </div>
         </div>

@@ -666,11 +666,6 @@ namespace Web.Controllers
                     existingSignup.ChildNames = NormalizeNames(request.ChildNames);
                     break;
                 case EventSignupMode.AdultsOnly:
-                    existingSignup.Adults = request.Adults;
-                    existingSignup.Children = 0;
-                    existingSignup.AdultNames = NormalizeNames(request.AdultNames);
-                    existingSignup.ChildNames = new List<string>();
-                    break;
                 case EventSignupMode.PeopleOnly:
                     existingSignup.Adults = request.Adults;
                     existingSignup.Children = 0;
