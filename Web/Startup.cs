@@ -410,6 +410,9 @@ namespace Web
             services.Configure<SesOptions>(Configuration.GetSection("Ses"));
             if (useMockData)
             {
+                // MockData environment uses MockEmailTransport for everything — force SES disabled
+                // via PostConfigure so IOptions<SesOptions> consumers see a single source of truth.
+                services.PostConfigure<SesOptions>(opts => opts.Enabled = false);
                 services.AddSingleton<IEmailTransport>(new MockData.MockEmailTransport());
             }
             else
@@ -432,7 +435,6 @@ namespace Web
             }
 
             var sesOptions = Configuration.GetSection("Ses").Get<SesOptions>() ?? new SesOptions();
-            // MockData environment uses MockEmailTransport for everything — never enable real SES
             if (useMockData)
                 sesOptions.Enabled = false;
             if (sesOptions.Enabled)
