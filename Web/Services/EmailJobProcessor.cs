@@ -332,6 +332,7 @@ namespace Web.Services
                             }
 
                             NormalizePendingDelivered(job);
+                            MarkCappedRecipientsAsFailed(job);
                             RecalculateCounts(job);
                             if (recipients.Count > 0 && recipients.All(r => r.Status == EmailJobRecipientStatus.Sent))
                             {
