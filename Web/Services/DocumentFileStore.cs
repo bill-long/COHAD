@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Microsoft.Extensions.Options;
@@ -102,23 +103,25 @@ namespace Web.Services
         {
             await EnsureContainerAsync().ConfigureAwait(false);
             var blob = _containerClient.GetBlobClient(blobPath);
-            var exists = await blob.ExistsAsync();
-            if (!exists.Value)
+
+            try
+            {
+                var response = await blob.DownloadStreamingAsync();
+                var etagString = response.Value.Details.ETag.ToString("H");
+                EntityTagHeaderValue.TryParse(etagString, out var entityTag);
+                return new DocumentFileResult
+                {
+                    Stream = response.Value.Content,
+                    ContentType = response.Value.Details.ContentType,
+                    EntityTag = entityTag,
+                    LastModified = response.Value.Details.LastModified,
+                    ContentLength = response.Value.Details.ContentLength,
+                };
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
             {
                 return null;
             }
-
-            var response = await blob.DownloadStreamingAsync();
-            var etagString = response.Value.Details.ETag.ToString("H");
-            EntityTagHeaderValue.TryParse(etagString, out var entityTag);
-            return new DocumentFileResult
-            {
-                Stream = response.Value.Content,
-                ContentType = response.Value.Details.ContentType,
-                EntityTag = entityTag,
-                LastModified = response.Value.Details.LastModified,
-                ContentLength = response.Value.Details.ContentLength,
-            };
         }
 
         public async Task DeleteAsync(string blobPath)
