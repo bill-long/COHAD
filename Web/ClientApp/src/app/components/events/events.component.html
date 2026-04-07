@@ -18,7 +18,7 @@
           <div class="event-body">
             <h2>{{ eventItem.title }}</h2>
             <p class="event-time">{{ eventItem.startUtc | date: 'fullDate' }} at {{ eventItem.startUtc | date: 'shortTime' }}</p>
-            <p class="event-description">{{ eventItem.description }}</p>
+            <p class="event-description">{{ eventItem.description | stripMarkdown }}</p>
             <div class="signup-summary" *ngIf="eventItem.allowSignups">
               <ng-container [ngSwitch]="eventItem.signupMode">
                 <ng-container *ngSwitchCase="'HouseholdOnly'">

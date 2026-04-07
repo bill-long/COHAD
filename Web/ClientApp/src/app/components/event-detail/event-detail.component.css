@@ -41,9 +41,39 @@
 }
 
 .event-detail-description {
-  margin: 0;
-  white-space: pre-wrap;
   max-width: 65ch;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.event-detail-description h1,
+.event-detail-description h2,
+.event-detail-description h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.event-detail-description p {
+  margin: 0 0 1rem;
+}
+
+.event-detail-description img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.event-detail-description ul,
+.event-detail-description ol {
+  padding-left: 1.5rem;
+  margin: 0 0 1rem;
+}
+
+.event-detail-description blockquote {
+  border-left: 4px solid var(--border-subtle);
+  margin: 0 0 1rem;
+  padding: 0.5rem 1rem;
+  color: var(--text-secondary);
 }
 
 .promo-wrap {

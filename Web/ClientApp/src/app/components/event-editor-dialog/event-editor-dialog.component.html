@@ -15,15 +15,44 @@
         <mat-hint align="end">{{ title.length }}/160</mat-hint>
       </mat-form-field>
     </div>
-    <div class="event-editor-field-row">
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="event-editor-mat-field">
-        <mat-label>Description</mat-label>
+    <div class="event-editor-field-row event-editor-description-row">
+      <div class="event-editor-content-header">
+        <label class="event-editor-content-label" id="event-editor-description-label">Description</label>
+        <mat-button-toggle-group
+          [value]="editorMode"
+          (change)="editorMode = $event.value"
+          class="event-editor-mode-toggle"
+          aria-label="Editor mode"
+        >
+          <mat-button-toggle value="visual">Visual</mat-button-toggle>
+          <mat-button-toggle value="markdown">Markdown</mat-button-toggle>
+        </mat-button-toggle-group>
+      </div>
+      <app-milkdown-editor
+        *ngIf="editorMode === 'visual'"
+        [value]="description"
+        (valueChange)="description = $event"
+        [placeholder]="'Describe the event…'"
+        [imageUploader]="false"
+        [ariaLabel]="'Description'"
+        class="event-editor-milkdown"
+      >
+      </app-milkdown-editor>
+      <mat-form-field
+        *ngIf="editorMode === 'markdown'"
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="event-editor-mat-field event-editor-source-field"
+      >
+        <mat-label>Markdown source</mat-label>
         <textarea
           matInput
           id="event-editor-description"
-          rows="3"
           [(ngModel)]="description"
-          placeholder="What residents should know"
+          rows="8"
+          class="event-editor-source-textarea"
+          placeholder="What residents should know…"
+          spellcheck="true"
         ></textarea>
       </mat-form-field>
     </div>
