@@ -532,7 +532,12 @@ namespace Web
             app.Use(
                 async (context, next) =>
                 {
-                    context.Response.Headers["X-Frame-Options"] = "DENY";
+                    // Azure AD B2C custom pages are loaded cross-origin; skip
+                    // X-Frame-Options for /b2c/ so B2C can render the template.
+                    if (!context.Request.Path.StartsWithSegments("/b2c"))
+                    {
+                        context.Response.Headers["X-Frame-Options"] = "DENY";
+                    }
                     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
                     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
                     await next();
@@ -541,7 +546,20 @@ namespace Web
 
             app.UseHttpsRedirection();
             app.UseResponseCompression();
-            app.UseStaticFiles();
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                OnPrepareResponse = ctx =>
+                {
+                    // Azure AD B2C fetches custom page content via a CORS request from
+                    // the b2clogin.com origin. Static files bypass the CORS middleware,
+                    // so we add the header here for /b2c/ paths only.
+                    if (ctx.Context.Request.Path.StartsWithSegments("/b2c"))
+                    {
+                        ctx.Context.Response.Headers["Access-Control-Allow-Origin"] =
+                            "https://cohadorgb2c.b2clogin.com";
+                    }
+                }
+            });
             if (!useDevSpaProxy)
             {
                 app.UseSpaStaticFiles();
