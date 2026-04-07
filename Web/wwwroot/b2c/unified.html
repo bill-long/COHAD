@@ -122,6 +122,36 @@
         /* endinject */
     </style>
 
+    <style>
+        /*
+         * COHAD customisation: visually reorder #api children so that
+         * .social (Google button) appears first, then .divider, then
+         * .localAccount (email / password form).
+         *
+         * B2C strips <script> from custom pages (not in sanitizerPolicy
+         * allowedTags), so we must use CSS flexbox order instead of
+         * DOM manipulation. This changes visual order only; keyboard
+         * tab order follows DOM order (social is last in the DOM).
+         *
+         * We override the upstream display:table / display:table-footer-group
+         * layout with flexbox + flex-direction:column so `order` works.
+         */
+        .unified_container .row .panel-default #api {
+            display: flex !important;
+            flex-direction: column;
+        }
+        .unified_container .row .panel-default #api > .social {
+            display: block !important;   /* override table-footer-group */
+            order: -2;                   /* first visually */
+        }
+        .unified_container .row .panel-default #api > .divider {
+            order: -1;                   /* between social and localAccount */
+        }
+        .unified_container .row .panel-default #api > .localAccount {
+            order: 0;                    /* last (default) */
+        }
+    </style>
+
 </head>
 <body>
     <div id="background_branding_container" data-tenant-branding-background-color="true">
@@ -140,56 +170,5 @@
             </div>
         </div>
     </div>
-    <script>
-        // Physically reorder #api children so .social appears first,
-        // then .divider, then .localAccount. This keeps DOM order
-        // (and therefore tab / screen-reader order) consistent with
-        // the visual layout. We use a MutationObserver because B2C
-        // injects its markup asynchronously after the page loads.
-        (function () {
-            var api = document.getElementById('api');
-            if (!api) return;
-
-            function reorder() {
-                var social = api.querySelector(':scope > .social');
-                if (!social) return false;
-
-                var divider = api.querySelector(':scope > .divider');
-                // prepend moves the node; no duplication
-                if (divider) api.prepend(divider);
-                api.prepend(social);
-                return true;
-            }
-
-            // B2C may not inject .social at all (e.g. no social IdPs
-            // configured). Consider the UI "settled" once .localAccount
-            // is present without .social — nothing to reorder.
-            function isSettled() {
-                var localAccount = api.querySelector(':scope > .localAccount');
-                if (!localAccount) return false;
-                var social = api.querySelector(':scope > .social');
-                return !social;
-            }
-
-            // If B2C content is already present (unlikely but safe)
-            if (reorder() || isSettled()) return;
-
-            var timeoutId;
-            function stopObserving() {
-                observer.disconnect();
-                if (timeoutId) clearTimeout(timeoutId);
-            }
-
-            // Watch for B2C to inject its children
-            var observer = new MutationObserver(function () {
-                if (reorder() || isSettled()) stopObserving();
-            });
-            observer.observe(api, { childList: true });
-
-            // Safety net: disconnect after 5 s even if expected
-            // elements never appear.
-            timeoutId = setTimeout(function () { stopObserving(); }, 5000);
-        })();
-    </script>
 </body>
 </html>
