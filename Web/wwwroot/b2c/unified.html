@@ -8,29 +8,64 @@
         /*
          * Azure AD B2C custom page template.
          *
-         * B2C injects its own fully-styled UI into <div id="api">.
-         * We only override layout ordering so social IdP buttons
-         * (Google, etc.) appear above the local-account form.
+         * B2C injects its fully-styled UI into <div id="api">. For the
+         * "unified" (sign-up-or-sign-in) page the injected direct children are:
+         *
+         *   .localAccount  – email / password form
+         *   .divider       – "OR" separator
+         *   .social        – social IdP buttons (e.g. Google)
+         *
+         * These class names come from the B2C "unified" page type and are
+         * documented in:
+         *   https://learn.microsoft.com/en-us/azure/active-directory-b2c/customize-ui
+         *
+         * We physically reorder the DOM (see <script> below) rather than
+         * using CSS flexbox `order`, so that keyboard tab order and screen-
+         * reader reading order match the visual layout.
+         *
+         * `display: flex !important` is still needed because B2C's own
+         * stylesheet sets a conflicting display value on #api.
          */
 
         /* Prevent browser dark-mode from inverting B2C's light UI */
         :root { color-scheme: light; }
-
-        /* Use flexbox on the container to reorder children */
-        #api {
-            display: flex !important;
-            flex-direction: column;
-        }
-
-        /* Social providers first, then divider, then local account */
-        #api > .social       { order: 1; }
-        #api > .divider      { order: 2; }
-        #api > .localAccount { order: 3; }
     </style>
 </head>
 <body>
     <div id="api">
         <!-- Azure AD B2C injects its UI here -->
     </div>
+    <script>
+        // Physically reorder #api children so .social appears first,
+        // then .divider, then .localAccount. This keeps DOM order
+        // (and therefore tab / screen-reader order) consistent with
+        // the visual layout. We use a MutationObserver because B2C
+        // injects its markup asynchronously after the page loads.
+        (function () {
+            var api = document.getElementById('api');
+            if (!api) return;
+
+            function reorder() {
+                var social = api.querySelector(':scope > .social');
+                var divider = api.querySelector(':scope > .divider');
+                if (social && divider) {
+                    // prepend moves the node; no duplication
+                    api.prepend(divider);
+                    api.prepend(social);
+                    return true;
+                }
+                return false;
+            }
+
+            // If B2C content is already present (unlikely but safe)
+            if (reorder()) return;
+
+            // Watch for B2C to inject its children
+            var observer = new MutationObserver(function () {
+                if (reorder()) observer.disconnect();
+            });
+            observer.observe(api, { childList: true });
+        })();
+    </script>
 </body>
 </html>
