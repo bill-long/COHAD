@@ -73,12 +73,18 @@ namespace Web.Services
             }
             catch (Exception ex)
             {
+                _logger.LogWarning(
+                    ex,
+                    "SMTP send failed for {Email} in job {JobId}",
+                    recipientEmail,
+                    jobId
+                );
+
                 if (_logSmtpProtocolOnFailure && _protocolLog != null)
                 {
                     var transcript = FormatSmtpTranscriptForLogs(_protocolLog);
                     _logger.LogWarning(
-                        ex,
-                        "SMTP send failed for {Email} in job {JobId}. Transcript (redacted): {SmtpTranscript}",
+                        "SMTP transcript (redacted) for {Email} in job {JobId}: {SmtpTranscript}",
                         recipientEmail,
                         jobId,
                         transcript

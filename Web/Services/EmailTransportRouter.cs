@@ -38,7 +38,7 @@ namespace Web.Services
 
         public IEmailTransport GetTransportForRecipient(string recipientEmail)
         {
-            if (_sesEnabled && _sesRecipients.Contains(recipientEmail))
+            if (_sesEnabled && _sesRecipients.Contains(recipientEmail?.Trim() ?? ""))
                 return _sesTransport;
 
             return _smtpTransport;

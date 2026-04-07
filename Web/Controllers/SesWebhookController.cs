@@ -310,7 +310,7 @@ namespace Web.Controllers
             string? jobId = null;
             string? email = null;
 
-            // SES message tags are in mail.tags or mail.commonHeaders — check mail.tags first
+            // SES message tags are in mail.tags (set via EmailTags on the SendEmail request)
             if (sesEvent.TryGetProperty("mail", out var mail) && mail.TryGetProperty("tags", out var tags))
             {
                 // SES tags are { "tagName": ["value1"] } format
