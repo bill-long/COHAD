@@ -529,12 +529,19 @@ namespace Web
             }
 
             // Add security headers on every response
+            var b2cOrigins = Configuration.GetSection("B2cCustomPage:AllowedOrigins")
+                .Get<string[]>() ?? Array.Empty<string>();
             app.Use(
                 async (context, next) =>
                 {
-                    // Azure AD B2C custom pages are loaded cross-origin; skip
-                    // X-Frame-Options for /b2c/ so B2C can render the template.
-                    if (!context.Request.Path.StartsWithSegments("/b2c"))
+                    if (context.Request.Path.StartsWithSegments("/b2c") && b2cOrigins.Length > 0)
+                    {
+                        // Azure AD B2C custom pages are loaded cross-origin; use a
+                        // CSP frame-ancestors allowlist instead of blanket DENY.
+                        context.Response.Headers["Content-Security-Policy"] =
+                            "frame-ancestors " + string.Join(" ", b2cOrigins);
+                    }
+                    else
                     {
                         context.Response.Headers["X-Frame-Options"] = "DENY";
                     }
@@ -555,8 +562,11 @@ namespace Web
                     // so we add the header here for /b2c/ paths only.
                     if (ctx.Context.Request.Path.StartsWithSegments("/b2c"))
                     {
-                        ctx.Context.Response.Headers["Access-Control-Allow-Origin"] =
-                            "https://cohadorgb2c.b2clogin.com";
+                        var origin = ctx.Context.Request.Headers["Origin"].ToString();
+                        if (b2cOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
+                        {
+                            ctx.Context.Response.Headers["Access-Control-Allow-Origin"] = origin;
+                        }
                     }
                 }
             });
