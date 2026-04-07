@@ -252,16 +252,22 @@ namespace Web.Controllers
 
                     // Any delivery event from SendGrid proves the email was sent —
                     // fix Status if the processor's post-send persist was lost to a
-                    // concurrency conflict and left the recipient stuck as Pending.
-                    var shouldFixPendingStatus = recipient.Status == EmailJobRecipientStatus.Pending;
-                    if (shouldFixPendingStatus)
+                    // concurrency conflict and left the recipient stuck as Pending
+                    // or Failed.
+                    var shouldFixRecipientStatus =
+                        recipient.Status == EmailJobRecipientStatus.Pending
+                        || recipient.Status == EmailJobRecipientStatus.Failed;
+                    if (shouldFixRecipientStatus)
                     {
                         recipient.Status = EmailJobRecipientStatus.Sent;
                         recipient.SentUtc ??= DateTime.UtcNow;
                         job.SentCount = (job.Recipients ?? new()).Count(r => r.Status == EmailJobRecipientStatus.Sent);
+                        job.FailedCount = (job.Recipients ?? new()).Count(r =>
+                            r.Status == EmailJobRecipientStatus.Failed
+                        );
                     }
 
-                    if (shouldUpdateStatus || shouldSetProviderMessageId || shouldFixPendingStatus)
+                    if (shouldUpdateStatus || shouldSetProviderMessageId || shouldFixRecipientStatus)
                     {
                         await _emailJobRepository.UpdateAsync(job);
                     }

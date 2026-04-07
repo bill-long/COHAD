@@ -66,19 +66,24 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// Promotes recipients that are still Pending but have a non-Unknown DeliveryStatus
-        /// to Sent, since a delivery event from the provider proves the email was sent.
-        /// This normalizes state before filtering so the processor does not re-send them.
+        /// Promotes recipients that are still Pending or Failed but have a non-Unknown
+        /// DeliveryStatus to Sent, since a delivery event from the provider proves the
+        /// email was sent. This normalizes state before filtering so the processor does
+        /// not re-send them.
         /// </summary>
         private static bool NormalizePendingDelivered(EmailJob job)
         {
             var changed = false;
             foreach (var r in job.Recipients ?? new())
             {
-                if (r.Status == EmailJobRecipientStatus.Pending && r.DeliveryStatus != DeliveryStatus.Unknown)
+                if (
+                    (r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed)
+                    && r.DeliveryStatus != DeliveryStatus.Unknown
+                )
                 {
                     r.Status = EmailJobRecipientStatus.Sent;
-                    r.SentUtc ??= DateTime.UtcNow;
+                    r.SentUtc ??= r.DeliveryStatusUpdatedUtc ?? DateTime.UtcNow;
+                    r.Error = null;
                     changed = true;
                 }
             }
@@ -107,6 +112,7 @@ namespace Web.Services
                     if (r.DeliveryStatus != DeliveryStatus.Unknown)
                     {
                         r.Status = EmailJobRecipientStatus.Sent;
+                        r.SentUtc ??= r.DeliveryStatusUpdatedUtc ?? DateTime.UtcNow;
                         r.Error = null;
                         continue;
                     }
@@ -175,7 +181,8 @@ namespace Web.Services
                 if (!serverLookup.TryGetValue(localRecipient.Email, out var serverRecipient))
                     continue;
 
-                // Take the more-recent delivery status (webhook-owned)
+                // Adopt the server's delivery status when it is non-Unknown (webhook-owned field).
+                // The processor never writes delivery status, so the server copy is authoritative.
                 if (serverRecipient.DeliveryStatus != DeliveryStatus.Unknown)
                 {
                     localRecipient.DeliveryStatus = serverRecipient.DeliveryStatus;
@@ -281,11 +288,14 @@ namespace Web.Services
                         {
                             var recipients = job.Recipients ?? new List<EmailJobRecipient>();
 
-                            // If there are genuinely unsent recipients (Pending with no delivery
-                            // confirmation), re-enqueue rather than declaring the job terminal —
-                            // the processor was interrupted, not permanently stuck.
+                            // If there are genuinely unsent recipients (Pending/Failed with no
+                            // delivery confirmation), re-enqueue rather than declaring the job
+                            // terminal — the processor was interrupted, not permanently stuck.
                             var hasUnsentRecipients = recipients.Any(r =>
-                                r.Status == EmailJobRecipientStatus.Pending
+                                (
+                                    r.Status == EmailJobRecipientStatus.Pending
+                                    || r.Status == EmailJobRecipientStatus.Failed
+                                )
                                 && r.DeliveryStatus == DeliveryStatus.Unknown
                                 && r.AttemptCount
                                     < (
