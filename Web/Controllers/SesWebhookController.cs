@@ -44,17 +44,21 @@ namespace Web.Controllers
                 return false;
             if (uri.Scheme != "https")
                 return false;
-            // Host must be sns.{region}.amazonaws.com
+            // Host must be exactly sns.{region}.amazonaws.com (4 dot-separated parts)
             var host = uri.Host;
+            var parts = host.Split('.');
             if (
-                !host.StartsWith("sns.", StringComparison.OrdinalIgnoreCase)
-                || !host.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase)
+                parts.Length != 4
+                || !string.Equals(parts[0], "sns", StringComparison.OrdinalIgnoreCase)
+                || parts[1].Length == 0
+                || !string.Equals(parts[2], "amazonaws", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(parts[3], "com", StringComparison.OrdinalIgnoreCase)
             )
                 return false;
-            // Path must contain SimpleNotificationService and end with .pem
+            // Path must be a single segment: /SimpleNotificationService-{hash}.pem
             var path = uri.AbsolutePath;
             if (
-                !path.Contains("SimpleNotificationService", StringComparison.Ordinal)
+                !path.StartsWith("/SimpleNotificationService-", StringComparison.Ordinal)
                 || !path.EndsWith(".pem", StringComparison.OrdinalIgnoreCase)
             )
                 return false;

@@ -394,7 +394,7 @@ public sealed class SesWebhookControllerTests
     [Theory]
     [InlineData("https://sns.us-east-1.amazonaws.com/SimpleNotificationService-abc123.pem", true)]
     [InlineData("https://sns.eu-west-1.amazonaws.com/SimpleNotificationService-def456.pem", true)]
-    [InlineData("https://sns.ap-southeast-2.amazonaws.com/path/SimpleNotificationService-xyz.pem", true)]
+    [InlineData("https://sns.ap-southeast-2.amazonaws.com/SimpleNotificationService-xyz.pem", true)]
     public void IsValidSnsCertUrl_accepts_valid_aws_urls(string url, bool expected)
     {
         Assert.Equal(expected, SesWebhookController.IsValidSnsCertUrl(url));
@@ -403,12 +403,15 @@ public sealed class SesWebhookControllerTests
     [Theory]
     [InlineData("http://sns.us-east-1.amazonaws.com/SimpleNotificationService-abc.pem")] // http not https
     [InlineData("https://evil.com/SimpleNotificationService-abc.pem")] // wrong host
-    [InlineData("https://sns.us-east-1.amazonaws.com/SomethingElse.pem")] // missing SimpleNotificationService
+    [InlineData("https://sns.us-east-1.amazonaws.com/SomethingElse.pem")] // missing SimpleNotificationService prefix
     [InlineData("https://sns.us-east-1.amazonaws.com/SimpleNotificationService-abc.txt")] // not .pem
     [InlineData("https://sns.us-east-1.amazonaws.com/SimpleNotificationService-abc.pem?a=1")] // query string
     [InlineData("https://sns.us-east-1.amazonaws.com/SimpleNotificationService-abc.pem#frag")] // fragment
     [InlineData("https://notsns.us-east-1.amazonaws.com/SimpleNotificationService-abc.pem")] // host doesn't start with sns.
     [InlineData("https://sns.us-east-1.notamazon.com/SimpleNotificationService-abc.pem")] // host doesn't end with amazonaws.com
+    [InlineData("https://sns.us-east-1.evilamazonaws.com/SimpleNotificationService-abc.pem")] // suffix-spoofed host
+    [InlineData("https://sns.evil.us-east-1.amazonaws.com/SimpleNotificationService-abc.pem")] // extra host segment
+    [InlineData("https://sns.ap-southeast-2.amazonaws.com/path/SimpleNotificationService-xyz.pem")] // extra path segment
     [InlineData("not-a-url")] // not a valid URI
     [InlineData("")] // empty string
     public void IsValidSnsCertUrl_rejects_invalid_urls(string url)
@@ -419,7 +422,7 @@ public sealed class SesWebhookControllerTests
     // ─── BuildSnsStringToSign tests ───
 
     [Fact]
-    public void BuildSnsStringToSign_Notification_includes_correct_fields()
+    public void BuildSnsStringToSign_Notification_includes_correct_fields_in_canonical_order()
     {
         var message = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(new
         {
@@ -432,15 +435,14 @@ public sealed class SesWebhookControllerTests
 
         var result = SesWebhookController.BuildSnsStringToSign(message);
 
-        Assert.NotNull(result);
-        Assert.Contains("Message\nHello world\n", result);
-        Assert.Contains("MessageId\nmsg-123\n", result);
-        Assert.Contains("Timestamp\n2025-01-01T00:00:00.000Z\n", result);
-        Assert.Contains("TopicArn\narn:aws:sns:us-west-2:123:test\n", result);
-        Assert.Contains("Type\nNotification\n", result);
-        // Notification messages must NOT include SubscribeURL or Token
-        Assert.DoesNotContain("SubscribeURL", result);
-        Assert.DoesNotContain("Token", result);
+        // Assert the full canonical string with correct field ordering per AWS SNS spec
+        var expected =
+            "Message\nHello world\n" +
+            "MessageId\nmsg-123\n" +
+            "Timestamp\n2025-01-01T00:00:00.000Z\n" +
+            "TopicArn\narn:aws:sns:us-west-2:123:test\n" +
+            "Type\nNotification\n";
+        Assert.Equal(expected, result);
     }
 
     [Fact]
@@ -543,12 +545,8 @@ public sealed class SesWebhookControllerTests
     // ─── SNS timestamp freshness tests ───
 
     [Fact]
-    public async Task Production_rejects_notification_without_Timestamp()
+    public async Task DevMode_accepts_notification_without_Timestamp()
     {
-        // Use Production to verify Timestamp is required in non-dev environments.
-        // Signature verification also fails in Production (no cert), so it returns Forbid
-        // before reaching the timestamp check. Instead, test that dev mode enforces
-        // timestamp validation even when signature verification is relaxed.
         var controller = CreateController(environment: "MockData");
         var body = JsonSerializer.Serialize(new
         {
@@ -556,20 +554,17 @@ public sealed class SesWebhookControllerTests
             MessageId = "sns-ts-1",
             Message = "{}",
             TopicArn = "arn:aws:sns:us-west-2:123:test",
-            // No Timestamp property — accepted in dev mode by the timestamp-missing branch
+            // No Timestamp — dev mode tolerates this
         });
         SetRequestBody(controller, body);
 
-        // In MockData, missing Timestamp is accepted (dev tolerance) — verify it doesn't crash
         var result = await controller.HandleNotification();
         Assert.IsType<OkResult>(result);
     }
 
     [Fact]
-    public async Task Production_rejects_notification_with_invalid_Timestamp()
+    public async Task DevMode_accepts_notification_with_invalid_Timestamp()
     {
-        // In Production, signature verification fails before timestamp check.
-        // Verify the invalid-Timestamp branch in dev mode (accepted with warning).
         var controller = CreateController(environment: "MockData");
         var body = JsonSerializer.Serialize(new
         {
@@ -581,7 +576,6 @@ public sealed class SesWebhookControllerTests
         });
         SetRequestBody(controller, body);
 
-        // In dev mode, invalid timestamps are accepted (with a log warning)
         var result = await controller.HandleNotification();
         Assert.IsType<OkResult>(result);
     }
