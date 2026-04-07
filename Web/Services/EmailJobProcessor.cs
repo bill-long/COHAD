@@ -162,7 +162,8 @@ namespace Web.Services
         /// <summary>
         /// Copies webhook-owned fields (DeliveryStatus, DeliveryStatusUpdatedUtc, ProviderMessageId)
         /// from the server copy into the processor's in-memory job so the next write does not
-        /// overwrite changes made by the webhook controller.
+        /// overwrite changes made by the webhook controller. Also adopts Sent status from the
+        /// server copy to prevent duplicate sends when another process already sent a recipient.
         /// </summary>
         internal static void MergeWebhookFields(EmailJob local, EmailJob server)
         {
@@ -198,6 +199,18 @@ namespace Web.Services
                 )
                 {
                     localRecipient.ProviderMessageId = serverRecipient.ProviderMessageId;
+                }
+
+                // If the server copy already shows this recipient as Sent (e.g. by a previous
+                // attempt that succeeded but whose persist we conflicted with), adopt that status
+                // so the send loop skips it and avoids a duplicate send.
+                if (localRecipient.Status != EmailJobRecipientStatus.Sent
+                    && serverRecipient.Status == EmailJobRecipientStatus.Sent)
+                {
+                    localRecipient.Status = serverRecipient.Status;
+                    localRecipient.SentUtc = serverRecipient.SentUtc;
+                    localRecipient.Error = serverRecipient.Error;
+                    localRecipient.Provider = serverRecipient.Provider;
                 }
             }
         }
@@ -600,6 +613,15 @@ namespace Web.Services
                     {
                         stoppedEarly = true;
                         break;
+                    }
+
+                    // After persist (which may have merged webhook updates on conflict),
+                    // skip this recipient if it was already sent by a previous attempt.
+                    if (recipient.Status == EmailJobRecipientStatus.Sent)
+                    {
+                        RecalculateCounts(job);
+                        await NotifyProgressAsync(job);
+                        continue;
                     }
 
                     try

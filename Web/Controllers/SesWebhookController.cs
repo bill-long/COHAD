@@ -510,6 +510,7 @@ namespace Web.Controllers
                     var certPem = await client.GetStringAsync(certUrl, HttpContext.RequestAborted);
                     var cert = X509Certificate2.CreateFromPem(certPem);
                     using var rsaKey = cert.GetRSAPublicKey();
+                    cert.Dispose();
                     if (rsaKey == null)
                         return false;
                     rsaParams = rsaKey.ExportParameters(false);
