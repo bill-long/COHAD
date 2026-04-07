@@ -17,8 +17,12 @@ export function stripMarkdownToPlainText(markdown: string): string {
   renderer.html = () => '';
   renderer.image = () => '';
   const html = marked.parse(markdown, { async: false, renderer }) as string;
-  return html
+  const stripped = html
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  // Decode HTML entities (e.g. &amp; → &)
+  const el = document.createElement('textarea');
+  el.innerHTML = stripped;
+  return el.value;
 }
