@@ -39,8 +39,9 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
             return endpoints;
         }
 
-        endpoints.MapGet(
+        endpoints.MapMethods(
             "/events/{segment}",
+            ["GET", "HEAD"],
             (HttpContext http, string segment) => WriteEventPageAsync(http, env, segment)
         );
         return endpoints;
@@ -66,6 +67,20 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
             var queryString = context.Request.QueryString.HasValue ? context.Request.QueryString.Value : string.Empty;
             context.Response.StatusCode = StatusCodes.Status301MovedPermanently;
             context.Response.Headers["Location"] = canonicalPath + queryString;
+            return;
+        }
+
+        // HEAD requests only need status + content-type; skip HTML generation.
+        if (HttpMethods.IsHead(context.Request.Method))
+        {
+            var headIndexPath = ResolveIndexHtmlPath(env);
+            if (string.IsNullOrEmpty(headIndexPath) || !File.Exists(headIndexPath))
+            {
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                return;
+            }
+
+            context.Response.ContentType = "text/html; charset=utf-8";
             return;
         }
 

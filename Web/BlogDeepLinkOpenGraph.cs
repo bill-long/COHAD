@@ -32,8 +32,9 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
             return endpoints;
         }
 
-        endpoints.MapGet(
+        endpoints.MapMethods(
             "/news/{segment}",
+            ["GET", "HEAD"],
             (HttpContext http, string segment) => WriteBlogPageAsync(http, env, segment)
         );
         return endpoints;
@@ -41,6 +42,20 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
 
     private static async Task WriteBlogPageAsync(HttpContext context, IWebHostEnvironment env, string segment)
     {
+        // HEAD requests only need status + content-type; skip DB lookup and HTML generation.
+        if (HttpMethods.IsHead(context.Request.Method))
+        {
+            var headIndexPath = ResolveIndexHtmlPath(env);
+            if (string.IsNullOrEmpty(headIndexPath) || !File.Exists(headIndexPath))
+            {
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                return;
+            }
+
+            context.Response.ContentType = "text/html; charset=utf-8";
+            return;
+        }
+
         BlogPost post;
         using (var scope = context.RequestServices.CreateScope())
         {
