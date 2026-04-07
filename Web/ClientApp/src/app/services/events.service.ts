@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
-export type EventSignupMode = 'AdultsAndChildren' | 'HouseholdOnly' | 'ChildrenOnly' | 'AdultsOnly';
+export type EventSignupMode = 'AdultsAndChildren' | 'HouseholdOnly' | 'ChildrenOnly' | 'AdultsOnly' | 'PeopleOnly';
 
 export interface EventSignup {
   userDisplayName: string;

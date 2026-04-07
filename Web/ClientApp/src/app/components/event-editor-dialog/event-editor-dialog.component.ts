@@ -32,6 +32,7 @@ export class EventEditorDialogComponent {
   removePromoMedia = false;
   selectedFile: File | null = null;
   existingPromoFileName = '';
+  editorMode: 'visual' | 'markdown' = 'visual';
   saving = false;
   error = '';
 

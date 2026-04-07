@@ -1,7 +1,7 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Location } from '@angular/common';
-import { Title } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml, Title } from '@angular/platform-browser';
 import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiUser } from 'src/app/models';
@@ -9,6 +9,7 @@ import { Login, Action, dispatcher, applicationState, ApplicationState } from 's
 import { EventDetail, EventsService } from 'src/app/services/events.service';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
+import { renderMarkdownToHtml } from 'src/app/utils/markdown';
 
 @Component({
   selector: 'app-event-detail',
@@ -18,6 +19,7 @@ import { httpErrorMessage } from 'src/app/utils/http-error-message';
 })
 export class EventDetailComponent implements OnInit {
   eventItem: EventDetail | null = null;
+  renderedDescriptionHtml: SafeHtml = '';
   loading = false;
   saving = false;
   error = '';
@@ -36,6 +38,7 @@ export class EventDetailComponent implements OnInit {
     private readonly titleService: Title,
     private readonly eventsService: EventsService,
     private readonly telemetry: ApplicationInsightsService,
+    private readonly sanitizer: DomSanitizer,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>,
   ) {}
@@ -75,12 +78,16 @@ export class EventDetailComponent implements OnInit {
     this.success = '';
     this.saving = true;
 
+    const mode = this.eventItem.signupMode ?? 'AdultsAndChildren';
+    const sendChildren = mode !== 'AdultsOnly' && mode !== 'PeopleOnly' && mode !== 'HouseholdOnly';
+    const sendAdults = mode !== 'ChildrenOnly' && mode !== 'HouseholdOnly';
+
     this.eventsService
       .signUp(this.eventItem.publicSlug, {
-        adults: this.adults,
-        children: this.children,
-        adultNames: this.parseNames(this.adultNames),
-        childNames: this.parseNames(this.childNames),
+        adults: sendAdults ? this.adults : 0,
+        children: sendChildren ? this.children : 0,
+        adultNames: sendAdults ? this.parseNames(this.adultNames) : [],
+        childNames: sendChildren ? this.parseNames(this.childNames) : [],
       })
       .subscribe({
         next: updated => {
@@ -100,6 +107,10 @@ export class EventDetailComponent implements OnInit {
     return (event.description ?? '').trim().length > 0;
   }
 
+  private renderMarkdown(markdown: string): SafeHtml {
+    return renderMarkdownToHtml(markdown, this.sanitizer);
+  }
+
   private loadEvent(segment: string): void {
     this.loading = true;
     this.error = '';
@@ -108,6 +119,7 @@ export class EventDetailComponent implements OnInit {
     this.eventsService.getByRouteSegment(segment).subscribe({
       next: eventItem => {
         this.eventItem = eventItem;
+        this.renderedDescriptionHtml = this.renderMarkdown(eventItem.description ?? '');
         this.loading = false;
         this.titleService.setTitle(eventItem.title ? `COHAD | ${eventItem.title}` : 'COHAD | Events');
         this.applyExistingSignup(eventItem);

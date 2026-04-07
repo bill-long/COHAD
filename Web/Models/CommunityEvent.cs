@@ -11,6 +11,7 @@ namespace Web.Models
         HouseholdOnly = 1,
         ChildrenOnly = 2,
         AdultsOnly = 3,
+        PeopleOnly = 4,
     }
 
     public class CommunityEvent

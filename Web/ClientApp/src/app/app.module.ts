@@ -78,6 +78,7 @@ import { YouthServicesComponent } from './components/youth-services/youth-servic
 import { VendorEditorDialogComponent } from './components/vendor-editor-dialog/vendor-editor-dialog.component';
 import { YouthServiceEditorDialogComponent } from './components/youth-service-editor-dialog/youth-service-editor-dialog.component';
 import { FormatPhonePipe } from './pipes/format-phone.pipe';
+import { StripMarkdownPipe } from './pipes/strip-markdown.pipe';
 import { BlogComponent } from './components/blog/blog.component';
 import { BlogDetailComponent } from './components/blog-detail/blog-detail.component';
 import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
@@ -132,6 +133,7 @@ import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tip
     VendorEditorDialogComponent,
     YouthServiceEditorDialogComponent,
     FormatPhonePipe,
+    StripMarkdownPipe,
     BlogComponent,
     BlogDetailComponent,
     ManageBlogComponent,

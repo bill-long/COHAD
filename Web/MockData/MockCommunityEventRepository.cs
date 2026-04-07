@@ -118,6 +118,36 @@ namespace Web.MockData
                 ModifiedUtc = now.AddDays(-2),
                 Signups = new List<EventSignup>(),
             };
+
+            var movieNightId = Guid.Parse("c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f");
+            _events[movieNightId] = new CommunityEvent
+            {
+                Id = movieNightId,
+                PublicSlug = $"{now.Year}-outdoor-movie-night",
+                Title = "Outdoor Movie Night",
+                Description =
+                    "Bring blankets and chairs for a movie under the stars at the clubhouse lawn! Sign up with how many people are coming.",
+                StartUtc = now.Date.AddDays(25).AddHours(20),
+                AllowSignups = true,
+                SignupMode = EventSignupMode.PeopleOnly,
+                CreatedByUniqueId = MockDataConstants.AdminUniqueId,
+                ModifiedByUniqueId = MockDataConstants.AdminUniqueId,
+                CreatedUtc = now.AddDays(-1),
+                ModifiedUtc = now.AddDays(-1),
+                Signups = new List<EventSignup>
+                {
+                    new EventSignup
+                    {
+                        UserUniqueId = MockDataConstants.SecondaryUserUniqueId,
+                        UserDisplayName = "Taylor Resident",
+                        UserEmail = "taylor@cohad.local",
+                        Adults = 5,
+                        Children = 0,
+                        AdultNames = new List<string> { "Taylor", "Jordan", "Sam", "Pat", "Riley" },
+                        SignedUpUtc = now.AddHours(-2),
+                    },
+                },
+            };
         }
 
         private void EnsureEtag(Guid id)
