@@ -59,7 +59,7 @@ namespace Web.Controllers
             )
                 return false;
             // No query string or fragment
-            if (!string.IsNullOrEmpty(uri.Query) && uri.Query != "?")
+            if (!string.IsNullOrEmpty(uri.Query))
                 return false;
             if (!string.IsNullOrEmpty(uri.Fragment))
                 return false;

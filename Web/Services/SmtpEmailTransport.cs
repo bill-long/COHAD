@@ -25,6 +25,8 @@ namespace Web.Services
         private SmtpClient _smtpClient;
         private MemoryStream _protocolLog;
 
+        /// <summary>Maximum bytes the protocol log stream will buffer before silently discarding writes.</summary>
+        private const int MaxProtocolLogBytes = 64 * 1024;
         private const int MaxSmtpTranscriptCharsToLog = 32 * 1024;
         private static readonly Regex Base64LikeRedaction = new(@"[A-Za-z0-9+/=]{40,}", RegexOptions.Compiled);
 
@@ -113,7 +115,7 @@ namespace Web.Services
 
             if (_logSmtpProtocolOnFailure)
             {
-                _protocolLog = new MemoryStream();
+                _protocolLog = new BoundedMemoryStream(MaxProtocolLogBytes);
                 _smtpClient = new SmtpClient(new ProtocolLogger(_protocolLog));
             }
             else
@@ -213,6 +215,51 @@ namespace Web.Services
                 return formatted;
 
             return formatted.Substring(formatted.Length - MaxSmtpTranscriptCharsToLog);
+        }
+    }
+
+    /// <summary>
+    /// A MemoryStream wrapper that silently discards writes once a byte cap is reached,
+    /// preventing unbounded memory growth when logging SMTP protocol transcripts.
+    /// </summary>
+    internal sealed class BoundedMemoryStream : MemoryStream
+    {
+        private readonly int _maxBytes;
+
+        public BoundedMemoryStream(int maxBytes) => _maxBytes = maxBytes;
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            var remaining = _maxBytes - (int)Length;
+            if (remaining <= 0) return;
+            base.Write(buffer, offset, Math.Min(count, remaining));
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            var remaining = _maxBytes - (int)Length;
+            if (remaining <= 0) return;
+            base.Write(buffer.Length <= remaining ? buffer : buffer.Slice(0, remaining));
+        }
+
+        public override void WriteByte(byte value)
+        {
+            if (Length < _maxBytes)
+                base.WriteByte(value);
+        }
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct)
+        {
+            var remaining = _maxBytes - (int)Length;
+            if (remaining <= 0) return Task.CompletedTask;
+            return base.WriteAsync(buffer, offset, Math.Min(count, remaining), ct);
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+        {
+            var remaining = _maxBytes - (int)Length;
+            if (remaining <= 0) return ValueTask.CompletedTask;
+            return base.WriteAsync(buffer.Length <= remaining ? buffer : buffer.Slice(0, remaining), ct);
         }
     }
 }
