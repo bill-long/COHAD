@@ -432,6 +432,9 @@ namespace Web
             }
 
             var sesOptions = Configuration.GetSection("Ses").Get<SesOptions>() ?? new SesOptions();
+            // MockData environment uses MockEmailTransport for everything — never enable real SES
+            if (useMockData)
+                sesOptions.Enabled = false;
             if (sesOptions.Enabled)
             {
                 if (string.IsNullOrWhiteSpace(sesOptions.Region))

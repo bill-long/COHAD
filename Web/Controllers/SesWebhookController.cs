@@ -41,6 +41,13 @@ namespace Web.Controllers
         /// </summary>
         private static readonly TimeSpan MaxMessageAge = TimeSpan.FromMinutes(10);
 
+        /// <summary>
+        /// Cache of SNS signing certificates keyed by URL. Avoids downloading the
+        /// certificate on every webhook request. Entries live for the process lifetime
+        /// which is acceptable — SNS rotates certs infrequently and new URLs get new entries.
+        /// </summary>
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, RSAParameters> _certCache = new();
+
         public SesWebhookController(
             IEmailJobRepository emailJobRepository,
             IEmailDeliveryActionService deliveryActionService,
@@ -134,10 +141,20 @@ namespace Web.Controllers
                 }
                 _logger.LogDebug("SNS message has invalid Timestamp — accepting in development mode.");
             }
-            else if (DateTime.UtcNow - msgTime > MaxMessageAge)
+            else
             {
-                _logger.LogWarning("SNS message timestamp too old ({Timestamp}) — rejecting.", tsProp.GetString());
-                return BadRequest();
+                var nowUtc = DateTime.UtcNow;
+                var futureClockSkewTolerance = TimeSpan.FromMinutes(5);
+                if (msgTime - nowUtc > futureClockSkewTolerance)
+                {
+                    _logger.LogWarning("SNS message timestamp too far in the future ({Timestamp}) — rejecting.", tsProp.GetString());
+                    return BadRequest();
+                }
+                if (nowUtc - msgTime > MaxMessageAge)
+                {
+                    _logger.LogWarning("SNS message timestamp too old ({Timestamp}) — rejecting.", tsProp.GetString());
+                    return BadRequest();
+                }
             }
 
             switch (messageType)
@@ -423,14 +440,21 @@ namespace Web.Controllers
                 if (stringToSign == null)
                     return false;
 
-                // Download the signing certificate
-                var client = _httpClientFactory.CreateClient();
-                var certPem = await client.GetStringAsync(certUrl, HttpContext.RequestAborted);
+                // Get or download the signing certificate's RSA public key (cached by URL)
+                RSAParameters rsaParams;
+                if (!_certCache.TryGetValue(certUrl, out rsaParams))
+                {
+                    var client = _httpClientFactory.CreateClient();
+                    var certPem = await client.GetStringAsync(certUrl, HttpContext.RequestAborted);
+                    var cert = X509Certificate2.CreateFromPem(certPem);
+                    using var rsaKey = cert.GetRSAPublicKey();
+                    if (rsaKey == null)
+                        return false;
+                    rsaParams = rsaKey.ExportParameters(false);
+                    _certCache.TryAdd(certUrl, rsaParams);
+                }
 
-                var cert = X509Certificate2.CreateFromPem(certPem);
-                using var rsa = cert.GetRSAPublicKey();
-                if (rsa == null)
-                    return false;
+                using var rsa = RSA.Create(rsaParams);
 
                 // Determine hash algorithm from SignatureVersion (v1=SHA1, v2=SHA256)
                 var sigVersion = message.TryGetProperty("SignatureVersion", out var sigVerProp)
