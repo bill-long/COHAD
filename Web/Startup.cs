@@ -424,6 +424,8 @@ namespace Web
                         SmtpHost = Configuration["SmtpHost"],
                         SmtpUser = Configuration["SmtpUser"],
                         SmtpPassword = Configuration["SmtpPassword"],
+                        TimeoutSeconds = Configuration.GetValue("SmtpTimeoutSeconds", 30),
+                        MaxIdleSeconds = Configuration.GetValue("SmtpMaxIdleSeconds", 60),
                     };
                     var logProtocol = Configuration.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
                     return new SmtpEmailTransport(
