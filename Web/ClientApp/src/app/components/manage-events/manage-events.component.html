@@ -53,7 +53,7 @@
         </div>
       </div>
 
-      <p class="event-row-description">{{ eventItem.description }}</p>
+      <p class="event-row-description">{{ eventItem.description | stripMarkdown }}</p>
       <div class="event-row-meta">
         <span>{{ eventItem.allowSignups ? 'Signups enabled' : 'No signups' }}</span>
         <span *ngIf="eventItem.hasPromoMedia">{{ eventItem.promoMediaDisplayName }}</span>

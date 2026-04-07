@@ -1,15 +1,15 @@
-import { Component, Inject, OnInit, SecurityContext } from '@angular/core';
+import { Component, Inject, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Location } from '@angular/common';
 import { DomSanitizer, SafeHtml, Title } from '@angular/platform-browser';
 import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { marked, Renderer } from 'marked';
 import { ApiUser } from 'src/app/models';
 import { Login, Action, dispatcher, applicationState, ApplicationState } from 'src/app/state';
 import { EventDetail, EventsService } from 'src/app/services/events.service';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
+import { renderMarkdownToHtml } from 'src/app/utils/markdown';
 
 @Component({
   selector: 'app-event-detail',
@@ -108,11 +108,7 @@ export class EventDetailComponent implements OnInit {
   }
 
   private renderMarkdown(markdown: string): SafeHtml {
-    const renderer = new Renderer();
-    renderer.html = () => '';
-    const rawHtml = marked.parse(markdown, { async: false, breaks: true, renderer }) as string;
-    const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, rawHtml) ?? '';
-    return this.sanitizer.bypassSecurityTrustHtml(sanitized);
+    return renderMarkdownToHtml(markdown, this.sanitizer);
   }
 
   private loadEvent(segment: string): void {
