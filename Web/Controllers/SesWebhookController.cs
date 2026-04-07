@@ -164,7 +164,8 @@ namespace Web.Controllers
             try
             {
                 var client = _httpClientFactory.CreateClient();
-                await client.GetAsync(subscribeUrl);
+                using var response = await client.GetAsync(subscribeUrl, HttpContext.RequestAborted);
+                response.EnsureSuccessStatusCode();
                 _logger.LogInformation("Confirmed SNS subscription: {Url}", subscribeUrl);
             }
             catch (Exception ex)
@@ -415,10 +416,27 @@ namespace Web.Controllers
                 if (rsa == null)
                     return false;
 
+                // Determine hash algorithm from SignatureVersion (v1=SHA1, v2=SHA256)
+                var sigVersion = message.TryGetProperty("SignatureVersion", out var sigVerProp)
+                    ? sigVerProp.GetString() : "1";
+                HashAlgorithmName hashAlg;
+                switch (sigVersion)
+                {
+                    case "1":
+                        hashAlg = HashAlgorithmName.SHA1;
+                        break;
+                    case "2":
+                        hashAlg = HashAlgorithmName.SHA256;
+                        break;
+                    default:
+                        _logger.LogWarning("Unsupported SNS SignatureVersion: {Version}", sigVersion);
+                        return false;
+                }
+
                 var signatureBytes = Convert.FromBase64String(signatureBase64);
                 var messageBytes = Encoding.UTF8.GetBytes(stringToSign);
 
-                return rsa.VerifyData(messageBytes, signatureBytes, HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
+                return rsa.VerifyData(messageBytes, signatureBytes, hashAlg, RSASignaturePadding.Pkcs1);
             }
             catch (Exception ex)
             {

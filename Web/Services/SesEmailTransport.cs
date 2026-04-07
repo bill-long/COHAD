@@ -16,7 +16,7 @@ namespace Web.Services
     /// Sends emails through Amazon SES v2 API using raw MIME messages.
     /// Uses the standard AWS credential chain (env vars, IAM role, ~/.aws/credentials).
     /// </summary>
-    public sealed class SesEmailTransport : IEmailTransport, IDisposable
+    public sealed class SesEmailTransport : IEmailTransport
     {
         private readonly IAmazonSimpleEmailServiceV2 _sesClient;
         private readonly SesOptions _options;
@@ -97,11 +97,6 @@ namespace Web.Services
                     Error = ex.Message,
                 };
             }
-        }
-
-        public void Dispose()
-        {
-            _sesClient?.Dispose();
         }
     }
 }
