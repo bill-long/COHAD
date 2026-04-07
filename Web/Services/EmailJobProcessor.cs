@@ -149,6 +149,9 @@ namespace Web.Services
                     if (latest.Status == EmailJobStatus.Cancelled)
                         return false;
                     MergeWebhookFields(job, latest);
+                    // Re-derive Status from the merged DeliveryStatus so the next write
+                    // does not revert webhook self-healing (Pending/Failed → Sent).
+                    NormalizePendingDelivered(job);
                     job.ETag = latest.ETag;
                 }
             }
@@ -315,6 +318,7 @@ namespace Web.Services
                                 continue;
                             }
 
+                            NormalizePendingDelivered(job);
                             RecalculateCounts(job);
                             if (recipients.Count > 0 && recipients.All(r => r.Status == EmailJobRecipientStatus.Sent))
                             {

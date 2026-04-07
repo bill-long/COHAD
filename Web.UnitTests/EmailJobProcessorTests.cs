@@ -961,7 +961,7 @@ public sealed class EmailJobProcessorTests
         while (DateTime.UtcNow < deadline)
         {
             await Task.Delay(25);
-            if (stalled.Status == EmailJobStatus.PartiallyCompleted)
+            if (stalled.Status == EmailJobStatus.Completed)
                 break;
         }
 
@@ -972,7 +972,9 @@ public sealed class EmailJobProcessorTests
         }
         catch (OperationCanceledException) { }
 
-        Assert.Equal(EmailJobStatus.PartiallyCompleted, stalled.Status);
+        // NormalizePendingDelivered promotes the Deferred recipient to Sent,
+        // so both recipients are Sent and the job is Completed.
+        Assert.Equal(EmailJobStatus.Completed, stalled.Status);
         Assert.NotNull(stalled.CompletedUtc);
         Assert.Contains("stalled", stalled.LastError, StringComparison.OrdinalIgnoreCase);
         _fileStore.Verify(f => f.DownloadAsync(It.IsAny<string>()), Times.Never);
@@ -1020,7 +1022,7 @@ public sealed class EmailJobProcessorTests
         while (DateTime.UtcNow < deadline)
         {
             await Task.Delay(25);
-            if (stalled.Status == EmailJobStatus.Failed)
+            if (stalled.Status == EmailJobStatus.Completed)
                 break;
         }
 
@@ -1031,7 +1033,9 @@ public sealed class EmailJobProcessorTests
         }
         catch (OperationCanceledException) { }
 
-        Assert.Equal(EmailJobStatus.Failed, stalled.Status);
+        // NormalizePendingDelivered promotes the Delivered recipient to Sent,
+        // so the single recipient is Sent and the job is Completed.
+        Assert.Equal(EmailJobStatus.Completed, stalled.Status);
         Assert.NotNull(stalled.CompletedUtc);
         Assert.Contains("stalled", stalled.LastError, StringComparison.OrdinalIgnoreCase);
         _fileStore.Verify(f => f.DownloadAsync(It.IsAny<string>()), Times.Never);
