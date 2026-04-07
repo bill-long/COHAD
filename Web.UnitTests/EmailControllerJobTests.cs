@@ -100,10 +100,26 @@ public sealed class EmailControllerJobTests
 
         var tokenService = new Mock<IUnsubscribeTokenService>();
 
+        var sesOpts = Microsoft.Extensions.Options.Options.Create(new Web.Configuration.SesOptions());
+        var mockSmtp = new Mock<IEmailTransport>();
+        mockSmtp.Setup(t => t.ProviderName).Returns("SendGrid");
+        mockSmtp
+            .Setup(t =>
+                t.SendAsync(
+                    It.IsAny<MimeKit.MimeMessage>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<System.Threading.CancellationToken>()
+                )
+            )
+            .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
+        var router = new EmailTransportRouter(mockSmtp.Object, mockSmtp.Object, sesOpts);
+
         return new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
             tokenService.Object,
+            router,
             hubContext.Object,
             config,
             env.Object,

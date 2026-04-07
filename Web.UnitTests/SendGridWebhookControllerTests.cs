@@ -305,7 +305,7 @@ namespace Web.UnitTests
             bool expected
         )
         {
-            Assert.Equal(expected, SendGridWebhookController.ShouldUpdateDeliveryStatus(current, incoming));
+            Assert.Equal(expected, DeliveryStatusHelper.ShouldUpdate(current, incoming));
         }
 
         // ─── Event mapping ───
