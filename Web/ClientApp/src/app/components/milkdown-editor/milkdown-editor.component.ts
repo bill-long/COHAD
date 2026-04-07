@@ -15,6 +15,8 @@ import { Crepe } from '@milkdown/crepe';
 import { BlogService } from 'src/app/services/blog.service';
 import { firstValueFrom } from 'rxjs';
 
+export type MilkdownImageUploader = (file: File) => Promise<string>;
+
 @Component({
   selector: 'app-milkdown-editor',
   templateUrl: './milkdown-editor.component.html',
@@ -25,6 +27,9 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
   @ViewChild('editorContainer', { static: true }) container!: ElementRef<HTMLDivElement>;
 
   @Input() value = '';
+  @Input() placeholder = 'Write your post…';
+  /** Pass a custom upload handler, or false to disable image uploads entirely. */
+  @Input() imageUploader: MilkdownImageUploader | false | null = null;
   @Output() valueChange = new EventEmitter<string>();
 
   private crepe: Crepe | null = null;
@@ -65,26 +70,44 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
     this.ready = false;
   }
 
-  private async initEditor(): Promise<void> {
-    const uploadFn = async (file: File): Promise<string> => {
+  private getUploadFn(): ((file: File) => Promise<string>) | undefined {
+    if (this.imageUploader === false) {
+      return undefined;
+    }
+    if (this.imageUploader) {
+      return this.imageUploader;
+    }
+    // Default: use BlogService upload
+    return async (file: File): Promise<string> => {
       const result = await firstValueFrom(this.blogService.uploadImage(file));
       return result.url;
     };
+  }
 
-    this.crepe = new Crepe({
+  private buildCrepeConfig(defaultValue: string): ConstructorParameters<typeof Crepe>[0] {
+    const uploadFn = this.getUploadFn();
+    return {
       root: this.container.nativeElement,
-      defaultValue: this.value || '',
+      defaultValue,
       featureConfigs: {
-        [Crepe.Feature.ImageBlock]: {
-          onUpload: uploadFn,
-          inlineOnUpload: uploadFn,
-          blockOnUpload: uploadFn,
-        },
+        ...(uploadFn
+          ? {
+              [Crepe.Feature.ImageBlock]: {
+                onUpload: uploadFn,
+                inlineOnUpload: uploadFn,
+                blockOnUpload: uploadFn,
+              },
+            }
+          : {}),
         [Crepe.Feature.Placeholder]: {
-          text: 'Write your post…',
+          text: this.placeholder,
         },
       },
-    });
+    };
+  }
+
+  private async initEditor(): Promise<void> {
+    this.crepe = new Crepe(this.buildCrepeConfig(this.value || ''));
 
     this.crepe.on(listener => {
       listener.markdownUpdated((_ctx, markdown, prevMarkdown) => {
@@ -110,25 +133,7 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
     }
     this.ready = false;
 
-    const uploadFn = async (file: File): Promise<string> => {
-      const result = await firstValueFrom(this.blogService.uploadImage(file));
-      return result.url;
-    };
-
-    this.crepe = new Crepe({
-      root: this.container.nativeElement,
-      defaultValue: newValue,
-      featureConfigs: {
-        [Crepe.Feature.ImageBlock]: {
-          onUpload: uploadFn,
-          inlineOnUpload: uploadFn,
-          blockOnUpload: uploadFn,
-        },
-        [Crepe.Feature.Placeholder]: {
-          text: 'Write your post…',
-        },
-      },
-    });
+    this.crepe = new Crepe(this.buildCrepeConfig(newValue));
 
     this.crepe.on(listener => {
       listener.markdownUpdated((_ctx, markdown, prevMarkdown) => {

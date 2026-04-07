@@ -27,7 +27,10 @@
         *ngIf="editorMode === 'visual'"
         [value]="description"
         (valueChange)="description = $event"
+        [placeholder]="'Describe the event…'"
+        [imageUploader]="false"
         class="event-editor-milkdown"
+        aria-labelledby="event-editor-description-label"
       >
       </app-milkdown-editor>
       <mat-form-field

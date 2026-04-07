@@ -43,6 +43,7 @@
 .event-detail-description {
   max-width: 65ch;
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .event-detail-description h1,

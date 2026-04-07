@@ -110,7 +110,7 @@ export class EventDetailComponent implements OnInit {
   private renderMarkdown(markdown: string): SafeHtml {
     const renderer = new Renderer();
     renderer.html = () => '';
-    const rawHtml = marked.parse(markdown, { async: false, renderer }) as string;
+    const rawHtml = marked.parse(markdown, { async: false, breaks: true, renderer }) as string;
     const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, rawHtml) ?? '';
     return this.sanitizer.bypassSecurityTrustHtml(sanitized);
   }

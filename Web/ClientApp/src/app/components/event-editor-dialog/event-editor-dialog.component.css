@@ -110,6 +110,13 @@
   margin-bottom: 0.5rem;
 }
 
+@media (max-width: 480px) {
+  .event-editor-content-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .event-editor-content-label {
   font-size: 0.82rem;
   font-weight: 600;
