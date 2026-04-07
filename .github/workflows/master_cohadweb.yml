@@ -49,8 +49,20 @@ jobs:
         if: steps.latest-check.outputs.is_latest == 'true'
         run: dotnet publish Web/Web.csproj --configuration Release --output ./publish
 
-      - name: Deploy to Azure Web App
+      - name: Re-check if still latest commit
         if: steps.latest-check.outputs.is_latest == 'true'
+        id: pre-deploy-check
+        run: |
+          git fetch origin master
+          if [ "${{ github.sha }}" != "$(git rev-parse origin/master)" ]; then
+            echo "Skipping deploy — newer commit landed during build"
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to Azure Web App
+        if: steps.pre-deploy-check.outputs.is_latest == 'true'
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'cohadweb'

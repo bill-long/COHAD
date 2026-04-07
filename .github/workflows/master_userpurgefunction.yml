@@ -42,8 +42,20 @@ jobs:
         if: steps.latest-check.outputs.is_latest == 'true'
         run: dotnet publish Functions/UserPurgeFunction/UserPurgeFunction.csproj --configuration Release --output ./publish
 
-      - name: Deploy to Azure Function App
+      - name: Re-check if still latest commit
         if: steps.latest-check.outputs.is_latest == 'true'
+        id: pre-deploy-check
+        run: |
+          git fetch origin master
+          if [ "${{ github.sha }}" != "$(git rev-parse origin/master)" ]; then
+            echo "Skipping deploy — newer commit landed during build"
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to Azure Function App
+        if: steps.pre-deploy-check.outputs.is_latest == 'true'
         uses: Azure/functions-action@v1.5.4
         with:
           app-name: ${{ secrets.AzureFunctionApp_Name_UserPurge }}
