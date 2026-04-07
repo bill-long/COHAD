@@ -529,10 +529,22 @@ namespace Web
             }
 
             // Add security headers on every response
+            var b2cOrigins = Configuration.GetSection("B2cCustomPage:AllowedOrigins")
+                .Get<string[]>() ?? Array.Empty<string>();
             app.Use(
                 async (context, next) =>
                 {
-                    context.Response.Headers["X-Frame-Options"] = "DENY";
+                    if (context.Request.Path.StartsWithSegments("/b2c") && b2cOrigins.Length > 0)
+                    {
+                        // Azure AD B2C custom pages are loaded cross-origin; use a
+                        // CSP frame-ancestors allowlist instead of blanket DENY.
+                        context.Response.Headers["Content-Security-Policy"] =
+                            "frame-ancestors " + string.Join(" ", b2cOrigins);
+                    }
+                    else
+                    {
+                        context.Response.Headers["X-Frame-Options"] = "DENY";
+                    }
                     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
                     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
                     await next();
@@ -541,7 +553,24 @@ namespace Web
 
             app.UseHttpsRedirection();
             app.UseResponseCompression();
-            app.UseStaticFiles();
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                OnPrepareResponse = ctx =>
+                {
+                    // Azure AD B2C fetches custom page content via a CORS request from
+                    // the b2clogin.com origin. Static files bypass the CORS middleware,
+                    // so we add the header here for /b2c/ paths only.
+                    if (ctx.Context.Request.Path.StartsWithSegments("/b2c"))
+                    {
+                        var origin = ctx.Context.Request.Headers["Origin"].ToString();
+                        if (b2cOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
+                        {
+                            ctx.Context.Response.Headers["Access-Control-Allow-Origin"] = origin;
+                            ctx.Context.Response.Headers.Append("Vary", "Origin");
+                        }
+                    }
+                }
+            });
             if (!useDevSpaProxy)
             {
                 app.UseSpaStaticFiles();
