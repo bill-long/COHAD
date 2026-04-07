@@ -49,6 +49,13 @@ public static class BlogDeepLinkOpenGraphEndpointExtensions
             post = await repo.GetByRouteSegmentAsync(segment);
         }
 
+        // HEAD requests only need status + content-type; skip HTML generation.
+        if (HttpMethods.IsHead(context.Request.Method))
+        {
+            context.Response.ContentType = "text/html; charset=utf-8";
+            return;
+        }
+
         var indexPath = ResolveIndexHtmlPath(env);
         if (string.IsNullOrEmpty(indexPath) || !File.Exists(indexPath))
         {
