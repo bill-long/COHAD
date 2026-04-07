@@ -239,29 +239,34 @@ export class TiptapEmailEditorComponent implements OnInit, OnDestroy, ControlVal
   insertLink(): void {
     const { from, to } = this.editor.state.selection;
     const hasSelection = from !== to;
-    const selectedText = hasSelection
-      ? this.editor.state.doc.textBetween(from, to)
-      : '';
 
-    const displayText = selectedText || window.prompt('Enter display text:');
-    if (!displayText) return;
+    if (!hasSelection) {
+      const displayText = window.prompt('Enter display text:');
+      if (!displayText) return;
 
-    const url = window.prompt('Enter URL:');
-    if (!url) return;
-    const trimmed = url.trim();
-    if (!TiptapEmailEditorComponent.ALLOWED_PROTOCOLS.test(trimmed)) {
-      window.alert('Only http, https, and mailto links are allowed.');
-      return;
-    }
+      const url = window.prompt('Enter URL:');
+      if (!url) return;
+      const trimmed = url.trim();
+      if (!TiptapEmailEditorComponent.ALLOWED_PROTOCOLS.test(trimmed)) {
+        window.alert('Only http, https, and mailto links are allowed.');
+        return;
+      }
 
-    if (hasSelection) {
-      this.editor.chain().focus().extendMarkRange('link').setLink({ href: trimmed }).run();
-    } else {
       this.editor
         .chain()
         .focus()
         .insertContent({ type: 'text', text: displayText, marks: [{ type: 'link', attrs: { href: trimmed } }] })
         .run();
+    } else {
+      const url = window.prompt('Enter URL:');
+      if (!url) return;
+      const trimmed = url.trim();
+      if (!TiptapEmailEditorComponent.ALLOWED_PROTOCOLS.test(trimmed)) {
+        window.alert('Only http, https, and mailto links are allowed.');
+        return;
+      }
+
+      this.editor.chain().focus().extendMarkRange('link').setLink({ href: trimmed }).run();
     }
   }
 
