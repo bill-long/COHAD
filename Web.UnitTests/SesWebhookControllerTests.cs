@@ -461,9 +461,16 @@ public sealed class SesWebhookControllerTests
 
         var result = SesWebhookController.BuildSnsStringToSign(message);
 
-        Assert.NotNull(result);
-        Assert.Contains("SubscribeURL\nhttps://sns.us-west-2.amazonaws.com/confirm\n", result);
-        Assert.Contains("Token\ntok-789\n", result);
+        // Assert the full canonical string with correct field ordering per AWS SNS spec
+        var expected =
+            "Message\nPlease confirm\n" +
+            "MessageId\nmsg-456\n" +
+            "SubscribeURL\nhttps://sns.us-west-2.amazonaws.com/confirm\n" +
+            "Timestamp\n2025-01-01T00:00:00.000Z\n" +
+            "Token\ntok-789\n" +
+            "TopicArn\narn:aws:sns:us-west-2:123:test\n" +
+            "Type\nSubscriptionConfirmation\n";
+        Assert.Equal(expected, result);
     }
 
     [Fact]
@@ -522,7 +529,7 @@ public sealed class SesWebhookControllerTests
     }
 
     [Fact]
-    public async Task Development_accepts_notification_when_signature_verification_fails()
+    public async Task DevMode_accepts_notification_when_signature_verification_fails()
     {
         var controller = CreateController(environment: "MockData");
         var body = JsonSerializer.Serialize(new
