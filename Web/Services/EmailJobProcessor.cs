@@ -880,6 +880,8 @@ namespace Web.Services
                     RecalculateCounts(job);
                     if (!await TryPersistJobAsync(repo, job))
                         stoppedEarly = true;
+                    else
+                        await NotifyProgressAsync(job);
                 }
             }
             else
