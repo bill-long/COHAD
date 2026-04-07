@@ -298,6 +298,25 @@ body.dark-theme .ql-editor.ql-blank::before {
   color: var(--primary-sage);
 }
 
+/* Milkdown editor dark mode: override Crepe frame theme variables */
+body.dark-theme .milkdown-editor-container .milkdown {
+  --crepe-color-background: var(--surface);
+  --crepe-color-on-background: var(--text-primary);
+  --crepe-color-surface: var(--surface-muted);
+  --crepe-color-surface-low: var(--surface-section);
+  --crepe-color-on-surface: var(--text-primary);
+  --crepe-color-on-surface-variant: var(--text-secondary);
+  --crepe-color-outline: var(--text-muted);
+  --crepe-color-primary: var(--text-secondary);
+  --crepe-color-secondary: var(--surface-chip);
+  --crepe-color-on-secondary: var(--text-primary);
+  --crepe-color-inline-code: var(--secondary-terracotta);
+  --crepe-color-error: var(--error);
+  --crepe-color-hover: var(--surface-subtle);
+  --crepe-color-selected: var(--surface-chip);
+  --crepe-color-inline-area: var(--surface-muted);
+}
+
 /* Milkdown editor: match blog post rendering */
 .milkdown-editor-container .milkdown {
   min-height: 200px;
