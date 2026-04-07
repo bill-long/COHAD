@@ -73,6 +73,13 @@ public static class EventDeepLinkOpenGraphEndpointExtensions
         // HEAD requests only need status + content-type; skip HTML generation.
         if (HttpMethods.IsHead(context.Request.Method))
         {
+            var headIndexPath = ResolveIndexHtmlPath(env);
+            if (string.IsNullOrEmpty(headIndexPath) || !File.Exists(headIndexPath))
+            {
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                return;
+            }
+
             context.Response.ContentType = "text/html; charset=utf-8";
             return;
         }
