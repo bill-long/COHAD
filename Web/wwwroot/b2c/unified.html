@@ -8,67 +8,80 @@
         /*
          * Azure AD B2C custom page template.
          *
-         * B2C injects its UI into <div id="api">. The injected markup for the
-         * "unified" sign-up-or-sign-in page looks roughly like:
+         * B2C injects its fully-styled UI into <div id="api">. For the
+         * "unified" (sign-up-or-sign-in) page the injected direct children are:
          *
-         *   #api
-         *     div.localAccount   (email / password form)
-         *     div.divider        ("OR")
-         *     div.social         (social IdP buttons)
+         *   .localAccount  – email / password form
+         *   .divider       – "OR" separator
+         *   .social        – social IdP buttons (e.g. Google)
          *
-         * We use flexbox ordering to move .social above .localAccount so
-         * Google (and any future social providers) appear first — especially
-         * important on mobile where the local-account form pushes social
-         * buttons below the fold.
+         * These class names come from the B2C "unified" page type and are
+         * documented in:
+         *   https://learn.microsoft.com/en-us/azure/active-directory-b2c/customize-ui
+         *
+         * We physically reorder the DOM (see <script> below) rather than
+         * using CSS flexbox `order`, so that keyboard tab order and screen-
+         * reader reading order match the visual layout.
          */
 
-        html, body {
-            margin: 0;
-            padding: 0;
-            font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-            background-color: #f5f5f5;
-        }
-
-        /* Centre the B2C-injected content */
-        #api {
-            display: flex;
-            flex-direction: column;
-            max-width: 440px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        }
-
-        /* Social providers first, then divider, then local account */
-        #api > .social   { order: 1; }
-        #api > .divider  { order: 2; }
-        #api > .localAccount { order: 3; }
-
-        /* Give social buttons some breathing room */
-        #api > .social {
-            margin-bottom: 0.5rem;
-        }
-
-        /* Style the "OR" divider */
-        #api > .divider {
-            text-align: center;
-            margin: 1rem 0;
-            color: #666;
-        }
-
-        @media (max-width: 480px) {
-            #api {
-                margin: 1rem;
-                padding: 1.25rem;
-            }
-        }
+        /* Prevent browser dark-mode from inverting B2C's light UI */
+        :root { color-scheme: light; }
     </style>
 </head>
 <body>
     <div id="api">
         <!-- Azure AD B2C injects its UI here -->
     </div>
+    <script>
+        // Physically reorder #api children so .social appears first,
+        // then .divider, then .localAccount. This keeps DOM order
+        // (and therefore tab / screen-reader order) consistent with
+        // the visual layout. We use a MutationObserver because B2C
+        // injects its markup asynchronously after the page loads.
+        (function () {
+            var api = document.getElementById('api');
+            if (!api) return;
+
+            function reorder() {
+                var social = api.querySelector(':scope > .social');
+                if (!social) return false;
+
+                var divider = api.querySelector(':scope > .divider');
+                // prepend moves the node; no duplication
+                if (divider) api.prepend(divider);
+                api.prepend(social);
+                return true;
+            }
+
+            // B2C may not inject .social at all (e.g. no social IdPs
+            // configured). Consider the UI "settled" once .localAccount
+            // is present without .social — nothing to reorder.
+            function isSettled() {
+                var localAccount = api.querySelector(':scope > .localAccount');
+                if (!localAccount) return false;
+                var social = api.querySelector(':scope > .social');
+                return !social;
+            }
+
+            // If B2C content is already present (unlikely but safe)
+            if (reorder() || isSettled()) return;
+
+            var timeoutId;
+            function stopObserving() {
+                observer.disconnect();
+                if (timeoutId) clearTimeout(timeoutId);
+            }
+
+            // Watch for B2C to inject its children
+            var observer = new MutationObserver(function () {
+                if (reorder() || isSettled()) stopObserving();
+            });
+            observer.observe(api, { childList: true });
+
+            // Safety net: disconnect after 5 s even if expected
+            // elements never appear.
+            timeoutId = setTimeout(function () { stopObserving(); }, 5000);
+        })();
+    </script>
 </body>
 </html>
