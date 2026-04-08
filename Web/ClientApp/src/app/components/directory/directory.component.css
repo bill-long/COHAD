@@ -29,8 +29,8 @@ mat-form-field {
   border-left: 3px solid var(--primary-sage);
   margin-top: 16px;
   break-inside: avoid;
-  width: 100%;
   max-width: 100%;
+  box-sizing: border-box;
 }
 
 mat-spinner {
