@@ -137,6 +137,15 @@ export class DirectoryComponent {
     return home.residents.filter(r => r.residentType === 0 || r.residentType === 1);
   }
 
+  getVisibleResidents(home: DirectoryHome): DirectoryResident[] {
+    const hasContact = this.hasAnyResidentContact(home);
+    return home.residents.filter(
+      r =>
+        (r.residentType === 0 || r.residentType === 1) &&
+        (hasContact || r.residentType === 1 || (r.phoneNumbers?.length ?? 0) > 0 || (r.emailAddresses?.length ?? 0) > 0),
+    );
+  }
+
   getHomeowners(home: DirectoryHome): DirectoryResident[] {
     return home.residents.filter(r => r.residentType === 0);
   }

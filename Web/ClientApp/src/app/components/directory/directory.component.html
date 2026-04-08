@@ -32,7 +32,7 @@
 
         <!-- Residents (shown when any adult has contact info, or when non-homeowner adults need listing) -->
         <div class="residentsSection" *ngIf="shouldShowResidents(home)">
-          <div class="residentRow" *ngFor="let resident of getAdults(home)">
+          <div class="residentRow" *ngFor="let resident of getVisibleResidents(home)">
             <div class="residentName">
               {{resident.givenName}} <span class="residentSurname">{{resident.surname}}</span>
             </div>
