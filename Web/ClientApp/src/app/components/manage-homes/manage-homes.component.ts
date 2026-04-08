@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, Inject, AfterViewInit } from '@angular/core';
+import { Component, OnInit, ViewChild, Inject } from '@angular/core';
 import { Action, applicationState, ApplicationState, dispatcher, LoadAllHomes } from 'src/app/state';
 import { MatTableDataSource } from '@angular/material/table';
 import { Home } from 'src/app/models';
@@ -14,10 +14,12 @@ import { ActivatedRoute, Router } from '@angular/router';
   styleUrls: ['./manage-homes.component.css'],
   standalone: false,
 })
-export class ManageHomesComponent implements OnInit, AfterViewInit {
+export class ManageHomesComponent implements OnInit {
   dataSource = new MatTableDataSource<Home>();
 
-  @ViewChild(MatSort) sort!: MatSort;
+  @ViewChild(MatSort) set sort(sort: MatSort) {
+    this.dataSource.sort = sort;
+  }
 
   columnsToDisplay = ['streetNumber', 'streetName', 'phoneNumber', 'emailAddress', 'residents', 'actions'];
 
@@ -76,10 +78,6 @@ export class ManageHomesComponent implements OnInit, AfterViewInit {
     this.filteredHomes$.subscribe(h => {
       this.dataSource.data = h;
     });
-  }
-
-  ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
   }
 
   isFilterMatch(f: string, home: Home) {
