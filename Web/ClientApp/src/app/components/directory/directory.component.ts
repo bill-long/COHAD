@@ -109,12 +109,8 @@ export class DirectoryComponent {
   }
 
   getSurname(home: DirectoryHome) {
-    const homeowners = this.getHomeowners(home);
-    if (homeowners.length < 1) {
-      return '';
-    }
-
-    return homeowners[0].surname;
+    const first = home.residents.find(r => r.residentType === 0);
+    return first?.surname ?? '';
   }
 
   getGivenNames(home: DirectoryHome) {
@@ -143,10 +139,6 @@ export class DirectoryComponent {
 
   getHomeowners(home: DirectoryHome): DirectoryResident[] {
     return home.residents.filter(r => r.residentType === 0);
-  }
-
-  getOtherAdults(home: DirectoryHome) {
-    return home.residents.filter(r => r.residentType === 1);
   }
 
   getChildren(home: DirectoryHome) {
