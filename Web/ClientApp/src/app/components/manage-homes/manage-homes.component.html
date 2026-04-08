@@ -1,10 +1,10 @@
-<mat-form-field appearance="fill" [hidden]="(focusedHome$ | async) != null">
+<mat-form-field appearance="fill" *ngIf="(focusedHome$ | async) == null">
   <mat-label>Search</mat-label>
   <input matInput [formControl]="homeFilter" />
 </mat-form-field>
 
-<div class="table-scroll-wrapper">
-  <table mat-table [dataSource]="dataSource" matSort [hidden]="(focusedHome$ | async) != null">
+<div class="table-scroll-wrapper" *ngIf="(focusedHome$ | async) == null">
+  <table mat-table [dataSource]="dataSource" matSort>
     <ng-container matColumnDef="streetNumber">
       <th mat-header-cell *matHeaderCellDef mat-sort-header>Street Number</th>
       <td mat-cell *matCellDef="let home">{{ home.streetNumber }}</td>
