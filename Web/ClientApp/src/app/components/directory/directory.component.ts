@@ -114,7 +114,7 @@ export class DirectoryComponent {
       return '';
     }
 
-    return home.residents[0].surname;
+    return homeowners[0].surname;
   }
 
   getGivenNames(home: DirectoryHome) {
@@ -135,6 +135,10 @@ export class DirectoryComponent {
     }
 
     return given;
+  }
+
+  getAdults(home: DirectoryHome): DirectoryResident[] {
+    return home.residents.filter(r => r.residentType === 0 || r.residentType === 1);
   }
 
   getHomeowners(home: DirectoryHome): DirectoryResident[] {

@@ -32,47 +32,24 @@
 
         <!-- Residents (only shown if at least one has contact info) -->
         <div class="residentsSection" *ngIf="hasAnyResidentContact(home)">
-          <ng-container *ngFor="let resident of getHomeowners(home)">
-            <div class="residentRow">
-              <div class="residentName">
-                {{resident.givenName}} <span class="residentSurname">{{resident.surname}}</span>
+          <div class="residentRow" *ngFor="let resident of getAdults(home)">
+            <div class="residentName">
+              {{resident.givenName}} <span class="residentSurname">{{resident.surname}}</span>
+            </div>
+            <div class="residentContact" *ngIf="resident.phoneNumbers?.length || resident.emailAddresses?.length">
+              <div class="contactLine" *ngFor="let phoneNumber of resident.phoneNumbers">
+                <mat-icon class="contactIcon" aria-hidden="true">phone</mat-icon>
+                <span class="contactDetail">
+                  <span class="contactType">{{phoneNumber.type}}</span>
+                  ({{phoneNumber.areaCode}}) {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
+                </span>
               </div>
-              <div class="residentContact" *ngIf="resident.phoneNumbers?.length || resident.emailAddresses?.length">
-                <div class="contactLine" *ngFor="let phoneNumber of resident.phoneNumbers">
-                  <mat-icon class="contactIcon" aria-hidden="true">phone</mat-icon>
-                  <span class="contactDetail">
-                    <span class="contactType">{{phoneNumber.type}}</span>
-                    ({{phoneNumber.areaCode}}) {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
-                  </span>
-                </div>
-                <div class="contactLine" *ngFor="let email of resident.emailAddresses">
-                  <mat-icon class="contactIcon" aria-hidden="true">mail</mat-icon>
-                  <span>{{email.address}}</span>
-                </div>
+              <div class="contactLine" *ngFor="let email of resident.emailAddresses">
+                <mat-icon class="contactIcon" aria-hidden="true">mail</mat-icon>
+                <span>{{email.address}}</span>
               </div>
             </div>
-          </ng-container>
-
-          <ng-container *ngFor="let resident of getOtherAdults(home)">
-            <div class="residentRow">
-              <div class="residentName">
-                {{resident.givenName}} <span class="residentSurname">{{resident.surname}}</span>
-              </div>
-              <div class="residentContact" *ngIf="resident.phoneNumbers?.length || resident.emailAddresses?.length">
-                <div class="contactLine" *ngFor="let phoneNumber of resident.phoneNumbers">
-                  <mat-icon class="contactIcon" aria-hidden="true">phone</mat-icon>
-                  <span class="contactDetail">
-                    <span class="contactType">{{phoneNumber.type}}</span>
-                    ({{phoneNumber.areaCode}}) {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
-                  </span>
-                </div>
-                <div class="contactLine" *ngFor="let email of resident.emailAddresses">
-                  <mat-icon class="contactIcon" aria-hidden="true">mail</mat-icon>
-                  <span>{{email.address}}</span>
-                </div>
-              </div>
-            </div>
-          </ng-container>
+          </div>
         </div>
 
         <!-- Children -->
