@@ -20,11 +20,11 @@
           </div>
           <div class="homeRight" *ngIf="home.phoneNumber || home.emailAddress">
             <div class="contactLine" *ngIf="home.phoneNumber">
-              <mat-icon class="contactIcon">phone</mat-icon>
+              <mat-icon class="contactIcon" aria-hidden="true">phone</mat-icon>
               <span>({{home.phoneNumber.areaCode}}) {{home.phoneNumber.prefix}}-{{('0000' + home.phoneNumber.lineNumber).slice(-4)}}</span>
             </div>
             <div class="contactLine" *ngIf="home.emailAddress">
-              <mat-icon class="contactIcon">mail</mat-icon>
+              <mat-icon class="contactIcon" aria-hidden="true">mail</mat-icon>
               <span>{{home.emailAddress.address}}</span>
             </div>
           </div>
@@ -39,14 +39,14 @@
               </div>
               <div class="residentContact" *ngIf="resident.phoneNumbers?.length || resident.emailAddresses?.length">
                 <div class="contactLine" *ngFor="let phoneNumber of resident.phoneNumbers">
-                  <mat-icon class="contactIcon">phone</mat-icon>
+                  <mat-icon class="contactIcon" aria-hidden="true">phone</mat-icon>
                   <span class="contactDetail">
                     <span class="contactType">{{phoneNumber.type}}</span>
                     ({{phoneNumber.areaCode}}) {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
                   </span>
                 </div>
                 <div class="contactLine" *ngFor="let email of resident.emailAddresses">
-                  <mat-icon class="contactIcon">mail</mat-icon>
+                  <mat-icon class="contactIcon" aria-hidden="true">mail</mat-icon>
                   <span>{{email.address}}</span>
                 </div>
               </div>
@@ -60,14 +60,14 @@
               </div>
               <div class="residentContact" *ngIf="resident.phoneNumbers?.length || resident.emailAddresses?.length">
                 <div class="contactLine" *ngFor="let phoneNumber of resident.phoneNumbers">
-                  <mat-icon class="contactIcon">phone</mat-icon>
+                  <mat-icon class="contactIcon" aria-hidden="true">phone</mat-icon>
                   <span class="contactDetail">
                     <span class="contactType">{{phoneNumber.type}}</span>
                     ({{phoneNumber.areaCode}}) {{phoneNumber.prefix}}-{{('0000' + phoneNumber.lineNumber).slice(-4)}}
                   </span>
                 </div>
                 <div class="contactLine" *ngFor="let email of resident.emailAddresses">
-                  <mat-icon class="contactIcon">mail</mat-icon>
+                  <mat-icon class="contactIcon" aria-hidden="true">mail</mat-icon>
                   <span>{{email.address}}</span>
                 </div>
               </div>
