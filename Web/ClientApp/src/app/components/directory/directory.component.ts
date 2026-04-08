@@ -152,4 +152,11 @@ export class DirectoryComponent {
         ((r.phoneNumbers?.length ?? 0) > 0 || (r.emailAddresses?.length ?? 0) > 0),
     );
   }
+
+  shouldShowResidents(home: DirectoryHome): boolean {
+    return (
+      this.hasAnyResidentContact(home) ||
+      home.residents.some(r => r.residentType === 1)
+    );
+  }
 }
