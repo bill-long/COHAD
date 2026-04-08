@@ -17,8 +17,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 export class ManageHomesComponent implements OnInit {
   dataSource = new MatTableDataSource<Home>();
 
-  @ViewChild(MatSort) set sort(sort: MatSort) {
-    this.dataSource.sort = sort;
+  @ViewChild(MatSort) set sort(sort: MatSort | undefined | null) {
+    this.dataSource.sort = sort ?? null;
   }
 
   columnsToDisplay = ['streetNumber', 'streetName', 'phoneNumber', 'emailAddress', 'residents', 'actions'];
