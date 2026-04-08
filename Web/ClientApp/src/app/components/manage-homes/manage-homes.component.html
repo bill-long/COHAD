@@ -1,60 +1,59 @@
-<mat-form-field appearance="fill" [hidden]="(focusedHome$ | async) != null">
-  <mat-label>Search</mat-label>
-  <input matInput [formControl]="homeFilter" />
-</mat-form-field>
+<ng-container *ngIf="focusedHome$ | async as focusedHome; else homeList">
+  <div class="focusedHomeEditor">
+    <app-edit-home [home]="focusedHome" (doneEvent)="unfocusHome()" [startWithEditEnabled]="true" [reloadAllOnSave]="true"></app-edit-home>
+  </div>
+</ng-container>
 
-<div class="table-scroll-wrapper">
-  <table mat-table [dataSource]="dataSource" matSort [hidden]="(focusedHome$ | async) != null">
-    <ng-container matColumnDef="streetNumber">
-      <th mat-header-cell *matHeaderCellDef mat-sort-header>Street Number</th>
-      <td mat-cell *matCellDef="let home">{{ home.streetNumber }}</td>
-    </ng-container>
+<ng-template #homeList>
+  <mat-form-field appearance="fill">
+    <mat-label>Search</mat-label>
+    <input matInput [formControl]="homeFilter" />
+  </mat-form-field>
 
-    <ng-container matColumnDef="streetName">
-      <th mat-header-cell *matHeaderCellDef mat-sort-header>Street Name</th>
-      <td mat-cell *matCellDef="let home">{{ home.streetName }}</td>
-    </ng-container>
+  <div class="table-scroll-wrapper">
+    <table mat-table [dataSource]="dataSource" matSort>
+      <ng-container matColumnDef="streetNumber">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Street Number</th>
+        <td mat-cell *matCellDef="let home">{{ home.streetNumber }}</td>
+      </ng-container>
 
-    <ng-container matColumnDef="phoneNumber">
-      <th mat-header-cell *matHeaderCellDef mat-sort-header>Phone Number</th>
-      <td mat-cell *matCellDef="let home">
-        <span *ngIf="home.phoneNumber"
-          >({{ home.phoneNumber.areaCode }}) {{ home.phoneNumber.prefix }}-{{ ('0000' + home.phoneNumber.lineNumber).slice(-4) }}</span
-        >
-      </td>
-    </ng-container>
+      <ng-container matColumnDef="streetName">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Street Name</th>
+        <td mat-cell *matCellDef="let home">{{ home.streetName }}</td>
+      </ng-container>
 
-    <ng-container matColumnDef="emailAddress">
-      <th mat-header-cell *matHeaderCellDef mat-sort-header>Email Address</th>
-      <td mat-cell *matCellDef="let home">{{ home.emailAddress?.address }}</td>
-    </ng-container>
+      <ng-container matColumnDef="phoneNumber">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Phone Number</th>
+        <td mat-cell *matCellDef="let home">
+          <span *ngIf="home.phoneNumber"
+            >({{ home.phoneNumber.areaCode }}) {{ home.phoneNumber.prefix }}-{{ ('0000' + home.phoneNumber.lineNumber).slice(-4) }}</span
+          >
+        </td>
+      </ng-container>
 
-    <ng-container matColumnDef="residents">
-      <th mat-header-cell *matHeaderCellDef>Residents</th>
-      <td mat-cell *matCellDef="let home">
-        <div *ngFor="let resident of home.residents">{{ resident.givenName }} {{ resident.surname }}</div>
-      </td>
-    </ng-container>
+      <ng-container matColumnDef="emailAddress">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Email Address</th>
+        <td mat-cell *matCellDef="let home">{{ home.emailAddress?.address }}</td>
+      </ng-container>
 
-    <ng-container matColumnDef="actions">
-      <th mat-header-cell *matHeaderCellDef></th>
-      <td mat-cell *matCellDef="let home">
-        <button mat-icon-button color="primary" aria-label="Edit" (click)="focusHome(home.id)">
-          <mat-icon>edit</mat-icon>
-        </button>
-      </td>
-    </ng-container>
+      <ng-container matColumnDef="residents">
+        <th mat-header-cell *matHeaderCellDef>Residents</th>
+        <td mat-cell *matCellDef="let home">
+          <div *ngFor="let resident of home.residents">{{ resident.givenName }} {{ resident.surname }}</div>
+        </td>
+      </ng-container>
 
-    <tr mat-header-row *matHeaderRowDef="columnsToDisplay"></tr>
-    <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
-  </table>
-</div>
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let home">
+          <button mat-icon-button color="primary" aria-label="Edit" (click)="focusHome(home.id)">
+            <mat-icon>edit</mat-icon>
+          </button>
+        </td>
+      </ng-container>
 
-<div class="focusedHomeEditor" *ngIf="(focusedHome$ | async) != null">
-  <app-edit-home
-    [home]="focusedHome$ | async"
-    (doneEvent)="unfocusHome()"
-    [startWithEditEnabled]="true"
-    [reloadAllOnSave]="true"
-  ></app-edit-home>
-</div>
+      <tr mat-header-row *matHeaderRowDef="columnsToDisplay"></tr>
+      <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
+    </table>
+  </div>
+</ng-template>
