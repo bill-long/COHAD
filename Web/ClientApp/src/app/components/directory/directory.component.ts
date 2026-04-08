@@ -148,4 +148,10 @@ export class DirectoryComponent {
   getChildren(home: DirectoryHome) {
     return home.residents.filter(r => r.residentType === 2);
   }
+
+  hasAnyResidentContact(home: DirectoryHome): boolean {
+    return [...this.getHomeowners(home), ...this.getOtherAdults(home)].some(
+      r => (r.phoneNumbers?.length ?? 0) > 0 || (r.emailAddresses?.length ?? 0) > 0,
+    );
+  }
 }

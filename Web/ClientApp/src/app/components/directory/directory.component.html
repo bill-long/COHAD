@@ -30,8 +30,8 @@
           </div>
         </div>
 
-        <!-- Residents -->
-        <div class="residentsSection">
+        <!-- Residents (only shown if at least one has contact info) -->
+        <div class="residentsSection" *ngIf="hasAnyResidentContact(home)">
           <ng-container *ngFor="let resident of getHomeowners(home)">
             <div class="residentRow">
               <div class="residentName">
