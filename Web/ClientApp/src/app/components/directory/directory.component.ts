@@ -109,12 +109,8 @@ export class DirectoryComponent {
   }
 
   getSurname(home: DirectoryHome) {
-    const homeowners = this.getHomeowners(home);
-    if (homeowners.length < 1) {
-      return '';
-    }
-
-    return home.residents[0].surname;
+    const first = home.residents.find(r => r.residentType === 0);
+    return first?.surname ?? '';
   }
 
   getGivenNames(home: DirectoryHome) {
@@ -137,15 +133,39 @@ export class DirectoryComponent {
     return given;
   }
 
+  getAdults(home: DirectoryHome): DirectoryResident[] {
+    return home.residents.filter(r => r.residentType === 0 || r.residentType === 1);
+  }
+
+  getVisibleResidents(home: DirectoryHome): DirectoryResident[] {
+    const hasContact = this.hasAnyResidentContact(home);
+    return home.residents.filter(
+      r =>
+        (r.residentType === 0 || r.residentType === 1) &&
+        (hasContact || r.residentType === 1 || (r.phoneNumbers?.length ?? 0) > 0 || (r.emailAddresses?.length ?? 0) > 0),
+    );
+  }
+
   getHomeowners(home: DirectoryHome): DirectoryResident[] {
     return home.residents.filter(r => r.residentType === 0);
   }
 
-  getOtherAdults(home: DirectoryHome) {
-    return home.residents.filter(r => r.residentType === 1);
-  }
-
   getChildren(home: DirectoryHome) {
     return home.residents.filter(r => r.residentType === 2);
+  }
+
+  hasAnyResidentContact(home: DirectoryHome): boolean {
+    return home.residents.some(
+      r =>
+        (r.residentType === 0 || r.residentType === 1) &&
+        ((r.phoneNumbers?.length ?? 0) > 0 || (r.emailAddresses?.length ?? 0) > 0),
+    );
+  }
+
+  shouldShowResidents(home: DirectoryHome): boolean {
+    return (
+      this.hasAnyResidentContact(home) ||
+      home.residents.some(r => r.residentType === 1)
+    );
   }
 }
