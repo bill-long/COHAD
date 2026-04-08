@@ -150,8 +150,10 @@ export class DirectoryComponent {
   }
 
   hasAnyResidentContact(home: DirectoryHome): boolean {
-    return [...this.getHomeowners(home), ...this.getOtherAdults(home)].some(
-      r => (r.phoneNumbers?.length ?? 0) > 0 || (r.emailAddresses?.length ?? 0) > 0,
+    return home.residents.some(
+      r =>
+        (r.residentType === 0 || r.residentType === 1) &&
+        ((r.phoneNumbers?.length ?? 0) > 0 || (r.emailAddresses?.length ?? 0) > 0),
     );
   }
 }

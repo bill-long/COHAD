@@ -153,8 +153,8 @@ mat-spinner {
 }
 
 .residentContact {
-  flex-shrink: 0;
-  text-align: right;
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
