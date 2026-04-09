@@ -233,8 +233,8 @@ namespace Web.Services
             CancellationToken ct
         )
         {
-            // Step 1: Idempotency check — skip if we already created a job for this message
-            var existingJob = await emailJobRepo.GetByInternetMessageIdAsync(internetMessageId);
+            // Step 1: Idempotency check — skip if we already created a job for this committee + message
+            var existingJob = await emailJobRepo.GetByInternetMessageIdAsync(internetMessageId, committee.CommitteeEmail);
             if (existingJob != null)
             {
                 _logger.LogDebug(
@@ -407,7 +407,7 @@ namespace Web.Services
                 CommitteeId = committee.Id,
                 CommitteeEmail = committee.CommitteeEmail,
                 InternetMessageId = internetMessageId,
-                SenderEmail = senderEmail ?? "(unknown)",
+                SenderEmail = senderEmail,
                 SenderName = senderName,
                 Subject = subject,
                 ReceivedUtc = receivedUtc,
@@ -534,17 +534,29 @@ namespace Web.Services
             string? senderName
         )
         {
+            var encodedName = System.Net.WebUtility.HtmlEncode(senderName ?? "");
+            var encodedEmail = System.Net.WebUtility.HtmlEncode(senderEmail ?? "(unknown sender)");
             var sender = !string.IsNullOrWhiteSpace(senderName)
-                ? $"{senderName} &lt;{senderEmail}&gt;"
-                : senderEmail ?? "(unknown sender)";
+                ? $"{encodedName} &lt;{encodedEmail}&gt;"
+                : encodedEmail;
 
             var receivedDate = message.ReceivedDateTime?.ToString("f") ?? "Unknown";
-            var originalBody = message.Body?.Content ?? "";
+
+            // Handle plain-text vs HTML body content
+            string originalBody;
+            if (message.Body?.ContentType == Microsoft.Graph.Models.BodyType.Text)
+            {
+                originalBody = $"<pre style=\"white-space:pre-wrap\">{System.Net.WebUtility.HtmlEncode(message.Body.Content ?? "")}</pre>";
+            }
+            else
+            {
+                originalBody = message.Body?.Content ?? "";
+            }
 
             return $"""
                 <div style="border-left:2px solid #ccc;padding-left:12px;margin-bottom:16px;color:#555">
                     <p><strong>---------- Forwarded message ----------</strong></p>
-                    <p><strong>From:</strong> {System.Net.WebUtility.HtmlEncode(sender)}<br/>
+                    <p><strong>From:</strong> {sender}<br/>
                     <strong>Date:</strong> {System.Net.WebUtility.HtmlEncode(receivedDate)}<br/>
                     <strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(message.Subject ?? "")}</p>
                 </div>

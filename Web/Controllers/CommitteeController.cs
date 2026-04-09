@@ -572,10 +572,12 @@ namespace Web.Controllers
                 return Forbid();
 
             committee.ForwardingEnabled = update.ForwardingEnabled;
-            if (
-                Enum.TryParse<ForwardingSenderFilter>(update.ForwardingSenderFilter, true, out var filter)
-            )
+            if (!string.IsNullOrWhiteSpace(update.ForwardingSenderFilter))
             {
+                if (!Enum.TryParse<ForwardingSenderFilter>(update.ForwardingSenderFilter, true, out var filter))
+                {
+                    return BadRequest(new { Error = $"Invalid ForwardingSenderFilter '{update.ForwardingSenderFilter}'." });
+                }
                 committee.ForwardingSenderFilter = filter;
             }
 
@@ -745,8 +747,8 @@ namespace Web.Controllers
                 MaxRecipientAttempts = 3,
                 TotalRecipients = recipients.Count,
                 InternetMessageId = held.InternetMessageId,
-                ReplyToEmail = held.SenderEmail,
-                ReplyToDisplay = held.SenderName,
+                ReplyToEmail = string.IsNullOrWhiteSpace(held.SenderEmail) ? null : held.SenderEmail,
+                ReplyToDisplay = string.IsNullOrWhiteSpace(held.SenderEmail) ? null : held.SenderName,
                 Recipients = recipients,
             };
 
@@ -833,6 +835,13 @@ namespace Web.Controllers
                 return Forbid();
 
             var graphReader = HttpContext.RequestServices.GetService<IGraphMailReader>();
+            if (graphReader == null)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new { Error = "Graph API credentials are not configured. Cannot delete legacy inbox rules without Graph access." }
+                );
+            }
 
             var committees = await _committeeRepository.GetAllAsync();
             var migrated = 0;
@@ -843,23 +852,12 @@ namespace Web.Controllers
             {
                 try
                 {
-                    if (graphReader != null)
-                    {
-                        await graphReader.DeleteMessageRuleAsync(c.CommitteeEmail, c.GraphMessageRuleId);
-                        _logger.LogInformation(
-                            "Deleted legacy inbox rule {RuleId} on {Mailbox}",
-                            c.GraphMessageRuleId,
-                            c.CommitteeEmail
-                        );
-                    }
-                    else
-                    {
-                        _logger.LogWarning(
-                            "Graph API not configured — skipping rule deletion for {Mailbox} (rule {RuleId})",
-                            c.CommitteeEmail,
-                            c.GraphMessageRuleId
-                        );
-                    }
+                    await graphReader.DeleteMessageRuleAsync(c.CommitteeEmail, c.GraphMessageRuleId);
+                    _logger.LogInformation(
+                        "Deleted legacy inbox rule {RuleId} on {Mailbox}",
+                        c.GraphMessageRuleId,
+                        c.CommitteeEmail
+                    );
 
                     c.ForwardingEnabled = true;
                     c.ForwardingSenderFilter = ForwardingSenderFilter.All;

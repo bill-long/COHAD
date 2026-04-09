@@ -171,14 +171,16 @@ namespace Web.Services.Repositories
             return results;
         }
 
-        public async Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId)
+        public async Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId, string fromEmail)
         {
             if (string.IsNullOrEmpty(internetMessageId))
                 return null;
 
             var query = new CosmosQueryDefinition(
-                "SELECT TOP 1 * FROM c WHERE c.InternetMessageId = @internetMessageId"
-            ).WithParameter("@internetMessageId", internetMessageId);
+                "SELECT TOP 1 * FROM c WHERE c.InternetMessageId = @internetMessageId AND c.FromEmail = @fromEmail"
+            )
+                .WithParameter("@internetMessageId", internetMessageId)
+                .WithParameter("@fromEmail", fromEmail);
 
             var iterator = _emailJobContainer.GetItemQueryIterator<JObject>(query);
             while (iterator.HasMoreResults)
@@ -188,7 +190,7 @@ namespace Web.Services.Repositories
                 if (first != null)
                 {
                     var job = CosmosLegacyDocumentMapper.ToEmailJob(first);
-                    job.ETag = response.Headers.ETag;
+                    job.ETag = first.Value<string>("_etag");
                     return job;
                 }
             }

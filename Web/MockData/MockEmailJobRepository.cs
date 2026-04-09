@@ -138,14 +138,16 @@ namespace Web.MockData
             }
         }
 
-        public Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId)
+        public Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId, string fromEmail)
         {
             if (string.IsNullOrEmpty(internetMessageId))
                 return Task.FromResult<EmailJob?>(null);
 
             lock (_jobs)
             {
-                var match = _jobs.Values.FirstOrDefault(j => j.InternetMessageId == internetMessageId);
+                var match = _jobs.Values.FirstOrDefault(j =>
+                    j.InternetMessageId == internetMessageId
+                    && string.Equals(j.FromEmail, fromEmail, StringComparison.OrdinalIgnoreCase));
                 return Task.FromResult(match != null ? CloneJob(match) : (EmailJob?)null);
             }
         }

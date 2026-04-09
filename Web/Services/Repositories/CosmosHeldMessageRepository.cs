@@ -89,7 +89,7 @@ namespace Web.Services.Repositories
                 if (first != null)
                 {
                     var msg = CosmosLegacyDocumentMapper.ToHeldMessage(first);
-                    msg.ETag = response.Headers.ETag;
+                    msg.ETag = first.Value<string>("_etag");
                     return msg;
                 }
             }
