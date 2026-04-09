@@ -98,8 +98,6 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.emailJobService.getTestRecipients().subscribe({
       next: recipients => {
         this.testRecipients = recipients;
-        // Pre-select all by default
-        this.selectedTestRecipients = new Set(recipients.map(r => r.email));
       },
       error: () => {
         this.testRecipients = [];
