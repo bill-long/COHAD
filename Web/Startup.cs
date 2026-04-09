@@ -531,8 +531,8 @@ namespace Web
             }
 
             // Add security headers on every response
-            var b2cOrigins = Configuration.GetSection("B2cCustomPage:AllowedOrigins")
-                .Get<string[]>() ?? Array.Empty<string>();
+            var b2cOrigins =
+                Configuration.GetSection("B2cCustomPage:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
             app.Use(
                 async (context, next) =>
                 {
@@ -555,24 +555,26 @@ namespace Web
 
             app.UseHttpsRedirection();
             app.UseResponseCompression();
-            app.UseStaticFiles(new StaticFileOptions
-            {
-                OnPrepareResponse = ctx =>
+            app.UseStaticFiles(
+                new StaticFileOptions
                 {
-                    // Azure AD B2C fetches custom page content via a CORS request from
-                    // the b2clogin.com origin. Static files bypass the CORS middleware,
-                    // so we add the header here for /b2c/ paths only.
-                    if (ctx.Context.Request.Path.StartsWithSegments("/b2c"))
+                    OnPrepareResponse = ctx =>
                     {
-                        var origin = ctx.Context.Request.Headers["Origin"].ToString();
-                        if (b2cOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
+                        // Azure AD B2C fetches custom page content via a CORS request from
+                        // the b2clogin.com origin. Static files bypass the CORS middleware,
+                        // so we add the header here for /b2c/ paths only.
+                        if (ctx.Context.Request.Path.StartsWithSegments("/b2c"))
                         {
-                            ctx.Context.Response.Headers["Access-Control-Allow-Origin"] = origin;
-                            ctx.Context.Response.Headers.Append("Vary", "Origin");
+                            var origin = ctx.Context.Request.Headers["Origin"].ToString();
+                            if (b2cOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
+                            {
+                                ctx.Context.Response.Headers["Access-Control-Allow-Origin"] = origin;
+                                ctx.Context.Response.Headers.Append("Vary", "Origin");
+                            }
                         }
-                    }
+                    },
                 }
-            });
+            );
             if (!useDevSpaProxy)
             {
                 app.UseSpaStaticFiles();
@@ -590,6 +592,29 @@ namespace Web
                 endpoints.MapHub<EmailJobHub>("/hubs/email-jobs");
                 endpoints.MapControllerRoute(name: "default", pattern: "{controller}/{action=Index}/{id?}");
             });
+
+            // Short-circuit requests for paths that are clearly not part of the SPA
+            // (e.g. WordPress scanner bots probing /wp-login.php). Without this, they
+            // fall through to the SPA default-page middleware which throws an exception.
+            app.Use(
+                async (context, next) =>
+                {
+                    var path = context.Request.Path.Value;
+                    if (
+                        path != null
+                        && (
+                            path.EndsWith(".php", StringComparison.OrdinalIgnoreCase)
+                            || path.EndsWith(".aspx", StringComparison.OrdinalIgnoreCase)
+                            || path.EndsWith(".jsp", StringComparison.OrdinalIgnoreCase)
+                        )
+                    )
+                    {
+                        context.Response.StatusCode = 404;
+                        return;
+                    }
+                    await next();
+                }
+            );
 
             app.UseSpa(spa =>
             {
