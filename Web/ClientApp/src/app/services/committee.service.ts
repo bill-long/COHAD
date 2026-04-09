@@ -58,7 +58,7 @@ export interface ForwardingSettings {
 
 export interface HeldMessage {
   id: string;
-  senderEmail: string;
+  senderEmail: string | null;
   senderName: string | null;
   subject: string | null;
   receivedUtc: string;

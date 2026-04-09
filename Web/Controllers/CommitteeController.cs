@@ -658,21 +658,8 @@ namespace Web.Controllers
             if (held.Status != HeldMessageStatus.Held)
                 return BadRequest(new { Error = $"Message is already {held.Status}." });
 
-            // Claim the held message via optimistic concurrency BEFORE creating the job.
-            // If two concurrent approvals race, only one will succeed — the loser gets 409.
-            held.Status = HeldMessageStatus.Approved;
-            held.ReviewedByUserId = apiUser.UniqueId;
-            held.ReviewedUtc = DateTime.UtcNow;
-            try
-            {
-                await _heldMessageRepository.UpdateAsync(held);
-            }
-            catch (InvalidOperationException)
-            {
-                return Conflict(new { Error = "Message was already actioned by another administrator." });
-            }
-
-            // Resolve forwarding recipients
+            // Validate forwarding recipients BEFORE claiming the held message,
+            // so a failed validation doesn't leave it permanently marked Approved.
             var residents = await ResolveResidentsForCommittees(new[] { committee });
             var forwardingMembers = (committee.Members ?? new List<CommitteeMember>())
                 .Where(m => m.ReceivesForwardedEmail)
@@ -694,6 +681,20 @@ namespace Web.Controllers
             if (recipients.Count == 0)
                 return BadRequest(new { Error = "No forwarding recipients with valid email addresses." });
 
+            // Claim the held message via optimistic concurrency BEFORE creating the job.
+            // If two concurrent approvals race, only one will succeed — the loser gets 409.
+            held.Status = HeldMessageStatus.Approved;
+            held.ReviewedByUserId = apiUser.UniqueId;
+            held.ReviewedUtc = DateTime.UtcNow;
+            try
+            {
+                await _heldMessageRepository.UpdateAsync(held);
+            }
+            catch (InvalidOperationException)
+            {
+                return Conflict(new { Error = "Message was already actioned by another administrator." });
+            }
+
             // Fetch original message body from Graph API (message was moved to Processed folder)
             var graphReader = HttpContext.RequestServices.GetService<IGraphMailReader>();
             string originalBodyHtml = null;
@@ -705,7 +706,12 @@ namespace Web.Controllers
                         committee.CommitteeEmail,
                         held.InternetMessageId
                     );
-                    originalBodyHtml = original?.Body?.Content;
+                    if (original?.Body != null && !string.IsNullOrEmpty(original.Body.Content))
+                    {
+                        originalBodyHtml = original.Body.ContentType == Microsoft.Graph.Models.BodyType.Text
+                            ? $"<pre style=\"white-space:pre-wrap\">{System.Net.WebUtility.HtmlEncode(original.Body.Content)}</pre>"
+                            : original.Body.Content;
+                    }
                 }
                 catch (Exception ex)
                 {

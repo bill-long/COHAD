@@ -458,7 +458,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   }
 
   getHeld(committeeId: string): HeldMessage[] {
-    return this.heldMessages.get(committeeId) ?? [];
+    return (this.heldMessages.get(committeeId) ?? []).filter(m => m.status === 'Held');
   }
 
   toggleForwarding(committee: CommitteeAdmin): void {
@@ -508,15 +508,16 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     this.error = '';
     this.success = '';
     this.actioningHeldId = message.id;
+    const sender = message.senderEmail ?? 'unknown sender';
     this.committeeService.approveHeldMessage(committee.id, message.id).subscribe({
       next: () => {
         this.actioningHeldId = null;
         this.loadHeldMessages(committee);
-        this.success = `Message from ${message.senderEmail} approved for forwarding.`;
+        this.success = `Message from ${sender} approved for forwarding.`;
       },
       error: () => {
         this.actioningHeldId = null;
-        this.error = `Failed to approve message from ${message.senderEmail}.`;
+        this.error = `Failed to approve message from ${sender}.`;
       },
     });
   }
@@ -525,15 +526,16 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     this.error = '';
     this.success = '';
     this.actioningHeldId = message.id;
+    const sender = message.senderEmail ?? 'unknown sender';
     this.committeeService.rejectHeldMessage(committee.id, message.id).subscribe({
       next: () => {
         this.actioningHeldId = null;
         this.loadHeldMessages(committee);
-        this.success = `Message from ${message.senderEmail} rejected.`;
+        this.success = `Message from ${sender} rejected.`;
       },
       error: () => {
         this.actioningHeldId = null;
-        this.error = `Failed to reject message from ${message.senderEmail}.`;
+        this.error = `Failed to reject message from ${sender}.`;
       },
     });
   }

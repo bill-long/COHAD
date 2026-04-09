@@ -261,29 +261,33 @@ namespace Web.Services
             // Step 2: Sender filtering
             if (committee.ForwardingSenderFilter == ForwardingSenderFilter.DirectoryOnly)
             {
+                var shouldHold = false;
+
                 if (string.IsNullOrWhiteSpace(senderEmail))
                 {
-                    // No sender email — hold for admin review rather than forwarding blindly
-                    await HoldMessageAsync(
-                        committee,
-                        graphId,
-                        internetMessageId,
-                        senderEmail,
-                        senderName,
-                        message.Subject,
-                        message.ReceivedDateTime?.UtcDateTime ?? DateTime.UtcNow,
-                        processedFolderId,
-                        heldMessageRepo,
-                        userRepo,
-                        ct
-                    );
-                    return;
+                    shouldHold = true;
+                }
+                else
+                {
+                    var senderResidents = await residentRepo.GetByEmailAsync(senderEmail);
+                    if (senderResidents.Count == 0)
+                        shouldHold = true;
                 }
 
-                var senderResidents = await residentRepo.GetByEmailAsync(senderEmail);
-                if (senderResidents.Count == 0)
+                if (shouldHold)
                 {
-                    // Hold for admin review
+                    if (forwardingMembers.Count == 0)
+                    {
+                        // No recipients to forward to — skip holding and just move to processed
+                        _logger.LogDebug(
+                            "Unknown sender {Sender} in {Mailbox} but no forwarding recipients — skipping hold",
+                            senderEmail,
+                            committee.CommitteeEmail
+                        );
+                        await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
+                        return;
+                    }
+
                     await HoldMessageAsync(
                         committee,
                         graphId,

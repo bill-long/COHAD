@@ -265,9 +265,8 @@
 
           <div class="held-message-list">
             <div class="held-message-row" *ngFor="let msg of getHeld(committee.id)">
-              <ng-container *ngIf="msg.status === 'Held'">
                 <div class="held-message-info">
-                  <span class="held-sender">{{ msg.senderName || msg.senderEmail }}</span>
+                  <span class="held-sender">{{ msg.senderName || msg.senderEmail || '(unknown sender)' }}</span>
                   <span class="held-subject" *ngIf="msg.subject">{{ msg.subject }}</span>
                   <span class="held-date">{{ msg.receivedUtc | date: 'medium' }}</span>
                 </div>
@@ -291,7 +290,6 @@
                     <mat-icon>close</mat-icon> Reject
                   </button>
                 </div>
-              </ng-container>
             </div>
           </div>
         </div>

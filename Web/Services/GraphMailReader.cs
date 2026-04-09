@@ -207,7 +207,6 @@ namespace Web.Services
                             "hasAttachments",
                         };
                         config.QueryParameters.Top = 1;
-                        config.QueryParameters.Expand = new[] { "attachments" };
                     },
                     ct
                 );
