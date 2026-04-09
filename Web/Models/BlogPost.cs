@@ -45,6 +45,12 @@ namespace Web.Models
 
         public string AuthorDisplayName { get; set; }
 
+        /// <summary>
+        /// When set, the post was published under a committee name rather than the author's personal name.
+        /// <see cref="AuthorDisplayName"/> contains the committee's display name.
+        /// </summary>
+        public User.Role? AuthorAsCommittee { get; set; }
+
         public string CreatedByUniqueId { get; set; }
 
         public string ModifiedByUniqueId { get; set; }

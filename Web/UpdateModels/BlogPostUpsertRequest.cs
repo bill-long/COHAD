@@ -15,6 +15,12 @@ namespace Web.UpdateModels
 
         public DateTime? PublishUtc { get; set; }
 
+        /// <summary>
+        /// Optional committee role name (e.g. "Board") to publish the post under
+        /// instead of the author's personal name. Null or empty means personal name.
+        /// </summary>
+        public string AuthorAsCommittee { get; set; }
+
         public bool RemoveFeaturedImage { get; set; }
 
         public IFormFile FeaturedImage { get; set; }

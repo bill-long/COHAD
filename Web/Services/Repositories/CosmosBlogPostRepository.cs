@@ -74,7 +74,7 @@ namespace Web.Services.Repositories
             var query = new CosmosQueryDefinition(
                 @"
 SELECT
-  c.id, c.PublicSlug, c.Title, c.Excerpt, c.PublishUtc, c.AuthorDisplayName,
+  c.id, c.PublicSlug, c.Title, c.Excerpt, c.PublishUtc, c.AuthorDisplayName, c.AuthorAsCommittee,
   c.FeaturedImageBlobPath, c.FeaturedImageDisplayName, c.FeaturedImageContentType, c.FeaturedImageSizeBytes
 FROM c
 WHERE c.PublishUtc <= @asOf
@@ -226,6 +226,7 @@ FROM c"
                 Excerpt = doc.Value<string>("Excerpt"),
                 PublishUtc = doc["PublishUtc"]?.ToObject<DateTime>() ?? default,
                 AuthorDisplayName = doc.Value<string>("AuthorDisplayName"),
+                AuthorAsCommittee = doc["AuthorAsCommittee"]?.ToObject<Models.User.Role?>(),
                 FeaturedImageBlobPath = doc.Value<string>("FeaturedImageBlobPath"),
                 FeaturedImageDisplayName = doc.Value<string>("FeaturedImageDisplayName"),
                 FeaturedImageContentType = doc.Value<string>("FeaturedImageContentType"),

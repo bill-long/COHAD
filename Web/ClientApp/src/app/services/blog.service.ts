@@ -9,6 +9,7 @@ export interface BlogPostCard {
   excerpt: string;
   publishUtc: string;
   authorDisplayName: string;
+  authorAsCommittee: string | null;
   hasFeaturedImage: boolean;
   featuredImageContentType: string | null;
   featuredImageDownloadUrl: string | null;
@@ -34,6 +35,7 @@ export interface BlogPostUpsertPayload {
   excerpt: string;
   publishUtc: string;
   removeFeaturedImage: boolean;
+  authorAsCommittee?: string | null;
 }
 
 @Injectable({
@@ -64,6 +66,9 @@ export class BlogService {
     formData.append('excerpt', payload.excerpt ?? '');
     formData.append('publishUtc', payload.publishUtc);
     formData.append('removeFeaturedImage', String(payload.removeFeaturedImage));
+    if (payload.authorAsCommittee) {
+      formData.append('authorAsCommittee', payload.authorAsCommittee);
+    }
     if (featuredImage != null) {
       formData.append('featuredImage', featuredImage);
     }

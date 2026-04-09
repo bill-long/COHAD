@@ -19,6 +19,7 @@ namespace Web.PresentationModels
                 Excerpt = card.Excerpt,
                 PublishUtc = card.PublishUtc,
                 AuthorDisplayName = card.AuthorDisplayName,
+                AuthorAsCommittee = card.AuthorAsCommittee,
                 HasFeaturedImage = card.HasFeaturedImage,
                 FeaturedImageContentType = card.FeaturedImageContentType,
                 FeaturedImageDownloadUrl = card.FeaturedImageDownloadUrl,

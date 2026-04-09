@@ -838,4 +838,157 @@ public sealed class BlogControllerTests
         Assert.Equal("\"xyz789\"", fileResult.EntityTag.Tag.ToString());
         Assert.NotNull(fileResult.LastModified);
     }
+
+    [Fact]
+    public async Task UpsertManage_create_with_committee_role_sets_committee_author()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Board },
+                    GivenName = "Test",
+                    Surname = "User",
+                }
+            );
+
+        BlogPost savedPost = null;
+        var mockPosts = new Mock<IBlogPostRepository>();
+        mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost>());
+        mockPosts
+            .Setup(r => r.UpsertAsync(It.IsAny<BlogPost>()))
+            .ReturnsAsync((BlogPost p) => p)
+            .Callback<BlogPost>(p => savedPost = p);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockPosts.Object,
+            Mock.Of<IBlogCommentRepository>(),
+            Mock.Of<IDocumentFileStore>(),
+            mockAudit.Object
+        );
+
+        var request = new BlogPostUpsertRequest
+        {
+            Title = "Board news",
+            Content = "Content here",
+            AuthorAsCommittee = "Board",
+        };
+
+        var result = await c.UpsertManage(request);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var detail = Assert.IsType<BlogPostDetail>(ok.Value);
+        Assert.Equal("COHAD Board", detail.AuthorDisplayName);
+        Assert.Equal("Board", detail.AuthorAsCommittee);
+        Assert.NotNull(savedPost);
+        Assert.Equal(User.Role.Board, savedPost.AuthorAsCommittee);
+    }
+
+    [Fact]
+    public async Task UpsertManage_create_without_committee_role_falls_back_to_personal_name()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+                    GivenName = "Test",
+                    Surname = "User",
+                }
+            );
+
+        BlogPost savedPost = null;
+        var mockPosts = new Mock<IBlogPostRepository>();
+        mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost>());
+        mockPosts
+            .Setup(r => r.UpsertAsync(It.IsAny<BlogPost>()))
+            .ReturnsAsync((BlogPost p) => p)
+            .Callback<BlogPost>(p => savedPost = p);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockPosts.Object,
+            Mock.Of<IBlogCommentRepository>(),
+            Mock.Of<IDocumentFileStore>(),
+            mockAudit.Object
+        );
+
+        var request = new BlogPostUpsertRequest
+        {
+            Title = "Admin news",
+            Content = "Content here",
+            AuthorAsCommittee = "Board",
+        };
+
+        var result = await c.UpsertManage(request);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var detail = Assert.IsType<BlogPostDetail>(ok.Value);
+        Assert.Equal("Test User", detail.AuthorDisplayName);
+        Assert.Null(detail.AuthorAsCommittee);
+        Assert.NotNull(savedPost);
+        Assert.Null(savedPost.AuthorAsCommittee);
+    }
+
+    [Fact]
+    public async Task UpsertManage_create_with_null_committee_uses_personal_name()
+    {
+        var uniqueId = UniqueId("u1");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Board },
+                    GivenName = "Test",
+                    Surname = "User",
+                }
+            );
+
+        var mockPosts = new Mock<IBlogPostRepository>();
+        mockPosts.Setup(r => r.GetSlugCandidatesAsync()).ReturnsAsync(new List<BlogPost>());
+        mockPosts.Setup(r => r.UpsertAsync(It.IsAny<BlogPost>())).ReturnsAsync((BlogPost p) => p);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockPosts.Object,
+            Mock.Of<IBlogCommentRepository>(),
+            Mock.Of<IDocumentFileStore>(),
+            mockAudit.Object
+        );
+
+        var request = new BlogPostUpsertRequest
+        {
+            Title = "Personal post",
+            Content = "Content here",
+            AuthorAsCommittee = null,
+        };
+
+        var result = await c.UpsertManage(request);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var detail = Assert.IsType<BlogPostDetail>(ok.Value);
+        Assert.Equal("Test User", detail.AuthorDisplayName);
+        Assert.Null(detail.AuthorAsCommittee);
+    }
 }
