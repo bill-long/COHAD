@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -192,8 +193,19 @@ namespace Web.Services
 
                 var graphId = message.Id; // Graph API ID — used for move operations
                 var internetMessageId = message.InternetMessageId; // RFC 2822 Message-ID — stable across moves
-                if (string.IsNullOrEmpty(graphId) || string.IsNullOrEmpty(internetMessageId))
+                if (string.IsNullOrEmpty(graphId))
                     continue;
+
+                if (string.IsNullOrEmpty(internetMessageId))
+                {
+                    _logger.LogWarning(
+                        "Message {GraphId} in {Mailbox} has no InternetMessageId — moving to Processed without forwarding",
+                        graphId,
+                        committee.CommitteeEmail
+                    );
+                    await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
+                    continue;
+                }
 
                 try
                 {
@@ -357,9 +369,13 @@ namespace Web.Services
             // Build the HTML body with forwarding header
             var htmlBody = BuildForwardedHtml(message, senderEmail, senderName);
 
+            // Deterministic job ID from committee + message ID for write-time idempotency.
+            // If two poll cycles race, the second CreateItemAsync will fail with 409 Conflict.
+            var jobId = DeterministicGuid(committee.CommitteeEmail, internetMessageId);
+
             var job = new EmailJob
             {
-                Id = Guid.NewGuid(),
+                Id = jobId,
                 Status = EmailJobStatus.Queued,
                 Category = ForwardCategory,
                 FromEmail = committee.CommitteeEmail,
@@ -383,7 +399,21 @@ namespace Web.Services
                 await fileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
             }
 
-            await emailJobRepo.AddAsync(job);
+            try
+            {
+                await emailJobRepo.AddAsync(job);
+            }
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                // Duplicate — another poll cycle already created a job for this message
+                _logger.LogDebug(
+                    "Job {JobId} already exists for message {InternetMessageId} — skipping",
+                    job.Id,
+                    internetMessageId
+                );
+                await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
+                return;
+            }
 
             // Step 4: Enqueue for EmailJobProcessor
             await _emailJobQueue.EnqueueAsync(job.Id, ct);
@@ -521,6 +551,20 @@ namespace Web.Services
             {
                 _logger.LogError(ex, "Failed to send held-message notification for {Committee}", committee.DisplayName);
             }
+        }
+
+        /// <summary>
+        /// Produces a deterministic GUID from two string inputs (committee email + internet message ID).
+        /// Ensures that the same message in the same mailbox always maps to the same EmailJob ID,
+        /// making CreateItemAsync fail with 409 if two poll cycles race on the same message.
+        /// </summary>
+        private static Guid DeterministicGuid(string a, string b)
+        {
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{a}\n{b}"));
+            // Truncate SHA-256 to 16 bytes for a GUID
+            var guidBytes = new byte[16];
+            Array.Copy(bytes, guidBytes, 16);
+            return new Guid(guidBytes);
         }
 
         private async Task MoveToProcessedSafe(
