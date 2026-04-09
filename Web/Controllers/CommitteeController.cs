@@ -572,11 +572,20 @@ namespace Web.Controllers
                 return Forbid();
 
             committee.ForwardingEnabled = update.ForwardingEnabled;
+            if (committee.ForwardingEnabled)
+            {
+                // Reject enablement when Graph credentials are not configured — the poller won't run.
+                var graphReader = HttpContext.RequestServices.GetService<IGraphMailReader>();
+                if (graphReader == null)
+                {
+                    return BadRequest(new { error = "Cannot enable forwarding: Graph API credentials are not configured." });
+                }
+            }
             if (!string.IsNullOrWhiteSpace(update.ForwardingSenderFilter))
             {
                 if (!Enum.TryParse<ForwardingSenderFilter>(update.ForwardingSenderFilter, true, out var filter))
                 {
-                    return BadRequest(new { Error = $"Invalid ForwardingSenderFilter '{update.ForwardingSenderFilter}'." });
+                    return BadRequest(new { error = $"Invalid ForwardingSenderFilter '{update.ForwardingSenderFilter}'." });
                 }
                 committee.ForwardingSenderFilter = filter;
             }
@@ -656,7 +665,7 @@ namespace Web.Controllers
             if (held == null || held.CommitteeId != key)
                 return NotFound();
             if (held.Status != HeldMessageStatus.Held)
-                return BadRequest(new { Error = $"Message is already {held.Status}." });
+                return BadRequest(new { error = $"Message is already {held.Status}." });
 
             // Validate forwarding recipients BEFORE claiming the held message,
             // so a failed validation doesn't leave it permanently marked Approved.
@@ -679,7 +688,7 @@ namespace Web.Controllers
                 .ToList();
 
             if (recipients.Count == 0)
-                return BadRequest(new { Error = "No forwarding recipients with valid email addresses." });
+                return BadRequest(new { error = "No forwarding recipients with valid email addresses." });
 
             // Claim the held message via optimistic concurrency BEFORE creating the job.
             // If two concurrent approvals race, only one will succeed — the loser gets 409.
@@ -692,7 +701,7 @@ namespace Web.Controllers
             }
             catch (InvalidOperationException)
             {
-                return Conflict(new { Error = "Message was already actioned by another administrator." });
+                return Conflict(new { error = "Message was already actioned by another administrator." });
             }
 
             // Fetch original message body from Graph API (message was moved to Processed folder)
@@ -789,7 +798,7 @@ namespace Web.Controllers
                 }
 
                 return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { Error = "Failed to create forwarding job. The message has been returned to Held status." });
+                    new { error = "Failed to create forwarding job. The message has been returned to Held status." });
             }
 
             await AuditAsync(
@@ -826,7 +835,7 @@ namespace Web.Controllers
             if (held == null || held.CommitteeId != key)
                 return NotFound();
             if (held.Status != HeldMessageStatus.Held)
-                return BadRequest(new { Error = $"Message is already {held.Status}." });
+                return BadRequest(new { error = $"Message is already {held.Status}." });
 
             held.Status = HeldMessageStatus.Rejected;
             held.ReviewedByUserId = apiUser.UniqueId;
@@ -837,7 +846,7 @@ namespace Web.Controllers
             }
             catch (InvalidOperationException)
             {
-                return Conflict(new { Error = "Message was already actioned by another administrator." });
+                return Conflict(new { error = "Message was already actioned by another administrator." });
             }
 
             await AuditAsync(
@@ -870,7 +879,7 @@ namespace Web.Controllers
             {
                 return StatusCode(
                     StatusCodes.Status503ServiceUnavailable,
-                    new { Error = "Graph API credentials are not configured. Cannot delete legacy inbox rules without Graph access." }
+                    new { error = "Graph API credentials are not configured. Cannot delete legacy inbox rules without Graph access." }
                 );
             }
 

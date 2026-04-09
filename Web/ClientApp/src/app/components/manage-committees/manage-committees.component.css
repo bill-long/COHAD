@@ -510,7 +510,7 @@
   height: 22px;
   padding: 0 6px;
   border-radius: 11px;
-  background: #d32f2f;
+  background: var(--error);
   color: #fff;
   font-size: 0.75rem;
   font-weight: 600;
