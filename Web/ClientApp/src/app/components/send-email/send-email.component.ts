@@ -282,7 +282,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.jobCompleted = false;
     this.activeTestJob = null;
     this.testJobCompleted = false;
-    this.selectedTestRecipients = new Set(this.testRecipients.map(r => r.email));
+    this.selectedTestRecipients = new Set();
     this.teardownJobSubscriptions();
     this.teardownTestJobSubscriptions();
   }
