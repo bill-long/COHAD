@@ -204,11 +204,6 @@
           </button>
 
           <div class="panel-actions-right">
-            <button type="button" mat-stroked-button [disabled]="syncingKey === committee.id" (click)="syncForwarding(committee)">
-              <mat-icon>sync</mat-icon>
-              {{ syncingKey === committee.id ? 'Syncing...' : 'Sync Rule to O365' }}
-            </button>
-
             <button
               type="button"
               mat-flat-button
@@ -298,22 +293,6 @@
                 </div>
               </ng-container>
             </div>
-          </div>
-        </div>
-
-        <div class="sync-status" *ngIf="getSyncStatus(committee.id) as status">
-          <div class="sync-status-row" *ngIf="status.lastSyncedUtc">
-            <span class="sync-label">Last synced:</span>
-            <span>{{ status.lastSyncedUtc | date: 'medium' }}</span>
-          </div>
-          <div class="sync-status-row" *ngIf="status.lastSyncStatus">
-            <span class="sync-label">Status:</span>
-            <span [class.sync-success]="status.lastSyncStatus === 'Success'" [class.sync-error]="status.lastSyncStatus !== 'Success'">
-              {{ status.lastSyncStatus }}
-            </span>
-          </div>
-          <div class="sync-status-row sync-error-detail" *ngIf="status.lastSyncError">
-            {{ status.lastSyncError }}
           </div>
         </div>
       </mat-expansion-panel>

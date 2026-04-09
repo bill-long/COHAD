@@ -48,12 +48,6 @@ export interface CommitteeAdmin {
   lastSyncError: string | null;
 }
 
-export interface ForwardingSyncStatus {
-  lastSyncedUtc: string | null;
-  lastSyncStatus: string | null;
-  lastSyncError: string | null;
-}
-
 export interface ForwardingSettings {
   forwardingEnabled: boolean;
   forwardingSenderFilter: string;
@@ -116,14 +110,6 @@ export class CommitteeService {
 
   deleteMember(key: string, memberId: string): Observable<void> {
     return this.httpClient.delete<void>(`api/committee/admin/${encodeURIComponent(key)}/members/${encodeURIComponent(memberId)}`);
-  }
-
-  syncForwarding(key: string): Observable<ForwardingSyncStatus> {
-    return this.httpClient.post<ForwardingSyncStatus>(`api/committee/admin/${encodeURIComponent(key)}/forwarding/sync`, null);
-  }
-
-  getForwardingStatus(key: string): Observable<ForwardingSyncStatus> {
-    return this.httpClient.get<ForwardingSyncStatus>(`api/committee/admin/${encodeURIComponent(key)}/forwarding/status`);
   }
 
   getForwardingSettings(key: string): Observable<ForwardingSettings> {

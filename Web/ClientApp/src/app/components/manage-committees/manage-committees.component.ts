@@ -7,7 +7,6 @@ import {
   CommitteeMemberAdmin,
   CommitteeService,
   ForwardingSettings,
-  ForwardingSyncStatus,
   HeldMessage,
   ResidentPickerItem,
 } from 'src/app/services/committee.service';
@@ -30,7 +29,6 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
 
   savingKey: string | null = null;
   savingOrder = false;
-  syncingKey: string | null = null;
   deletingMember: { key: string; memberId: string } | null = null;
 
   /** ID of the member currently being edited, or null when all are collapsed */
@@ -47,9 +45,6 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
 
   /** Tracks pending photo uploads per committee key → memberId → File */
   pendingPhotos = new Map<string, Map<string, File>>();
-
-  /** Tracks forwarding sync status per committee key */
-  syncStatuses = new Map<string, ForwardingSyncStatus>();
 
   /** Forwarding settings per committee key */
   forwardingSettings = new Map<string, ForwardingSettings>();
@@ -434,36 +429,6 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     }
   }
 
-  syncForwarding(committee: CommitteeAdmin): void {
-    this.error = '';
-    this.success = '';
-    this.syncingKey = committee.id;
-    this.committeeService.syncForwarding(committee.id).subscribe({
-      next: status => {
-        this.syncingKey = null;
-        this.syncStatuses.set(committee.id, status);
-        this.success = `Forwarding synced for ${committee.displayName}.`;
-      },
-      error: () => {
-        this.syncingKey = null;
-        this.error = `Failed to sync forwarding for ${committee.displayName}.`;
-        this.loadSyncStatus(committee);
-      },
-    });
-  }
-
-  loadSyncStatus(committee: CommitteeAdmin): void {
-    this.committeeService.getForwardingStatus(committee.id).subscribe({
-      next: status => {
-        this.syncStatuses.set(committee.id, status);
-      },
-    });
-  }
-
-  getSyncStatus(committeeId: string): ForwardingSyncStatus | undefined {
-    return this.syncStatuses.get(committeeId);
-  }
-
   isDeletingMember(committeeId: string, memberId: string): boolean {
     return this.deletingMember?.key === committeeId && this.deletingMember?.memberId === memberId;
   }
@@ -588,7 +553,6 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         this.savedOrder = this.committees.map(c => c.id);
         this.loading = false;
         for (const c of this.committees) {
-          this.loadSyncStatus(c);
           this.loadForwardingSettings(c);
           this.loadHeldMessages(c);
         }

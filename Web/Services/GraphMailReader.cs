@@ -174,5 +174,14 @@ namespace Web.Services
 
             return created.Id!;
         }
+
+        public async Task DeleteMessageRuleAsync(string mailbox, string ruleId, CancellationToken ct = default)
+        {
+            await _graphClient
+                .Users[mailbox]
+                .MailFolders["inbox"]
+                .MessageRules[ruleId]
+                .DeleteAsync(cancellationToken: ct);
+        }
     }
 }

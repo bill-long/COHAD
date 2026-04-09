@@ -33,5 +33,11 @@ namespace Web.Services
         /// Returns the folder ID for the given display name, creating it if it does not exist.
         /// </summary>
         Task<string> GetOrCreateFolderAsync(string mailbox, string folderName, CancellationToken ct = default);
+
+        /// <summary>
+        /// Deletes an inbox message rule from the specified mailbox.
+        /// Used during migration from the legacy inbox-rule forwarding to the new polling gateway.
+        /// </summary>
+        Task DeleteMessageRuleAsync(string mailbox, string ruleId, CancellationToken ct = default);
     }
 }

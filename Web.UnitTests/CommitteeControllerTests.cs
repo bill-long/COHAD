@@ -86,7 +86,6 @@ public sealed class CommitteeControllerTests
         IResidentRepository? residentRepo = null,
         IDocumentFileStore? fileStore = null,
         IImageUploadHelper? imageUploadHelper = null,
-        IGraphMailboxService? graphMailboxService = null,
         IUserRepository? userRepo = null,
         IAuditLogRepository? auditLogRepo = null,
         CommitteeListCache? cache = null,
@@ -98,7 +97,6 @@ public sealed class CommitteeControllerTests
         residentRepo ??= DefaultResidentRepoMock().Object;
         fileStore ??= Mock.Of<IDocumentFileStore>();
         imageUploadHelper ??= DefaultImageUploadHelper();
-        graphMailboxService ??= Mock.Of<IGraphMailboxService>();
         userRepo ??= AdminUserRepo(nameId, idp);
         auditLogRepo ??= Mock.Of<IAuditLogRepository>();
         cache ??= new CommitteeListCache(committeeRepo, new MemoryCache(new MemoryCacheOptions()), WebJsonOptions);
@@ -111,7 +109,6 @@ public sealed class CommitteeControllerTests
             cache,
             fileStore,
             imageUploadHelper,
-            graphMailboxService,
             Mock.Of<IHeldMessageRepository>(),
             Mock.Of<IEmailJobRepository>(),
             new EmailJobQueue(),
@@ -1043,67 +1040,17 @@ public sealed class CommitteeControllerTests
     }
 
     // ──────────────────────────────────────────────
-    // Forwarding sync
+    // Forwarding sync (deprecated — endpoint returns 410 Gone)
     // ──────────────────────────────────────────────
 
     [Fact]
-    public async Task SyncForwarding_returns_Ok_with_sync_status()
+    public async Task SyncForwarding_returns_410_Gone()
     {
-        var committee = SampleCommittee();
-        var mockRepo = new Mock<ICommitteeRepository>();
-        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
-        mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
-
-        var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph
-            .Setup(g =>
-                g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>())
-            )
-            .ReturnsAsync(
-                (Committee c, IReadOnlyDictionary<Guid, Resident> r) =>
-                {
-                    c.LastSyncedUtc = DateTime.UtcNow;
-                    c.LastSyncStatus = "Success";
-                    return c;
-                }
-            );
-
-        var c = CreateController(committeeRepo: mockRepo.Object, graphMailboxService: mockGraph.Object);
-        var result = await c.SyncForwarding("board");
-
-        Assert.IsType<OkObjectResult>(result);
-    }
-
-    [Fact]
-    public async Task SyncForwarding_returns_502_and_saves_error_on_failure()
-    {
-        var committee = SampleCommittee();
-        var mockRepo = new Mock<ICommitteeRepository>();
-        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
-        mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
-
-        var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph
-            .Setup(g =>
-                g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>())
-            )
-            .ThrowsAsync(new Exception("Graph API timeout"));
-
-        var c = CreateController(committeeRepo: mockRepo.Object, graphMailboxService: mockGraph.Object);
+        var c = CreateController();
         var result = await c.SyncForwarding("board");
 
         var status = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(502, status.StatusCode);
-        // Verify error was persisted
-        mockRepo.Verify(
-            r =>
-                r.UpsertAsync(
-                    It.Is<Committee>(comm =>
-                        comm.LastSyncStatus == "Failed" && comm.LastSyncError == "Graph API timeout"
-                    )
-                ),
-            Times.Once
-        );
+        Assert.Equal(410, status.StatusCode);
     }
 
     // ──────────────────────────────────────────────
@@ -1214,62 +1161,6 @@ public sealed class CommitteeControllerTests
                     It.Is<NewAuditLogEntry>(e =>
                         e.SubjectId == "board" && e.Action.Contains("Alice") && e.Action.Contains("Removed member")
                     )
-                ),
-            Times.Once
-        );
-    }
-
-    [Fact]
-    public async Task SyncForwarding_writes_audit_log_on_success()
-    {
-        var committee = SampleCommittee();
-        var uniqueId = UniqueId("u1");
-
-        var mockRepo = new Mock<ICommitteeRepository>();
-        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
-        mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
-
-        var mockUsers = new Mock<IUserRepository>();
-        mockUsers
-            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
-            .ReturnsAsync(
-                new User
-                {
-                    UniqueId = uniqueId,
-                    GivenName = "Mock",
-                    Surname = "Admin",
-                    Roles = new List<User.Role> { User.Role.Administrator },
-                }
-            );
-
-        var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph
-            .Setup(g =>
-                g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>())
-            )
-            .ReturnsAsync(
-                (Committee c, IReadOnlyDictionary<Guid, Resident> r) =>
-                {
-                    c.LastSyncedUtc = DateTime.UtcNow;
-                    c.LastSyncStatus = "Success";
-                    return c;
-                }
-            );
-
-        var mockAudit = new Mock<IAuditLogRepository>();
-
-        var c = CreateController(
-            committeeRepo: mockRepo.Object,
-            userRepo: mockUsers.Object,
-            auditLogRepo: mockAudit.Object,
-            graphMailboxService: mockGraph.Object
-        );
-        await c.SyncForwarding("board");
-
-        mockAudit.Verify(
-            a =>
-                a.AddAsync(
-                    It.Is<NewAuditLogEntry>(e => e.SubjectId == "board" && e.Action.Contains("Synced email forwarding"))
                 ),
             Times.Once
         );

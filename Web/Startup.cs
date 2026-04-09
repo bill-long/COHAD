@@ -297,7 +297,6 @@ namespace Web
                 services.AddSingleton<IYouthServiceListingRepository, MockYouthServiceListingRepository>();
                 services.AddSingleton<ICommitteeRepository, MockCommitteeRepository>();
                 services.AddSingleton<IResidentRepository, MockResidentRepository>();
-                services.AddSingleton<IGraphMailboxService, MockGraphMailboxService>();
                 services.AddSingleton<IDocumentFileStore>(sp => new CachedDocumentFileStore(
                     new MockDocumentFileStore()
                 ));
@@ -399,12 +398,7 @@ namespace Web
 
                 if (graphConfigured)
                 {
-                    services.AddSingleton<IGraphMailboxService, GraphMailboxService>();
                     services.AddSingleton<IGraphMailReader, GraphMailReader>();
-                }
-                else
-                {
-                    services.AddSingleton<IGraphMailboxService, NotConfiguredGraphMailboxService>();
                 }
             }
 

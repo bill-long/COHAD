@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Web.Configuration;
 using Web.Models;
 using Web.PresentationModels;
+using Microsoft.Extensions.DependencyInjection;
 using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
@@ -36,7 +37,6 @@ namespace Web.Controllers
         private readonly CommitteeListCache _listCache;
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IImageUploadHelper _imageUploadHelper;
-        private readonly IGraphMailboxService _graphMailboxService;
         private readonly IHeldMessageRepository _heldMessageRepository;
         private readonly IEmailJobRepository _emailJobRepository;
         private readonly EmailJobQueue _emailJobQueue;
@@ -51,7 +51,6 @@ namespace Web.Controllers
             CommitteeListCache listCache,
             IDocumentFileStore documentFileStore,
             IImageUploadHelper imageUploadHelper,
-            IGraphMailboxService graphMailboxService,
             IHeldMessageRepository heldMessageRepository,
             IEmailJobRepository emailJobRepository,
             EmailJobQueue emailJobQueue,
@@ -66,7 +65,6 @@ namespace Web.Controllers
             _listCache = listCache;
             _documentFileStore = documentFileStore;
             _imageUploadHelper = imageUploadHelper;
-            _graphMailboxService = graphMailboxService;
             _heldMessageRepository = heldMessageRepository;
             _emailJobRepository = emailJobRepository;
             _emailJobQueue = emailJobQueue;
@@ -470,93 +468,18 @@ namespace Web.Controllers
 
         [HttpPost("admin/{key}/forwarding/sync")]
         [Authorize(Policy = "CommitteeEditor")]
-        public async Task<IActionResult> SyncForwarding(string key)
+        [Obsolete("Use the polling mail gateway instead. This endpoint will be removed in a future release.")]
+        public Task<IActionResult> SyncForwarding(string key)
         {
-            var apiUser = await GetApiUserAsync();
-            if (apiUser == null)
-                return Forbid();
-
-            var committee = await _committeeRepository.GetByIdAsync(key);
-            if (committee == null)
-                return NotFound();
-            if (!CanManageCommittee(apiUser, committee))
-                return Forbid();
-
-            try
-            {
-                var residents = await ResolveResidentsForCommittees(new[] { committee });
-                committee = await _graphMailboxService.SyncForwardingRuleAsync(committee, residents);
-                await _committeeRepository.UpsertAsync(committee);
-
-                var recipientCount =
-                    committee.Members?.Count(m =>
-                        m.ReceivesForwardedEmail
-                        && residents.TryGetValue(m.ResidentId, out var r)
-                        && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true
-                    )
-                    ?? 0;
-
-                if (string.Equals(committee.LastSyncStatus, "NotConfigured", StringComparison.OrdinalIgnoreCase))
+            IActionResult result = StatusCode(
+                StatusCodes.Status410Gone,
+                new
                 {
-                    _logger.LogWarning("Forwarding sync unavailable for {Committee}: Graph API is not configured", key);
-
-                    await AuditAsync(
-                        committee.Id,
-                        committee.DisplayName,
-                        "Email forwarding sync skipped — Graph API is not configured."
-                    );
-
-                    return StatusCode(
-                        StatusCodes.Status503ServiceUnavailable,
-                        new
-                        {
-                            committee.LastSyncedUtc,
-                            committee.LastSyncStatus,
-                            committee.LastSyncError,
-                        }
-                    );
+                    message = "The inbox rule sync endpoint has been deprecated. Use the Mail Forwarding settings (enable/disable toggle) in the committee admin panel instead.",
+                    alternative = $"PUT /api/committee/admin/{key}/forwarding/settings",
                 }
-
-                _logger.LogInformation(
-                    "Forwarding sync succeeded for {Committee}: {RecipientCount} recipients",
-                    key,
-                    recipientCount
-                );
-
-                await AuditAsync(
-                    committee.Id,
-                    committee.DisplayName,
-                    $"Synced email forwarding ({recipientCount} recipients)."
-                );
-
-                return Ok(
-                    new
-                    {
-                        committee.LastSyncedUtc,
-                        committee.LastSyncStatus,
-                        committee.LastSyncError,
-                    }
-                );
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Forwarding sync failed for {Committee}", key);
-
-                committee.LastSyncedUtc = DateTime.UtcNow;
-                committee.LastSyncStatus = "Failed";
-                committee.LastSyncError = ex.Message;
-                await _committeeRepository.UpsertAsync(committee);
-
-                return StatusCode(
-                    StatusCodes.Status502BadGateway,
-                    new
-                    {
-                        committee.LastSyncedUtc,
-                        committee.LastSyncStatus,
-                        committee.LastSyncError,
-                    }
-                );
-            }
+            );
+            return Task.FromResult(result);
         }
 
         [HttpGet("admin/{key}/forwarding/status")]
@@ -847,6 +770,72 @@ namespace Web.Controllers
             );
 
             return Ok(new { Status = "Rejected" });
+        }
+
+        // ── Migration (legacy inbox-rule → polling gateway) ─────────────
+
+        /// <summary>
+        /// One-time migration: for committees with a legacy inbox rule (<c>GraphMessageRuleId</c>),
+        /// deletes the rule from Exchange via Graph API, enables the polling mail gateway with
+        /// <c>ForwardingSenderFilter = All</c> (preserving previous behavior), and clears the rule ID.
+        /// Requires Administrator policy.
+        /// </summary>
+        [HttpPost("admin/migrate-forwarding")]
+        [Authorize(Policy = "Administrator")]
+        public async Task<IActionResult> MigrateForwarding()
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var graphReader = HttpContext.RequestServices.GetService<IGraphMailReader>();
+
+            var committees = await _committeeRepository.GetAllAsync();
+            var migrated = 0;
+            var failed = 0;
+            var details = new List<string>();
+
+            foreach (var c in committees.Where(c => !string.IsNullOrEmpty(c.GraphMessageRuleId)))
+            {
+                try
+                {
+                    if (graphReader != null)
+                    {
+                        await graphReader.DeleteMessageRuleAsync(c.CommitteeEmail, c.GraphMessageRuleId);
+                        _logger.LogInformation(
+                            "Deleted legacy inbox rule {RuleId} on {Mailbox}",
+                            c.GraphMessageRuleId,
+                            c.CommitteeEmail
+                        );
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Graph API not configured — skipping rule deletion for {Mailbox} (rule {RuleId})",
+                            c.CommitteeEmail,
+                            c.GraphMessageRuleId
+                        );
+                    }
+
+                    c.ForwardingEnabled = true;
+                    c.ForwardingSenderFilter = ForwardingSenderFilter.All;
+                    c.GraphMessageRuleId = null;
+                    await _committeeRepository.UpsertAsync(c);
+
+                    migrated++;
+                    details.Add($"{c.DisplayName}: migrated");
+
+                    await AuditAsync(c.Id, c.DisplayName, "Migrated from legacy inbox rule to polling mail gateway.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Migration failed for {Mailbox}", c.CommitteeEmail);
+                    failed++;
+                    details.Add($"{c.DisplayName}: failed — {ex.Message}");
+                }
+            }
+
+            return Ok(new { migrated, failed, details });
         }
 
         private async Task AuditAsync(string subjectId, string subjectName, string action)
