@@ -47,7 +47,7 @@ namespace Web.Controllers
         {
             { Models.User.Role.WelcomeCommittee, "Welcome Committee" },
             { Models.User.Role.GardenClub, "Garden Club" },
-            { Models.User.Role.Board, "Board of Directors" },
+            { Models.User.Role.Board, "COHAD Board" },
             { Models.User.Role.SocialCommittee, "Social Committee" },
             { Models.User.Role.SunshineCommittee, "Sunshine Committee" },
             { Models.User.Role.ArchitecturalCommittee, "Architectural Committee" },

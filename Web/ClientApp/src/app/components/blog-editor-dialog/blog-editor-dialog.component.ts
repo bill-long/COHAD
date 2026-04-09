@@ -10,7 +10,7 @@ import { httpErrorMessage } from 'src/app/utils/http-error-message';
 const committeeDisplayNames: Record<string, string> = {
   WelcomeCommittee: 'Welcome Committee',
   GardenClub: 'Garden Club',
-  Board: 'Board of Directors',
+  Board: 'COHAD Board',
   SocialCommittee: 'Social Committee',
   SunshineCommittee: 'Sunshine Committee',
   ArchitecturalCommittee: 'Architectural Committee',
