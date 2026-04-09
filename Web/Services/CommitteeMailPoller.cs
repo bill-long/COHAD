@@ -259,9 +259,27 @@ namespace Web.Services
             var senderName = message.From?.EmailAddress?.Name;
 
             // Step 2: Sender filtering
-            if (committee.ForwardingSenderFilter == ForwardingSenderFilter.DirectoryOnly
-                && !string.IsNullOrWhiteSpace(senderEmail))
+            if (committee.ForwardingSenderFilter == ForwardingSenderFilter.DirectoryOnly)
             {
+                if (string.IsNullOrWhiteSpace(senderEmail))
+                {
+                    // No sender email — hold for admin review rather than forwarding blindly
+                    await HoldMessageAsync(
+                        committee,
+                        graphId,
+                        internetMessageId,
+                        senderEmail,
+                        senderName,
+                        message.Subject,
+                        message.ReceivedDateTime?.UtcDateTime ?? DateTime.UtcNow,
+                        processedFolderId,
+                        heldMessageRepo,
+                        userRepo,
+                        ct
+                    );
+                    return;
+                }
+
                 var senderResidents = await residentRepo.GetByEmailAsync(senderEmail);
                 if (senderResidents.Count == 0)
                 {

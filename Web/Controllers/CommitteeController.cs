@@ -798,7 +798,14 @@ namespace Web.Controllers
             held.Status = HeldMessageStatus.Rejected;
             held.ReviewedByUserId = apiUser.UniqueId;
             held.ReviewedUtc = DateTime.UtcNow;
-            await _heldMessageRepository.UpdateAsync(held);
+            try
+            {
+                await _heldMessageRepository.UpdateAsync(held);
+            }
+            catch (InvalidOperationException)
+            {
+                return Conflict(new { Error = "Message was already actioned by another administrator." });
+            }
 
             await AuditAsync(
                 committee.Id,

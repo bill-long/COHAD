@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -28,6 +29,16 @@ namespace Web.Services
             var tenantId = config["Graph:TenantId"];
             var clientId = config["Graph:ClientId"];
             var clientSecret = config["Graph:ClientSecret"];
+
+            if (string.IsNullOrWhiteSpace(tenantId)
+                || string.IsNullOrWhiteSpace(clientId)
+                || string.IsNullOrWhiteSpace(clientSecret))
+            {
+                throw new InvalidOperationException(
+                    "Graph API credentials are not configured. "
+                    + "Ensure Graph:TenantId, Graph:ClientId, and Graph:ClientSecret are set."
+                );
+            }
 
             var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
             _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });

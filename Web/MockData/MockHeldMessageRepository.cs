@@ -56,6 +56,11 @@ namespace Web.MockData
             {
                 if (!_messages.ContainsKey(message.Id))
                     throw new InvalidOperationException($"HeldMessage {message.Id} not found.");
+
+                var stored = _messages[message.Id];
+                if (!string.IsNullOrEmpty(message.ETag) && stored.ETag != message.ETag)
+                    throw new InvalidOperationException("HeldMessage was modified by another process.");
+
                 message.ETag = Guid.NewGuid().ToString();
                 _messages[message.Id] = Clone(message);
             }
