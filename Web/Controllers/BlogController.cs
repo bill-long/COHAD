@@ -39,6 +39,20 @@ namespace Web.Controllers
         private readonly IImageUploadHelper _imageUploadHelper;
         private readonly DocumentStorageOptions _storageOptions;
 
+        /// <summary>
+        /// Maps committee <see cref="Models.User.Role"/> values to their human-readable display names
+        /// used as <see cref="BlogPost.AuthorDisplayName"/> when publishing under a committee.
+        /// </summary>
+        private static readonly Dictionary<Models.User.Role, string> CommitteeDisplayNames = new()
+        {
+            { Models.User.Role.WelcomeCommittee, "Welcome Committee" },
+            { Models.User.Role.GardenClub, "Garden Club" },
+            { Models.User.Role.Board, "Board of Directors" },
+            { Models.User.Role.SocialCommittee, "Social Committee" },
+            { Models.User.Role.SunshineCommittee, "Sunshine Committee" },
+            { Models.User.Role.ArchitecturalCommittee, "Architectural Committee" },
+        };
+
         public BlogController(
             IUserRepository userRepository,
             IBlogPostRepository blogPostRepository,
@@ -247,7 +261,23 @@ namespace Web.Controllers
                 ? GenerateExcerpt(request.Content)
                 : request.Excerpt.Trim();
             post.PublishUtc = request.PublishUtc.HasValue ? NormalizeToUtc(request.PublishUtc.Value) : now;
-            post.AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim();
+
+            // Resolve author identity: personal name or committee display name.
+            if (!string.IsNullOrWhiteSpace(request.AuthorAsCommittee)
+                && Enum.TryParse<Models.User.Role>(request.AuthorAsCommittee, ignoreCase: false, out var committeeRole)
+                && CommitteeDisplayNames.TryGetValue(committeeRole, out var committeeName)
+                && apiUser.Roles != null
+                && apiUser.Roles.Contains(committeeRole))
+            {
+                post.AuthorDisplayName = committeeName;
+                post.AuthorAsCommittee = committeeRole;
+            }
+            else
+            {
+                post.AuthorDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim();
+                post.AuthorAsCommittee = null;
+            }
+
             post.ModifiedByUniqueId = apiUser.UniqueId;
             post.ModifiedUtc = now;
 

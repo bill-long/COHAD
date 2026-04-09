@@ -17,6 +17,12 @@ namespace Web.PresentationModels
 
         public string AuthorDisplayName { get; protected set; }
 
+        /// <summary>
+        /// The committee role name when the post was published under a committee identity,
+        /// or <c>null</c> when published under the author's personal name.
+        /// </summary>
+        public string AuthorAsCommittee { get; protected set; }
+
         public bool HasFeaturedImage { get; protected set; }
 
         public string FeaturedImageContentType { get; protected set; }
@@ -34,6 +40,7 @@ namespace Web.PresentationModels
                 Excerpt = post.Excerpt,
                 PublishUtc = post.PublishUtc,
                 AuthorDisplayName = post.AuthorDisplayName,
+                AuthorAsCommittee = post.AuthorAsCommittee?.ToString(),
                 HasFeaturedImage = !string.IsNullOrWhiteSpace(post.FeaturedImageBlobPath),
                 FeaturedImageContentType = post.FeaturedImageContentType,
                 FeaturedImageDownloadUrl = !string.IsNullOrWhiteSpace(post.FeaturedImageBlobPath)

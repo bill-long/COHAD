@@ -21,6 +21,16 @@
       </mat-form-field>
     </div>
 
+    <div class="blog-editor-field-row" *ngIf="authorOptions.length > 1">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="blog-editor-mat-field">
+        <mat-label>Post as</mat-label>
+        <mat-select [(ngModel)]="authorAsCommittee" id="blog-editor-author">
+          <mat-option *ngFor="let opt of authorOptions" [value]="opt.value">{{ opt.label }}</mat-option>
+        </mat-select>
+        <mat-hint>Choose whether to publish under your name or a committee</mat-hint>
+      </mat-form-field>
+    </div>
+
     <div class="blog-editor-field-row blog-editor-datetime-row">
       <span id="blog-editor-publish-label" class="blog-editor-datetime-label">Publish date and time</span>
       <div class="blog-editor-datetime-fields" aria-labelledby="blog-editor-publish-label">
