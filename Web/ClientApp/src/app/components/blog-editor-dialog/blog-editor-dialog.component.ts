@@ -6,15 +6,12 @@ import { BlogPostDetail, BlogService } from 'src/app/services/blog.service';
 import { applicationState, ApplicationState } from 'src/app/state';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
 
-/** Maps committee role names to their display labels shown in the author dropdown. */
-const committeeDisplayNames: Record<string, string> = {
-  WelcomeCommittee: 'Welcome Committee',
-  GardenClub: 'Garden Club',
-  Board: 'COHAD Board',
-  SocialCommittee: 'Social Committee',
-  SunshineCommittee: 'Sunshine Committee',
-  ArchitecturalCommittee: 'Architectural Committee',
-};
+/** Derives a human-readable label from a backend committee role name. */
+function committeeDisplayName(role: string): string | null {
+  if (role === 'Board') return 'COHAD Board';
+  if (role === 'Resident' || role === 'Administrator') return null;
+  return role.replace(/([a-z])([A-Z])/g, '$1 $2');
+}
 
 export interface AuthorOption {
   value: string | null;
@@ -92,8 +89,9 @@ export class BlogEditorDialogComponent {
       const personalName = [state.apiUser?.givenName, state.apiUser?.surname].filter(Boolean).join(' ') || 'Me';
       const options: AuthorOption[] = [{ value: null, label: personalName }];
       for (const role of roles) {
-        if (committeeDisplayNames[role]) {
-          options.push({ value: role, label: committeeDisplayNames[role] });
+        const label = committeeDisplayName(role);
+        if (label) {
+          options.push({ value: role, label });
         }
       }
       this.authorOptions = options;
