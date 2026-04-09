@@ -25,10 +25,11 @@ namespace Web.Models
         public string CommitteeEmail { get; set; }
 
         /// <summary>
-        /// The Graph message ID of the original message in the shared mailbox.
+        /// The RFC 2822 Internet Message-ID of the original message in the shared mailbox.
+        /// Stable across folder moves (unlike the Graph message <c>id</c>).
         /// Used to correlate with the mailbox message for approve/reject actions.
         /// </summary>
-        public string GraphMessageId { get; set; }
+        public string InternetMessageId { get; set; }
 
         public string SenderEmail { get; set; }
 

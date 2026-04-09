@@ -36,15 +36,15 @@ namespace Web.MockData
             }
         }
 
-        public Task<HeldMessage?> GetByGraphMessageIdAsync(string committeeId, string graphMessageId)
+        public Task<HeldMessage?> GetByInternetMessageIdAsync(string committeeId, string internetMessageId)
         {
-            if (string.IsNullOrEmpty(graphMessageId))
+            if (string.IsNullOrEmpty(internetMessageId))
                 return Task.FromResult<HeldMessage?>(null);
 
             lock (_messages)
             {
                 var match = _messages.Values.FirstOrDefault(m =>
-                    m.CommitteeId == committeeId && m.GraphMessageId == graphMessageId
+                    m.CommitteeId == committeeId && m.InternetMessageId == internetMessageId
                 );
                 return Task.FromResult(match != null ? Clone(match) : null);
             }
@@ -97,7 +97,7 @@ namespace Web.MockData
                 Id = m.Id,
                 CommitteeId = m.CommitteeId,
                 CommitteeEmail = m.CommitteeEmail,
-                GraphMessageId = m.GraphMessageId,
+                InternetMessageId = m.InternetMessageId,
                 SenderEmail = m.SenderEmail,
                 SenderName = m.SenderName,
                 Subject = m.Subject,

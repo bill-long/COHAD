@@ -87,11 +87,12 @@ namespace Web.Models
         public bool GroupRecipients { get; set; }
 
         /// <summary>
-        /// Graph message ID from the original mailbox message that triggered this forwarding job.
+        /// RFC 2822 Internet Message-ID of the original mailbox message that triggered this forwarding job.
+        /// Stable across folder moves (unlike the Graph message <c>id</c>).
         /// Used as an idempotency key by <see cref="CommitteeMailPoller"/> to prevent duplicate sends.
         /// Null for jobs not created by the mail poller.
         /// </summary>
-        public string GraphMessageId { get; set; }
+        public string InternetMessageId { get; set; }
 
         /// <summary>
         /// Optional Reply-To email address. When set, the outgoing message includes a Reply-To header

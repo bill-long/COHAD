@@ -138,14 +138,14 @@ namespace Web.MockData
             }
         }
 
-        public Task<EmailJob?> GetByGraphMessageIdAsync(string graphMessageId)
+        public Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId)
         {
-            if (string.IsNullOrEmpty(graphMessageId))
+            if (string.IsNullOrEmpty(internetMessageId))
                 return Task.FromResult<EmailJob?>(null);
 
             lock (_jobs)
             {
-                var match = _jobs.Values.FirstOrDefault(j => j.GraphMessageId == graphMessageId);
+                var match = _jobs.Values.FirstOrDefault(j => j.InternetMessageId == internetMessageId);
                 return Task.FromResult(match != null ? CloneJob(match) : (EmailJob?)null);
             }
         }
@@ -292,7 +292,7 @@ namespace Web.MockData
                 FailedCount = job.FailedCount,
                 LastError = job.LastError,
                 GroupRecipients = job.GroupRecipients,
-                GraphMessageId = job.GraphMessageId,
+                InternetMessageId = job.InternetMessageId,
                 ReplyToEmail = job.ReplyToEmail,
                 ReplyToDisplay = job.ReplyToDisplay,
                 ETag = job.ETag,

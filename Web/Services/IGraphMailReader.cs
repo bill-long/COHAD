@@ -39,5 +39,11 @@ namespace Web.Services
         /// Used during migration from the legacy inbox-rule forwarding to the new polling gateway.
         /// </summary>
         Task DeleteMessageRuleAsync(string mailbox, string ruleId, CancellationToken ct = default);
+
+        /// <summary>
+        /// Returns a message by its RFC 2822 Internet Message-ID (stable across folder moves).
+        /// Returns null if the message is not found.
+        /// </summary>
+        Task<Message?> GetMessageByInternetIdAsync(string mailbox, string internetMessageId, CancellationToken ct = default);
     }
 }

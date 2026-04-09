@@ -171,14 +171,14 @@ namespace Web.Services.Repositories
             return results;
         }
 
-        public async Task<EmailJob?> GetByGraphMessageIdAsync(string graphMessageId)
+        public async Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId)
         {
-            if (string.IsNullOrEmpty(graphMessageId))
+            if (string.IsNullOrEmpty(internetMessageId))
                 return null;
 
             var query = new CosmosQueryDefinition(
-                "SELECT TOP 1 * FROM c WHERE c.GraphMessageId = @graphMessageId"
-            ).WithParameter("@graphMessageId", graphMessageId);
+                "SELECT TOP 1 * FROM c WHERE c.InternetMessageId = @internetMessageId"
+            ).WithParameter("@internetMessageId", internetMessageId);
 
             var iterator = _emailJobContainer.GetItemQueryIterator<JObject>(query);
             while (iterator.HasMoreResults)

@@ -21,9 +21,9 @@ namespace Web.Services.Repositories
         Task<HeldMessage?> GetByIdAsync(Guid id);
 
         /// <summary>
-        /// Returns the held message for the given Graph message ID in the specified committee, or null.
+        /// Returns the held message for the given Internet Message-ID in the specified committee, or null.
         /// </summary>
-        Task<HeldMessage?> GetByGraphMessageIdAsync(string committeeId, string graphMessageId);
+        Task<HeldMessage?> GetByInternetMessageIdAsync(string committeeId, string internetMessageId);
 
         Task UpdateAsync(HeldMessage message);
 
@@ -70,16 +70,16 @@ namespace Web.Services.Repositories
             }
         }
 
-        public async Task<HeldMessage?> GetByGraphMessageIdAsync(string committeeId, string graphMessageId)
+        public async Task<HeldMessage?> GetByInternetMessageIdAsync(string committeeId, string internetMessageId)
         {
-            if (string.IsNullOrEmpty(graphMessageId))
+            if (string.IsNullOrEmpty(internetMessageId))
                 return null;
 
             var query = new CosmosQueryDefinition(
-                "SELECT TOP 1 * FROM c WHERE c.CommitteeId = @committeeId AND c.GraphMessageId = @graphMessageId"
+                "SELECT TOP 1 * FROM c WHERE c.CommitteeId = @committeeId AND c.InternetMessageId = @internetMessageId"
             )
                 .WithParameter("@committeeId", committeeId)
-                .WithParameter("@graphMessageId", graphMessageId);
+                .WithParameter("@internetMessageId", internetMessageId);
 
             var iterator = _container.GetItemQueryIterator<JObject>(query);
             while (iterator.HasMoreResults)

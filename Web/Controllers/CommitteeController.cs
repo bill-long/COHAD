@@ -656,6 +656,20 @@ namespace Web.Controllers
             if (held.Status != HeldMessageStatus.Held)
                 return BadRequest(new { Error = $"Message is already {held.Status}." });
 
+            // Claim the held message via optimistic concurrency BEFORE creating the job.
+            // If two concurrent approvals race, only one will succeed — the loser gets 409.
+            held.Status = HeldMessageStatus.Approved;
+            held.ReviewedByUserId = apiUser.UniqueId;
+            held.ReviewedUtc = DateTime.UtcNow;
+            try
+            {
+                await _heldMessageRepository.UpdateAsync(held);
+            }
+            catch (InvalidOperationException)
+            {
+                return Conflict(new { Error = "Message was already actioned by another administrator." });
+            }
+
             // Resolve forwarding recipients
             var residents = await ResolveResidentsForCommittees(new[] { committee });
             var forwardingMembers = (committee.Members ?? new List<CommitteeMember>())
@@ -671,22 +685,51 @@ namespace Web.Controllers
                     HomeId = r.HomeId,
                     Status = EmailJobRecipientStatus.Pending,
                 })
+                .GroupBy(r => r.Email, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
                 .ToList();
 
             if (recipients.Count == 0)
                 return BadRequest(new { Error = "No forwarding recipients with valid email addresses." });
 
-            // Create forwarding EmailJob
+            // Fetch original message body from Graph API (message was moved to Processed folder)
+            var graphReader = HttpContext.RequestServices.GetService<IGraphMailReader>();
+            string originalBodyHtml = null;
+            if (graphReader != null)
+            {
+                try
+                {
+                    var original = await graphReader.GetMessageByInternetIdAsync(
+                        committee.CommitteeEmail,
+                        held.InternetMessageId
+                    );
+                    originalBodyHtml = original?.Body?.Content;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Could not retrieve original message body for {InternetMessageId} in {Mailbox}",
+                        held.InternetMessageId,
+                        committee.CommitteeEmail
+                    );
+                }
+            }
+
+            // Build forwarding subject
             var fwdSubject = held.Subject?.StartsWith("Fwd:", StringComparison.OrdinalIgnoreCase) == true
                     || held.Subject?.StartsWith("FW:", StringComparison.OrdinalIgnoreCase) == true
                 ? held.Subject
                 : $"Fwd: {held.Subject}";
 
+            // Build HTML body with forwarding header + original content
             var htmlBody =
                 $"<p><em>This message was approved for forwarding by an administrator.</em></p>"
                 + $"<p><strong>From:</strong> {System.Net.WebUtility.HtmlEncode(held.SenderName ?? "")} "
                 + $"&lt;{System.Net.WebUtility.HtmlEncode(held.SenderEmail)}&gt;<br/>"
-                + $"<strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(held.Subject ?? "")}</p>";
+                + $"<strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(held.Subject ?? "")}</p>"
+                + "<hr/>"
+                + (originalBodyHtml ?? "<p><em>(Original message body could not be retrieved.)</em></p>");
 
             var job = new EmailJob
             {
@@ -701,7 +744,7 @@ namespace Web.Controllers
                 CreatedByDisplayName = $"{apiUser.GivenName} {apiUser.Surname}".Trim(),
                 MaxRecipientAttempts = 3,
                 TotalRecipients = recipients.Count,
-                GraphMessageId = held.GraphMessageId,
+                InternetMessageId = held.InternetMessageId,
                 ReplyToEmail = held.SenderEmail,
                 ReplyToDisplay = held.SenderName,
                 Recipients = recipients,
@@ -715,12 +758,6 @@ namespace Web.Controllers
 
             await _emailJobRepository.AddAsync(job);
             await _emailJobQueue.EnqueueAsync(job.Id);
-
-            // Mark held message as approved
-            held.Status = HeldMessageStatus.Approved;
-            held.ReviewedByUserId = apiUser.UniqueId;
-            held.ReviewedUtc = DateTime.UtcNow;
-            await _heldMessageRepository.UpdateAsync(held);
 
             await AuditAsync(
                 committee.Id,

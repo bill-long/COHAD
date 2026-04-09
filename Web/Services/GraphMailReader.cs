@@ -46,6 +46,7 @@ namespace Web.Services
                         config.QueryParameters.Select = new[]
                         {
                             "id",
+                            "internetMessageId",
                             "subject",
                             "from",
                             "receivedDateTime",
@@ -61,30 +62,15 @@ namespace Web.Services
             if (page?.Value != null)
                 messages.AddRange(page.Value);
 
-            // Follow @odata.nextLink pages
+            // Follow @odata.nextLink pages.
+            // nextLink URLs are opaque continuation tokens — do not set additional query params.
             while (page?.OdataNextLink != null)
             {
                 page = await _graphClient
                     .Users[mailbox]
                     .MailFolders["inbox"]
-                    .Messages.GetAsync(
-                        config =>
-                        {
-                            config.QueryParameters.Select = new[]
-                            {
-                                "id",
-                                "subject",
-                                "from",
-                                "receivedDateTime",
-                                "body",
-                                "hasAttachments",
-                            };
-                            config.QueryParameters.Top = 50;
-                            config.QueryParameters.Orderby = new[] { "receivedDateTime asc" };
-                            config.QueryParameters.Skip = messages.Count;
-                        },
-                        ct
-                    );
+                    .Messages.WithUrl(page.OdataNextLink)
+                    .GetAsync(cancellationToken: ct);
 
                 if (page?.Value != null)
                     messages.AddRange(page.Value);
@@ -147,7 +133,8 @@ namespace Web.Services
                 .MailFolders.GetAsync(
                     config =>
                     {
-                        config.QueryParameters.Filter = $"displayName eq '{folderName}'";
+                        config.QueryParameters.Filter = $"displayName eq '{folderName.Replace("'", "''")}'";
+
                         config.QueryParameters.Select = new[] { "id", "displayName" };
                     },
                     ct
@@ -182,6 +169,39 @@ namespace Web.Services
                 .MailFolders["inbox"]
                 .MessageRules[ruleId]
                 .DeleteAsync(cancellationToken: ct);
+        }
+
+        public async Task<Message?> GetMessageByInternetIdAsync(
+            string mailbox,
+            string internetMessageId,
+            CancellationToken ct = default
+        )
+        {
+            // Filter by internetMessageId across all mail folders
+            var result = await _graphClient
+                .Users[mailbox]
+                .Messages.GetAsync(
+                    config =>
+                    {
+                        config.QueryParameters.Filter =
+                            $"internetMessageId eq '{internetMessageId.Replace("'", "''")}'";
+                        config.QueryParameters.Select = new[]
+                        {
+                            "id",
+                            "internetMessageId",
+                            "subject",
+                            "from",
+                            "receivedDateTime",
+                            "body",
+                            "hasAttachments",
+                        };
+                        config.QueryParameters.Top = 1;
+                        config.QueryParameters.Expand = new[] { "attachments" };
+                    },
+                    ct
+                );
+
+            return result?.Value?.FirstOrDefault();
         }
     }
 }

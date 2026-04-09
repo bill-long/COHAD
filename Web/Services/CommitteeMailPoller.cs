@@ -181,8 +181,9 @@ namespace Web.Services
             {
                 ct.ThrowIfCancellationRequested();
 
-                var graphMessageId = message.Id;
-                if (string.IsNullOrEmpty(graphMessageId))
+                var graphId = message.Id; // Graph API ID — used for move operations
+                var internetMessageId = message.InternetMessageId; // RFC 2822 Message-ID — stable across moves
+                if (string.IsNullOrEmpty(graphId) || string.IsNullOrEmpty(internetMessageId))
                     continue;
 
                 try
@@ -190,7 +191,8 @@ namespace Web.Services
                     await ProcessMessageAsync(
                         committee,
                         message,
-                        graphMessageId,
+                        graphId,
+                        internetMessageId,
                         processedFolderId,
                         forwardingMembers,
                         recipientResidents,
@@ -206,8 +208,8 @@ namespace Web.Services
                 {
                     _logger.LogError(
                         ex,
-                        "Error processing message {MessageId} in {Mailbox}",
-                        graphMessageId,
+                        "Error processing message {InternetMessageId} in {Mailbox}",
+                        internetMessageId,
                         committee.CommitteeEmail
                     );
                     // Continue with next message
@@ -218,7 +220,8 @@ namespace Web.Services
         private async Task ProcessMessageAsync(
             Committee committee,
             Microsoft.Graph.Models.Message message,
-            string graphMessageId,
+            string graphId,
+            string internetMessageId,
             string processedFolderId,
             List<CommitteeMember> forwardingMembers,
             Dictionary<Guid, Resident> recipientResidents,
@@ -231,24 +234,24 @@ namespace Web.Services
         )
         {
             // Step 1: Idempotency check — skip if we already created a job for this message
-            var existingJob = await emailJobRepo.GetByGraphMessageIdAsync(graphMessageId);
+            var existingJob = await emailJobRepo.GetByInternetMessageIdAsync(internetMessageId);
             if (existingJob != null)
             {
                 _logger.LogDebug(
-                    "Skipping message {MessageId} — job {JobId} already exists",
-                    graphMessageId,
+                    "Skipping message {InternetMessageId} — job {JobId} already exists",
+                    internetMessageId,
                     existingJob.Id
                 );
-                await MoveToProcessedSafe(committee.CommitteeEmail, graphMessageId, processedFolderId, ct);
+                await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
                 return;
             }
 
             // Also check if already held
-            var existingHeld = await heldMessageRepo.GetByGraphMessageIdAsync(committee.Id, graphMessageId);
+            var existingHeld = await heldMessageRepo.GetByInternetMessageIdAsync(committee.Id, internetMessageId);
             if (existingHeld != null)
             {
-                _logger.LogDebug("Skipping message {MessageId} — already held", graphMessageId);
-                await MoveToProcessedSafe(committee.CommitteeEmail, graphMessageId, processedFolderId, ct);
+                _logger.LogDebug("Skipping message {InternetMessageId} — already held", internetMessageId);
+                await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
                 return;
             }
 
@@ -265,7 +268,8 @@ namespace Web.Services
                     // Hold for admin review
                     await HoldMessageAsync(
                         committee,
-                        graphMessageId,
+                        graphId,
+                        internetMessageId,
                         senderEmail,
                         senderName,
                         message.Subject,
@@ -286,7 +290,7 @@ namespace Web.Services
                     "No forwarding recipients for {Mailbox}, moving message to processed",
                     committee.CommitteeEmail
                 );
-                await MoveToProcessedSafe(committee.CommitteeEmail, graphMessageId, processedFolderId, ct);
+                await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
                 return;
             }
 
@@ -299,6 +303,8 @@ namespace Web.Services
                     HomeId = r.HomeId,
                     Status = EmailJobRecipientStatus.Pending,
                 })
+                .GroupBy(r => r.Email, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
                 .ToList();
 
             if (recipients.Count == 0)
@@ -307,7 +313,7 @@ namespace Web.Services
                     "Committee {Committee} has forwarding members but none have valid email addresses",
                     committee.Id
                 );
-                await MoveToProcessedSafe(committee.CommitteeEmail, graphMessageId, processedFolderId, ct);
+                await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
                 return;
             }
 
@@ -333,7 +339,7 @@ namespace Web.Services
                 CreatedByDisplayName = "Committee Mail Poller",
                 MaxRecipientAttempts = 3,
                 TotalRecipients = recipients.Count,
-                GraphMessageId = graphMessageId,
+                InternetMessageId = internetMessageId,
                 ReplyToEmail = senderEmail,
                 ReplyToDisplay = senderName,
                 Recipients = recipients,
@@ -352,20 +358,21 @@ namespace Web.Services
             await _emailJobQueue.EnqueueAsync(job.Id, ct);
 
             _logger.LogInformation(
-                "Created forwarding job {JobId} for message {MessageId} in {Mailbox} → {RecipientCount} recipients",
+                "Created forwarding job {JobId} for message {InternetMessageId} in {Mailbox} → {RecipientCount} recipients",
                 job.Id,
-                graphMessageId,
+                internetMessageId,
                 committee.CommitteeEmail,
                 recipients.Count
             );
 
-            // Step 5: Move to processed
-            await MoveToProcessedSafe(committee.CommitteeEmail, graphMessageId, processedFolderId, ct);
+            // Step 5: Move to processed (uses Graph API id, not InternetMessageId)
+            await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
         }
 
         private async Task HoldMessageAsync(
             Committee committee,
-            string graphMessageId,
+            string graphId,
+            string internetMessageId,
             string? senderEmail,
             string? senderName,
             string? subject,
@@ -381,7 +388,7 @@ namespace Web.Services
                 Id = Guid.NewGuid(),
                 CommitteeId = committee.Id,
                 CommitteeEmail = committee.CommitteeEmail,
-                GraphMessageId = graphMessageId,
+                InternetMessageId = internetMessageId,
                 SenderEmail = senderEmail ?? "(unknown)",
                 SenderName = senderName,
                 Subject = subject,
@@ -393,14 +400,14 @@ namespace Web.Services
             await heldMessageRepo.AddAsync(held);
 
             _logger.LogInformation(
-                "Held message {MessageId} in {Mailbox} — sender {Sender} not in directory",
-                graphMessageId,
+                "Held message {InternetMessageId} in {Mailbox} — sender {Sender} not in directory",
+                internetMessageId,
                 committee.CommitteeEmail,
                 senderEmail
             );
 
-            // Move to processed folder (the held record in Cosmos tracks the message)
-            await MoveToProcessedSafe(committee.CommitteeEmail, graphMessageId, processedFolderId, ct);
+            // Move to processed folder using Graph API id (the held record in Cosmos tracks via InternetMessageId)
+            await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
 
             // Notify administrators
             await NotifyAdminsOfHeldMessageAsync(committee, held, userRepo, ct);

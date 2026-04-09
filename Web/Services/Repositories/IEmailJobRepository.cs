@@ -44,10 +44,10 @@ namespace Web.Services.Repositories
         Task<List<EmailJob>> GetTerminalJobsOlderThanAsync(DateTime cutoffUtc, int limit);
 
         /// <summary>
-        /// Returns the first job with the given <see cref="EmailJob.GraphMessageId"/>, or null.
+        /// Returns the first job with the given <see cref="EmailJob.InternetMessageId"/>, or null.
         /// Used by <see cref="CommitteeMailPoller"/> as an idempotency check to avoid creating
         /// duplicate forwarding jobs for the same mailbox message.
         /// </summary>
-        Task<EmailJob?> GetByGraphMessageIdAsync(string graphMessageId);
+        Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId);
     }
 }
