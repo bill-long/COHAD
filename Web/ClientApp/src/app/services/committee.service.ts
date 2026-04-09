@@ -54,6 +54,26 @@ export interface ForwardingSyncStatus {
   lastSyncError: string | null;
 }
 
+export interface ForwardingSettings {
+  forwardingEnabled: boolean;
+  forwardingSenderFilter: string;
+  lastPollUtc: string | null;
+  lastPollStatus: string | null;
+  lastPollError: string | null;
+}
+
+export interface HeldMessage {
+  id: string;
+  senderEmail: string;
+  senderName: string | null;
+  subject: string | null;
+  receivedUtc: string;
+  heldUtc: string;
+  status: string;
+  reviewedByUserId: string | null;
+  reviewedUtc: string | null;
+}
+
 export interface ResidentPickerItem {
   id: string;
   displayName: string;
@@ -104,5 +124,25 @@ export class CommitteeService {
 
   getForwardingStatus(key: string): Observable<ForwardingSyncStatus> {
     return this.httpClient.get<ForwardingSyncStatus>(`api/committee/admin/${encodeURIComponent(key)}/forwarding/status`);
+  }
+
+  getForwardingSettings(key: string): Observable<ForwardingSettings> {
+    return this.httpClient.get<ForwardingSettings>(`api/committee/admin/${encodeURIComponent(key)}/forwarding/settings`);
+  }
+
+  updateForwardingSettings(key: string, settings: { forwardingEnabled: boolean; forwardingSenderFilter: string }): Observable<ForwardingSettings> {
+    return this.httpClient.put<ForwardingSettings>(`api/committee/admin/${encodeURIComponent(key)}/forwarding/settings`, settings);
+  }
+
+  getHeldMessages(key: string): Observable<HeldMessage[]> {
+    return this.httpClient.get<HeldMessage[]>(`api/committee/admin/${encodeURIComponent(key)}/forwarding/held`);
+  }
+
+  approveHeldMessage(key: string, messageId: string): Observable<{ jobId: string; status: string }> {
+    return this.httpClient.post<{ jobId: string; status: string }>(`api/committee/admin/${encodeURIComponent(key)}/forwarding/held/${encodeURIComponent(messageId)}/approve`, null);
+  }
+
+  rejectHeldMessage(key: string, messageId: string): Observable<{ status: string }> {
+    return this.httpClient.post<{ status: string }>(`api/committee/admin/${encodeURIComponent(key)}/forwarding/held/${encodeURIComponent(messageId)}/reject`, null);
   }
 }

@@ -383,6 +383,9 @@ namespace Web.Services.Cosmos
                 FailedCount = doc.Value<int?>("FailedCount") ?? 0,
                 LastError = doc.Value<string>("LastError"),
                 GroupRecipients = doc.Value<bool?>("GroupRecipients") ?? false,
+                GraphMessageId = doc.Value<string>("GraphMessageId"),
+                ReplyToEmail = doc.Value<string>("ReplyToEmail"),
+                ReplyToDisplay = doc.Value<string>("ReplyToDisplay"),
                 Recipients = ToEmailJobRecipients(doc["Recipients"]),
             };
         }
@@ -436,6 +439,9 @@ namespace Web.Services.Cosmos
                 ["FailedCount"] = job.FailedCount,
                 ["LastError"] = job.LastError != null ? job.LastError : JValue.CreateNull(),
                 ["GroupRecipients"] = job.GroupRecipients,
+                ["GraphMessageId"] = job.GraphMessageId,
+                ["ReplyToEmail"] = job.ReplyToEmail,
+                ["ReplyToDisplay"] = job.ReplyToDisplay,
                 ["Recipients"] = recipientsArray,
             };
         }
@@ -534,6 +540,14 @@ namespace Web.Services.Cosmos
                 LastSyncedUtc = doc.Value<DateTime?>("LastSyncedUtc"),
                 LastSyncStatus = doc.Value<string>("LastSyncStatus"),
                 LastSyncError = doc.Value<string>("LastSyncError"),
+                ForwardingEnabled = doc.Value<bool?>("ForwardingEnabled") ?? false,
+                ForwardingSenderFilter = Enum.TryParse<ForwardingSenderFilter>(
+                    doc.Value<string>("ForwardingSenderFilter"), out var fsf)
+                    ? fsf
+                    : ForwardingSenderFilter.DirectoryOnly,
+                LastPollUtc = doc["LastPollUtc"]?.ToObject<DateTime?>(),
+                LastPollStatus = doc.Value<string>("LastPollStatus"),
+                LastPollError = doc.Value<string>("LastPollError"),
             };
         }
 
@@ -552,6 +566,13 @@ namespace Web.Services.Cosmos
                 ["LastSyncedUtc"] = committee.LastSyncedUtc,
                 ["LastSyncStatus"] = committee.LastSyncStatus,
                 ["LastSyncError"] = committee.LastSyncError,
+                ["ForwardingEnabled"] = committee.ForwardingEnabled,
+                ["ForwardingSenderFilter"] = committee.ForwardingSenderFilter.ToString(),
+                ["LastPollUtc"] = committee.LastPollUtc != null
+                    ? JToken.FromObject(committee.LastPollUtc)
+                    : JValue.CreateNull(),
+                ["LastPollStatus"] = committee.LastPollStatus,
+                ["LastPollError"] = committee.LastPollError,
             };
         }
 
@@ -575,6 +596,53 @@ namespace Web.Services.Cosmos
             }
 
             return new List<CommitteeMember>();
+        }
+
+        // ── HeldMessage ─────────────────────────────────────────────────
+
+        internal static string ToHeldMessageDocumentId(Guid id) => $"HeldMessage|{id:D}";
+
+        internal static HeldMessage ToHeldMessage(JObject doc)
+        {
+            var rawId = doc.Value<string>("id");
+            return new HeldMessage
+            {
+                Id = ParseLegacyGuid(rawId),
+                CommitteeId = doc.Value<string>("CommitteeId"),
+                CommitteeEmail = doc.Value<string>("CommitteeEmail"),
+                GraphMessageId = doc.Value<string>("GraphMessageId"),
+                SenderEmail = doc.Value<string>("SenderEmail"),
+                SenderName = doc.Value<string>("SenderName"),
+                Subject = doc.Value<string>("Subject"),
+                ReceivedUtc = doc["ReceivedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
+                HeldUtc = doc["HeldUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
+                Status = Enum.TryParse<HeldMessageStatus>(doc.Value<string>("Status"), out var s)
+                    ? s
+                    : HeldMessageStatus.Held,
+                ReviewedByUserId = doc.Value<string>("ReviewedByUserId"),
+                ReviewedUtc = doc["ReviewedUtc"]?.ToObject<DateTime?>(),
+            };
+        }
+
+        internal static JObject ToHeldMessageDocument(HeldMessage msg)
+        {
+            return new JObject
+            {
+                ["id"] = ToHeldMessageDocumentId(msg.Id),
+                ["CommitteeId"] = msg.CommitteeId,
+                ["CommitteeEmail"] = msg.CommitteeEmail,
+                ["GraphMessageId"] = msg.GraphMessageId,
+                ["SenderEmail"] = msg.SenderEmail,
+                ["SenderName"] = msg.SenderName,
+                ["Subject"] = msg.Subject,
+                ["ReceivedUtc"] = JToken.FromObject(msg.ReceivedUtc),
+                ["HeldUtc"] = JToken.FromObject(msg.HeldUtc),
+                ["Status"] = msg.Status.ToString(),
+                ["ReviewedByUserId"] = msg.ReviewedByUserId,
+                ["ReviewedUtc"] = msg.ReviewedUtc != null
+                    ? JToken.FromObject(msg.ReviewedUtc)
+                    : JValue.CreateNull(),
+            };
         }
     }
 }

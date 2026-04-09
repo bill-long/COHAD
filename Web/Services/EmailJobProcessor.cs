@@ -558,7 +558,9 @@ namespace Web.Services
                     var message = new MimeMessage();
                     message.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
                     message.Subject = job.Subject;
-                    message.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                    var replyToName = job.ReplyToDisplay ?? job.FromDisplay;
+                    var replyToAddr = job.ReplyToEmail ?? job.FromEmail;
+                    message.ReplyTo.Add(new MailboxAddress(replyToName, replyToAddr));
                     message.Body = EmailMessageBuilder.BuildBodyWithImages(imageData.ProcessedHtml, imageData.Images);
 
                     foreach (var r in pendingRecipients)
@@ -657,7 +659,9 @@ namespace Web.Services
                             var message = new MimeMessage();
                             message.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
                             message.Subject = job.Subject;
-                            message.ReplyTo.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
+                            var perReplyToName = job.ReplyToDisplay ?? job.FromDisplay;
+                            var perReplyToAddr = job.ReplyToEmail ?? job.FromEmail;
+                            message.ReplyTo.Add(new MailboxAddress(perReplyToName, perReplyToAddr));
                             message.To.Add(new MailboxAddress("", recipient.Email));
                             message.Body = EmailMessageBuilder.BuildBodyWithImages(htmlWithFooter, imageData.Images);
 

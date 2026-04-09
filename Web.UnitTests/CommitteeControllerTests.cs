@@ -112,6 +112,9 @@ public sealed class CommitteeControllerTests
             fileStore,
             imageUploadHelper,
             graphMailboxService,
+            Mock.Of<IHeldMessageRepository>(),
+            Mock.Of<IEmailJobRepository>(),
+            new EmailJobQueue(),
             Options.Create(new DocumentStorageOptions()),
             Mock.Of<ILogger<CommitteeController>>()
         );

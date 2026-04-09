@@ -1,8 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Web.Models
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum ForwardingSenderFilter
+    {
+        DirectoryOnly = 0,
+        All = 1,
+    }
+
     public class Committee
     {
         public string Id { get; set; }
@@ -23,6 +31,7 @@ namespace Web.Models
         /// </summary>
         public User.Role? ManagementRole { get; set; }
 
+        // ── Legacy forwarding rule fields (kept for migration) ──────────
         public string GraphMessageRuleId { get; set; }
 
         public DateTime? LastSyncedUtc { get; set; }
@@ -30,6 +39,27 @@ namespace Web.Models
         public string LastSyncStatus { get; set; }
 
         public string LastSyncError { get; set; }
+
+        // ── Polling mail gateway fields ─────────────────────────────────
+
+        /// <summary>
+        /// When true, the <see cref="CommitteeMailPoller"/> reads this committee's
+        /// shared mailbox and forwards messages to members with <see cref="CommitteeMember.ReceivesForwardedEmail"/>.
+        /// </summary>
+        public bool ForwardingEnabled { get; set; }
+
+        /// <summary>
+        /// Controls whether only directory-listed senders are forwarded (<see cref="ForwardingSenderFilter.DirectoryOnly"/>)
+        /// or all senders (<see cref="ForwardingSenderFilter.All"/>).
+        /// Unknown senders are held for admin review when set to <see cref="ForwardingSenderFilter.DirectoryOnly"/>.
+        /// </summary>
+        public ForwardingSenderFilter ForwardingSenderFilter { get; set; }
+
+        public DateTime? LastPollUtc { get; set; }
+
+        public string LastPollStatus { get; set; }
+
+        public string LastPollError { get; set; }
     }
 
     public class CommitteeMember

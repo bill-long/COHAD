@@ -42,5 +42,12 @@ namespace Web.Services.Repositories
         /// Used for retention cleanup.
         /// </summary>
         Task<List<EmailJob>> GetTerminalJobsOlderThanAsync(DateTime cutoffUtc, int limit);
+
+        /// <summary>
+        /// Returns the first job with the given <see cref="EmailJob.GraphMessageId"/>, or null.
+        /// Used by <see cref="CommitteeMailPoller"/> as an idempotency check to avoid creating
+        /// duplicate forwarding jobs for the same mailbox message.
+        /// </summary>
+        Task<EmailJob?> GetByGraphMessageIdAsync(string graphMessageId);
     }
 }

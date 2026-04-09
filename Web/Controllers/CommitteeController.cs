@@ -37,6 +37,9 @@ namespace Web.Controllers
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IImageUploadHelper _imageUploadHelper;
         private readonly IGraphMailboxService _graphMailboxService;
+        private readonly IHeldMessageRepository _heldMessageRepository;
+        private readonly IEmailJobRepository _emailJobRepository;
+        private readonly EmailJobQueue _emailJobQueue;
         private readonly DocumentStorageOptions _storageOptions;
         private readonly ILogger<CommitteeController> _logger;
 
@@ -49,6 +52,9 @@ namespace Web.Controllers
             IDocumentFileStore documentFileStore,
             IImageUploadHelper imageUploadHelper,
             IGraphMailboxService graphMailboxService,
+            IHeldMessageRepository heldMessageRepository,
+            IEmailJobRepository emailJobRepository,
+            EmailJobQueue emailJobQueue,
             IOptions<DocumentStorageOptions> storageOptions,
             ILogger<CommitteeController> logger
         )
@@ -61,6 +67,9 @@ namespace Web.Controllers
             _documentFileStore = documentFileStore;
             _imageUploadHelper = imageUploadHelper;
             _graphMailboxService = graphMailboxService;
+            _heldMessageRepository = heldMessageRepository;
+            _emailJobRepository = emailJobRepository;
+            _emailJobQueue = emailJobQueue;
             _storageOptions = storageOptions.Value;
             _logger = logger;
         }
@@ -592,6 +601,252 @@ namespace Web.Controllers
                         .ToList(),
                 }
             );
+        }
+
+        // ── Forwarding settings (polling mail gateway) ──────────────────
+
+        [HttpGet("admin/{key}/forwarding/settings")]
+        [Authorize(Policy = "CommitteeEditor")]
+        public async Task<IActionResult> GetForwardingSettings(string key)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var committee = await _committeeRepository.GetByIdAsync(key);
+            if (committee == null)
+                return NotFound();
+            if (!CanManageCommittee(apiUser, committee))
+                return Forbid();
+
+            return Ok(
+                new
+                {
+                    committee.ForwardingEnabled,
+                    ForwardingSenderFilter = committee.ForwardingSenderFilter.ToString(),
+                    committee.LastPollUtc,
+                    committee.LastPollStatus,
+                    committee.LastPollError,
+                }
+            );
+        }
+
+        [HttpPut("admin/{key}/forwarding/settings")]
+        [Authorize(Policy = "CommitteeEditor")]
+        public async Task<IActionResult> UpdateForwardingSettings(
+            string key,
+            [FromBody] ForwardingSettingsUpdate update
+        )
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var committee = await _committeeRepository.GetByIdAsync(key);
+            if (committee == null)
+                return NotFound();
+            if (!CanManageCommittee(apiUser, committee))
+                return Forbid();
+
+            committee.ForwardingEnabled = update.ForwardingEnabled;
+            if (
+                Enum.TryParse<ForwardingSenderFilter>(update.ForwardingSenderFilter, true, out var filter)
+            )
+            {
+                committee.ForwardingSenderFilter = filter;
+            }
+
+            await _committeeRepository.UpsertAsync(committee);
+            _listCache.Invalidate();
+
+            var filterLabel = committee.ForwardingSenderFilter.ToString();
+            await AuditAsync(
+                committee.Id,
+                committee.DisplayName,
+                committee.ForwardingEnabled
+                    ? $"Enabled mail forwarding (sender filter: {filterLabel})."
+                    : "Disabled mail forwarding."
+            );
+
+            return Ok(
+                new
+                {
+                    committee.ForwardingEnabled,
+                    ForwardingSenderFilter = committee.ForwardingSenderFilter.ToString(),
+                    committee.LastPollUtc,
+                    committee.LastPollStatus,
+                    committee.LastPollError,
+                }
+            );
+        }
+
+        // ── Moderation queue (held messages) ────────────────────────────
+
+        [HttpGet("admin/{key}/forwarding/held")]
+        [Authorize(Policy = "CommitteeEditor")]
+        public async Task<IActionResult> GetHeldMessages(string key)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var committee = await _committeeRepository.GetByIdAsync(key);
+            if (committee == null)
+                return NotFound();
+            if (!CanManageCommittee(apiUser, committee))
+                return Forbid();
+
+            var held = await _heldMessageRepository.GetByCommitteeIdAsync(key);
+            return Ok(
+                held.Select(m => new
+                {
+                    m.Id,
+                    m.SenderEmail,
+                    m.SenderName,
+                    m.Subject,
+                    m.ReceivedUtc,
+                    m.HeldUtc,
+                    Status = m.Status.ToString(),
+                    m.ReviewedByUserId,
+                    m.ReviewedUtc,
+                })
+            );
+        }
+
+        [HttpPost("admin/{key}/forwarding/held/{messageId:guid}/approve")]
+        [Authorize(Policy = "CommitteeEditor")]
+        public async Task<IActionResult> ApproveHeldMessage(string key, Guid messageId)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var committee = await _committeeRepository.GetByIdAsync(key);
+            if (committee == null)
+                return NotFound();
+            if (!CanManageCommittee(apiUser, committee))
+                return Forbid();
+
+            var held = await _heldMessageRepository.GetByIdAsync(messageId);
+            if (held == null || held.CommitteeId != key)
+                return NotFound();
+            if (held.Status != HeldMessageStatus.Held)
+                return BadRequest(new { Error = $"Message is already {held.Status}." });
+
+            // Resolve forwarding recipients
+            var residents = await ResolveResidentsForCommittees(new[] { committee });
+            var forwardingMembers = (committee.Members ?? new List<CommitteeMember>())
+                .Where(m => m.ReceivesForwardedEmail)
+                .ToList();
+
+            var recipients = forwardingMembers
+                .Select(m => residents.GetValueOrDefault(m.ResidentId))
+                .Where(r => r?.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true)
+                .Select(r => new EmailJobRecipient
+                {
+                    Email = r.EmailAddresses.First(e => !string.IsNullOrWhiteSpace(e?.Address)).Address,
+                    HomeId = r.HomeId,
+                    Status = EmailJobRecipientStatus.Pending,
+                })
+                .ToList();
+
+            if (recipients.Count == 0)
+                return BadRequest(new { Error = "No forwarding recipients with valid email addresses." });
+
+            // Create forwarding EmailJob
+            var fwdSubject = held.Subject?.StartsWith("Fwd:", StringComparison.OrdinalIgnoreCase) == true
+                    || held.Subject?.StartsWith("FW:", StringComparison.OrdinalIgnoreCase) == true
+                ? held.Subject
+                : $"Fwd: {held.Subject}";
+
+            var htmlBody =
+                $"<p><em>This message was approved for forwarding by an administrator.</em></p>"
+                + $"<p><strong>From:</strong> {System.Net.WebUtility.HtmlEncode(held.SenderName ?? "")} "
+                + $"&lt;{System.Net.WebUtility.HtmlEncode(held.SenderEmail)}&gt;<br/>"
+                + $"<strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(held.Subject ?? "")}</p>";
+
+            var job = new EmailJob
+            {
+                Id = Guid.NewGuid(),
+                Status = EmailJobStatus.Queued,
+                Category = "committee-forward",
+                FromEmail = committee.CommitteeEmail,
+                FromDisplay = committee.DisplayName,
+                Subject = fwdSubject,
+                CreatedUtc = DateTime.UtcNow,
+                CreatedByUserId = apiUser.UniqueId,
+                CreatedByDisplayName = $"{apiUser.GivenName} {apiUser.Surname}".Trim(),
+                MaxRecipientAttempts = 3,
+                TotalRecipients = recipients.Count,
+                GraphMessageId = held.GraphMessageId,
+                ReplyToEmail = held.SenderEmail,
+                ReplyToDisplay = held.SenderName,
+                Recipients = recipients,
+            };
+
+            job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
+            using (var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(htmlBody)))
+            {
+                await _documentFileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
+            }
+
+            await _emailJobRepository.AddAsync(job);
+            await _emailJobQueue.EnqueueAsync(job.Id);
+
+            // Mark held message as approved
+            held.Status = HeldMessageStatus.Approved;
+            held.ReviewedByUserId = apiUser.UniqueId;
+            held.ReviewedUtc = DateTime.UtcNow;
+            await _heldMessageRepository.UpdateAsync(held);
+
+            await AuditAsync(
+                committee.Id,
+                committee.DisplayName,
+                $"Approved held message from {held.SenderEmail} (subject: {held.Subject})."
+            );
+
+            _logger.LogInformation(
+                "Admin approved held message {HeldId} for committee {Committee} → job {JobId}",
+                messageId,
+                key,
+                job.Id
+            );
+
+            return Ok(new { JobId = job.Id, Status = "Approved" });
+        }
+
+        [HttpPost("admin/{key}/forwarding/held/{messageId:guid}/reject")]
+        [Authorize(Policy = "CommitteeEditor")]
+        public async Task<IActionResult> RejectHeldMessage(string key, Guid messageId)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var committee = await _committeeRepository.GetByIdAsync(key);
+            if (committee == null)
+                return NotFound();
+            if (!CanManageCommittee(apiUser, committee))
+                return Forbid();
+
+            var held = await _heldMessageRepository.GetByIdAsync(messageId);
+            if (held == null || held.CommitteeId != key)
+                return NotFound();
+            if (held.Status != HeldMessageStatus.Held)
+                return BadRequest(new { Error = $"Message is already {held.Status}." });
+
+            held.Status = HeldMessageStatus.Rejected;
+            held.ReviewedByUserId = apiUser.UniqueId;
+            held.ReviewedUtc = DateTime.UtcNow;
+            await _heldMessageRepository.UpdateAsync(held);
+
+            await AuditAsync(
+                committee.Id,
+                committee.DisplayName,
+                $"Rejected held message from {held.SenderEmail} (subject: {held.Subject})."
+            );
+
+            return Ok(new { Status = "Rejected" });
         }
 
         private async Task AuditAsync(string subjectId, string subjectName, string action)

@@ -170,5 +170,30 @@ namespace Web.Services.Repositories
 
             return results;
         }
+
+        public async Task<EmailJob?> GetByGraphMessageIdAsync(string graphMessageId)
+        {
+            if (string.IsNullOrEmpty(graphMessageId))
+                return null;
+
+            var query = new CosmosQueryDefinition(
+                "SELECT TOP 1 * FROM c WHERE c.GraphMessageId = @graphMessageId"
+            ).WithParameter("@graphMessageId", graphMessageId);
+
+            var iterator = _emailJobContainer.GetItemQueryIterator<JObject>(query);
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                var first = response.FirstOrDefault();
+                if (first != null)
+                {
+                    var job = CosmosLegacyDocumentMapper.ToEmailJob(first);
+                    job.ETag = response.Headers.ETag;
+                    return job;
+                }
+            }
+
+            return null;
+        }
     }
 }

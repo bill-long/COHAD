@@ -86,6 +86,25 @@ namespace Web.Models
         /// </summary>
         public bool GroupRecipients { get; set; }
 
+        /// <summary>
+        /// Graph message ID from the original mailbox message that triggered this forwarding job.
+        /// Used as an idempotency key by <see cref="CommitteeMailPoller"/> to prevent duplicate sends.
+        /// Null for jobs not created by the mail poller.
+        /// </summary>
+        public string GraphMessageId { get; set; }
+
+        /// <summary>
+        /// Optional Reply-To email address. When set, the outgoing message includes a Reply-To header
+        /// so recipients reply to the original sender rather than the From address.
+        /// Used by committee mail forwarding where From is the committee mailbox.
+        /// </summary>
+        public string ReplyToEmail { get; set; }
+
+        /// <summary>
+        /// Display name for the Reply-To header.
+        /// </summary>
+        public string ReplyToDisplay { get; set; }
+
         public List<EmailJobRecipient> Recipients { get; set; } = new();
 
         /// <summary>

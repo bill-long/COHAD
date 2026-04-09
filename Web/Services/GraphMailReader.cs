@@ -1,0 +1,178 @@
+#nullable enable
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Azure.Identity;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Graph;
+using Microsoft.Graph.Models;
+using Microsoft.Graph.Users.Item.Messages.Item.Move;
+
+namespace Web.Services
+{
+    /// <summary>
+    /// Reads and manages messages in O365 shared mailboxes via Microsoft Graph API.
+    /// Uses client-credentials (application permission) flow with <c>Mail.ReadWrite</c>.
+    /// </summary>
+    public sealed class GraphMailReader : IGraphMailReader
+    {
+        private readonly GraphServiceClient _graphClient;
+        private readonly ILogger<GraphMailReader> _logger;
+
+        public GraphMailReader(IConfiguration config, ILogger<GraphMailReader> logger)
+        {
+            _logger = logger;
+
+            var tenantId = config["Graph:TenantId"];
+            var clientId = config["Graph:ClientId"];
+            var clientSecret = config["Graph:ClientSecret"];
+
+            var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+            _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
+        }
+
+        public async Task<List<Message>> GetInboxMessagesAsync(string mailbox, CancellationToken ct = default)
+        {
+            var messages = new List<Message>();
+
+            var page = await _graphClient
+                .Users[mailbox]
+                .MailFolders["inbox"]
+                .Messages.GetAsync(
+                    config =>
+                    {
+                        config.QueryParameters.Select = new[]
+                        {
+                            "id",
+                            "subject",
+                            "from",
+                            "receivedDateTime",
+                            "body",
+                            "hasAttachments",
+                        };
+                        config.QueryParameters.Top = 50;
+                        config.QueryParameters.Orderby = new[] { "receivedDateTime asc" };
+                    },
+                    ct
+                );
+
+            if (page?.Value != null)
+                messages.AddRange(page.Value);
+
+            // Follow @odata.nextLink pages
+            while (page?.OdataNextLink != null)
+            {
+                page = await _graphClient
+                    .Users[mailbox]
+                    .MailFolders["inbox"]
+                    .Messages.GetAsync(
+                        config =>
+                        {
+                            config.QueryParameters.Select = new[]
+                            {
+                                "id",
+                                "subject",
+                                "from",
+                                "receivedDateTime",
+                                "body",
+                                "hasAttachments",
+                            };
+                            config.QueryParameters.Top = 50;
+                            config.QueryParameters.Orderby = new[] { "receivedDateTime asc" };
+                            config.QueryParameters.Skip = messages.Count;
+                        },
+                        ct
+                    );
+
+                if (page?.Value != null)
+                    messages.AddRange(page.Value);
+            }
+
+            _logger.LogDebug("Read {Count} inbox messages from {Mailbox}", messages.Count, mailbox);
+            return messages;
+        }
+
+        public async Task<Message?> GetMessageWithAttachmentsAsync(
+            string mailbox,
+            string messageId,
+            CancellationToken ct = default
+        )
+        {
+            return await _graphClient
+                .Users[mailbox]
+                .Messages[messageId]
+                .GetAsync(
+                    config =>
+                    {
+                        config.QueryParameters.Expand = new[] { "attachments" };
+                    },
+                    ct
+                );
+        }
+
+        public async Task MoveMessageAsync(
+            string mailbox,
+            string messageId,
+            string destinationFolderId,
+            CancellationToken ct = default
+        )
+        {
+            await _graphClient
+                .Users[mailbox]
+                .Messages[messageId]
+                .Move.PostAsync(
+                    new MovePostRequestBody { DestinationId = destinationFolderId },
+                    cancellationToken: ct
+                );
+
+            _logger.LogDebug(
+                "Moved message {MessageId} to folder {FolderId} in {Mailbox}",
+                messageId,
+                destinationFolderId,
+                mailbox
+            );
+        }
+
+        public async Task<string> GetOrCreateFolderAsync(
+            string mailbox,
+            string folderName,
+            CancellationToken ct = default
+        )
+        {
+            // Search for existing folder by displayName
+            var existing = await _graphClient
+                .Users[mailbox]
+                .MailFolders.GetAsync(
+                    config =>
+                    {
+                        config.QueryParameters.Filter = $"displayName eq '{folderName}'";
+                        config.QueryParameters.Select = new[] { "id", "displayName" };
+                    },
+                    ct
+                );
+
+            var folder = existing?.Value?.FirstOrDefault();
+            if (folder != null)
+                return folder.Id!;
+
+            // Create the folder
+            var created = await _graphClient
+                .Users[mailbox]
+                .MailFolders.PostAsync(
+                    new MailFolder { DisplayName = folderName },
+                    cancellationToken: ct
+                );
+
+            _logger.LogInformation(
+                "Created mail folder '{FolderName}' (ID: {FolderId}) in {Mailbox}",
+                folderName,
+                created!.Id,
+                mailbox
+            );
+
+            return created.Id!;
+        }
+    }
+}
