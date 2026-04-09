@@ -108,6 +108,8 @@ namespace Web.Services
 
             foreach (var committee in enabled)
             {
+                string pollStatus;
+                string? pollError;
                 try
                 {
                     await PollCommitteeAsync(
@@ -121,19 +123,26 @@ namespace Web.Services
                         ct
                     );
 
-                    committee.LastPollUtc = DateTime.UtcNow;
-                    committee.LastPollStatus = "Success";
-                    committee.LastPollError = null;
+                    pollStatus = "Success";
+                    pollError = null;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.LogError(ex, "Failed to poll committee mailbox {Mailbox}", committee.CommitteeEmail);
-                    committee.LastPollUtc = DateTime.UtcNow;
-                    committee.LastPollStatus = "Failed";
-                    committee.LastPollError = ex.Message;
+                    pollStatus = "Failed";
+                    pollError = ex.Message;
                 }
 
-                await committeeRepo.UpsertAsync(committee);
+                // Reload the committee to avoid clobbering concurrent UI/API edits (last-write-wins).
+                // Only update the poll status fields.
+                var fresh = await committeeRepo.GetByIdAsync(committee.Id);
+                if (fresh != null)
+                {
+                    fresh.LastPollUtc = DateTime.UtcNow;
+                    fresh.LastPollStatus = pollStatus;
+                    fresh.LastPollError = pollError;
+                    await committeeRepo.UpsertAsync(fresh);
+                }
             }
         }
 
@@ -486,7 +495,7 @@ namespace Web.Services
                     CreatedByDisplayName = "Committee Mail Poller",
                     MaxRecipientAttempts = 2,
                     TotalRecipients = recipients.Count,
-                    GroupRecipients = true,
+                    GroupRecipients = false,
                     Recipients = recipients,
                 };
 

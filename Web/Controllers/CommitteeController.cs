@@ -758,14 +758,39 @@ namespace Web.Controllers
                 Recipients = recipients,
             };
 
-            job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
-            using (var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(htmlBody)))
+            // Create the forwarding job. If any step fails, revert the held message status.
+            try
             {
-                await _documentFileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
-            }
+                job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
+                using (var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(htmlBody)))
+                {
+                    await _documentFileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
+                }
 
-            await _emailJobRepository.AddAsync(job);
-            await _emailJobQueue.EnqueueAsync(job.Id);
+                await _emailJobRepository.AddAsync(job);
+                await _emailJobQueue.EnqueueAsync(job.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to create forwarding job for held message {HeldId} — reverting to Held",
+                    messageId
+                );
+
+                // Revert the held message so it can be retried
+                held.Status = HeldMessageStatus.Held;
+                held.ReviewedByUserId = null;
+                held.ReviewedUtc = null;
+                try { await _heldMessageRepository.UpdateAsync(held); }
+                catch (Exception revertEx)
+                {
+                    _logger.LogError(revertEx, "Failed to revert held message {HeldId} status", messageId);
+                }
+
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { Error = "Failed to create forwarding job. The message has been returned to Held status." });
+            }
 
             await AuditAsync(
                 committee.Id,
