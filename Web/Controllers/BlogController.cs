@@ -263,8 +263,9 @@ namespace Web.Controllers
             post.PublishUtc = request.PublishUtc.HasValue ? NormalizeToUtc(request.PublishUtc.Value) : now;
 
             // Resolve author identity: personal name or committee display name.
-            if (!string.IsNullOrWhiteSpace(request.AuthorAsCommittee)
-                && Enum.TryParse<Models.User.Role>(request.AuthorAsCommittee, ignoreCase: false, out var committeeRole)
+            var authorAsCommittee = request.AuthorAsCommittee?.Trim();
+            if (!string.IsNullOrWhiteSpace(authorAsCommittee)
+                && Enum.TryParse<Models.User.Role>(authorAsCommittee, ignoreCase: false, out var committeeRole)
                 && CommitteeDisplayNames.TryGetValue(committeeRole, out var committeeName)
                 && apiUser.Roles != null
                 && apiUser.Roles.Contains(committeeRole))
