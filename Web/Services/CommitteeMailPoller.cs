@@ -393,7 +393,7 @@ namespace Web.Services
                                 && fileAtt.ContentBytes.Length > 0)
                             {
                                 var safeName = SanitizeFileName(fileAtt.Name ?? $"attachment-{attachIndex}");
-                                var blobPath = $"email-jobs/{jobId:D}-attachments/{safeName}";
+                                var blobPath = $"email-jobs/{jobId:D}-attachments/{attachIndex:D4}-{safeName}";
 
                                 using (var stream = new MemoryStream(fileAtt.ContentBytes))
                                 {
@@ -403,7 +403,7 @@ namespace Web.Services
 
                                 attachments.Add(new EmailJobAttachment
                                 {
-                                    FileName = fileAtt.Name ?? safeName,
+                                    FileName = safeName,
                                     BlobPath = blobPath,
                                     ContentType = fileAtt.ContentType ?? "application/octet-stream",
                                     Size = fileAtt.ContentBytes.Length,

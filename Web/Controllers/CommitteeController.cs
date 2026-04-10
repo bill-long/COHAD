@@ -763,7 +763,7 @@ namespace Web.Controllers
                                     var safeName = string.Join("_", (fileAtt.Name ?? $"attachment-{attachIndex}")
                                         .Split(Path.GetInvalidFileNameChars()));
                                     if (string.IsNullOrWhiteSpace(safeName)) safeName = "attachment";
-                                    var blobPath = $"email-jobs/{jobId:D}-attachments/{safeName}";
+                                    var blobPath = $"email-jobs/{jobId:D}-attachments/{attachIndex:D4}-{safeName}";
 
                                     using (var stream = new System.IO.MemoryStream(fileAtt.ContentBytes))
                                     {
@@ -773,7 +773,7 @@ namespace Web.Controllers
 
                                     attachments.Add(new EmailJobAttachment
                                     {
-                                        FileName = fileAtt.Name ?? safeName,
+                                        FileName = safeName,
                                         BlobPath = blobPath,
                                         ContentType = fileAtt.ContentType ?? "application/octet-stream",
                                         Size = fileAtt.ContentBytes.Length,
