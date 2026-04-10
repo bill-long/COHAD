@@ -766,10 +766,17 @@ namespace Web.Controllers
                                 if (string.IsNullOrWhiteSpace(safeName)) safeName = "attachment";
                                 var blobPath = $"email-jobs/{jobId:D}-attachments/{attachIndex:D4}-{safeName}";
 
-                                using (var stream = new System.IO.MemoryStream(fileAtt.ContentBytes))
+                                try
                                 {
-                                    await _documentFileStore.UploadAsync(blobPath, stream,
-                                        fileAtt.ContentType ?? "application/octet-stream");
+                                    using (var stream = new System.IO.MemoryStream(fileAtt.ContentBytes))
+                                    {
+                                        await _documentFileStore.UploadAsync(blobPath, stream,
+                                            fileAtt.ContentType ?? "application/octet-stream");
+                                    }
+                                }
+                                catch (Azure.RequestFailedException blobEx) when (blobEx.Status == 409)
+                                {
+                                    _logger.LogDebug("Attachment blob {Path} already exists — proceeding", blobPath);
                                 }
 
                                 attachments.Add(new EmailJobAttachment
@@ -829,9 +836,16 @@ namespace Web.Controllers
             try
             {
                 job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
-                using (var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(htmlBody)))
+                try
                 {
-                    await _documentFileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
+                    using (var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(htmlBody)))
+                    {
+                        await _documentFileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
+                    }
+                }
+                catch (Azure.RequestFailedException blobEx) when (blobEx.Status == 409)
+                {
+                    _logger.LogDebug("Body blob {Path} already exists — proceeding", job.ContentBlobPath);
                 }
 
                 await _emailJobRepository.AddAsync(job);
