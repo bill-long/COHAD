@@ -122,7 +122,8 @@ namespace Web.Services
                     {
                         ct = new ContentType("application", "octet-stream");
                     }
-                    bodyBuilder.Attachments.Add(fileName, data, ct);
+                    var safeFileName = string.IsNullOrWhiteSpace(fileName) ? "attachment" : fileName;
+                    bodyBuilder.Attachments.Add(safeFileName, data, ct);
                 }
             }
             return bodyBuilder.ToMessageBody();

@@ -550,7 +550,11 @@ namespace Web.Services
                         using var downloadedStream = result.Stream;
                         using var ms = new MemoryStream();
                         await downloadedStream.CopyToAsync(ms, ct);
-                        attachmentData.Add((att.FileName, ms.ToArray(), att.ContentType));
+
+                        var safeFileName = string.IsNullOrWhiteSpace(att.FileName)
+                            ? Path.GetFileName(att.BlobPath) ?? "attachment"
+                            : att.FileName;
+                        attachmentData.Add((safeFileName, ms.ToArray(), att.ContentType));
                     }
                     catch (Exception ex)
                     {
