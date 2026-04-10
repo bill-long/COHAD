@@ -539,9 +539,17 @@ namespace Web.Services
                     try
                     {
                         var result = await fileStore.DownloadAsync(att.BlobPath);
+                        if (result == null)
+                        {
+                            _logger.LogWarning(
+                                "Attachment blob {BlobPath} not found for job {JobId}; skipping",
+                                att.BlobPath, job.Id);
+                            continue;
+                        }
+
+                        using var downloadedStream = result.Stream;
                         using var ms = new MemoryStream();
-                        await result.Stream.CopyToAsync(ms, ct);
-                        result.Stream.Dispose();
+                        await downloadedStream.CopyToAsync(ms, ct);
                         attachmentData.Add((att.FileName, ms.ToArray(), att.ContentType));
                     }
                     catch (Exception ex)

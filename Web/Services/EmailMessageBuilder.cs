@@ -111,7 +111,18 @@ namespace Web.Services
             {
                 foreach (var (fileName, data, contentType) in attachments)
                 {
-                    bodyBuilder.Attachments.Add(fileName, data, ContentType.Parse(contentType));
+                    ContentType ct;
+                    try
+                    {
+                        ct = !string.IsNullOrWhiteSpace(contentType)
+                            ? ContentType.Parse(contentType)
+                            : new ContentType("application", "octet-stream");
+                    }
+                    catch
+                    {
+                        ct = new ContentType("application", "octet-stream");
+                    }
+                    bodyBuilder.Attachments.Add(fileName, data, ct);
                 }
             }
             return bodyBuilder.ToMessageBody();
