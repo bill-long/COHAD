@@ -712,11 +712,12 @@ namespace Web.Controllers
             // Fetch original message body from Graph API (message was moved to Processed folder)
             var graphReader = HttpContext.RequestServices.GetService<IGraphMailReader>();
             string originalBodyHtml = null;
+            Microsoft.Graph.Models.Message original = null;
             if (graphReader != null)
             {
                 try
                 {
-                    var original = await graphReader.GetMessageByInternetIdAsync(
+                    original = await graphReader.GetMessageByInternetIdAsync(
                         committee.CommitteeEmail,
                         held.InternetMessageId
                     );
@@ -738,53 +739,47 @@ namespace Web.Controllers
                 }
             }
 
-            // Generate job ID early so attachment blob paths can reference it
-            var jobId = Guid.NewGuid();
+            // Deterministic job ID from held message ID (stable across retries, avoids orphaned blobs)
+            var jobId = held.Id;
 
-            // Fetch attachments from the original message
+            // Fetch attachments from the original message (reuse the lookup above)
             var attachments = new List<EmailJobAttachment>();
-            if (graphReader != null)
+            if (graphReader != null && original?.HasAttachments == true && original.Id != null)
             {
                 try
                 {
-                    var originalForAttachments = await graphReader.GetMessageByInternetIdAsync(
-                        committee.CommitteeEmail, held.InternetMessageId);
+                    var withAttachments = await graphReader.GetMessageWithAttachmentsAsync(
+                        committee.CommitteeEmail, original.Id);
 
-                    if (originalForAttachments?.HasAttachments == true && originalForAttachments.Id != null)
+                    if (withAttachments?.Attachments != null)
                     {
-                        var withAttachments = await graphReader.GetMessageWithAttachmentsAsync(
-                            committee.CommitteeEmail, originalForAttachments.Id);
-
-                        if (withAttachments?.Attachments != null)
+                        int attachIndex = 0;
+                        foreach (var att in withAttachments.Attachments)
                         {
-                            int attachIndex = 0;
-                            foreach (var att in withAttachments.Attachments)
+                            if (att is Microsoft.Graph.Models.FileAttachment fileAtt
+                                && fileAtt.IsInline != true
+                                && fileAtt.ContentBytes != null
+                                && fileAtt.ContentBytes.Length > 0)
                             {
-                                if (att is Microsoft.Graph.Models.FileAttachment fileAtt
-                                    && fileAtt.IsInline != true
-                                    && fileAtt.ContentBytes != null
-                                    && fileAtt.ContentBytes.Length > 0)
+                                var safeName = string.Join("_", (fileAtt.Name ?? $"attachment-{attachIndex}")
+                                    .Split(Path.GetInvalidFileNameChars()));
+                                if (string.IsNullOrWhiteSpace(safeName)) safeName = "attachment";
+                                var blobPath = $"email-jobs/{jobId:D}-attachments/{attachIndex:D4}-{safeName}";
+
+                                using (var stream = new System.IO.MemoryStream(fileAtt.ContentBytes))
                                 {
-                                    var safeName = string.Join("_", (fileAtt.Name ?? $"attachment-{attachIndex}")
-                                        .Split(Path.GetInvalidFileNameChars()));
-                                    if (string.IsNullOrWhiteSpace(safeName)) safeName = "attachment";
-                                    var blobPath = $"email-jobs/{jobId:D}-attachments/{attachIndex:D4}-{safeName}";
-
-                                    using (var stream = new System.IO.MemoryStream(fileAtt.ContentBytes))
-                                    {
-                                        await _documentFileStore.UploadAsync(blobPath, stream,
-                                            fileAtt.ContentType ?? "application/octet-stream");
-                                    }
-
-                                    attachments.Add(new EmailJobAttachment
-                                    {
-                                        FileName = safeName,
-                                        BlobPath = blobPath,
-                                        ContentType = fileAtt.ContentType ?? "application/octet-stream",
-                                        Size = fileAtt.ContentBytes.Length,
-                                    });
-                                    attachIndex++;
+                                    await _documentFileStore.UploadAsync(blobPath, stream,
+                                        fileAtt.ContentType ?? "application/octet-stream");
                                 }
+
+                                attachments.Add(new EmailJobAttachment
+                                {
+                                    FileName = safeName,
+                                    BlobPath = blobPath,
+                                    ContentType = fileAtt.ContentType ?? "application/octet-stream",
+                                    Size = fileAtt.ContentBytes.Length,
+                                });
+                                attachIndex++;
                             }
                         }
                     }
