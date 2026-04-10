@@ -438,6 +438,9 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       next: settings => {
         this.forwardingSettings.set(committee.id, settings);
       },
+      error: () => {
+        // Silently ignore — settings panel will just not render
+      },
     });
   }
 
@@ -445,6 +448,9 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     this.committeeService.getHeldMessages(committee.id).subscribe({
       next: messages => {
         this.heldMessages.set(committee.id, messages);
+      },
+      error: () => {
+        // Silently ignore — held messages section will just not render
       },
     });
   }

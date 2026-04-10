@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -109,6 +110,14 @@ public sealed class CommitteeControllerTests
         heldMessageRepo ??= Mock.Of<IHeldMessageRepository>();
         emailJobRepo ??= Mock.Of<IEmailJobRepository>();
 
+        var hubClientProxy = new Mock<IClientProxy>();
+        hubClientProxy.Setup(p => p.SendCoreAsync(It.IsAny<string>(), It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var hubClients = new Mock<IHubClients>();
+        hubClients.Setup(c => c.Group(It.IsAny<string>())).Returns(hubClientProxy.Object);
+        var hubContext = new Mock<IHubContext<HeldMessageNotificationsHub>>();
+        hubContext.Setup(h => h.Clients).Returns(hubClients.Object);
+
         var c = new CommitteeController(
             committeeRepo,
             residentRepo,
@@ -121,7 +130,7 @@ public sealed class CommitteeControllerTests
             emailJobRepo,
             new EmailJobQueue(),
             Options.Create(new DocumentStorageOptions()),
-            Mock.Of<IHubContext<HeldMessageNotificationsHub>>(),
+            hubContext.Object,
             Mock.Of<ILogger<CommitteeController>>()
         );
 
@@ -1560,5 +1569,88 @@ public sealed class CommitteeControllerTests
         var bad = Assert.IsType<BadRequestObjectResult>(result);
         var json = JsonSerializer.Serialize(bad.Value);
         Assert.Contains("No forwarding recipients", json);
+    }
+
+    [Fact]
+    public async Task GetHeldMessages_returns_held_messages_for_committee()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            SenderName = "Sender",
+            Subject = "Test Subject",
+            ReceivedUtc = DateTime.UtcNow.AddMinutes(-10),
+            HeldUtc = DateTime.UtcNow.AddMinutes(-5),
+            Status = HeldMessageStatus.Held,
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByCommitteeIdAsync("board", 50))
+            .ReturnsAsync(new List<HeldMessage> { held });
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.GetHeldMessages("board");
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Contains("sender@example.com", json);
+        Assert.Contains("Test Subject", json);
+    }
+
+    [Fact]
+    public async Task RejectHeldMessage_success_returns_rejected_status()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            Subject = "Test",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Held,
+            ETag = "etag-1"
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.RejectHeldMessage("board", heldId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Contains("Rejected", json);
+
+        // Verify UpdateAsync was called
+        mockHeldRepo.Verify(r => r.UpdateAsync(It.Is<HeldMessage>(h => h.Status == HeldMessageStatus.Rejected)), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetForwardingSettings_not_found_returns_404()
+    {
+        var mockRepo = new Mock<ICommitteeRepository>();
+        mockRepo.Setup(r => r.GetByIdAsync("nonexistent")).ReturnsAsync((Committee)null);
+
+        var c = CreateController(committeeRepo: mockRepo.Object);
+        var result = await c.GetForwardingSettings("nonexistent");
+
+        Assert.IsType<NotFoundResult>(result);
     }
 }
