@@ -825,6 +825,7 @@ namespace Web.Controllers
                 CreatedByDisplayName = $"{apiUser.GivenName} {apiUser.Surname}".Trim(),
                 MaxRecipientAttempts = 3,
                 TotalRecipients = recipients.Count,
+                GroupRecipients = true,
                 InternetMessageId = held.InternetMessageId,
                 ReplyToEmail = string.IsNullOrWhiteSpace(held.SenderEmail) ? null : held.SenderEmail,
                 ReplyToDisplay = string.IsNullOrWhiteSpace(held.SenderEmail) ? null : held.SenderName,

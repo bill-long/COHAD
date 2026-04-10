@@ -438,6 +438,7 @@ namespace Web.Services
                 CreatedByDisplayName = "Committee Mail Poller",
                 MaxRecipientAttempts = 3,
                 TotalRecipients = recipients.Count,
+                GroupRecipients = true,
                 InternetMessageId = internetMessageId,
                 ReplyToEmail = string.IsNullOrWhiteSpace(senderEmail) ? null : senderEmail,
                 ReplyToDisplay = string.IsNullOrWhiteSpace(senderEmail) ? null : senderName,
