@@ -108,12 +108,22 @@ namespace Web.Models
 
         public List<EmailJobRecipient> Recipients { get; set; } = new();
 
+        public List<EmailJobAttachment> Attachments { get; set; } = new();
+
         /// <summary>
         /// Cosmos DB ETag for optimistic concurrency. Not serialized to/from the document body;
         /// populated from the Cosmos response headers.
         /// </summary>
         [JsonIgnore]
         public string ETag { get; set; }
+    }
+
+    public class EmailJobAttachment
+    {
+        public string FileName { get; set; }
+        public string BlobPath { get; set; }
+        public string ContentType { get; set; }
+        public long Size { get; set; }
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]

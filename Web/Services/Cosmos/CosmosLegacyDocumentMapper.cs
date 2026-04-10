@@ -386,6 +386,7 @@ namespace Web.Services.Cosmos
                 InternetMessageId = doc.Value<string>("InternetMessageId"),
                 ReplyToEmail = doc.Value<string>("ReplyToEmail"),
                 ReplyToDisplay = doc.Value<string>("ReplyToDisplay"),
+                Attachments = ToEmailJobAttachments(doc["Attachments"]),
                 Recipients = ToEmailJobRecipients(doc["Recipients"]),
             };
         }
@@ -442,6 +443,15 @@ namespace Web.Services.Cosmos
                 ["InternetMessageId"] = job.InternetMessageId,
                 ["ReplyToEmail"] = job.ReplyToEmail,
                 ["ReplyToDisplay"] = job.ReplyToDisplay,
+                ["Attachments"] = new JArray(
+                    (job.Attachments ?? new List<EmailJobAttachment>()).Select(a => new JObject
+                    {
+                        ["FileName"] = a.FileName,
+                        ["BlobPath"] = a.BlobPath,
+                        ["ContentType"] = a.ContentType,
+                        ["Size"] = a.Size,
+                    })
+                ),
                 ["Recipients"] = recipientsArray,
             };
         }
@@ -479,6 +489,21 @@ namespace Web.Services.Cosmos
             }
 
             return new List<EmailJobRecipient>();
+        }
+
+        private static List<EmailJobAttachment> ToEmailJobAttachments(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return new List<EmailJobAttachment>();
+            if (token is JArray array)
+                return array.OfType<JObject>().Select(a => new EmailJobAttachment
+                {
+                    FileName = a.Value<string>("FileName"),
+                    BlobPath = a.Value<string>("BlobPath"),
+                    ContentType = a.Value<string>("ContentType"),
+                    Size = a.Value<long?>("Size") ?? 0,
+                }).ToList();
+            return new List<EmailJobAttachment>();
         }
 
         // ── Committee ────────────────────────────────────────────────

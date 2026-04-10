@@ -733,6 +733,63 @@ namespace Web.Controllers
                 }
             }
 
+            // Generate job ID early so attachment blob paths can reference it
+            var jobId = Guid.NewGuid();
+
+            // Fetch attachments from the original message
+            var attachments = new List<EmailJobAttachment>();
+            if (graphReader != null)
+            {
+                try
+                {
+                    var originalForAttachments = await graphReader.GetMessageByInternetIdAsync(
+                        committee.CommitteeEmail, held.InternetMessageId);
+
+                    if (originalForAttachments?.HasAttachments == true && originalForAttachments.Id != null)
+                    {
+                        var withAttachments = await graphReader.GetMessageWithAttachmentsAsync(
+                            committee.CommitteeEmail, originalForAttachments.Id);
+
+                        if (withAttachments?.Attachments != null)
+                        {
+                            int attachIndex = 0;
+                            foreach (var att in withAttachments.Attachments)
+                            {
+                                if (att is Microsoft.Graph.Models.FileAttachment fileAtt
+                                    && fileAtt.IsInline != true
+                                    && fileAtt.ContentBytes != null
+                                    && fileAtt.ContentBytes.Length > 0)
+                                {
+                                    var safeName = string.Join("_", (fileAtt.Name ?? $"attachment-{attachIndex}")
+                                        .Split(Path.GetInvalidFileNameChars()));
+                                    if (string.IsNullOrWhiteSpace(safeName)) safeName = "attachment";
+                                    var blobPath = $"email-jobs/{jobId:D}-attachments/{safeName}";
+
+                                    using (var stream = new System.IO.MemoryStream(fileAtt.ContentBytes))
+                                    {
+                                        await _documentFileStore.UploadAsync(blobPath, stream,
+                                            fileAtt.ContentType ?? "application/octet-stream");
+                                    }
+
+                                    attachments.Add(new EmailJobAttachment
+                                    {
+                                        FileName = fileAtt.Name ?? safeName,
+                                        BlobPath = blobPath,
+                                        ContentType = fileAtt.ContentType ?? "application/octet-stream",
+                                        Size = fileAtt.ContentBytes.Length,
+                                    });
+                                    attachIndex++;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to download attachments for held message {HeldId}", messageId);
+                }
+            }
+
             // Build forwarding subject
             var fwdSubject = held.Subject?.StartsWith("Fwd:", StringComparison.OrdinalIgnoreCase) == true
                     || held.Subject?.StartsWith("FW:", StringComparison.OrdinalIgnoreCase) == true
@@ -750,7 +807,7 @@ namespace Web.Controllers
 
             var job = new EmailJob
             {
-                Id = Guid.NewGuid(),
+                Id = jobId,
                 Status = EmailJobStatus.Queued,
                 Category = "committee-forward",
                 FromEmail = committee.CommitteeEmail,
@@ -764,6 +821,7 @@ namespace Web.Controllers
                 InternetMessageId = held.InternetMessageId,
                 ReplyToEmail = string.IsNullOrWhiteSpace(held.SenderEmail) ? null : held.SenderEmail,
                 ReplyToDisplay = string.IsNullOrWhiteSpace(held.SenderEmail) ? null : held.SenderName,
+                Attachments = attachments,
                 Recipients = recipients,
             };
 

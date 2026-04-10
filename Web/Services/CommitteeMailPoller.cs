@@ -373,6 +373,53 @@ namespace Web.Services
             // If two poll cycles race, the second CreateItemAsync will fail with 409 Conflict.
             var jobId = DeterministicGuid(committee.CommitteeEmail, internetMessageId);
 
+            // Download non-inline attachments from Graph API
+            var attachments = new List<EmailJobAttachment>();
+            if (message.HasAttachments == true)
+            {
+                try
+                {
+                    var fullMessage = await _graphMailReader.GetMessageWithAttachmentsAsync(
+                        committee.CommitteeEmail, graphId, ct);
+
+                    if (fullMessage?.Attachments != null)
+                    {
+                        int attachIndex = 0;
+                        foreach (var att in fullMessage.Attachments)
+                        {
+                            if (att is Microsoft.Graph.Models.FileAttachment fileAtt
+                                && fileAtt.IsInline != true
+                                && fileAtt.ContentBytes != null
+                                && fileAtt.ContentBytes.Length > 0)
+                            {
+                                var safeName = SanitizeFileName(fileAtt.Name ?? $"attachment-{attachIndex}");
+                                var blobPath = $"email-jobs/{jobId:D}-attachments/{safeName}";
+
+                                using (var stream = new MemoryStream(fileAtt.ContentBytes))
+                                {
+                                    await fileStore.UploadAsync(blobPath, stream,
+                                        fileAtt.ContentType ?? "application/octet-stream");
+                                }
+
+                                attachments.Add(new EmailJobAttachment
+                                {
+                                    FileName = fileAtt.Name ?? safeName,
+                                    BlobPath = blobPath,
+                                    ContentType = fileAtt.ContentType ?? "application/octet-stream",
+                                    Size = fileAtt.ContentBytes.Length,
+                                });
+                                attachIndex++;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to download attachments for message {InternetMessageId} in {Mailbox}",
+                        internetMessageId, committee.CommitteeEmail);
+                }
+            }
+
             var job = new EmailJob
             {
                 Id = jobId,
@@ -389,6 +436,7 @@ namespace Web.Services
                 InternetMessageId = internetMessageId,
                 ReplyToEmail = string.IsNullOrWhiteSpace(senderEmail) ? null : senderEmail,
                 ReplyToDisplay = string.IsNullOrWhiteSpace(senderEmail) ? null : senderName,
+                Attachments = attachments,
                 Recipients = recipients,
             };
 
@@ -522,6 +570,13 @@ namespace Web.Services
                 // Non-fatal — message stays in Inbox and will be skipped next poll via idempotency check
                 _logger.LogWarning(ex, "Failed to move message {MessageId} to processed folder", messageId);
             }
+        }
+
+        private static string SanitizeFileName(string name)
+        {
+            var invalid = Path.GetInvalidFileNameChars();
+            var sanitized = new string(name.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
+            return string.IsNullOrWhiteSpace(sanitized) ? "attachment" : sanitized;
         }
 
         private static string BuildForwardedHtml(

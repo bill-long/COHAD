@@ -494,7 +494,7 @@ namespace Web.Services
                 }
                 else
                 {
-                    await ProcessJobSendAsync(job, htmlBody, repo, jobCts.Token);
+                    await ProcessJobSendAsync(job, htmlBody, repo, fileStore, jobCts.Token);
                 }
             }
             catch (OperationCanceledException)
@@ -522,11 +522,35 @@ namespace Web.Services
             EmailJob job,
             string htmlBody,
             IEmailJobRepository repo,
+            IDocumentFileStore fileStore,
             CancellationToken ct
         )
         {
             htmlBody = EmailMessageBuilder.InlineCss(htmlBody);
             var imageData = EmailMessageBuilder.ExtractInlineImages(htmlBody);
+
+            // Download attachments from blob storage (once, before the send loop)
+            List<(string fileName, byte[] data, string contentType)>? attachmentData = null;
+            if (job.Attachments?.Count > 0)
+            {
+                attachmentData = new();
+                foreach (var att in job.Attachments)
+                {
+                    try
+                    {
+                        var result = await fileStore.DownloadAsync(att.BlobPath);
+                        using var ms = new MemoryStream();
+                        await result.Stream.CopyToAsync(ms, ct);
+                        result.Stream.Dispose();
+                        attachmentData.Add((att.FileName, ms.ToArray(), att.ContentType));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to download attachment {BlobPath} for job {JobId}", att.BlobPath, job.Id);
+                    }
+                }
+            }
+
             var categoryDisplayName = EmailSubscriptionCategories.DisplayNames.TryGetValue(
                 job.Category ?? "",
                 out var name
@@ -561,7 +585,7 @@ namespace Web.Services
                     var replyToName = string.IsNullOrWhiteSpace(job.ReplyToDisplay) ? job.FromDisplay : job.ReplyToDisplay;
                     var replyToAddr = string.IsNullOrWhiteSpace(job.ReplyToEmail) ? job.FromEmail : job.ReplyToEmail;
                     message.ReplyTo.Add(new MailboxAddress(replyToName, replyToAddr));
-                    message.Body = EmailMessageBuilder.BuildBodyWithImages(imageData.ProcessedHtml, imageData.Images);
+                    message.Body = EmailMessageBuilder.BuildBodyWithImages(imageData.ProcessedHtml, imageData.Images, attachmentData);
 
                     foreach (var r in pendingRecipients)
                         message.To.Add(new MailboxAddress("", r.Email));
@@ -663,7 +687,7 @@ namespace Web.Services
                             var perReplyToAddr = string.IsNullOrWhiteSpace(job.ReplyToEmail) ? job.FromEmail : job.ReplyToEmail;
                             message.ReplyTo.Add(new MailboxAddress(perReplyToName, perReplyToAddr));
                             message.To.Add(new MailboxAddress("", recipient.Email));
-                            message.Body = EmailMessageBuilder.BuildBodyWithImages(htmlWithFooter, imageData.Images);
+                            message.Body = EmailMessageBuilder.BuildBodyWithImages(htmlWithFooter, imageData.Images, attachmentData);
 
                             if (token != null && !string.IsNullOrEmpty(_appBaseUrl))
                             {

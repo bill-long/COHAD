@@ -298,6 +298,13 @@ namespace Web.MockData
                 ReplyToEmail = job.ReplyToEmail,
                 ReplyToDisplay = job.ReplyToDisplay,
                 ETag = job.ETag,
+                Attachments = job.Attachments?.Select(a => new EmailJobAttachment
+                {
+                    FileName = a.FileName,
+                    BlobPath = a.BlobPath,
+                    ContentType = a.ContentType,
+                    Size = a.Size,
+                }).ToList() ?? new(),
                 Recipients =
                     job.Recipients?.Select(r => new EmailJobRecipient
                         {
