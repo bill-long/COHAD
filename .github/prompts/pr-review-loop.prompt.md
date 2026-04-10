@@ -96,4 +96,5 @@ Then go back to **Step 3** (poll for the next review). Repeat until the review p
 - **Max poll attempts per round: 20.** Stop and inform the user if exceeded.
 - **Reply convention:** Always include the short commit hash and a brief description in reply bodies. Only reply inline, not on the PR.
 - **Do not skip verification.** Always build (and test when appropriate) before pushing fixes.
+- **Never defer unit tests.** If a reviewer requests unit tests, write them immediately in the same PR. Do not reply with "will add in a follow-up" or "acknowledged for later." Unit test requests are actionable comments that must be addressed with code, not acknowledgments.
 - **Stop when approved** or when there are no actionable comments remaining.
