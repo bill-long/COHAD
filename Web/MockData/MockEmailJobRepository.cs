@@ -138,6 +138,20 @@ namespace Web.MockData
             }
         }
 
+        public Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId, string fromEmail)
+        {
+            if (string.IsNullOrEmpty(internetMessageId))
+                return Task.FromResult<EmailJob?>(null);
+
+            lock (_jobs)
+            {
+                var match = _jobs.Values.FirstOrDefault(j =>
+                    j.InternetMessageId == internetMessageId
+                    && string.Equals(j.FromEmail, fromEmail, StringComparison.OrdinalIgnoreCase));
+                return Task.FromResult(match != null ? CloneJob(match) : (EmailJob?)null);
+            }
+        }
+
         /// <summary>
         /// Pre-populates completed jobs so Manage → Email has a tall list without sending repeatedly.
         /// </summary>
@@ -279,7 +293,18 @@ namespace Web.MockData
                 SentCount = job.SentCount,
                 FailedCount = job.FailedCount,
                 LastError = job.LastError,
+                GroupRecipients = job.GroupRecipients,
+                InternetMessageId = job.InternetMessageId,
+                ReplyToEmail = job.ReplyToEmail,
+                ReplyToDisplay = job.ReplyToDisplay,
                 ETag = job.ETag,
+                Attachments = job.Attachments?.Select(a => new EmailJobAttachment
+                {
+                    FileName = a.FileName,
+                    BlobPath = a.BlobPath,
+                    ContentType = a.ContentType,
+                    Size = a.Size,
+                }).ToList() ?? new(),
                 Recipients =
                     job.Recipients?.Select(r => new EmailJobRecipient
                         {

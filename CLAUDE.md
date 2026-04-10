@@ -108,3 +108,13 @@ When `appInsightsConnectionString` is empty, the service becomes a complete no-o
 - `MockJwt__SigningKey` must be ≥32 UTF-8 bytes for HS256. `appsettings.MockData.json` intentionally leaves it empty; supply via env var or `dotnet user-secrets`.
 - `UnsubscribeToken__SigningKey` must be ≥32 UTF-8 bytes; it is used to derive an AES-GCM encryption key (via SHA-256) for unsubscribe tokens. Without it, emails are sent without unsubscribe headers/footer (graceful degradation). Supply via env var or `dotnet user-secrets set "UnsubscribeToken:SigningKey" "..."` in the `Web` project.
 - `AppBaseUrl` must be set (e.g. `https://www.cohad.org`) for unsubscribe links in emails. Without it, no footer or headers are added.
+
+## Unit test policy
+
+**Every new backend endpoint, service method, or non-trivial behavior change must include unit tests in the same PR.** Do not defer tests to a follow-up. If a code reviewer requests unit tests, write them immediately — do not reply with "will add later" or "acknowledged for follow-up."
+
+Test expectations:
+- New controller endpoints: test success path, authorization, input validation (400), and error/edge cases (409 conflict, 404 not found, etc.)
+- New service logic: test core behavior, edge cases, and error handling
+- Use the existing patterns in `Web.UnitTests/` (Moq mocks, `CreateController` helpers, xUnit `[Fact]`)
+- Run `dotnet test Web.UnitTests/Web.UnitTests.csproj` to verify all tests pass before committing

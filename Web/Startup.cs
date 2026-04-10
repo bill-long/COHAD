@@ -297,7 +297,6 @@ namespace Web
                 services.AddSingleton<IYouthServiceListingRepository, MockYouthServiceListingRepository>();
                 services.AddSingleton<ICommitteeRepository, MockCommitteeRepository>();
                 services.AddSingleton<IResidentRepository, MockResidentRepository>();
-                services.AddSingleton<IGraphMailboxService, MockGraphMailboxService>();
                 services.AddSingleton<IDocumentFileStore>(sp => new CachedDocumentFileStore(
                     new MockDocumentFileStore()
                 ));
@@ -305,6 +304,7 @@ namespace Web
                 services.AddSingleton<IEmailJobRepository>(sp => new MockEmailJobRepository(
                     sp.GetRequiredService<IDocumentFileStore>()
                 ));
+                services.AddSingleton<IHeldMessageRepository, MockHeldMessageRepository>();
             }
             else
             {
@@ -383,21 +383,22 @@ namespace Web
                     sp.GetRequiredService<CosmosClient>().GetContainer(db, "EmailJobs")
                 ));
 
+                services.AddScoped<IHeldMessageRepository>(sp => new CosmosHeldMessageRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "HeldMessages")
+                ));
+
                 // Graph API for committee mailbox forwarding — registered only when credentials are configured.
                 var graphTenantId = Configuration["Graph:TenantId"];
                 var graphClientId = Configuration["Graph:ClientId"];
                 var graphClientSecret = Configuration["Graph:ClientSecret"];
-                if (
+                var graphConfigured =
                     !string.IsNullOrWhiteSpace(graphTenantId)
                     && !string.IsNullOrWhiteSpace(graphClientId)
-                    && !string.IsNullOrWhiteSpace(graphClientSecret)
-                )
+                    && !string.IsNullOrWhiteSpace(graphClientSecret);
+
+                if (graphConfigured)
                 {
-                    services.AddSingleton<IGraphMailboxService, GraphMailboxService>();
-                }
-                else
-                {
-                    services.AddSingleton<IGraphMailboxService, NotConfiguredGraphMailboxService>();
+                    services.AddSingleton<IGraphMailReader, GraphMailReader>();
                 }
             }
 
@@ -405,6 +406,15 @@ namespace Web
             services.AddSingleton<EmailJobQueue>();
             services.AddSingleton<EmailJobProcessor>();
             services.AddHostedService(sp => sp.GetRequiredService<EmailJobProcessor>());
+
+            // Committee mail poller — polls shared mailboxes and creates forwarding EmailJobs.
+            // Only registered when Graph API credentials are configured; CommitteeForwarding:Enabled
+            // must also be true for the poller to actually run.
+            if (services.Any(sd => sd.ServiceType == typeof(IGraphMailReader)))
+            {
+                services.AddSingleton<CommitteeMailPoller>();
+                services.AddHostedService(sp => sp.GetRequiredService<CommitteeMailPoller>());
+            }
 
             // Email transport abstraction (SMTP / SES per-recipient routing)
             services.Configure<SesOptions>(Configuration.GetSection("Ses"));
@@ -589,6 +599,7 @@ namespace Web
                 endpoints.MapEventDeepLinkOpenGraph(env);
                 endpoints.MapBlogDeepLinkOpenGraph(env);
                 endpoints.MapHub<VendorFlagNotificationsHub>("/hubs/vendor-flags");
+                endpoints.MapHub<HeldMessageNotificationsHub>("/hubs/held-messages");
                 endpoints.MapHub<EmailJobHub>("/hubs/email-jobs");
                 endpoints.MapControllerRoute(name: "default", pattern: "{controller}/{action=Index}/{id?}");
             });

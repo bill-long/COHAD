@@ -6,7 +6,8 @@ import {
   CommitteeAdmin,
   CommitteeMemberAdmin,
   CommitteeService,
-  ForwardingSyncStatus,
+  ForwardingSettings,
+  HeldMessage,
   ResidentPickerItem,
 } from 'src/app/services/committee.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
@@ -28,7 +29,6 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
 
   savingKey: string | null = null;
   savingOrder = false;
-  syncingKey: string | null = null;
   deletingMember: { key: string; memberId: string } | null = null;
 
   /** ID of the member currently being edited, or null when all are collapsed */
@@ -46,8 +46,17 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   /** Tracks pending photo uploads per committee key → memberId → File */
   pendingPhotos = new Map<string, Map<string, File>>();
 
-  /** Tracks forwarding sync status per committee key */
-  syncStatuses = new Map<string, ForwardingSyncStatus>();
+  /** Forwarding settings per committee key */
+  forwardingSettings = new Map<string, ForwardingSettings>();
+
+  /** Held messages per committee key */
+  heldMessages = new Map<string, HeldMessage[]>();
+
+  /** Tracks which committee is currently saving settings */
+  savingSettingsKey: string | null = null;
+
+  /** Tracks which held message is currently being actioned */
+  actioningHeldId: string | null = null;
 
   /** Tracks local blob URLs for photo previews (SafeUrl for template binding), keyed by committeeId:memberId */
   private previewUrls = new Map<string, SafeUrl>();
@@ -420,38 +429,121 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     }
   }
 
-  syncForwarding(committee: CommitteeAdmin): void {
-    this.error = '';
-    this.success = '';
-    this.syncingKey = committee.id;
-    this.committeeService.syncForwarding(committee.id).subscribe({
-      next: status => {
-        this.syncingKey = null;
-        this.syncStatuses.set(committee.id, status);
-        this.success = `Forwarding synced for ${committee.displayName}.`;
-      },
-      error: () => {
-        this.syncingKey = null;
-        this.error = `Failed to sync forwarding for ${committee.displayName}.`;
-        this.loadSyncStatus(committee);
-      },
-    });
-  }
-
-  loadSyncStatus(committee: CommitteeAdmin): void {
-    this.committeeService.getForwardingStatus(committee.id).subscribe({
-      next: status => {
-        this.syncStatuses.set(committee.id, status);
-      },
-    });
-  }
-
-  getSyncStatus(committeeId: string): ForwardingSyncStatus | undefined {
-    return this.syncStatuses.get(committeeId);
-  }
-
   isDeletingMember(committeeId: string, memberId: string): boolean {
     return this.deletingMember?.key === committeeId && this.deletingMember?.memberId === memberId;
+  }
+
+  loadForwardingSettings(committee: CommitteeAdmin): void {
+    this.committeeService.getForwardingSettings(committee.id).subscribe({
+      next: settings => {
+        this.forwardingSettings.set(committee.id, settings);
+      },
+      error: () => {
+        // Silently ignore — settings panel will just not render
+      },
+    });
+  }
+
+  loadHeldMessages(committee: CommitteeAdmin): void {
+    this.committeeService.getHeldMessages(committee.id).subscribe({
+      next: messages => {
+        this.heldMessages.set(committee.id, messages);
+      },
+      error: () => {
+        // Silently ignore — held messages section will just not render
+      },
+    });
+  }
+
+  getSettings(committeeId: string): ForwardingSettings | undefined {
+    return this.forwardingSettings.get(committeeId);
+  }
+
+  getHeldCount(committeeId: string): number {
+    return (this.heldMessages.get(committeeId) ?? []).filter(m => m.status === 'Held').length;
+  }
+
+  getHeld(committeeId: string): HeldMessage[] {
+    return (this.heldMessages.get(committeeId) ?? []).filter(m => m.status === 'Held');
+  }
+
+  toggleForwarding(committee: CommitteeAdmin): void {
+    const current = this.forwardingSettings.get(committee.id);
+    if (!current) return;
+    this.savingSettingsKey = committee.id;
+    const newEnabled = !current.forwardingEnabled;
+    this.committeeService.updateForwardingSettings(committee.id, {
+      forwardingEnabled: newEnabled,
+      forwardingSenderFilter: current.forwardingSenderFilter,
+    }).subscribe({
+      next: settings => {
+        this.forwardingSettings.set(committee.id, settings);
+        this.savingSettingsKey = null;
+        this.success = newEnabled
+          ? `Mail forwarding enabled for ${committee.displayName}.`
+          : `Mail forwarding disabled for ${committee.displayName}.`;
+      },
+      error: () => {
+        this.savingSettingsKey = null;
+        this.error = `Failed to update forwarding settings for ${committee.displayName}.`;
+      },
+    });
+  }
+
+  updateSenderFilter(committee: CommitteeAdmin, filter: string): void {
+    const current = this.forwardingSettings.get(committee.id);
+    if (!current) return;
+    this.savingSettingsKey = committee.id;
+    this.committeeService.updateForwardingSettings(committee.id, {
+      forwardingEnabled: current.forwardingEnabled,
+      forwardingSenderFilter: filter,
+    }).subscribe({
+      next: settings => {
+        this.forwardingSettings.set(committee.id, settings);
+        this.savingSettingsKey = null;
+        this.success = `Sender filter updated for ${committee.displayName}.`;
+      },
+      error: () => {
+        this.savingSettingsKey = null;
+        this.error = `Failed to update sender filter for ${committee.displayName}.`;
+      },
+    });
+  }
+
+  approveHeld(committee: CommitteeAdmin, message: HeldMessage): void {
+    this.error = '';
+    this.success = '';
+    this.actioningHeldId = message.id;
+    const sender = message.senderEmail ?? 'unknown sender';
+    this.committeeService.approveHeldMessage(committee.id, message.id).subscribe({
+      next: () => {
+        this.actioningHeldId = null;
+        this.loadHeldMessages(committee);
+        this.success = `Message from ${sender} approved for forwarding.`;
+      },
+      error: () => {
+        this.actioningHeldId = null;
+        this.error = `Failed to approve message from ${sender}.`;
+      },
+    });
+  }
+
+  rejectHeld(committee: CommitteeAdmin, message: HeldMessage): void {
+    this.error = '';
+    this.success = '';
+    this.actioningHeldId = message.id;
+    const sender = message.senderEmail ?? 'unknown sender';
+    this.committeeService.rejectHeldMessage(committee.id, message.id).subscribe({
+      next: () => {
+        this.actioningHeldId = null;
+        this.loadHeldMessages(committee);
+        this.success = `Message from ${sender} rejected.`;
+      },
+      error: () => {
+        this.actioningHeldId = null;
+        this.error = `Failed to reject message from ${sender}.`;
+      },
+    });
   }
 
   private loadCommittees(): void {
@@ -469,7 +561,8 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         this.savedOrder = this.committees.map(c => c.id);
         this.loading = false;
         for (const c of this.committees) {
-          this.loadSyncStatus(c);
+          this.loadForwardingSettings(c);
+          this.loadHeldMessages(c);
         }
       },
       error: () => {

@@ -70,3 +70,13 @@ Both the .NET backend and Angular frontend send telemetry to the **same** Applic
 - **Custom events** — `DocumentDownloaded`, `VendorDetailViewed`, `VendorReviewSubmitted`, `EmailSent`, `EventSignupSubmitted`, `DirectorySearched`
 
 **To change the target resource**, update both `appsettings.json` → `ApplicationInsights:ConnectionString` (backend) and `environment.prod.ts` → `appInsightsConnectionString` (frontend).
+
+### Unit test policy
+
+**Every new backend endpoint, service method, or non-trivial behavior change must include unit tests in the same PR.** Do not defer tests to a follow-up. If a code reviewer requests unit tests, write them immediately — do not reply with "will add later" or "acknowledged for follow-up."
+
+Test expectations:
+- New controller endpoints: test success path, authorization, input validation (400), and error/edge cases (409 conflict, 404 not found, etc.)
+- New service logic: test core behavior, edge cases, and error handling
+- Use the existing patterns in `Web.UnitTests/` (Moq mocks, `CreateController` helpers, xUnit `[Fact]`)
+- Run `dotnet test Web.UnitTests/Web.UnitTests.csproj` to verify all tests pass before committing

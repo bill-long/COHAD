@@ -5,15 +5,19 @@ using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
 using Web.Controllers;
+using Web.Hubs;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -86,22 +90,33 @@ public sealed class CommitteeControllerTests
         IResidentRepository? residentRepo = null,
         IDocumentFileStore? fileStore = null,
         IImageUploadHelper? imageUploadHelper = null,
-        IGraphMailboxService? graphMailboxService = null,
         IUserRepository? userRepo = null,
         IAuditLogRepository? auditLogRepo = null,
         CommitteeListCache? cache = null,
         string nameId = "u1",
-        string idp = "google.com"
+        string idp = "google.com",
+        IHeldMessageRepository? heldMessageRepo = null,
+        IEmailJobRepository? emailJobRepo = null,
+        IServiceProvider? serviceProvider = null
     )
     {
         committeeRepo ??= Mock.Of<ICommitteeRepository>();
         residentRepo ??= DefaultResidentRepoMock().Object;
         fileStore ??= Mock.Of<IDocumentFileStore>();
         imageUploadHelper ??= DefaultImageUploadHelper();
-        graphMailboxService ??= Mock.Of<IGraphMailboxService>();
         userRepo ??= AdminUserRepo(nameId, idp);
         auditLogRepo ??= Mock.Of<IAuditLogRepository>();
         cache ??= new CommitteeListCache(committeeRepo, new MemoryCache(new MemoryCacheOptions()), WebJsonOptions);
+        heldMessageRepo ??= Mock.Of<IHeldMessageRepository>();
+        emailJobRepo ??= Mock.Of<IEmailJobRepository>();
+
+        var hubClientProxy = new Mock<IClientProxy>();
+        hubClientProxy.Setup(p => p.SendCoreAsync(It.IsAny<string>(), It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var hubClients = new Mock<IHubClients>();
+        hubClients.Setup(c => c.Group(It.IsAny<string>())).Returns(hubClientProxy.Object);
+        var hubContext = new Mock<IHubContext<HeldMessageNotificationsHub>>();
+        hubContext.Setup(h => h.Clients).Returns(hubClients.Object);
 
         var c = new CommitteeController(
             committeeRepo,
@@ -111,23 +126,27 @@ public sealed class CommitteeControllerTests
             cache,
             fileStore,
             imageUploadHelper,
-            graphMailboxService,
+            heldMessageRepo,
+            emailJobRepo,
+            new EmailJobQueue(),
             Options.Create(new DocumentStorageOptions()),
+            hubContext.Object,
             Mock.Of<ILogger<CommitteeController>>()
         );
 
-        c.ControllerContext = new ControllerContext
+        var httpContext = new DefaultHttpContext
         {
-            HttpContext = new DefaultHttpContext
-            {
-                User = new ClaimsPrincipal(
-                    new ClaimsIdentity(
-                        new[] { new Claim(ClaimTypes.NameIdentifier, nameId), new Claim(IdentityProviderClaim, idp) },
-                        "Test"
-                    )
-                ),
-            },
+            User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                    new[] { new Claim(ClaimTypes.NameIdentifier, nameId), new Claim(IdentityProviderClaim, idp) },
+                    "Test"
+                )
+            ),
         };
+        if (serviceProvider != null)
+            httpContext.RequestServices = serviceProvider;
+
+        c.ControllerContext = new ControllerContext { HttpContext = httpContext };
         return c;
     }
 
@@ -1040,67 +1059,17 @@ public sealed class CommitteeControllerTests
     }
 
     // ──────────────────────────────────────────────
-    // Forwarding sync
+    // Forwarding sync (deprecated — endpoint returns 410 Gone)
     // ──────────────────────────────────────────────
 
     [Fact]
-    public async Task SyncForwarding_returns_Ok_with_sync_status()
+    public async Task SyncForwarding_returns_410_Gone()
     {
-        var committee = SampleCommittee();
-        var mockRepo = new Mock<ICommitteeRepository>();
-        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
-        mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
-
-        var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph
-            .Setup(g =>
-                g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>())
-            )
-            .ReturnsAsync(
-                (Committee c, IReadOnlyDictionary<Guid, Resident> r) =>
-                {
-                    c.LastSyncedUtc = DateTime.UtcNow;
-                    c.LastSyncStatus = "Success";
-                    return c;
-                }
-            );
-
-        var c = CreateController(committeeRepo: mockRepo.Object, graphMailboxService: mockGraph.Object);
-        var result = await c.SyncForwarding("board");
-
-        Assert.IsType<OkObjectResult>(result);
-    }
-
-    [Fact]
-    public async Task SyncForwarding_returns_502_and_saves_error_on_failure()
-    {
-        var committee = SampleCommittee();
-        var mockRepo = new Mock<ICommitteeRepository>();
-        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
-        mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
-
-        var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph
-            .Setup(g =>
-                g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>())
-            )
-            .ThrowsAsync(new Exception("Graph API timeout"));
-
-        var c = CreateController(committeeRepo: mockRepo.Object, graphMailboxService: mockGraph.Object);
+        var c = CreateController();
         var result = await c.SyncForwarding("board");
 
         var status = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(502, status.StatusCode);
-        // Verify error was persisted
-        mockRepo.Verify(
-            r =>
-                r.UpsertAsync(
-                    It.Is<Committee>(comm =>
-                        comm.LastSyncStatus == "Failed" && comm.LastSyncError == "Graph API timeout"
-                    )
-                ),
-            Times.Once
-        );
+        Assert.Equal(410, status.StatusCode);
     }
 
     // ──────────────────────────────────────────────
@@ -1211,62 +1180,6 @@ public sealed class CommitteeControllerTests
                     It.Is<NewAuditLogEntry>(e =>
                         e.SubjectId == "board" && e.Action.Contains("Alice") && e.Action.Contains("Removed member")
                     )
-                ),
-            Times.Once
-        );
-    }
-
-    [Fact]
-    public async Task SyncForwarding_writes_audit_log_on_success()
-    {
-        var committee = SampleCommittee();
-        var uniqueId = UniqueId("u1");
-
-        var mockRepo = new Mock<ICommitteeRepository>();
-        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
-        mockRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
-
-        var mockUsers = new Mock<IUserRepository>();
-        mockUsers
-            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
-            .ReturnsAsync(
-                new User
-                {
-                    UniqueId = uniqueId,
-                    GivenName = "Mock",
-                    Surname = "Admin",
-                    Roles = new List<User.Role> { User.Role.Administrator },
-                }
-            );
-
-        var mockGraph = new Mock<IGraphMailboxService>();
-        mockGraph
-            .Setup(g =>
-                g.SyncForwardingRuleAsync(It.IsAny<Committee>(), It.IsAny<IReadOnlyDictionary<Guid, Resident>>())
-            )
-            .ReturnsAsync(
-                (Committee c, IReadOnlyDictionary<Guid, Resident> r) =>
-                {
-                    c.LastSyncedUtc = DateTime.UtcNow;
-                    c.LastSyncStatus = "Success";
-                    return c;
-                }
-            );
-
-        var mockAudit = new Mock<IAuditLogRepository>();
-
-        var c = CreateController(
-            committeeRepo: mockRepo.Object,
-            userRepo: mockUsers.Object,
-            auditLogRepo: mockAudit.Object,
-            graphMailboxService: mockGraph.Object
-        );
-        await c.SyncForwarding("board");
-
-        mockAudit.Verify(
-            a =>
-                a.AddAsync(
-                    It.Is<NewAuditLogEntry>(e => e.SubjectId == "board" && e.Action.Contains("Synced email forwarding"))
                 ),
             Times.Once
         );
@@ -1395,5 +1308,349 @@ public sealed class CommitteeControllerTests
         var result = await c.Update("board", "{}", new List<IFormFile>());
 
         Assert.IsType<ForbidResult>(result);
+    }
+
+    // ──────────────────────────────────────────────
+    // Forwarding settings endpoints
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetForwardingSettings_returns_settings()
+    {
+        var committee = SampleCommittee("board");
+        committee.ForwardingEnabled = true;
+        committee.ForwardingSenderFilter = ForwardingSenderFilter.DirectoryOnly;
+        committee.LastPollUtc = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        committee.LastPollStatus = "Success";
+
+        var mockRepo = new Mock<ICommitteeRepository>();
+        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var c = CreateController(committeeRepo: mockRepo.Object);
+        var result = await c.GetForwardingSettings("board");
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value);
+        var doc = JsonSerializer.Deserialize<JsonElement>(json);
+        Assert.True(doc.GetProperty("ForwardingEnabled").GetBoolean());
+        Assert.Equal("DirectoryOnly", doc.GetProperty("ForwardingSenderFilter").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateForwardingSettings_invalid_filter_returns_400()
+    {
+        var committee = SampleCommittee("board");
+        var mockRepo = new Mock<ICommitteeRepository>();
+        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var c = CreateController(committeeRepo: mockRepo.Object);
+        var result = await c.UpdateForwardingSettings("board", new ForwardingSettingsUpdate
+        {
+            ForwardingEnabled = false,
+            ForwardingSenderFilter = "InvalidValue"
+        });
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        var json = JsonSerializer.Serialize(bad.Value);
+        Assert.Contains("Invalid", json);
+    }
+
+    [Fact]
+    public async Task UpdateForwardingSettings_enable_without_graph_returns_400()
+    {
+        var committee = SampleCommittee("board");
+        var mockRepo = new Mock<ICommitteeRepository>();
+        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        // No IGraphMailReader registered in services
+        var services = new ServiceCollection().BuildServiceProvider();
+        var c = CreateController(committeeRepo: mockRepo.Object, serviceProvider: services);
+        var result = await c.UpdateForwardingSettings("board", new ForwardingSettingsUpdate
+        {
+            ForwardingEnabled = true,
+            ForwardingSenderFilter = "All"
+        });
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        var json = JsonSerializer.Serialize(bad.Value);
+        Assert.Contains("Graph API", json);
+    }
+
+    [Fact]
+    public async Task UpdateForwardingSettings_disable_without_graph_succeeds()
+    {
+        var committee = SampleCommittee("board");
+        committee.ForwardingEnabled = true;
+        var mockRepo = new Mock<ICommitteeRepository>();
+        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var services = new ServiceCollection().BuildServiceProvider();
+        var c = CreateController(committeeRepo: mockRepo.Object, serviceProvider: services);
+        var result = await c.UpdateForwardingSettings("board", new ForwardingSettingsUpdate
+        {
+            ForwardingEnabled = false,
+            ForwardingSenderFilter = "All"
+        });
+
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    // ──────────────────────────────────────────────
+    // Moderation queue endpoints
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task ApproveHeldMessage_already_approved_returns_400()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            Subject = "Test",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Approved,
+            ETag = "etag-1"
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.ApproveHeldMessage("board", heldId);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        var json = JsonSerializer.Serialize(bad.Value);
+        Assert.Contains("already", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RejectHeldMessage_already_rejected_returns_400()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            Subject = "Test",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Rejected,
+            ETag = "etag-1"
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.RejectHeldMessage("board", heldId);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        var json = JsonSerializer.Serialize(bad.Value);
+        Assert.Contains("already", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ApproveHeldMessage_etag_conflict_returns_409()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            Subject = "Test",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Held,
+            ETag = "etag-1"
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+        mockHeldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>()))
+            .ThrowsAsync(new InvalidOperationException("HeldMessage was modified by another process."));
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.ApproveHeldMessage("board", heldId);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var json = JsonSerializer.Serialize(conflict.Value);
+        Assert.Contains("already actioned", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RejectHeldMessage_etag_conflict_returns_409()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            Subject = "Test",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Held,
+            ETag = "etag-1"
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+        mockHeldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>()))
+            .ThrowsAsync(new InvalidOperationException("HeldMessage was modified by another process."));
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.RejectHeldMessage("board", heldId);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var json = JsonSerializer.Serialize(conflict.Value);
+        Assert.Contains("already actioned", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ApproveHeldMessage_no_recipients_returns_400()
+    {
+        // Committee with no members that receive forwarded email
+        var committee = SampleCommittee("board");
+        foreach (var m in committee.Members) m.ReceivesForwardedEmail = false;
+
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            Subject = "Test",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Held,
+            ETag = "etag-1"
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.ApproveHeldMessage("board", heldId);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        var json = JsonSerializer.Serialize(bad.Value);
+        Assert.Contains("No forwarding recipients", json);
+    }
+
+    [Fact]
+    public async Task GetHeldMessages_returns_held_messages_for_committee()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            SenderName = "Sender",
+            Subject = "Test Subject",
+            ReceivedUtc = DateTime.UtcNow.AddMinutes(-10),
+            HeldUtc = DateTime.UtcNow.AddMinutes(-5),
+            Status = HeldMessageStatus.Held,
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByCommitteeIdAsync("board", 50))
+            .ReturnsAsync(new List<HeldMessage> { held });
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.GetHeldMessages("board");
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Contains("sender@example.com", json);
+        Assert.Contains("Test Subject", json);
+    }
+
+    [Fact]
+    public async Task RejectHeldMessage_success_returns_rejected_status()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            Subject = "Test",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Held,
+            ETag = "etag-1"
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.RejectHeldMessage("board", heldId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Contains("Rejected", json);
+
+        // Verify UpdateAsync was called
+        mockHeldRepo.Verify(r => r.UpdateAsync(It.Is<HeldMessage>(h => h.Status == HeldMessageStatus.Rejected)), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetForwardingSettings_not_found_returns_404()
+    {
+        var mockRepo = new Mock<ICommitteeRepository>();
+        mockRepo.Setup(r => r.GetByIdAsync("nonexistent")).ReturnsAsync((Committee)null);
+
+        var c = CreateController(committeeRepo: mockRepo.Object);
+        var result = await c.GetForwardingSettings("nonexistent");
+
+        Assert.IsType<NotFoundResult>(result);
     }
 }

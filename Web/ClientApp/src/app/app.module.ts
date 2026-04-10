@@ -28,6 +28,7 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatBadgeModule } from '@angular/material/badge';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { provideNativeDateAdapter } from '@angular/material/core';
 
@@ -188,6 +189,7 @@ import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tip
     MatSnackBarModule,
     MatDatepickerModule,
     MatBadgeModule,
+    MatSlideToggleModule,
     DragDropModule,
     TiptapEmailEditorComponent,
   ],

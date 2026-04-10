@@ -42,5 +42,14 @@ namespace Web.Services.Repositories
         /// Used for retention cleanup.
         /// </summary>
         Task<List<EmailJob>> GetTerminalJobsOlderThanAsync(DateTime cutoffUtc, int limit);
+
+        /// <summary>
+        /// Returns the first job with the given <see cref="EmailJob.InternetMessageId"/>
+        /// sent from the specified mailbox, or null.
+        /// Used by <see cref="CommitteeMailPoller"/> as an idempotency check to avoid creating
+        /// duplicate forwarding jobs for the same mailbox message. Scoped by fromEmail because
+        /// the same RFC 2822 Message-ID can appear in multiple committee mailboxes.
+        /// </summary>
+        Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId, string fromEmail);
     }
 }

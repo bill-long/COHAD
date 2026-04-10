@@ -86,7 +86,29 @@ namespace Web.Models
         /// </summary>
         public bool GroupRecipients { get; set; }
 
+        /// <summary>
+        /// RFC 2822 Internet Message-ID of the original mailbox message that triggered this forwarding job.
+        /// Stable across folder moves (unlike the Graph message <c>id</c>).
+        /// Used as an idempotency key by <see cref="CommitteeMailPoller"/> to prevent duplicate sends.
+        /// Null for jobs not created by the mail poller.
+        /// </summary>
+        public string InternetMessageId { get; set; }
+
+        /// <summary>
+        /// Optional Reply-To email address. When set, the outgoing message includes a Reply-To header
+        /// so recipients reply to the original sender rather than the From address.
+        /// Used by committee mail forwarding where From is the committee mailbox.
+        /// </summary>
+        public string ReplyToEmail { get; set; }
+
+        /// <summary>
+        /// Display name for the Reply-To header.
+        /// </summary>
+        public string ReplyToDisplay { get; set; }
+
         public List<EmailJobRecipient> Recipients { get; set; } = new();
+
+        public List<EmailJobAttachment> Attachments { get; set; } = new();
 
         /// <summary>
         /// Cosmos DB ETag for optimistic concurrency. Not serialized to/from the document body;
@@ -94,6 +116,14 @@ namespace Web.Models
         /// </summary>
         [JsonIgnore]
         public string ETag { get; set; }
+    }
+
+    public class EmailJobAttachment
+    {
+        public string FileName { get; set; }
+        public string BlobPath { get; set; }
+        public string ContentType { get; set; }
+        public long Size { get; set; }
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]

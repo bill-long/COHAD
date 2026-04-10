@@ -311,21 +311,6 @@
   gap: 0.5rem;
 }
 
-.sync-status {
-  margin-top: 0.75rem;
-  padding: 0.65rem;
-  border: 1px solid var(--border-faint);
-  border-radius: 8px;
-  background: var(--surface);
-  font-size: 0.88rem;
-}
-
-.sync-status-row {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
 .sync-label {
   font-weight: 500;
   color: var(--text-secondary);
@@ -475,4 +460,133 @@
 .resident-email {
   color: var(--text-secondary, #999);
   font-size: 0.9em;
+}
+
+/* Forwarding settings */
+.forwarding-settings {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.forwarding-heading {
+  margin: 0 0 0.65rem;
+  font-size: var(--heading-card);
+  font-weight: var(--heading-card-weight);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.forwarding-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.sender-filter-field {
+  width: 180px;
+}
+
+.forwarding-poll-status {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Held messages */
+.held-messages {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.held-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--error);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.held-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.held-message-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-section);
+}
+
+.held-message-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.held-sender {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.held-subject {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.held-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.held-message-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .forwarding-toggle-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sender-filter-field {
+    width: 100%;
+  }
+
+  .held-message-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .held-message-actions {
+    flex-direction: column;
+  }
+
+  .held-message-actions button {
+    white-space: normal;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0.625rem 0.75rem;
+  }
 }

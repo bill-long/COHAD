@@ -98,7 +98,7 @@ namespace Web.Services
             return new ExtractedImages { ProcessedHtml = processed, Images = images };
         }
 
-        public static MimeEntity BuildBodyWithImages(string html, List<InlineImage> images)
+        public static MimeEntity BuildBodyWithImages(string html, List<InlineImage> images, List<(string fileName, byte[] data, string contentType)>? attachments = null)
         {
             var bodyBuilder = new BodyBuilder();
             foreach (var img in images)
@@ -107,6 +107,25 @@ namespace Web.Services
                 resource.ContentId = img.ContentId;
             }
             bodyBuilder.HtmlBody = html;
+            if (attachments != null)
+            {
+                foreach (var (fileName, data, contentType) in attachments)
+                {
+                    ContentType ct;
+                    try
+                    {
+                        ct = !string.IsNullOrWhiteSpace(contentType)
+                            ? ContentType.Parse(contentType)
+                            : new ContentType("application", "octet-stream");
+                    }
+                    catch
+                    {
+                        ct = new ContentType("application", "octet-stream");
+                    }
+                    var safeFileName = string.IsNullOrWhiteSpace(fileName) ? "attachment" : fileName;
+                    bodyBuilder.Attachments.Add(safeFileName, data, ct);
+                }
+            }
             return bodyBuilder.ToMessageBody();
         }
 
