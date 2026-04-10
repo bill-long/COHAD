@@ -40,7 +40,7 @@ jobs:
 
       - name: dotnet publish UserPurgeFunction
         if: steps.latest-check.outputs.is_latest == 'true'
-        run: dotnet publish Functions/UserPurgeFunction/UserPurgeFunction.csproj --configuration Release --output ./publish
+        run: dotnet publish Functions/UserPurgeFunction/UserPurgeFunction.csproj --configuration Release --output ./publish -p:SkipWebpackBuild=true
 
       - name: Re-check if still latest commit
         if: steps.latest-check.outputs.is_latest == 'true'
