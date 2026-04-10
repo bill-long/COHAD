@@ -1,8 +1,9 @@
 import { Component, Inject, OnInit } from '@angular/core';
-import { Observable, Observer, of } from 'rxjs';
+import { Observable, Observer, combineLatest, of } from 'rxjs';
 import { catchError, map, shareReplay } from 'rxjs/operators';
 import { EventsService } from 'src/app/services/events.service';
 import { VendorFlagNotification } from 'src/app/services/vendors.service';
+import { HeldMessageNotification, HeldMessageNotificationsService } from 'src/app/services/held-message-notifications.service';
 import { Router, NavigationEnd, NavigationStart } from '@angular/router';
 import { applicationState, ApplicationState, dispatcher, Action, Login, MockLogin, Logout } from 'src/app/state';
 import { ApiUser, AuthUser } from 'src/app/models';
@@ -32,6 +33,9 @@ export class NavbarComponent implements OnInit {
 
   readonly vendorFlagNotifications$: Observable<VendorFlagNotification[]>;
   readonly unreadVendorFlagNotificationCount$: Observable<number>;
+  readonly heldMessageNotifications$: Observable<HeldMessageNotification[]>;
+  readonly unreadHeldMessageCount$: Observable<number>;
+  readonly totalUnreadCount$: Observable<number>;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -40,6 +44,7 @@ export class NavbarComponent implements OnInit {
     private themeService: ThemeService,
     private readonly eventsService: EventsService,
     private readonly vendorFlagNotificationsService: VendorFlagNotificationsService,
+    private readonly heldMessageNotificationsService: HeldMessageNotificationsService,
   ) {
     this.showEventsNav$ = this.eventsService.getUpcoming().pipe(
       map(events => events.length > 0),
@@ -49,6 +54,12 @@ export class NavbarComponent implements OnInit {
 
     this.vendorFlagNotifications$ = this.vendorFlagNotificationsService.notifications$;
     this.unreadVendorFlagNotificationCount$ = this.vendorFlagNotificationsService.unreadCount$;
+    this.heldMessageNotifications$ = this.heldMessageNotificationsService.notifications$;
+    this.unreadHeldMessageCount$ = this.heldMessageNotificationsService.unreadCount$;
+    this.totalUnreadCount$ = combineLatest([
+      this.vendorFlagNotificationsService.unreadCount$,
+      this.heldMessageNotificationsService.unreadCount$,
+    ]).pipe(map(([a, b]) => a + b));
 
     router.events.subscribe(e => {
       if (e instanceof NavigationStart) {
@@ -145,5 +156,10 @@ export class NavbarComponent implements OnInit {
   openFlagNotification(notification: VendorFlagNotification): void {
     this.vendorFlagNotificationsService.markAsRead(notification.flagId);
     this.router.navigate(['/residents/vendors', notification.vendorId]);
+  }
+
+  openHeldNotification(notification: HeldMessageNotification): void {
+    this.heldMessageNotificationsService.markAsRead(notification.id);
+    this.router.navigate(['/manage/committees']);
   }
 }

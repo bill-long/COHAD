@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -15,6 +16,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
 using Web.Controllers;
+using Web.Hubs;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -119,6 +121,7 @@ public sealed class CommitteeControllerTests
             emailJobRepo,
             new EmailJobQueue(),
             Options.Create(new DocumentStorageOptions()),
+            Mock.Of<IHubContext<HeldMessageNotificationsHub>>(),
             Mock.Of<ILogger<CommitteeController>>()
         );
 

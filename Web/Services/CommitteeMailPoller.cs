@@ -11,6 +11,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.SignalR;
+using Web.Hubs;
 using Web.Models;
 using Web.Services.Repositories;
 
@@ -26,6 +28,7 @@ namespace Web.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly EmailJobQueue _emailJobQueue;
         private readonly IGraphMailReader _graphMailReader;
+        private readonly IHubContext<HeldMessageNotificationsHub> _heldMessageHub;
         private readonly ILogger<CommitteeMailPoller> _logger;
         private readonly TimeSpan _pollInterval;
         private readonly bool _enabled;
@@ -37,6 +40,7 @@ namespace Web.Services
             IServiceScopeFactory scopeFactory,
             EmailJobQueue emailJobQueue,
             IGraphMailReader graphMailReader,
+            IHubContext<HeldMessageNotificationsHub> heldMessageHub,
             IConfiguration config,
             ILogger<CommitteeMailPoller> logger
         )
@@ -44,6 +48,7 @@ namespace Web.Services
             _scopeFactory = scopeFactory;
             _emailJobQueue = emailJobQueue;
             _graphMailReader = graphMailReader;
+            _heldMessageHub = heldMessageHub;
             _logger = logger;
 
             _enabled = config.GetValue("CommitteeForwarding:Enabled", false);
@@ -535,6 +540,27 @@ namespace Web.Services
                 committee.CommitteeEmail,
                 senderEmail
             );
+
+            try
+            {
+                await _heldMessageHub.Clients
+                    .Group(HeldMessageNotificationsHub.AdminGroupName)
+                    .SendAsync("HeldMessageCreated", new
+                    {
+                        id = held.Id.ToString("D"),
+                        committeeId = held.CommitteeId,
+                        committeeDisplayName = committee.DisplayName,
+                        senderEmail = held.SenderEmail,
+                        senderName = held.SenderName,
+                        subject = held.Subject,
+                        receivedUtc = held.ReceivedUtc,
+                        heldUtc = held.HeldUtc,
+                    }, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send held-message SignalR notification for {Committee}", committee.DisplayName);
+            }
 
             // Move to processed folder using Graph API id (the held record in Cosmos tracks via InternetMessageId)
             await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);

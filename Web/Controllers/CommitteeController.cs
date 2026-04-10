@@ -6,9 +6,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Web.Configuration;
+using Web.Hubs;
 using Web.Models;
 using Web.PresentationModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +43,7 @@ namespace Web.Controllers
         private readonly IEmailJobRepository _emailJobRepository;
         private readonly EmailJobQueue _emailJobQueue;
         private readonly DocumentStorageOptions _storageOptions;
+        private readonly IHubContext<HeldMessageNotificationsHub> _heldMessageHub;
         private readonly ILogger<CommitteeController> _logger;
 
         public CommitteeController(
@@ -55,6 +58,7 @@ namespace Web.Controllers
             IEmailJobRepository emailJobRepository,
             EmailJobQueue emailJobQueue,
             IOptions<DocumentStorageOptions> storageOptions,
+            IHubContext<HeldMessageNotificationsHub> heldMessageHub,
             ILogger<CommitteeController> logger
         )
         {
@@ -69,6 +73,7 @@ namespace Web.Controllers
             _emailJobRepository = emailJobRepository;
             _emailJobQueue = emailJobQueue;
             _storageOptions = storageOptions.Value;
+            _heldMessageHub = heldMessageHub;
             _logger = logger;
         }
 
@@ -872,6 +877,10 @@ namespace Web.Controllers
                 job.Id
             );
 
+            await _heldMessageHub.Clients
+                .Group(HeldMessageNotificationsHub.AdminGroupName)
+                .SendAsync("HeldMessageResolved", new { id = messageId.ToString("D"), committeeId = key });
+
             return Ok(new { JobId = job.Id, Status = "Approved" });
         }
 
@@ -913,7 +922,48 @@ namespace Web.Controllers
                 $"Rejected held message from {held.SenderEmail} (subject: {held.Subject})."
             );
 
+            await _heldMessageHub.Clients
+                .Group(HeldMessageNotificationsHub.AdminGroupName)
+                .SendAsync("HeldMessageResolved", new { id = messageId.ToString("D"), committeeId = key });
+
             return Ok(new { Status = "Rejected" });
+        }
+
+        /// <summary>
+        /// Returns all held messages with status Held across all committees.
+        /// Used by the notification service to populate the badge on initial load.
+        /// </summary>
+        [HttpGet("admin/held-messages/pending")]
+        [Authorize(Policy = "Administrator")]
+        public async Task<IActionResult> GetAllPendingHeldMessages()
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var committees = await _committeeRepository.GetAllAsync();
+            var committeeMap = committees.ToDictionary(c => c.Id, c => c.DisplayName);
+
+            var allHeld = new List<object>();
+            foreach (var c in committees)
+            {
+                var held = await _heldMessageRepository.GetByCommitteeIdAsync(c.Id);
+                allHeld.AddRange(held
+                    .Where(h => h.Status == HeldMessageStatus.Held)
+                    .Select(h => new
+                    {
+                        id = h.Id.ToString("D"),
+                        committeeId = h.CommitteeId,
+                        committeeDisplayName = committeeMap.GetValueOrDefault(h.CommitteeId, h.CommitteeId),
+                        senderEmail = h.SenderEmail,
+                        senderName = h.SenderName,
+                        subject = h.Subject,
+                        receivedUtc = h.ReceivedUtc,
+                        heldUtc = h.HeldUtc,
+                    }));
+            }
+
+            return Ok(allHeld);
         }
 
         // ── Migration (legacy inbox-rule → polling gateway) ─────────────

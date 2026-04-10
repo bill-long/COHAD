@@ -597,6 +597,7 @@ namespace Web
                 endpoints.MapEventDeepLinkOpenGraph(env);
                 endpoints.MapBlogDeepLinkOpenGraph(env);
                 endpoints.MapHub<VendorFlagNotificationsHub>("/hubs/vendor-flags");
+                endpoints.MapHub<HeldMessageNotificationsHub>("/hubs/held-messages");
                 endpoints.MapHub<EmailJobHub>("/hubs/email-jobs");
                 endpoints.MapControllerRoute(name: "default", pattern: "{controller}/{action=Index}/{id?}");
             });
