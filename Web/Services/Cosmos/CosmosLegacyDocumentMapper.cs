@@ -542,7 +542,7 @@ namespace Web.Services.Cosmos
                 LastSyncError = doc.Value<string>("LastSyncError"),
                 ForwardingEnabled = doc.Value<bool?>("ForwardingEnabled") ?? false,
                 ForwardingSenderFilter = Enum.TryParse<ForwardingSenderFilter>(
-                    doc.Value<string>("ForwardingSenderFilter"), out var fsf)
+                    doc.Value<string>("ForwardingSenderFilter"), ignoreCase: true, out var fsf)
                     ? fsf
                     : ForwardingSenderFilter.DirectoryOnly,
                 LastPollUtc = doc["LastPollUtc"]?.ToObject<DateTime?>(),

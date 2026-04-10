@@ -387,16 +387,23 @@ namespace Web.Services
                 MaxRecipientAttempts = 3,
                 TotalRecipients = recipients.Count,
                 InternetMessageId = internetMessageId,
-                ReplyToEmail = senderEmail,
-                ReplyToDisplay = senderName,
+                ReplyToEmail = string.IsNullOrWhiteSpace(senderEmail) ? null : senderEmail,
+                ReplyToDisplay = string.IsNullOrWhiteSpace(senderEmail) ? null : senderName,
                 Recipients = recipients,
             };
 
-            // Store HTML body in blob storage
+            // Store HTML body in blob storage (idempotent — ignore conflict if blob already exists from a prior attempt)
             job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
-            using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(htmlBody)))
+            try
             {
-                await fileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
+                using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(htmlBody)))
+                {
+                    await fileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
+                }
+            }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 409)
+            {
+                _logger.LogDebug("Blob {Path} already exists — proceeding with job creation", job.ContentBlobPath);
             }
 
             try
@@ -446,7 +453,8 @@ namespace Web.Services
         {
             var held = new HeldMessage
             {
-                Id = Guid.NewGuid(),
+                // Deterministic ID for write-time idempotency (same pattern as EmailJob)
+                Id = DeterministicGuid(committee.CommitteeEmail, internetMessageId + ":held"),
                 CommitteeId = committee.Id,
                 CommitteeEmail = committee.CommitteeEmail,
                 InternetMessageId = internetMessageId,
@@ -458,7 +466,20 @@ namespace Web.Services
                 Status = HeldMessageStatus.Held,
             };
 
-            await heldMessageRepo.AddAsync(held);
+            try
+            {
+                await heldMessageRepo.AddAsync(held);
+            }
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                _logger.LogDebug(
+                    "Held record already exists for message {InternetMessageId} in {Mailbox} — skipping",
+                    internetMessageId,
+                    committee.CommitteeEmail
+                );
+                await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
+                return;
+            }
 
             _logger.LogInformation(
                 "Held message {InternetMessageId} in {Mailbox} — sender {Sender} not in directory",
@@ -469,88 +490,6 @@ namespace Web.Services
 
             // Move to processed folder using Graph API id (the held record in Cosmos tracks via InternetMessageId)
             await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
-
-            // Notify administrators
-            await NotifyAdminsOfHeldMessageAsync(committee, held, userRepo, ct);
-        }
-
-        private async Task NotifyAdminsOfHeldMessageAsync(
-            Committee committee,
-            HeldMessage held,
-            IUserRepository userRepo,
-            CancellationToken ct
-        )
-        {
-            try
-            {
-                var users = await userRepo.GetAllAsync();
-                var admins = users
-                    .Where(u => u.Roles?.Contains(User.Role.Administrator) == true)
-                    .Where(u => !string.IsNullOrWhiteSpace(u.Emails))
-                    .ToList();
-
-                if (admins.Count == 0)
-                {
-                    _logger.LogWarning("No administrators with email addresses found for held message notification");
-                    return;
-                }
-
-                var recipients = admins
-                    .Select(a => new EmailJobRecipient
-                    {
-                        Email = a.Emails!.Split(new[] { ',', '|', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                            .Select(e => e.Trim())
-                            .FirstOrDefault(e => !string.IsNullOrWhiteSpace(e)) ?? "",
-                        Status = EmailJobRecipientStatus.Pending,
-                    })
-                    .Where(r => !string.IsNullOrWhiteSpace(r.Email))
-                    .ToList();
-
-                if (recipients.Count == 0)
-                    return;
-
-                var subject = $"[COHAD] Message held for review — {committee.DisplayName}";
-                var html = BuildHeldNotificationHtml(committee, held);
-
-                var job = new EmailJob
-                {
-                    Id = Guid.NewGuid(),
-                    Status = EmailJobStatus.Queued,
-                    Category = "admin-notification",
-                    FromEmail = committee.CommitteeEmail,
-                    FromDisplay = "COHAD Mail Gateway",
-                    Subject = subject,
-                    CreatedUtc = DateTime.UtcNow,
-                    CreatedByUserId = "system:mail-poller",
-                    CreatedByDisplayName = "Committee Mail Poller",
-                    MaxRecipientAttempts = 2,
-                    TotalRecipients = recipients.Count,
-                    GroupRecipients = false,
-                    Recipients = recipients,
-                };
-
-                job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
-                using var scope = _scopeFactory.CreateScope();
-                var fileStore = scope.ServiceProvider.GetRequiredService<IDocumentFileStore>();
-                using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(html)))
-                {
-                    await fileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
-                }
-
-                var emailJobRepo = scope.ServiceProvider.GetRequiredService<IEmailJobRepository>();
-                await emailJobRepo.AddAsync(job);
-                await _emailJobQueue.EnqueueAsync(job.Id, ct);
-
-                _logger.LogInformation(
-                    "Sent held-message notification to {Count} administrators for {Committee}",
-                    recipients.Count,
-                    committee.DisplayName
-                );
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send held-message notification for {Committee}", committee.DisplayName);
-            }
         }
 
         /// <summary>
@@ -618,27 +557,6 @@ namespace Web.Services
                     <strong>Subject:</strong> {System.Net.WebUtility.HtmlEncode(message.Subject ?? "")}</p>
                 </div>
                 {originalBody}
-                """;
-        }
-
-        private static string BuildHeldNotificationHtml(Committee committee, HeldMessage held)
-        {
-            return $"""
-                <p>A message was received in the <strong>{System.Net.WebUtility.HtmlEncode(committee.DisplayName)}</strong>
-                mailbox ({System.Net.WebUtility.HtmlEncode(committee.CommitteeEmail)}) from a sender
-                not listed in the COHAD directory. It has been held for your review.</p>
-
-                <table style="border-collapse:collapse;margin:16px 0">
-                    <tr><td style="padding:4px 12px 4px 0;font-weight:bold">From:</td>
-                        <td style="padding:4px 0">{System.Net.WebUtility.HtmlEncode(held.SenderName ?? "")} &lt;{System.Net.WebUtility.HtmlEncode(held.SenderEmail)}&gt;</td></tr>
-                    <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Subject:</td>
-                        <td style="padding:4px 0">{System.Net.WebUtility.HtmlEncode(held.Subject ?? "(no subject)")}</td></tr>
-                    <tr><td style="padding:4px 12px 4px 0;font-weight:bold">Received:</td>
-                        <td style="padding:4px 0">{held.ReceivedUtc:f} UTC</td></tr>
-                </table>
-
-                <p>Please log in to COHAD and navigate to <strong>Manage Committees → {System.Net.WebUtility.HtmlEncode(committee.DisplayName)}</strong>
-                to approve or reject this message.</p>
                 """;
         }
     }

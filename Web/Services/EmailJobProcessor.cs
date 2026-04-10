@@ -558,8 +558,8 @@ namespace Web.Services
                     var message = new MimeMessage();
                     message.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
                     message.Subject = job.Subject;
-                    var replyToName = job.ReplyToDisplay ?? job.FromDisplay;
-                    var replyToAddr = job.ReplyToEmail ?? job.FromEmail;
+                    var replyToName = string.IsNullOrWhiteSpace(job.ReplyToDisplay) ? job.FromDisplay : job.ReplyToDisplay;
+                    var replyToAddr = string.IsNullOrWhiteSpace(job.ReplyToEmail) ? job.FromEmail : job.ReplyToEmail;
                     message.ReplyTo.Add(new MailboxAddress(replyToName, replyToAddr));
                     message.Body = EmailMessageBuilder.BuildBodyWithImages(imageData.ProcessedHtml, imageData.Images);
 
@@ -659,8 +659,8 @@ namespace Web.Services
                             var message = new MimeMessage();
                             message.From.Add(new MailboxAddress(job.FromDisplay, job.FromEmail));
                             message.Subject = job.Subject;
-                            var perReplyToName = job.ReplyToDisplay ?? job.FromDisplay;
-                            var perReplyToAddr = job.ReplyToEmail ?? job.FromEmail;
+                            var perReplyToName = string.IsNullOrWhiteSpace(job.ReplyToDisplay) ? job.FromDisplay : job.ReplyToDisplay;
+                            var perReplyToAddr = string.IsNullOrWhiteSpace(job.ReplyToEmail) ? job.FromEmail : job.ReplyToEmail;
                             message.ReplyTo.Add(new MailboxAddress(perReplyToName, perReplyToAddr));
                             message.To.Add(new MailboxAddress("", recipient.Email));
                             message.Body = EmailMessageBuilder.BuildBodyWithImages(htmlWithFooter, imageData.Images);

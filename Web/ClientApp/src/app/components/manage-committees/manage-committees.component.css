@@ -586,5 +586,7 @@
   .held-message-actions button {
     white-space: normal;
     min-width: 0;
+    min-height: 44px;
+    padding: 0.625rem 0.75rem;
   }
 }

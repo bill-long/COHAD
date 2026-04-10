@@ -25,36 +25,40 @@ gh pr edit <PR_NUMBER> --add-reviewer "copilot-pull-request-reviewer"
 
 ## Step 3: Poll for review completion
 
-**Poll every 30 seconds**, up to 20 attempts. Do NOT poll more frequently than 30s. Poll for new comments by timestamp, because Copilot does not always create a new review ID.
+**Poll every 30 seconds**, up to 20 attempts. Do NOT poll more frequently than 30s.
 
-Check whether the review is done by counting Copilot reviews:
+Copilot may post comments under **either** `copilot-pull-request-reviewer[bot]` or `Copilot` as the user login. Check for both when polling for new reviews and reading comments.
+
+Check whether new comments have arrived by counting all Copilot-authored PR comments:
 
 ```bash
-count=$(gh api repos/bill-long/COHAD/pulls/<PR>/reviews \
-  --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer[bot]")] | length')
+count=$(gh api "repos/bill-long/COHAD/pulls/<PR>/comments?per_page=100" \
+  --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer[bot]" or .user.login == "Copilot")] | length')
 ```
 
-When the count increases from the previous known count, the new review has arrived. Break out of the loop.
+When the count increases from the previous known count, new review comments have arrived. Break out of the loop.
 
-If 20 attempts pass with no new review, stop and tell the user.
+If 20 attempts pass with no new comments, stop and tell the user.
 
 ## Step 4: Read the review
 
-Get the latest Copilot review:
+Get new Copilot comments (from both logins), sorted oldest-first:
+
+```bash
+gh api "repos/bill-long/COHAD/pulls/<PR>/comments?per_page=100&sort=created&direction=desc" \
+  --jq '[.[] | select((.user.login == "copilot-pull-request-reviewer[bot]" or .user.login == "Copilot") and (.created_at > "<LAST_SEEN_TIMESTAMP>"))] | reverse | .[] | "ID=\(.id) FILE=\(.path) LINE=\(.line // .original_line)\nBODY=\(.body)\n---"'
+```
+
+Track the timestamp of the last comment you've seen so you only process new ones each round.
+
+Also check formal reviews for an APPROVED state:
 
 ```bash
 gh api repos/bill-long/COHAD/pulls/<PR>/reviews \
-  --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer[bot]")] | last | "REVIEW_ID=\(.id) STATE=\(.state)\nBODY=\(.body)"'
+  --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer[bot]" or .user.login == "Copilot")] | last | "STATE=\(.state)"'
 ```
 
-Then read inline comments for that review:
-
-```bash
-gh api "repos/bill-long/COHAD/pulls/<PR>/reviews/<REVIEW_ID>/comments" \
-  --jq '.[] | "ID=\(.id) FILE=\(.path) LINE=\(.line // .original_line)\nBODY=\(.body)\n---"'
-```
-
-If the review state is `APPROVED` with no inline comments, the loop is done — tell the user and stop.
+If the review state is `APPROVED` with no new inline comments, the loop is done — tell the user and stop.
 
 ## Step 5: Address each comment
 

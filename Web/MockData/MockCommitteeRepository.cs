@@ -178,6 +178,11 @@ namespace Web.MockData
                 LastSyncedUtc = c.LastSyncedUtc,
                 LastSyncStatus = c.LastSyncStatus,
                 LastSyncError = c.LastSyncError,
+                ForwardingEnabled = c.ForwardingEnabled,
+                ForwardingSenderFilter = c.ForwardingSenderFilter,
+                LastPollUtc = c.LastPollUtc,
+                LastPollStatus = c.LastPollStatus,
+                LastPollError = c.LastPollError,
             };
 
         private static CommitteeMember CloneMember(CommitteeMember m) =>
