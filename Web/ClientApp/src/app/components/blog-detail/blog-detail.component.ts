@@ -191,6 +191,6 @@ export class BlogDetailComponent implements OnInit {
   }
 
   private renderMarkdown(markdown: string): SafeHtml {
-    return renderMarkdownToHtml(markdown, this.sanitizer);
+    return renderMarkdownToHtml(markdown, this.sanitizer, { dropCap: true });
   }
 }

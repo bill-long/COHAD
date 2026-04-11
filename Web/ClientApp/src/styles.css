@@ -287,15 +287,36 @@ body.dark-theme .ql-editor.ql-blank::before {
   font-size: 1.1rem;
 }
 
-/* Blog drop cap */
-.blog-content > p:first-child::first-letter {
+/* Blog drop cap — injected <span class="drop-cap"> lets us use shape-outside so text
+   flows around the visual ink rather than the rectangular bounding box of the letter.
+   The paragraph receives class="drop-cap-para" from injectDropCapSpan, so the selector
+   works regardless of whether the paragraph is the first child (e.g. after a heading).
+   Sizing note: font-size: 3.35em with line-height: 1 makes the floated letter read as
+   about two lines tall. 3.35em (not 3.4em) ensures the float box stays fractionally
+   below two paragraph line-heights across zoom levels; at 3.4em the glyph's rendered
+   height can exceed the computed 2 × line-height by a sub-pixel amount, causing a
+   third line to be displaced. The exact relationship depends on the surrounding
+   typography (for example Angular Material's .mat-typography line-height). display:
+   flow-root contains the float so a short first paragraph doesn't let it protrude into
+   following blocks. */
+.blog-content > p.drop-cap-para {
+  display: flow-root;
+}
+
+.blog-content > p.drop-cap-para .drop-cap {
   float: left;
-  font-size: 3.4em;
-  line-height: 0.8;
-  padding-right: 0.08em;
-  margin-top: 0.05em;
+  font-size: 3.35em;
+  line-height: 1;
+  margin-right: 0.1em;
   font-weight: 700;
   color: var(--primary-sage);
+  shape-outside: inset(0 0 0 0);
+}
+
+/* Letters whose right side narrows toward the top (A, L) — taper the shape so text
+   tucks into the empty upper-right space, but is fully pushed out at the foot. */
+.blog-content > p.drop-cap-para .drop-cap.drop-cap-inset {
+  shape-outside: polygon(0 0, 45% 0, 100% 100%, 0 100%);
 }
 
 /* Milkdown editor dark mode: override Crepe frame theme variables */

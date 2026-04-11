@@ -25,7 +25,7 @@ namespace Web.MockData
                 PublicSlug = $"{now.Year}-spring-garden-tips",
                 Title = "Spring Garden Tips",
                 Content =
-                    "## Get Your Garden Ready for Spring\n\nAs the weather warms up, it's time to start thinking about your garden. Here are some tips from the Garden Club to help you get started:\n\n- **Clean up beds** — Remove dead leaves and debris from flower beds.\n- **Test your soil** — Good soil is the foundation of a great garden.\n- **Plan your plantings** — Consider native plants that thrive in our climate.\n\nThe Garden Club meets every second Saturday at the clubhouse. New members are always welcome!",
+                    "As the weather warms up, it's time to start thinking about your garden. Here are some tips from the Garden Club to help you get started:\n\n- **Clean up beds** — Remove dead leaves and debris from flower beds.\n- **Test your soil** — Good soil is the foundation of a great garden.\n- **Plan your plantings** — Consider native plants that thrive in our climate.\n\nThe Garden Club meets every second Saturday at the clubhouse. New members are always welcome!",
                 Excerpt =
                     "As the weather warms up, it's time to start thinking about your garden. Here are some tips from the Garden Club.",
                 PublishUtc = now.AddDays(-3),
