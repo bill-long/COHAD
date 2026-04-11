@@ -239,20 +239,21 @@ mat-spinner {
 
   .home {
     padding: 10px 0 10px 10px;
-    margin-top: 0;
+    margin-top: 16px;
     border-left-width: 2px;
     max-width: 100%;
   }
 
   .contactIcon {
-    font-size: 11px;
-    width: 11px;
-    height: 11px;
-    line-height: 11px;
+    display: none;
   }
 
   .childrenSection {
     background: none;
     padding: 4px 0;
+  }
+
+  * {
+    color: black !important;
   }
 }
