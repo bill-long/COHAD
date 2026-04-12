@@ -1,4 +1,4 @@
-import { renderMarkdownToHtml, stripMarkdownToPlainText } from './markdown';
+import { renderMarkdownToHtml, stripMarkdownToPlainText, injectDropCapSpan, injectDropCapSpanWithoutDom } from './markdown';
 import { DomSanitizer } from '@angular/platform-browser';
 import { SecurityContext } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -40,6 +40,143 @@ describe('renderMarkdownToHtml', () => {
   it('handles empty input', () => {
     const result = toHtmlString(renderMarkdownToHtml('', sanitizer));
     expect(result).toBe('');
+  });
+
+  it('handles empty input with dropCap option', () => {
+    const result = toHtmlString(renderMarkdownToHtml('', sanitizer, { dropCap: true }));
+    expect(result).toBe('');
+  });
+
+  it('injects drop-cap span when dropCap option is true', () => {
+    const result = toHtmlString(renderMarkdownToHtml('At the start', sanitizer, { dropCap: true }));
+    expect(result).toContain('class="drop-cap');
+  });
+
+  it('does not inject drop-cap span by default', () => {
+    const result = toHtmlString(renderMarkdownToHtml('At the start', sanitizer));
+    expect(result).not.toContain('drop-cap');
+  });
+});
+
+describe('injectDropCapSpan', () => {
+  it('wraps the first letter of the first paragraph', () => {
+    const html = '<p>At the start of the story</p>';
+    const result = injectDropCapSpan(html);
+    expect(result).toContain('class="drop-cap-para"');
+    expect(result).toContain('<span class="drop-cap drop-cap-inset">A</span>');
+    expect(result).toContain('t the start of the story');
+  });
+
+  it('does not wrap when first paragraph starts with a non-letter', () => {
+    const html = '<p>123 numbers first</p>';
+    const result = injectDropCapSpan(html);
+    expect(result).toBe(html);
+  });
+
+  it('only wraps the first paragraph', () => {
+    const html = '<p>First paragraph</p><p>Second paragraph</p>';
+    const result = injectDropCapSpan(html);
+    const matches = result.match(/<span class="drop-cap/g) ?? [];
+    expect(matches.length).toBe(1);
+  });
+
+  it('adds drop-cap-inset class for letters with narrow top-right (A and L)', () => {
+    expect(injectDropCapSpan('<p>At the start</p>')).toContain('class="drop-cap drop-cap-inset"');
+    expect(injectDropCapSpan('<p>Lovely day</p>')).toContain('class="drop-cap drop-cap-inset"');
+    expect(injectDropCapSpan('<p>Mellow non-inset</p>')).not.toContain('drop-cap-inset');
+    expect(injectDropCapSpan('<p>Victory lap</p>')).not.toContain('drop-cap-inset');
+    expect(injectDropCapSpan('<p>Twisting road</p>')).not.toContain('drop-cap-inset');
+  });
+
+  it('preserves leading whitespace before the first letter', () => {
+    const html = '<p>  Mellow spaces</p>';
+    const result = injectDropCapSpan(html);
+    expect(result).toContain('drop-cap-para');
+    expect(result).toContain('<span class="drop-cap">M</span>');
+  });
+
+  it('does not inject into a paragraph nested inside a blockquote', () => {
+    const html = '<blockquote><p>Quoted text</p></blockquote><p>Real first paragraph</p>';
+    const result = injectDropCapSpan(html);
+    expect(result).toContain('class="drop-cap-para"');
+    // Should inject into the top-level <p>, not the one inside the blockquote
+    expect(result).toContain('<span class="drop-cap">R</span>');
+    expect(result).not.toContain('<span class="drop-cap">Q</span>');
+  });
+
+  it('wraps the first letter even when it is inside inline markup', () => {
+    const html = '<p><strong>Amazing</strong> day ahead</p>';
+    const result = injectDropCapSpan(html);
+    expect(result).toContain('class="drop-cap-para"');
+    expect(result).toContain('class="drop-cap drop-cap-inset"');
+    expect(result).toContain('>A</span>');
+  });
+
+  it('wraps the first letter when a whitespace text node precedes an inline element', () => {
+    const html = '<p> <strong>Amazing</strong> day ahead</p>';
+    const result = injectDropCapSpan(html);
+    expect(result).toContain('class="drop-cap-para"');
+    expect(result).toContain('class="drop-cap drop-cap-inset"');
+    expect(result).toContain('>A</span>');
+  });
+
+  it('is idempotent when applied to already-processed HTML', () => {
+    const html = '<p>Amazing post</p>';
+    const once = injectDropCapSpan(html);
+    const twice = injectDropCapSpan(once);
+    expect(twice).toBe(once);
+    expect(twice.split('drop-cap').length - 1).toBe(3); // from drop-cap-para, drop-cap, and drop-cap-inset
+  });
+});
+
+describe('injectDropCapSpanWithoutDom (SSR fallback)', () => {
+  it('wraps the first letter of the first top-level paragraph', () => {
+    const html = '<p>Amazing post</p>';
+    const result = injectDropCapSpanWithoutDom(html);
+    expect(result).toContain('class="drop-cap-para"');
+    expect(result).toContain('<span class="drop-cap drop-cap-inset">A</span>');
+  });
+
+  it('does not inject into a paragraph nested inside a blockquote', () => {
+    const html = '<blockquote><p>Quoted text</p></blockquote><p>Real first paragraph</p>';
+    const result = injectDropCapSpanWithoutDom(html);
+    expect(result).toContain('<span class="drop-cap">R</span>');
+    expect(result).not.toContain('<span class="drop-cap">Q</span>');
+  });
+
+  it('applies drop-cap-inset class for A', () => {
+    const html = '<p>Autumn leaves</p>';
+    const result = injectDropCapSpanWithoutDom(html);
+    expect(result).toContain('class="drop-cap drop-cap-inset"');
+  });
+
+  it('does not inject when first character is not a letter', () => {
+    const html = '<p>123 numeric start</p>';
+    const result = injectDropCapSpanWithoutDom(html);
+    expect(result).toBe(html);
+  });
+
+  it('wraps the first letter when it is inside inline markup', () => {
+    const html = '<p><strong>Amazing</strong> day ahead</p>';
+    const result = injectDropCapSpanWithoutDom(html);
+    expect(result).toContain('class="drop-cap-para"');
+    expect(result).toContain('class="drop-cap drop-cap-inset"');
+    expect(result).toContain('>A</span>');
+    expect(result).toContain('</span>mazing</strong>');
+  });
+
+  it('is idempotent when applied to already-processed HTML', () => {
+    const html = '<p>Amazing post</p>';
+    const once = injectDropCapSpanWithoutDom(html);
+    const twice = injectDropCapSpanWithoutDom(once);
+    expect(twice).toBe(once);
+    expect(twice.split('drop-cap-para').length - 1).toBe(1);
+  });
+
+  it('returns html unchanged when there is no paragraph', () => {
+    const html = '<h1>Title only</h1>';
+    const result = injectDropCapSpanWithoutDom(html);
+    expect(result).toBe(html);
   });
 });
 
