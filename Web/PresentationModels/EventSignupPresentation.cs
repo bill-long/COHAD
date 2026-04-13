@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Web.Models;
@@ -6,6 +7,10 @@ namespace Web.PresentationModels
 {
     public class EventSignupPresentation
     {
+        public string HomeId { get; private set; }
+
+        public string HomeAddress { get; private set; }
+
         public string UserDisplayName { get; private set; }
 
         public string UserEmail { get; private set; }
@@ -29,6 +34,8 @@ namespace Web.PresentationModels
 
             return new EventSignupPresentation
             {
+                HomeId = signup.HomeId != Guid.Empty ? signup.HomeId.ToString("D") : null,
+                HomeAddress = signup.HomeAddress,
                 UserDisplayName = signup.UserDisplayName,
                 UserEmail = signup.UserEmail,
                 Adults = signup.Adults,

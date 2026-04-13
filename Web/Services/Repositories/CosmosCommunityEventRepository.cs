@@ -43,6 +43,11 @@ namespace Web.Services.Repositories
         Task<CommunityEvent> ReplaceAsync(CommunityEvent communityEvent, string ifMatchEtag);
 
         Task DeleteAsync(Guid id);
+
+        /// <summary>
+        /// Returns events that contain at least one user-based signup for the given user.
+        /// </summary>
+        Task<List<CommunityEvent>> GetEventsWithUserSignupAsync(string userUniqueId);
     }
 
     public class CosmosCommunityEventRepository : ICommunityEventRepository
@@ -143,6 +148,34 @@ namespace Web.Services.Repositories
             }
 
             return null;
+        }
+
+        public async Task<List<CommunityEvent>> GetEventsWithUserSignupAsync(string userUniqueId)
+        {
+            // Signups is stored as a serialized JSON string, so use CONTAINS as a prefilter
+            // and validate matches client-side after deserialization.
+            var query = new CosmosQueryDefinition(
+                "SELECT * FROM c WHERE IS_DEFINED(c.Signups) AND CONTAINS(c.Signups, @uid)"
+            ).WithParameter("@uid", userUniqueId);
+            var iterator = _eventsContainer.GetItemQueryIterator<JObject>(query);
+            var results = new List<CommunityEvent>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                results.AddRange(
+                    response
+                        .Select(CosmosLegacyDocumentMapper.ToCommunityEvent)
+                        .Where(evt =>
+                            evt?.Signups != null
+                            && evt.Signups.Any(s =>
+                                s.HomeId == Guid.Empty
+                                && string.Equals(s.UserUniqueId, userUniqueId, StringComparison.Ordinal)
+                            )
+                        )
+                );
+            }
+
+            return results;
         }
 
         public async Task<CommunityEventReadResult> ReadAsync(Guid id)
