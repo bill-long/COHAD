@@ -154,9 +154,9 @@ namespace Web.Controllers
             await _userRepository.UpsertAsync(userToModify);
 
             // Convert any user-based event signups to home-based now that the user has a home.
-            // This is a follow-up side effect — failures should not cause the already-committed
-            // association update to be reported as a failure.
-            if (requestedHomeIds.Count > 0)
+            // Only auto-convert when exactly one home is assigned; multi-home users require
+            // manual migration to avoid mis-associating signups with the wrong household.
+            if (requestedHomeIds.Count == 1)
             {
                 var primaryHome = existingHomes.First(h => h.Id == requestedHomeIds[0]);
                 var homeAddress = $"{primaryHome.StreetNumber} {primaryHome.StreetName}".Trim();

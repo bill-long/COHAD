@@ -190,6 +190,16 @@ namespace Web.Services
                 }
 
                 var primaryHomeId = user.OwnedHomeIds[0];
+                if (user.OwnedHomeIds.Count > 1)
+                {
+                    // Multi-home users require manual migration to avoid picking the wrong household.
+                    result.SignupsSkipped++;
+                    result.Details.Add(
+                        $"Skipped user '{uid}': owns {user.OwnedHomeIds.Count} homes — manual migration required."
+                    );
+                    continue;
+                }
+
                 userPrimaryHomeMap[uid] = primaryHomeId;
                 homeIdsToFetch.Add(primaryHomeId);
             }

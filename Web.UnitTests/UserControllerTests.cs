@@ -310,6 +310,72 @@ public sealed class UserControllerTests
     }
 
     [Fact]
+    public async Task UpdateUserAssociations_does_not_convert_signups_when_multiple_homes_assigned()
+    {
+        var apiUniqueId = UniqueId("admin");
+        var targetUniqueId = "target-user";
+        var homeId1 = Guid.NewGuid();
+        var homeId2 = Guid.NewGuid();
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(apiUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = apiUniqueId,
+                    GivenName = "Admin",
+                    Surname = "User",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(targetUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = targetUniqueId,
+                    Emails = "target@example.com",
+                    Roles = new List<User.Role>(),
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+        mockUsers
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .ReturnsAsync((User u) => u);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(new List<Home>
+            {
+                new Home { Id = homeId1, StreetNumber = 42, StreetName = "Oak Ave", Residents = new List<Resident>() },
+                new Home { Id = homeId2, StreetNumber = 99, StreetName = "Elm St", Residents = new List<Resident>() },
+            });
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var mockConversion = new Mock<IEventSignupConversionService>();
+
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, mockConversion.Object, nameId: "admin");
+        var result = await c.UpdateUserAssociations(
+            targetUniqueId,
+            new UpdatedUserAssociations
+            {
+                RoleNames = new List<string> { "Resident" },
+                OwnedHomeIds = new List<Guid> { homeId1, homeId2 },
+            }
+        );
+
+        Assert.IsType<OkResult>(result);
+        mockConversion.Verify(
+            s => s.ConvertUserSignupsToHomeAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>()),
+            Times.Never
+        );
+    }
+
+    [Fact]
     public async Task MigrateEventSignups_calls_service_and_returns_result()
     {
         var apiUniqueId = UniqueId("admin");
