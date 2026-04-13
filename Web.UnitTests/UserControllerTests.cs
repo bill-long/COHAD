@@ -4,6 +4,8 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Web.Controllers;
 using Web.Models;
@@ -27,7 +29,7 @@ public sealed class UserControllerTests
         string idp = "google.com"
     )
     {
-        var c = new UserController(users, homes, audit, signupConversion ?? Mock.Of<IEventSignupConversionService>())
+        var c = new UserController(users, homes, audit, signupConversion ?? Mock.Of<IEventSignupConversionService>(), NullLogger<UserController>.Instance)
         {
             ControllerContext = new ControllerContext
             {

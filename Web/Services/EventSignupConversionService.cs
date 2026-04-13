@@ -78,16 +78,16 @@ namespace Web.Services
                 return 0;
             }
 
-            var candidates = (await _eventRepository.GetEventsWithUserSignupAsync(userUniqueId)).ToList();
+            var candidateIds = (await _eventRepository.GetEventIdsWithUserSignupAsync(userUniqueId)).ToList();
 
             var converted = 0;
             const int maxRetries = 3;
 
-            foreach (var candidate in candidates)
+            foreach (var eventId in candidateIds)
             {
                 for (var attempt = 0; attempt <= maxRetries; attempt++)
                 {
-                    var read = await _eventRepository.ReadAsync(candidate.Id);
+                    var read = await _eventRepository.ReadAsync(eventId);
                     if (read == null)
                     {
                         break;

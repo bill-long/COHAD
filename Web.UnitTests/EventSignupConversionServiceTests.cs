@@ -38,7 +38,7 @@ public sealed class EventSignupConversionServiceTests
 
         CommunityEvent replaced = null;
         var mockRepo = new Mock<ICommunityEventRepository>();
-        mockRepo.Setup(r => r.GetEventsWithUserSignupAsync(userUniqueId)).ReturnsAsync(new List<CommunityEvent> { storedEvent });
+        mockRepo.Setup(r => r.GetEventIdsWithUserSignupAsync(userUniqueId)).ReturnsAsync(new List<Guid> { storedEvent.Id });
         mockRepo
             .Setup(r => r.ReadAsync(eventId))
             .ReturnsAsync(new CommunityEventReadResult { Event = storedEvent, ETag = "\"e1\"" });
@@ -94,7 +94,7 @@ public sealed class EventSignupConversionServiceTests
 
         CommunityEvent replaced = null;
         var mockRepo = new Mock<ICommunityEventRepository>();
-        mockRepo.Setup(r => r.GetEventsWithUserSignupAsync(userUniqueId)).ReturnsAsync(new List<CommunityEvent> { storedEvent });
+        mockRepo.Setup(r => r.GetEventIdsWithUserSignupAsync(userUniqueId)).ReturnsAsync(new List<Guid> { storedEvent.Id });
         mockRepo
             .Setup(r => r.ReadAsync(eventId))
             .ReturnsAsync(new CommunityEventReadResult { Event = storedEvent, ETag = "\"e1\"" });
@@ -117,7 +117,7 @@ public sealed class EventSignupConversionServiceTests
     public async Task Returns_zero_when_no_user_signups_exist()
     {
         var mockRepo = new Mock<ICommunityEventRepository>();
-        mockRepo.Setup(r => r.GetEventsWithUserSignupAsync("someuser")).ReturnsAsync(new List<CommunityEvent>());
+        mockRepo.Setup(r => r.GetEventIdsWithUserSignupAsync("someuser")).ReturnsAsync(new List<Guid>());
 
         var service = new EventSignupConversionService(mockRepo.Object);
         var count = await service.ConvertUserSignupsToHomeAsync("someuser", Guid.NewGuid(), "1 Main St");
@@ -148,7 +148,7 @@ public sealed class EventSignupConversionServiceTests
         };
 
         var mockRepo = new Mock<ICommunityEventRepository>();
-        mockRepo.Setup(r => r.GetEventsWithUserSignupAsync("target-user")).ReturnsAsync(new List<CommunityEvent>());
+        mockRepo.Setup(r => r.GetEventIdsWithUserSignupAsync("target-user")).ReturnsAsync(new List<Guid>());
 
         var service = new EventSignupConversionService(mockRepo.Object);
         var count = await service.ConvertUserSignupsToHomeAsync("target-user", Guid.NewGuid(), "1 Main St");
@@ -186,7 +186,7 @@ public sealed class EventSignupConversionServiceTests
         };
 
         var mockRepo = new Mock<ICommunityEventRepository>();
-        mockRepo.Setup(r => r.GetEventsWithUserSignupAsync(userUniqueId)).ReturnsAsync(new List<CommunityEvent> { event1, event2 });
+        mockRepo.Setup(r => r.GetEventIdsWithUserSignupAsync(userUniqueId)).ReturnsAsync(new List<Guid> { event1.Id, event2.Id });
         mockRepo
             .Setup(r => r.ReadAsync(eventId1))
             .ReturnsAsync(new CommunityEventReadResult { Event = event1, ETag = "\"e1\"" });

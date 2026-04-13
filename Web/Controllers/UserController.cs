@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -21,18 +22,21 @@ namespace Web.Controllers
         private readonly IHomeRepository _homeRepository;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly IEventSignupConversionService _signupConversion;
+        private readonly ILogger<UserController> _logger;
 
         public UserController(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
             IAuditLogRepository auditLogRepository,
-            IEventSignupConversionService signupConversion
+            IEventSignupConversionService signupConversion,
+            ILogger<UserController> logger
         )
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
             _auditLogRepository = auditLogRepository;
             _signupConversion = signupConversion;
+            _logger = logger;
         }
 
         public async Task<IEnumerable<PresentationUser>> Get()
@@ -168,8 +172,10 @@ namespace Web.Controllers
                         homeAddress
                     );
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    _logger.LogWarning(ex, "Event signup conversion failed for user {UserId} after home assignment to {HomeId}",
+                        userToModify.UniqueId, primaryHome.Id);
                     try
                     {
                         await _auditLogRepository.AddAsync(

@@ -229,11 +229,11 @@ namespace Web.MockData
             }
         }
 
-        public Task<List<CommunityEvent>> GetEventsWithUserSignupAsync(string userUniqueId)
+        public Task<List<Guid>> GetEventIdsWithUserSignupAsync(string userUniqueId)
         {
             if (string.IsNullOrWhiteSpace(userUniqueId))
             {
-                return Task.FromResult(new List<CommunityEvent>());
+                return Task.FromResult(new List<Guid>());
             }
 
             lock (_events)
@@ -243,7 +243,7 @@ namespace Web.MockData
                         e.Signups != null
                         && e.Signups.Any(s => s.HomeId == Guid.Empty && s.UserUniqueId == userUniqueId)
                     )
-                    .Select(CloneEvent)
+                    .Select(e => e.Id)
                     .ToList();
                 return Task.FromResult(results);
             }
