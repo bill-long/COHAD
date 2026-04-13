@@ -164,7 +164,7 @@
               color="primary"
               class="event-detail-signup-btn"
               (click)="submitSignup()"
-              [disabled]="saving"
+              [disabled]="saving || !homeSelectionReady"
             >
               <mat-spinner *ngIf="saving" class="event-detail-signup-spinner" diameter="20" mode="indeterminate"></mat-spinner>
               <span *ngIf="!saving">{{ hasExistingSignup ? 'Update signup' : 'Sign up' }}</span>

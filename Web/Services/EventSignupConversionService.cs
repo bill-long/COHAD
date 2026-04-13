@@ -193,7 +193,6 @@ namespace Web.Services
                 if (user.OwnedHomeIds.Count > 1)
                 {
                     // Multi-home users require manual migration to avoid picking the wrong household.
-                    result.SignupsSkipped++;
                     result.Details.Add(
                         $"Skipped user '{uid}': owns {user.OwnedHomeIds.Count} homes — manual migration required."
                     );
@@ -301,7 +300,7 @@ namespace Web.Services
             var skippedUsers = distinctUserIds.Count - userHomeMap.Count;
             if (skippedUsers > 0)
             {
-                result.Details.Add($"{skippedUsers} user(s) could not be resolved to a home (no home association or home record missing) — their signups were left as-is.");
+                result.Details.Add($"{skippedUsers} user(s) could not be automatically resolved to a single home (no home association, missing home record, or multiple homes requiring manual migration) — their signups were left as-is.");
             }
 
             return result;

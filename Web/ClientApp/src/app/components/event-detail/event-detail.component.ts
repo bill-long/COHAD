@@ -32,6 +32,8 @@ export class EventDetailComponent implements OnInit {
 
   /** The home selected for signup (auto-set when user has one home). */
   selectedHomeId: string | null = null;
+  /** True once initHomeSelection has completed (prevents submitting before home is resolved). */
+  homeSelectionReady = false;
 
   private currentSlug = '';
 
@@ -192,6 +194,7 @@ export class EventDetailComponent implements OnInit {
       this.selectedHomeId = null;
     }
     this.applyExistingSignup(eventItem);
+    this.homeSelectionReady = true;
   }
 
   private applyExistingSignup(eventItem: EventDetail): void {
