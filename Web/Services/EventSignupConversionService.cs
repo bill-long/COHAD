@@ -157,7 +157,7 @@ namespace Web.Services
                 .Where(e => e.Signups != null)
                 .SelectMany(e => e.Signups
                     .Where(s => s.HomeId == Guid.Empty && !string.IsNullOrEmpty(s.UserUniqueId))
-                    .Select(s => new { EventId = e.Id, EventTitle = e.Title, s.UserUniqueId })
+                    .Select(s => new { EventId = e.Id, s.UserUniqueId })
                 )
                 .ToList();
 
@@ -170,15 +170,21 @@ namespace Web.Services
             var distinctUserIds = userSignupEntries.Select(e => e.UserUniqueId).Distinct().ToList();
             result.Details.Add($"Found {userSignupEntries.Count} user-based signup(s) across {distinctUserIds.Count} user(s).");
 
-            // Look up each user and resolve their primary home (batched).
+            // Batch-load all users and resolve their primary homes.
+            var allUsers = await userRepository.GetAllAsync();
+            var userLookup = allUsers
+                .Where(u => u.UniqueId != null)
+                .ToDictionary(u => u.UniqueId, StringComparer.Ordinal);
+
             var userHomeMap = new Dictionary<string, (Guid HomeId, string HomeAddress)>();
             var homeIdsToFetch = new List<Guid>();
             var userPrimaryHomeMap = new Dictionary<string, Guid>();
 
             foreach (var uid in distinctUserIds)
             {
-                var user = await userRepository.GetByUniqueIdAsync(uid);
-                if (user?.OwnedHomeIds == null || user.OwnedHomeIds.Count == 0)
+                if (!userLookup.TryGetValue(uid, out var user)
+                    || user.OwnedHomeIds == null
+                    || user.OwnedHomeIds.Count == 0)
                 {
                     continue;
                 }

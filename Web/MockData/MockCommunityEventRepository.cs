@@ -231,6 +231,11 @@ namespace Web.MockData
 
         public Task<List<CommunityEvent>> GetEventsWithUserSignupAsync(string userUniqueId)
         {
+            if (string.IsNullOrWhiteSpace(userUniqueId))
+            {
+                return Task.FromResult(new List<CommunityEvent>());
+            }
+
             lock (_events)
             {
                 var results = _events.Values

@@ -239,8 +239,8 @@ public sealed class EventSignupConversionServiceTests
 
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
-            .Setup(r => r.GetByUniqueIdAsync(userId))
-            .ReturnsAsync(new User { UniqueId = userId, OwnedHomeIds = new List<Guid> { homeId } });
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(new List<User> { new User { UniqueId = userId, OwnedHomeIds = new List<Guid> { homeId } } });
 
         var mockHomes = new Mock<IHomeRepository>();
         mockHomes
@@ -280,8 +280,8 @@ public sealed class EventSignupConversionServiceTests
 
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
-            .Setup(r => r.GetByUniqueIdAsync(userId))
-            .ReturnsAsync(new User { UniqueId = userId, OwnedHomeIds = new List<Guid>() });
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(new List<User> { new User { UniqueId = userId, OwnedHomeIds = new List<Guid>() } });
 
         var mockHomes = new Mock<IHomeRepository>();
         mockHomes.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync(new List<Home>());
@@ -325,8 +325,8 @@ public sealed class EventSignupConversionServiceTests
 
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
-            .Setup(r => r.GetByUniqueIdAsync(userId))
-            .ReturnsAsync(new User { UniqueId = userId, OwnedHomeIds = new List<Guid> { homeId } });
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(new List<User> { new User { UniqueId = userId, OwnedHomeIds = new List<Guid> { homeId } } });
 
         var mockHomes = new Mock<IHomeRepository>();
         mockHomes

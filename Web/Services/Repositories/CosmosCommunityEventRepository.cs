@@ -152,6 +152,11 @@ namespace Web.Services.Repositories
 
         public async Task<List<CommunityEvent>> GetEventsWithUserSignupAsync(string userUniqueId)
         {
+            if (string.IsNullOrWhiteSpace(userUniqueId))
+            {
+                return new List<CommunityEvent>();
+            }
+
             // Signups is stored as a serialized JSON string, so use CONTAINS as a prefilter
             // and validate matches client-side after deserialization.
             var query = new CosmosQueryDefinition(
