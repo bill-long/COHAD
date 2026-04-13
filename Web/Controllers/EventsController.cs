@@ -121,7 +121,11 @@ namespace Web.Controllers
             }
 
             var (isAuthenticated, currentUserHomeIds, currentUserUniqueId) = await TryGetCurrentUserContextAsync();
-            var detail = CommunityEventDetail.FromStorageModel(stored, includeSignups: false, currentUserHomeIds, currentUserUniqueId);
+            var detail = CommunityEventDetail.FromStorageModel(
+                stored,
+                includeSignups: false,
+                currentUserHomeIds: currentUserHomeIds,
+                currentUserUniqueId: currentUserUniqueId);
 
             if (!isAuthenticated)
             {
@@ -242,11 +246,11 @@ namespace Web.Controllers
             var all = await _communityEventRepository.GetAllAsync();
             var upcoming = all.Where(e => IsInUpcomingWindow(e, now))
                 .OrderBy(e => e.StartUtc)
-                .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, null))
+                .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, currentUserHomeIds: null))
                 .ToList();
             var past = all.Where(e => !IsInUpcomingWindow(e, now))
                 .OrderByDescending(e => e.StartUtc)
-                .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, null))
+                .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, currentUserHomeIds: null))
                 .ToList();
 
             return Ok(new ManageEventsPayload { Upcoming = upcoming, Past = past });
@@ -480,7 +484,7 @@ namespace Web.Controllers
                 }
             );
 
-            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: true, apiUser.OwnedHomeIds, apiUser.UniqueId));
+            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: true, currentUserHomeIds: apiUser.OwnedHomeIds, currentUserUniqueId: apiUser.UniqueId));
         }
 
         [HttpDelete("manage/{id:guid}")]
@@ -672,7 +676,7 @@ namespace Web.Controllers
                 }
             );
 
-            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: false, apiUser.OwnedHomeIds, apiUser.UniqueId));
+            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: false, currentUserHomeIds: apiUser.OwnedHomeIds, currentUserUniqueId: apiUser.UniqueId));
         }
 
         /// <summary>Finds an existing signup by home (when signupHomeId is non-empty) or by user (fallback).</summary>
