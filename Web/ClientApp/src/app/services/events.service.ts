@@ -5,6 +5,8 @@ import { Observable } from 'rxjs';
 export type EventSignupMode = 'AdultsAndChildren' | 'HouseholdOnly' | 'ChildrenOnly' | 'AdultsOnly' | 'PeopleOnly';
 
 export interface EventSignup {
+  homeId: string | null;
+  homeAddress: string | null;
   userDisplayName: string;
   userEmail: string;
   adults: number;
@@ -34,7 +36,8 @@ export interface EventCard {
 export interface EventDetail extends EventCard {
   promoMediaDisplayName: string | null;
   signups: EventSignup[];
-  mySignup: EventSignup | null;
+  myHomeSignups: EventSignup[];
+  myUserSignup: EventSignup | null;
 }
 
 export interface EventUpsertPayload {
@@ -48,6 +51,7 @@ export interface EventUpsertPayload {
 }
 
 export interface EventSignupPayload {
+  homeId?: string | null;
   adults: number;
   children: number;
   adultNames: string[];

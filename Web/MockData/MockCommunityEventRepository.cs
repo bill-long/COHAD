@@ -33,7 +33,8 @@ namespace Web.MockData
                 {
                     new EventSignup
                     {
-                        UserUniqueId = MockDataConstants.AdminUniqueId,
+                        HomeId = MockDataConstants.SampleHomeId,
+                        HomeAddress = "123 Mock Lane",
                         UserDisplayName = "Mock Resident",
                         UserEmail = "mock@cohad.local",
                         Adults = 2,
@@ -64,7 +65,8 @@ namespace Web.MockData
                 {
                     new EventSignup
                     {
-                        UserUniqueId = MockDataConstants.AdminUniqueId,
+                        HomeId = MockDataConstants.SampleHomeId,
+                        HomeAddress = "123 Mock Lane",
                         UserDisplayName = "Mock Resident",
                         UserEmail = "mock@cohad.local",
                         Adults = 0,
@@ -93,7 +95,8 @@ namespace Web.MockData
                 {
                     new EventSignup
                     {
-                        UserUniqueId = MockDataConstants.SecondaryUserUniqueId,
+                        HomeId = MockDataConstants.SecondSampleHomeId,
+                        HomeAddress = "456 Test Court",
                         UserDisplayName = "Taylor Resident",
                         UserEmail = "taylor@cohad.local",
                         Adults = 0,
@@ -138,7 +141,8 @@ namespace Web.MockData
                 {
                     new EventSignup
                     {
-                        UserUniqueId = MockDataConstants.SecondaryUserUniqueId,
+                        HomeId = MockDataConstants.SecondSampleHomeId,
+                        HomeAddress = "456 Test Court",
                         UserDisplayName = "Taylor Resident",
                         UserEmail = "taylor@cohad.local",
                         Adults = 5,
@@ -222,6 +226,26 @@ namespace Web.MockData
 
                 EnsureEtag(id);
                 return Task.FromResult(new CommunityEventReadResult { Event = CloneEvent(e), ETag = _etags[id] });
+            }
+        }
+
+        public Task<List<Guid>> GetEventIdsWithUserSignupAsync(string userUniqueId)
+        {
+            if (string.IsNullOrWhiteSpace(userUniqueId))
+            {
+                return Task.FromResult(new List<Guid>());
+            }
+
+            lock (_events)
+            {
+                var results = _events.Values
+                    .Where(e =>
+                        e.Signups != null
+                        && e.Signups.Any(s => s.HomeId == Guid.Empty && s.UserUniqueId == userUniqueId)
+                    )
+                    .Select(e => e.Id)
+                    .ToList();
+                return Task.FromResult(results);
             }
         }
 
@@ -311,6 +335,8 @@ namespace Web.MockData
                     communityEvent
                         .Signups?.Select(s => new EventSignup
                         {
+                            HomeId = s.HomeId,
+                            HomeAddress = s.HomeAddress,
                             UserUniqueId = s.UserUniqueId,
                             UserDisplayName = s.UserDisplayName,
                             UserEmail = s.UserEmail,

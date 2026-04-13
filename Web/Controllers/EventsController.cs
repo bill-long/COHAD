@@ -47,6 +47,7 @@ namespace Web.Controllers
 
         private readonly IUserRepository _userRepository;
         private readonly ICommunityEventRepository _communityEventRepository;
+        private readonly IHomeRepository _homeRepository;
         private readonly IDocumentFileStore _documentFileStore;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly IOgThumbnailService _ogThumbnailService;
@@ -57,6 +58,7 @@ namespace Web.Controllers
         public EventsController(
             IUserRepository userRepository,
             ICommunityEventRepository communityEventRepository,
+            IHomeRepository homeRepository,
             IDocumentFileStore documentFileStore,
             IAuditLogRepository auditLogRepository,
             IOgThumbnailService ogThumbnailService,
@@ -67,6 +69,7 @@ namespace Web.Controllers
         {
             _userRepository = userRepository;
             _communityEventRepository = communityEventRepository;
+            _homeRepository = homeRepository;
             _documentFileStore = documentFileStore;
             _auditLogRepository = auditLogRepository;
             _ogThumbnailService = ogThumbnailService;
@@ -117,10 +120,14 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            var currentUserUniqueId = await TryGetCurrentUserUniqueIdAsync();
-            var detail = CommunityEventDetail.FromStorageModel(stored, includeSignups: false, currentUserUniqueId);
+            var (isAuthenticated, currentUserHomeIds, currentUserUniqueId) = await TryGetCurrentUserContextAsync();
+            var detail = CommunityEventDetail.FromStorageModel(
+                stored,
+                includeSignups: false,
+                currentUserHomeIds: currentUserHomeIds,
+                currentUserUniqueId: currentUserUniqueId);
 
-            if (string.IsNullOrWhiteSpace(currentUserUniqueId))
+            if (!isAuthenticated)
             {
                 return OkWithETag(detail);
             }
@@ -239,11 +246,11 @@ namespace Web.Controllers
             var all = await _communityEventRepository.GetAllAsync();
             var upcoming = all.Where(e => IsInUpcomingWindow(e, now))
                 .OrderBy(e => e.StartUtc)
-                .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, null))
+                .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, currentUserHomeIds: null))
                 .ToList();
             var past = all.Where(e => !IsInUpcomingWindow(e, now))
                 .OrderByDescending(e => e.StartUtc)
-                .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, null))
+                .Select(e => CommunityEventDetail.FromStorageModel(e, includeSignups: true, currentUserHomeIds: null))
                 .ToList();
 
             return Ok(new ManageEventsPayload { Upcoming = upcoming, Past = past });
@@ -477,7 +484,7 @@ namespace Web.Controllers
                 }
             );
 
-            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: true, apiUser.UniqueId));
+            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: true, currentUserHomeIds: apiUser.OwnedHomeIds, currentUserUniqueId: apiUser.UniqueId));
         }
 
         [HttpDelete("manage/{id:guid}")]
@@ -532,7 +539,7 @@ namespace Web.Controllers
             return Ok();
         }
 
-        /// <summary>Creates or updates the current user's signup for an event.</summary>
+        /// <summary>Creates or updates a signup for an event, keyed by home (if the user has one) or by user.</summary>
         /// <remarks>
         /// Uses Cosmos optimistic concurrency (If-Match ETag) with bounded retries so concurrent signups do not overwrite each other.
         /// </remarks>
@@ -544,6 +551,41 @@ namespace Web.Controllers
             if (apiUser == null)
             {
                 return NotFound();
+            }
+
+            var hasHomes = apiUser.OwnedHomeIds != null && apiUser.OwnedHomeIds.Count > 0;
+            var requestedHomeId = request?.HomeId ?? Guid.Empty;
+
+            // Determine signup key: home-based or user-based.
+            Guid signupHomeId;
+            string homeAddress;
+
+            if (hasHomes)
+            {
+                if (requestedHomeId == Guid.Empty)
+                {
+                    return BadRequest("Please select a home for the signup.");
+                }
+
+                if (!apiUser.OwnedHomeIds.Contains(requestedHomeId))
+                {
+                    return BadRequest("You are not associated with the specified home.");
+                }
+
+                var home = await _homeRepository.GetByIdAsync(requestedHomeId);
+                if (home == null)
+                {
+                    return BadRequest("The specified home was not found.");
+                }
+
+                signupHomeId = requestedHomeId;
+                homeAddress = $"{home.StreetNumber} {home.StreetName}".Trim();
+            }
+            else
+            {
+                // User without homes → personal signup keyed by UserUniqueId.
+                signupHomeId = Guid.Empty;
+                homeAddress = null;
             }
 
             var routeEvent = await _communityEventRepository.GetByRouteSegmentAsync(segment);
@@ -580,8 +622,8 @@ namespace Web.Controllers
                     return BadRequest(validationError);
                 }
 
-                isNewSignup = !(read.Event.Signups?.Any(s => s.UserUniqueId == apiUser.UniqueId) ?? false);
-                ApplySignupMutation(read.Event, apiUser, request);
+                isNewSignup = !FindExistingSignup(read.Event, signupHomeId, apiUser.UniqueId, out _);
+                ApplySignupMutation(read.Event, apiUser, request, signupHomeId, homeAddress);
 
                 try
                 {
@@ -634,19 +676,61 @@ namespace Web.Controllers
                 }
             );
 
-            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: false, apiUser.UniqueId));
+            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: false, currentUserHomeIds: apiUser.OwnedHomeIds, currentUserUniqueId: apiUser.UniqueId));
         }
 
-        private static void ApplySignupMutation(CommunityEvent stored, Models.User apiUser, EventSignupRequest request)
+        /// <summary>Finds an existing signup by home (when signupHomeId is non-empty) or by user (fallback).</summary>
+        private static bool FindExistingSignup(
+            CommunityEvent stored,
+            Guid signupHomeId,
+            string userUniqueId,
+            out EventSignup existing
+        )
+        {
+            existing = null;
+            if (stored.Signups == null)
+            {
+                return false;
+            }
+
+            existing = signupHomeId != Guid.Empty
+                ? stored.Signups.FirstOrDefault(s => s.HomeId == signupHomeId)
+                : stored.Signups.FirstOrDefault(s => s.HomeId == Guid.Empty && s.UserUniqueId == userUniqueId);
+
+            return existing != null;
+        }
+
+        private static void ApplySignupMutation(
+            CommunityEvent stored,
+            Models.User apiUser,
+            EventSignupRequest request,
+            Guid signupHomeId,
+            string homeAddress
+        )
         {
             stored.Signups ??= new List<EventSignup>();
-            var existingSignup = stored.Signups.FirstOrDefault(s => s.UserUniqueId == apiUser.UniqueId);
+
+            FindExistingSignup(stored, signupHomeId, apiUser.UniqueId, out var existingSignup);
             if (existingSignup == null)
             {
-                existingSignup = new EventSignup { UserUniqueId = apiUser.UniqueId };
+                existingSignup = signupHomeId != Guid.Empty
+                    ? new EventSignup { HomeId = signupHomeId }
+                    : new EventSignup { UserUniqueId = apiUser.UniqueId };
                 stored.Signups.Add(existingSignup);
             }
 
+            // Clean up any orphaned user-based signup for this user when creating a home-based one.
+            // This handles the case where a prior conversion attempt failed silently.
+            if (signupHomeId != Guid.Empty)
+            {
+                stored.Signups.RemoveAll(s =>
+                    s != existingSignup
+                    && s.HomeId == Guid.Empty
+                    && s.UserUniqueId == apiUser.UniqueId
+                );
+            }
+
+            existingSignup.HomeAddress = homeAddress;
             existingSignup.UserDisplayName =
                 $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim();
             existingSignup.UserEmail = apiUser.Emails;
@@ -758,22 +842,22 @@ namespace Web.Controllers
             return await _userRepository.GetByUniqueIdAsync(uniqueId);
         }
 
-        private async Task<string> TryGetCurrentUserUniqueIdAsync()
+        private async Task<(bool IsAuthenticated, IReadOnlyList<Guid> HomeIds, string UserUniqueId)> TryGetCurrentUserContextAsync()
         {
             if (User?.Identity?.IsAuthenticated != true)
             {
-                return null;
+                return (false, null, null);
             }
 
             try
             {
                 var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
                 var apiUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
-                return apiUser?.UniqueId;
+                return apiUser != null ? (true, apiUser.OwnedHomeIds, apiUser.UniqueId) : (false, null, null);
             }
             catch (InvalidOperationException)
             {
-                return null;
+                return (false, null, null);
             }
         }
 

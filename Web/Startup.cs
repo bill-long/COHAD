@@ -261,6 +261,7 @@ namespace Web
             services.AddSingleton<IOgThumbnailService, SkiaSharpOgThumbnailService>();
             services.AddSingleton<IImageConversionService, SkiaSharpImageConversionService>();
             services.AddSingleton<IImageUploadHelper, ImageUploadHelper>();
+            services.AddScoped<IEventSignupConversionService, EventSignupConversionService>();
 
             // Unsubscribe token service — only registered when a signing key is configured.
             // Without a key, the UnsubscribeController still works (returns 400 for all tokens)

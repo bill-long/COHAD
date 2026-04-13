@@ -64,10 +64,24 @@ namespace Web.Models
 
     public class EventSignup
     {
+        /// <summary>
+        /// Non-empty when the signup is home-based (shared by all users associated with this home).
+        /// Mutually exclusive with <see cref="UserUniqueId"/>.
+        /// </summary>
+        public Guid HomeId { get; set; }
+
+        public string HomeAddress { get; set; }
+
+        /// <summary>
+        /// Non-null when the signup is user-based (the user is not yet associated with a home).
+        /// Mutually exclusive with a non-empty <see cref="HomeId"/>.
+        /// </summary>
         public string UserUniqueId { get; set; }
 
+        /// <summary>Display name of the user who last created or updated this signup.</summary>
         public string UserDisplayName { get; set; }
 
+        /// <summary>Email of the user who last created or updated this signup.</summary>
         public string UserEmail { get; set; }
 
         public int Adults { get; set; }

@@ -108,7 +108,7 @@
       <div class="signup-list" *ngIf="eventItem.signups.length > 0">
         <div class="signup-row" *ngFor="let signup of eventItem.signups">
           <div class="signup-row-top">
-            <div class="signup-name">{{ signup.userDisplayName || '—' }}</div>
+            <div class="signup-name">{{ signup.homeAddress || signup.userDisplayName || '—' }}</div>
             <ng-container [ngSwitch]="eventItem.signupMode">
               <div class="signup-counts" *ngSwitchCase="'HouseholdOnly'">&nbsp;</div>
               <div class="signup-counts" *ngSwitchCase="'ChildrenOnly'">
@@ -123,7 +123,7 @@
               <div class="signup-counts" *ngSwitchDefault>{{ signup.adults }} adults · {{ signup.children }} children</div>
             </ng-container>
           </div>
-          <div class="signup-email" *ngIf="signup.userEmail">{{ signup.userEmail }}</div>
+          <div class="signup-email" *ngIf="signup.userEmail">{{ signup.userDisplayName ? signup.userDisplayName + ' · ' : '' }}{{ signup.userEmail }}</div>
           <div class="signup-when" *ngIf="signup.signedUpUtc">Signed up {{ signup.signedUpUtc | date: 'medium' }}</div>
           <div class="signup-names" *ngIf="signup.adultNames.length > 0 || signup.childNames.length > 0">
             <span *ngIf="signup.adultNames.length > 0"

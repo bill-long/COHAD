@@ -62,7 +62,24 @@
           </p>
 
           <ng-container *ngIf="isSignedIn$ | async; else loginToSignup">
-            <div class="signup-form-fields" *ngIf="event.signupMode !== 'HouseholdOnly'">
+            <ng-container *ngIf="ownedHomes$ | async as homes">
+              <ng-container *ngIf="homes.length > 0">
+                <mat-form-field
+                  *ngIf="homes.length > 1"
+                  appearance="outline"
+                  class="event-detail-field event-detail-home-select"
+                  subscriptSizing="dynamic"
+                >
+                  <mat-label>Signing up for</mat-label>
+                  <mat-select [value]="selectedHomeId" (selectionChange)="onHomeSelected($event.value)">
+                    <mat-option *ngFor="let home of homes" [value]="home.id">
+                      {{ home.streetNumber }} {{ home.streetName }}
+                    </mat-option>
+                  </mat-select>
+                </mat-form-field>
+              </ng-container>
+
+              <div class="signup-form-fields" *ngIf="event.signupMode !== 'HouseholdOnly'">
               <div class="signup-form-counts">
                 <mat-form-field
                   appearance="outline"
@@ -147,10 +164,10 @@
               color="primary"
               class="event-detail-signup-btn"
               (click)="submitSignup()"
-              [disabled]="saving"
+              [disabled]="saving || !homeSelectionReady"
             >
               <mat-spinner *ngIf="saving" class="event-detail-signup-spinner" diameter="20" mode="indeterminate"></mat-spinner>
-              <span *ngIf="!saving">{{ event.mySignup ? 'Update signup' : 'Sign up' }}</span>
+              <span *ngIf="!saving">{{ hasExistingSignup ? 'Update signup' : 'Sign up' }}</span>
               <span *ngIf="saving">Saving…</span>
             </button>
 
@@ -169,6 +186,7 @@
                 <p class="mat-body-medium event-detail-feedback-text">{{ success }}</p>
               </mat-card-content>
             </mat-card>
+            </ng-container>
           </ng-container>
 
           <ng-template #loginToSignup>

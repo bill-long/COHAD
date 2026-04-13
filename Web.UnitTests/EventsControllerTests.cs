@@ -29,6 +29,7 @@ public sealed class EventsControllerTests
         ICommunityEventRepository events,
         IDocumentFileStore fileStore,
         IAuditLogRepository auditLog,
+        IHomeRepository homes = null,
         IImageUploadHelper? imageUploadHelper = null,
         string nameId = "u1",
         string idp = "google.com"
@@ -37,6 +38,7 @@ public sealed class EventsControllerTests
         var c = new EventsController(
             users,
             events,
+            homes ?? Mock.Of<IHomeRepository>(),
             fileStore,
             auditLog,
             new SkiaSharpOgThumbnailService(),
@@ -216,6 +218,7 @@ public sealed class EventsControllerTests
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -226,6 +229,7 @@ public sealed class EventsControllerTests
                     GivenName = "Mock",
                     Surname = "Resident",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -243,13 +247,18 @@ public sealed class EventsControllerTests
             .Setup(r => r.ReadAsync(eventId))
             .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
 
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
         var c = CreateController(
             mockUsers.Object,
             mockEvents.Object,
             Mock.Of<IDocumentFileStore>(),
-            Mock.Of<IAuditLogRepository>()
+            Mock.Of<IAuditLogRepository>(),
+            mockHomes.Object
         );
-        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 1, Children = 0 });
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 1, Children = 0 });
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
@@ -259,6 +268,7 @@ public sealed class EventsControllerTests
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -269,6 +279,7 @@ public sealed class EventsControllerTests
                     GivenName = "Mock",
                     Surname = "Resident",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -287,19 +298,68 @@ public sealed class EventsControllerTests
             .Setup(r => r.ReadAsync(eventId))
             .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
 
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockEvents.Object,
+            Mock.Of<IDocumentFileStore>(),
+            Mock.Of<IAuditLogRepository>(),
+            mockHomes.Object
+        );
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 51, Children = 0 });
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task SignUp_returns_BadRequest_when_user_does_not_own_specified_home()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var ownedHomeId = Guid.NewGuid();
+        var otherHomeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Resident",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { ownedHomeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>(),
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+
         var c = CreateController(
             mockUsers.Object,
             mockEvents.Object,
             Mock.Of<IDocumentFileStore>(),
             Mock.Of<IAuditLogRepository>()
         );
-        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 51, Children = 0 });
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = otherHomeId, Adults = 1, Children = 0 });
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
     [Fact]
-    public async Task SignUp_adds_signup_and_replaces_event_with_etag()
+    public async Task SignUp_user_without_home_creates_user_based_signup()
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
@@ -310,10 +370,11 @@ public sealed class EventsControllerTests
                 new User
                 {
                     UniqueId = uniqueId,
-                    GivenName = "Mock",
+                    GivenName = "New",
                     Surname = "Resident",
-                    Emails = "mock@cohad.local",
+                    Emails = "new@cohad.local",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid>(),
                 }
             );
 
@@ -341,10 +402,115 @@ public sealed class EventsControllerTests
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
         var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 2, Children = 0 });
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(replaced);
+        Assert.Single(replaced!.Signups);
+        Assert.Equal(Guid.Empty, replaced.Signups[0].HomeId);
+        Assert.Equal(uniqueId, replaced.Signups[0].UserUniqueId);
+        Assert.Null(replaced.Signups[0].HomeAddress);
+        Assert.Equal(2, replaced.Signups[0].Adults);
+    }
+
+    [Fact]
+    public async Task SignUp_user_with_home_requires_homeId()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Resident",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>(),
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockEvents.Object,
+            Mock.Of<IDocumentFileStore>(),
+            Mock.Of<IAuditLogRepository>()
+        );
+        // User has a home but sends no homeId → should be rejected.
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 1, Children = 0 });
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task SignUp_adds_signup_and_replaces_event_with_etag()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Resident",
+                    Emails = "mock@cohad.local",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>(),
+        };
+
+        CommunityEvent replaced = null;
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .Callback<CommunityEvent, string>((e, _) => replaced = e)
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
         var result = await c.SignUp(
             eventId.ToString("D"),
             new EventSignupRequest
             {
+                HomeId = homeId,
                 Adults = 2,
                 Children = 1,
                 AdultNames = new List<string> { "Alex", "Jordan" },
@@ -373,10 +539,11 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
-    public async Task SignUp_updates_existing_signup_and_writes_audit()
+    public async Task SignUp_removes_orphaned_user_signup_when_creating_home_signup()
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -388,6 +555,79 @@ public sealed class EventsControllerTests
                     Surname = "Resident",
                     Emails = "mock@cohad.local",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        // Event has an orphaned user-based signup (from before the user had a home).
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>
+            {
+                new EventSignup
+                {
+                    HomeId = Guid.Empty,
+                    UserUniqueId = uniqueId,
+                    Adults = 1,
+                    Children = 0,
+                },
+            },
+        };
+
+        CommunityEvent replaced = null;
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .Callback<CommunityEvent, string>((e, _) => replaced = e)
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
+        var result = await c.SignUp(
+            eventId.ToString("D"),
+            new EventSignupRequest { HomeId = homeId, Adults = 2, Children = 0 }
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(replaced);
+        // The orphaned user-based signup should be removed; only the new home-based one remains.
+        Assert.Single(replaced!.Signups);
+        Assert.Equal(homeId, replaced.Signups[0].HomeId);
+        Assert.Equal(2, replaced.Signups[0].Adults);
+    }
+
+    [Fact]
+    public async Task SignUp_updates_existing_signup_and_writes_audit()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Resident",
+                    Emails = "mock@cohad.local",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -401,7 +641,7 @@ public sealed class EventsControllerTests
             {
                 new EventSignup
                 {
-                    UserUniqueId = uniqueId,
+                    HomeId = homeId,
                     Adults = 1,
                     Children = 0,
                 },
@@ -420,8 +660,12 @@ public sealed class EventsControllerTests
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object);
-        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 2, Children = 1 });
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 2, Children = 1 });
 
         Assert.IsType<OkObjectResult>(result);
 
@@ -442,6 +686,7 @@ public sealed class EventsControllerTests
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -453,6 +698,7 @@ public sealed class EventsControllerTests
                     Surname = "Resident",
                     Emails = "mock@cohad.local",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -476,13 +722,18 @@ public sealed class EventsControllerTests
                 new Microsoft.Azure.Cosmos.CosmosException("Not found", HttpStatusCode.NotFound, 0, string.Empty, 0)
             );
 
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
         var c = CreateController(
             mockUsers.Object,
             mockEvents.Object,
             Mock.Of<IDocumentFileStore>(),
-            Mock.Of<IAuditLogRepository>()
+            Mock.Of<IAuditLogRepository>(),
+            mockHomes.Object
         );
-        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 1, Children = 0 });
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 1, Children = 0 });
 
         Assert.IsType<NotFoundResult>(result);
     }
@@ -815,6 +1066,7 @@ public sealed class EventsControllerTests
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -826,6 +1078,7 @@ public sealed class EventsControllerTests
                     Surname = "Resident",
                     Emails = "mock@cohad.local",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -853,11 +1106,16 @@ public sealed class EventsControllerTests
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object);
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
         var result = await c.SignUp(
             eventId.ToString("D"),
             new EventSignupRequest
             {
+                HomeId = homeId,
                 Adults = 5,
                 Children = 3,
                 AdultNames = new List<string> { "Alex" },
@@ -879,6 +1137,7 @@ public sealed class EventsControllerTests
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -889,6 +1148,7 @@ public sealed class EventsControllerTests
                     GivenName = "Mock",
                     Surname = "Resident",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -908,13 +1168,18 @@ public sealed class EventsControllerTests
             .Setup(r => r.ReadAsync(eventId))
             .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
 
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
         var c = CreateController(
             mockUsers.Object,
             mockEvents.Object,
             Mock.Of<IDocumentFileStore>(),
-            Mock.Of<IAuditLogRepository>()
+            Mock.Of<IAuditLogRepository>(),
+            mockHomes.Object
         );
-        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 2, Children = 0 });
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 2, Children = 0 });
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
@@ -924,6 +1189,7 @@ public sealed class EventsControllerTests
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -935,6 +1201,7 @@ public sealed class EventsControllerTests
                     Surname = "Resident",
                     Emails = "mock@cohad.local",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -962,11 +1229,16 @@ public sealed class EventsControllerTests
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object);
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
         var result = await c.SignUp(
             eventId.ToString("D"),
             new EventSignupRequest
             {
+                HomeId = homeId,
                 Adults = 2,
                 Children = 3,
                 AdultNames = new List<string> { "Alex" },
@@ -988,6 +1260,7 @@ public sealed class EventsControllerTests
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -998,6 +1271,7 @@ public sealed class EventsControllerTests
                     GivenName = "Mock",
                     Surname = "Resident",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -1017,13 +1291,18 @@ public sealed class EventsControllerTests
             .Setup(r => r.ReadAsync(eventId))
             .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
 
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
         var c = CreateController(
             mockUsers.Object,
             mockEvents.Object,
             Mock.Of<IDocumentFileStore>(),
-            Mock.Of<IAuditLogRepository>()
+            Mock.Of<IAuditLogRepository>(),
+            mockHomes.Object
         );
-        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 0, Children = 5 });
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 0, Children = 5 });
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
@@ -1033,6 +1312,7 @@ public sealed class EventsControllerTests
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -1044,6 +1324,7 @@ public sealed class EventsControllerTests
                     Surname = "Resident",
                     Emails = "mock@cohad.local",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -1071,11 +1352,16 @@ public sealed class EventsControllerTests
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object);
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
         var result = await c.SignUp(
             eventId.ToString("D"),
             new EventSignupRequest
             {
+                HomeId = homeId,
                 Adults = 2,
                 Children = 3,
                 AdultNames = new List<string> { "Alex", "Jordan" },
@@ -1097,6 +1383,7 @@ public sealed class EventsControllerTests
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -1107,6 +1394,7 @@ public sealed class EventsControllerTests
                     GivenName = "Mock",
                     Surname = "Resident",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -1126,13 +1414,18 @@ public sealed class EventsControllerTests
             .Setup(r => r.ReadAsync(eventId))
             .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
 
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
         var c = CreateController(
             mockUsers.Object,
             mockEvents.Object,
             Mock.Of<IDocumentFileStore>(),
-            Mock.Of<IAuditLogRepository>()
+            Mock.Of<IAuditLogRepository>(),
+            mockHomes.Object
         );
-        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Adults = 0, Children = 0 });
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 0, Children = 0 });
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
@@ -1142,6 +1435,7 @@ public sealed class EventsControllerTests
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
         var mockUsers = new Mock<IUserRepository>();
         mockUsers
             .Setup(r => r.GetByUniqueIdAsync(uniqueId))
@@ -1153,6 +1447,7 @@ public sealed class EventsControllerTests
                     Surname = "Resident",
                     Emails = "mock@cohad.local",
                     Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
 
@@ -1180,11 +1475,16 @@ public sealed class EventsControllerTests
         var mockAudit = new Mock<IAuditLogRepository>();
         mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
 
-        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object);
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
         var result = await c.SignUp(
             eventId.ToString("D"),
             new EventSignupRequest
             {
+                HomeId = homeId,
                 Adults = 4,
                 Children = 2,
                 AdultNames = new List<string> { "Alex", "Jordan", "Sam", "Pat" },
@@ -1243,7 +1543,7 @@ public sealed class EventsControllerTests
             mockEvents.Object,
             mockFiles.Object,
             mockAudit.Object,
-            mockUploadHelper.Object
+            imageUploadHelper: mockUploadHelper.Object
         );
 
         var imgBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 };
@@ -1629,6 +1929,7 @@ public sealed class EventsControllerTests
         var c = new EventsController(
             Mock.Of<IUserRepository>(),
             mockEvents.Object,
+            Mock.Of<IHomeRepository>(),
             Mock.Of<IDocumentFileStore>(),
             Mock.Of<IAuditLogRepository>(),
             new SkiaSharpOgThumbnailService(),

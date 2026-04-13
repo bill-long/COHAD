@@ -4,8 +4,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.PresentationModels;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 
@@ -19,16 +21,22 @@ namespace Web.Controllers
         private readonly IUserRepository _userRepository;
         private readonly IHomeRepository _homeRepository;
         private readonly IAuditLogRepository _auditLogRepository;
+        private readonly IEventSignupConversionService _signupConversion;
+        private readonly ILogger<UserController> _logger;
 
         public UserController(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
-            IAuditLogRepository auditLogRepository
+            IAuditLogRepository auditLogRepository,
+            IEventSignupConversionService signupConversion,
+            ILogger<UserController> logger
         )
         {
             _userRepository = userRepository;
             _homeRepository = homeRepository;
             _auditLogRepository = auditLogRepository;
+            _signupConversion = signupConversion;
+            _logger = logger;
         }
 
         public async Task<IEnumerable<PresentationUser>> Get()
@@ -148,7 +156,80 @@ namespace Web.Controllers
             );
 
             await _userRepository.UpsertAsync(userToModify);
+
+            // Convert any user-based event signups to home-based now that the user has a home.
+            // Only auto-convert when exactly one home is assigned; multi-home users require
+            // manual migration to avoid mis-associating signups with the wrong household.
+            if (requestedHomeIds.Count == 1)
+            {
+                var primaryHome = existingHomes.First(h => h.Id == requestedHomeIds[0]);
+                var homeAddress = $"{primaryHome.StreetNumber} {primaryHome.StreetName}".Trim();
+                try
+                {
+                    await _signupConversion.ConvertUserSignupsToHomeAsync(
+                        userToModify.UniqueId,
+                        primaryHome.Id,
+                        homeAddress
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Event signup conversion failed for user {UserId} after home assignment to {HomeId}",
+                        userToModify.UniqueId, primaryHome.Id);
+                    try
+                    {
+                        await _auditLogRepository.AddAsync(
+                            new NewAuditLogEntry
+                            {
+                                Id = Guid.NewGuid(),
+                                SubjectId = userToModify.UniqueId,
+                                SubjectName = userToModify.Emails,
+                                Action = "Event signup conversion failed after home assignment. Run migration endpoint to retry.",
+                                Time = DateTime.UtcNow,
+                                UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}".Trim(),
+                                UserId = apiUser.UniqueId,
+                            }
+                        );
+                    }
+                    catch
+                    {
+                        // Best-effort: do not fail the request if audit logging also fails.
+                    }
+                }
+            }
+
             return Ok();
+        }
+
+        /// <summary>
+        /// One-time migration: converts all existing user-based event signups to home-based
+        /// for users who now own a home. Safe to run multiple times (idempotent).
+        /// </summary>
+        [HttpPost("admin/migrate-event-signups")]
+        public async Task<IActionResult> MigrateEventSignups()
+        {
+            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            if (apiUser == null)
+            {
+                return NotFound();
+            }
+
+            var result = await _signupConversion.MigrateAllUserSignupsAsync(_userRepository, _homeRepository);
+
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    SubjectId = "migrate-event-signups",
+                    SubjectName = "Event signup migration",
+                    Action = $"Migrated event signups: {result.SignupsConverted} converted, {result.SignupsRemoved} removed, {result.SignupsSkipped} skipped.",
+                    Time = DateTime.UtcNow,
+                    UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}".Trim(),
+                    UserId = apiUser.UniqueId,
+                }
+            );
+
+            return Ok(result);
         }
     }
 }

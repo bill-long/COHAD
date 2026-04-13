@@ -43,6 +43,12 @@ namespace Web.Services.Repositories
         Task<CommunityEvent> ReplaceAsync(CommunityEvent communityEvent, string ifMatchEtag);
 
         Task DeleteAsync(Guid id);
+
+        /// <summary>
+        /// Returns IDs of events that contain at least one user-based signup for the given user.
+        /// Uses a lightweight projection to avoid deserializing full event documents.
+        /// </summary>
+        Task<List<Guid>> GetEventIdsWithUserSignupAsync(string userUniqueId);
     }
 
     public class CosmosCommunityEventRepository : ICommunityEventRepository
@@ -143,6 +149,39 @@ namespace Web.Services.Repositories
             }
 
             return null;
+        }
+
+        public async Task<List<Guid>> GetEventIdsWithUserSignupAsync(string userUniqueId)
+        {
+            if (string.IsNullOrWhiteSpace(userUniqueId))
+            {
+                return new List<Guid>();
+            }
+
+            // Signups is stored as a serialized JSON string, so use CONTAINS as a prefilter.
+            // Project only id and Signups to avoid transferring full event documents.
+            var query = new CosmosQueryDefinition(
+                "SELECT c.id, c.Signups FROM c WHERE IS_DEFINED(c.Signups) AND CONTAINS(c.Signups, @uid)"
+            ).WithParameter("@uid", userUniqueId);
+            var iterator = _eventsContainer.GetItemQueryIterator<JObject>(query);
+            var results = new List<Guid>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                foreach (var doc in response)
+                {
+                    var evt = CosmosLegacyDocumentMapper.ToCommunityEvent(doc);
+                    if (evt?.Signups != null
+                        && evt.Signups.Any(s =>
+                            s.HomeId == Guid.Empty
+                            && string.Equals(s.UserUniqueId, userUniqueId, StringComparison.Ordinal)))
+                    {
+                        results.Add(evt.Id);
+                    }
+                }
+            }
+
+            return results;
         }
 
         public async Task<CommunityEventReadResult> ReadAsync(Guid id)

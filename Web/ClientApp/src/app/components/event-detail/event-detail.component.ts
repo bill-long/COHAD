@@ -2,9 +2,9 @@ import { Component, Inject, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Location } from '@angular/common';
 import { DomSanitizer, SafeHtml, Title } from '@angular/platform-browser';
-import { Observable, Observer } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { ApiUser } from 'src/app/models';
+import { Observable, Observer, firstValueFrom } from 'rxjs';
+import { map, filter } from 'rxjs/operators';
+import { ApiUser, Home } from 'src/app/models';
 import { Login, Action, dispatcher, applicationState, ApplicationState } from 'src/app/state';
 import { EventDetail, EventsService } from 'src/app/services/events.service';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
@@ -29,6 +29,11 @@ export class EventDetailComponent implements OnInit {
   children = 0;
   adultNames = '';
   childNames = '';
+
+  /** The home selected for signup (auto-set when user has one home). */
+  selectedHomeId: string | null = null;
+  /** True once initHomeSelection has completed (prevents submitting before home is resolved). */
+  homeSelectionReady = false;
 
   private currentSlug = '';
 
@@ -64,9 +69,31 @@ export class EventDetailComponent implements OnInit {
     return this.apiUser$.pipe(map(u => u != null));
   }
 
+  get ownedHomes$(): Observable<Home[]> {
+    return this.apiUser$.pipe(map(u => u?.ownedHomes ?? []));
+  }
+
+  /** Whether the current user already has a signup for this event (home-based or user-based). */
+  get hasExistingSignup(): boolean {
+    if (this.eventItem == null) {
+      return false;
+    }
+    if (this.selectedHomeId != null) {
+      return this.eventItem.myHomeSignups.some(s => s.homeId === this.selectedHomeId);
+    }
+    return this.eventItem.myUserSignup != null;
+  }
+
   logIn(): void {
     const redirectTo = this.currentSlug ? `/events/${this.currentSlug}` : '/events';
     this.dispatcher.next(new Login(redirectTo));
+  }
+
+  onHomeSelected(homeId: string): void {
+    this.selectedHomeId = homeId;
+    if (this.eventItem != null) {
+      this.applyExistingSignup(this.eventItem);
+    }
   }
 
   submitSignup(): void {
@@ -84,6 +111,7 @@ export class EventDetailComponent implements OnInit {
 
     this.eventsService
       .signUp(this.eventItem.publicSlug, {
+        homeId: this.selectedHomeId,
         adults: sendAdults ? this.adults : 0,
         children: sendChildren ? this.children : 0,
         adultNames: sendAdults ? this.parseNames(this.adultNames) : [],
@@ -94,6 +122,7 @@ export class EventDetailComponent implements OnInit {
           this.eventItem = updated;
           this.saving = false;
           this.success = 'Signup saved.';
+          this.applyExistingSignup(updated);
           this.telemetry.trackEvent('EventSignupSubmitted', { eventSlug: this.eventItem.publicSlug });
         },
         error: err => {
@@ -122,7 +151,7 @@ export class EventDetailComponent implements OnInit {
         this.renderedDescriptionHtml = this.renderMarkdown(eventItem.description ?? '');
         this.loading = false;
         this.titleService.setTitle(eventItem.title ? `COHAD | ${eventItem.title}` : 'COHAD | Events');
-        this.applyExistingSignup(eventItem);
+        this.initHomeSelection(eventItem);
         if (eventItem.publicSlug && eventItem.publicSlug !== segment) {
           this.currentSlug = eventItem.publicSlug;
           const snapshot = this.route.snapshot;
@@ -149,8 +178,32 @@ export class EventDetailComponent implements OnInit {
     });
   }
 
+  /** Auto-select the user's home (if they have exactly one) and populate the form. */
+  private async initHomeSelection(eventItem: EventDetail): Promise<void> {
+    // Wait until auth bootstrap completes so apiUser is populated (not the initial null).
+    const state = await firstValueFrom(this.appState.pipe(filter(s => s.authSessionResolved)));
+    const user = state.apiUser;
+    const homes = user?.ownedHomes ?? [];
+    if (homes.length === 1) {
+      this.selectedHomeId = homes[0].id;
+    } else if (homes.length > 1 && eventItem.myHomeSignups.length > 0) {
+      this.selectedHomeId = eventItem.myHomeSignups[0].homeId;
+    } else if (homes.length > 1) {
+      this.selectedHomeId = homes[0].id;
+    } else {
+      this.selectedHomeId = null;
+    }
+    this.applyExistingSignup(eventItem);
+    this.homeSelectionReady = true;
+  }
+
   private applyExistingSignup(eventItem: EventDetail): void {
-    const signup = eventItem.mySignup;
+    let signup: import('src/app/services/events.service').EventSignup | null = null;
+    if (this.selectedHomeId != null) {
+      signup = eventItem.myHomeSignups.find(s => s.homeId === this.selectedHomeId) ?? null;
+    } else {
+      signup = eventItem.myUserSignup;
+    }
     const mode = eventItem.signupMode ?? 'AdultsAndChildren';
     if (signup == null) {
       this.adults = mode === 'ChildrenOnly' || mode === 'HouseholdOnly' ? 0 : 1;

@@ -191,6 +191,7 @@ public sealed class SlugAliasTests
         var c = new EventsController(
             users,
             events,
+            Mock.Of<IHomeRepository>(),
             Mock.Of<IDocumentFileStore>(),
             Mock.Of<IAuditLogRepository>(),
             Mock.Of<IOgThumbnailService>(),
