@@ -48,7 +48,7 @@ namespace Web.Services
 
         public new void Add(string item)
         {
-            if (Count < MaxEntries)
+            if (Count < MaxEntries - 1)
             {
                 base.Add(item);
                 return;
