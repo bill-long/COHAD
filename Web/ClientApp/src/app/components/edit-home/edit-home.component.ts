@@ -303,7 +303,7 @@ export class EditHomeComponent implements OnInit, OnChanges {
       return 'Facebook account';
     }
     if (provider.trim().length < 1) {
-      return 'Account provider unknown';
+      return 'Email account';
     }
     return associatedUser.identityProvider;
   }
