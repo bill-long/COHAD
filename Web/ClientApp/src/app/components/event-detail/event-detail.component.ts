@@ -180,8 +180,12 @@ export class EventDetailComponent implements OnInit {
 
   /** Auto-select the user's home (if they have exactly one) and populate the form. */
   private async initHomeSelection(eventItem: EventDetail): Promise<void> {
-    // Wait until auth bootstrap completes so apiUser is populated (not the initial null).
-    const state = await firstValueFrom(this.appState.pipe(filter(s => s.authSessionResolved)));
+    // Wait until auth bootstrap fully completes — authSessionResolved alone fires before
+    // /api/me returns, so apiUser would still be null. authBootstrapStatus === 'completed'
+    // (or 'idle' for unauthenticated users) ensures the user profile is loaded.
+    const state = await firstValueFrom(
+      this.appState.pipe(filter(s => s.authSessionResolved && s.authBootstrapStatus !== 'inProgress'))
+    );
     const user = state.apiUser;
     const homes = user?.ownedHomes ?? [];
     if (homes.length === 1) {
