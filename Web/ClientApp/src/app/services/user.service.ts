@@ -1,8 +1,8 @@
 import { Injectable, Inject } from '@angular/core';
 import { Action, applicationState, ApplicationState, dispatcher, LoadAllUsers, LoadAllUsersCompleted, LoadUserCompleted } from '../state';
-import { Observable, Subject, Observer } from 'rxjs';
+import { Observable, Subject, of, EMPTY, concat } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
-import { switchMap, filter } from 'rxjs/operators';
+import { switchMap, filter, defaultIfEmpty, catchError, finalize, ignoreElements } from 'rxjs/operators';
 import { ApiUser } from '../models';
 
 @Injectable({
@@ -26,53 +26,46 @@ export class UserService {
   }
 
   saveUser(originalUser: ApiUser, changedUser: ApiUser): Observable<boolean> {
-    const obs = Observable.create(async (o: Observer<boolean>) => {
-      try {
-        const originalHomes = originalUser.ownedHomes ?? [];
-        const newHomes = changedUser.ownedHomes ?? [];
-        const originalRoles = originalUser.roles ?? [];
-        const newRoles = changedUser.roles ?? [];
+    const originalHomes = originalUser.ownedHomes ?? [];
+    const newHomes = changedUser.ownedHomes ?? [];
+    const originalRoles = originalUser.roles ?? [];
+    const newRoles = changedUser.roles ?? [];
 
-        const originalHomeIds = [...new Set(originalHomes.map(h => h.id))].sort();
-        const newHomeIds = [...new Set(newHomes.map(h => h.id))].sort();
-        const originalRoleNames = [...new Set(originalRoles)].sort();
-        const newRoleNames = [...new Set(newRoles)].sort();
-        const homesChanged = JSON.stringify(originalHomeIds) !== JSON.stringify(newHomeIds);
-        const rolesChanged = JSON.stringify(originalRoleNames) !== JSON.stringify(newRoleNames);
+    const originalHomeIds = [...new Set(originalHomes.map(h => h.id))].sort();
+    const newHomeIds = [...new Set(newHomes.map(h => h.id))].sort();
+    const originalRoleNames = [...new Set(originalRoles)].sort();
+    const newRoleNames = [...new Set(newRoles)].sort();
+    const homesChanged = JSON.stringify(originalHomeIds) !== JSON.stringify(newHomeIds);
+    const rolesChanged = JSON.stringify(originalRoleNames) !== JSON.stringify(newRoleNames);
 
-        if (homesChanged || rolesChanged) {
-          await this.httpClient
-            .put(`api/user/${changedUser.uniqueId}/associations`, {
-              roleNames: newRoleNames,
-              ownedHomeIds: newHomeIds,
-            })
-            .toPromise();
-        }
+    const updateAssociations$ =
+      homesChanged || rolesChanged
+        ? this.httpClient.put(`api/user/${encodeURIComponent(changedUser.uniqueId)}/associations`, {
+            roleNames: newRoleNames,
+            ownedHomeIds: newHomeIds,
+          })
+        : EMPTY;
 
-        if (
-          originalUser.givenName != changedUser.givenName ||
-          originalUser.surname != changedUser.surname ||
-          originalUser.streetAddress != changedUser.streetAddress
-        ) {
-          await this.httpClient
-            .put(`api/user`, {
-              uniqueId: changedUser.uniqueId,
-              givenName: changedUser.givenName,
-              surname: changedUser.surname,
-              streetAddress: changedUser.streetAddress,
-            })
-            .toPromise();
-        }
-      } catch (e) {
+    const updateProfile$ =
+      originalUser.givenName != changedUser.givenName ||
+      originalUser.surname != changedUser.surname ||
+      originalUser.streetAddress != changedUser.streetAddress
+        ? this.httpClient.put(`api/user`, {
+            uniqueId: changedUser.uniqueId,
+            givenName: changedUser.givenName,
+            surname: changedUser.surname,
+            streetAddress: changedUser.streetAddress,
+          })
+        : EMPTY;
+
+    return concat(updateAssociations$, updateProfile$).pipe(
+      ignoreElements(),
+      defaultIfEmpty(true as boolean),
+      finalize(() => this.dispatcher.next(new LoadAllUsers())),
+      catchError(e => {
         console.error('Failed to update user.', e);
-        o.next(false);
-      }
-
-      this.dispatcher.next(new LoadAllUsers());
-      o.next(true);
-      o.complete();
-    });
-
-    return obs;
+        return of(false);
+      }),
+    );
   }
 }
