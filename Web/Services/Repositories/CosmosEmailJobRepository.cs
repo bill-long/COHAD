@@ -192,7 +192,12 @@ namespace Web.Services.Repositories
             while (iterator.HasMoreResults)
             {
                 var response = await iterator.ReadNextAsync();
-                results.AddRange(response.Select(CosmosLegacyDocumentMapper.ToEmailJob));
+                foreach (var doc in response)
+                {
+                    var job = CosmosLegacyDocumentMapper.ToEmailJob(doc);
+                    job.ETag = doc.Value<string>("_etag");
+                    results.Add(job);
+                }
             }
 
             return results;

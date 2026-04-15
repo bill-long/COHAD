@@ -367,8 +367,10 @@ namespace Web.Services
         /// <summary>
         /// Periodically checks for InProgress jobs that have stalled (no progress for
         /// StallAfterMinutes) and re-enqueues them. Catches orphaned jobs that the main
-        /// processing loop cannot recover — e.g. when TryClaimAsync fails repeatedly
-        /// due to webhook contention and the in-memory queue item is lost.
+        /// processing loop cannot recover — e.g. when multiple processor instances race
+        /// to claim or update the same job, when cancellation interrupts processing after
+        /// a job is marked InProgress, or when watchdog/processor ETag updates conflict.
+        /// Also sweeps recently-completed jobs to apply late-arriving delivery events.
         /// </summary>
         private async Task StallWatchdogLoopAsync(CancellationToken stoppingToken)
         {
@@ -617,7 +619,7 @@ namespace Web.Services
                         break;
                     }
 
-                    // Re-read to get a fresh ETag and merge any webhook-owned changes
+                    // Re-read to get a fresh ETag and merge the latest server job state (including Sent recipients) before retrying
                     var claimLatest = await repo.GetByIdAsync(jobId);
                     if (claimLatest == null)
                     {
