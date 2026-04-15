@@ -416,6 +416,12 @@ namespace Web.Services
                         {
                             var recipients = job.Recipients ?? new List<EmailJobRecipient>();
 
+                            // Apply delivery events first so recipient statuses reflect
+                            // any webhook confirmations stored in the delivery events
+                            // container — the job document's DeliveryStatus fields may
+                            // be stale if the processor was interrupted after sending.
+                            await ApplyDeliveryEventsAsync(job, deliveryEventRepo, deliveryActionService, _logger);
+
                             // If there are genuinely unsent recipients (Pending/Failed with no
                             // delivery confirmation), re-enqueue rather than declaring the job
                             // terminal — the processor was interrupted, not permanently stuck.
@@ -443,7 +449,6 @@ namespace Web.Services
                                 continue;
                             }
 
-                            await ApplyDeliveryEventsAsync(job, deliveryEventRepo, deliveryActionService, _logger);
                             MarkCappedRecipientsAsFailed(job);
                             RecalculateCounts(job);
                             if (recipients.Count > 0 && recipients.All(r => r.Status == EmailJobRecipientStatus.Sent))
