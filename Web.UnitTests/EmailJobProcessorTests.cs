@@ -1871,6 +1871,66 @@ public sealed class EmailJobProcessorTests
         EmailJobProcessor.MergeJobFromServer(server, new EmailJob { Recipients = null });
     }
 
+    [Fact]
+    public void MergeJobFromServer_adopts_delivery_progress_from_server()
+    {
+        var local = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Unknown,
+                    ProviderMessageId = null,
+                },
+                new()
+                {
+                    Email = "b@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Delivered,
+                    DeliveryStatusUpdatedUtc = new DateTime(2026, 4, 7, 3, 0, 0, DateTimeKind.Utc),
+                    ProviderMessageId = "local-id",
+                },
+            },
+        };
+        var server = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Delivered,
+                    DeliveryStatusUpdatedUtc = new DateTime(2026, 4, 7, 4, 0, 0, DateTimeKind.Utc),
+                    ProviderMessageId = "server-id-a",
+                },
+                new()
+                {
+                    Email = "b@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Delivered,
+                    DeliveryStatusUpdatedUtc = new DateTime(2026, 4, 7, 2, 0, 0, DateTimeKind.Utc),
+                    ProviderMessageId = "server-id-b",
+                },
+            },
+        };
+
+        EmailJobProcessor.MergeJobFromServer(local, server);
+
+        // a@: local was Unknown, server was Delivered → adopted
+        Assert.Equal(DeliveryStatus.Delivered, local.Recipients[0].DeliveryStatus);
+        Assert.Equal(new DateTime(2026, 4, 7, 4, 0, 0, DateTimeKind.Utc), local.Recipients[0].DeliveryStatusUpdatedUtc);
+        Assert.Equal("server-id-a", local.Recipients[0].ProviderMessageId);
+
+        // b@: local already had Delivered, server also Delivered (same severity) → kept local
+        Assert.Equal(DeliveryStatus.Delivered, local.Recipients[1].DeliveryStatus);
+        Assert.Equal(new DateTime(2026, 4, 7, 3, 0, 0, DateTimeKind.Utc), local.Recipients[1].DeliveryStatusUpdatedUtc);
+        Assert.Equal("local-id", local.Recipients[1].ProviderMessageId); // local already had one
+    }
+
     // ───────────────────────────────────────────────────
     // ApplyDeliveryEventsAsync
     // ───────────────────────────────────────────────────

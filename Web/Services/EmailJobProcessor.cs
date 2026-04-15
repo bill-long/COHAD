@@ -129,9 +129,10 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// On ETag conflict during claim, adopts Sent status from the server copy for any
-        /// recipient that another processor instance may have already sent. This prevents
-        /// duplicate sends when a claim retry reads a stale local copy.
+        /// On ETag conflict, adopts Sent status and delivery progress from the server copy
+        /// for any recipient that another processor or sweep may have already advanced.
+        /// This prevents duplicate sends and avoids overwriting delivery-event fields
+        /// (DeliveryStatus, ProviderMessageId) with stale local values.
         /// </summary>
         internal static void MergeJobFromServer(EmailJob local, EmailJob server)
         {
@@ -162,6 +163,21 @@ namespace Web.Services
                     localRecipient.SentUtc = serverRecipient.SentUtc;
                     localRecipient.Error = serverRecipient.Error;
                     localRecipient.Provider = serverRecipient.Provider;
+                }
+
+                // Adopt delivery progress from server to avoid overwriting with stale local values
+                if (DeliveryStatusHelper.ShouldUpdate(localRecipient.DeliveryStatus, serverRecipient.DeliveryStatus))
+                {
+                    localRecipient.DeliveryStatus = serverRecipient.DeliveryStatus;
+                    localRecipient.DeliveryStatusUpdatedUtc = serverRecipient.DeliveryStatusUpdatedUtc;
+                }
+
+                if (
+                    string.IsNullOrEmpty(localRecipient.ProviderMessageId)
+                    && !string.IsNullOrEmpty(serverRecipient.ProviderMessageId)
+                )
+                {
+                    localRecipient.ProviderMessageId = serverRecipient.ProviderMessageId;
                 }
             }
         }
