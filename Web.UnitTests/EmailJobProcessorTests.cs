@@ -2292,4 +2292,176 @@ public sealed class EmailJobProcessorTests
 
         _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Never);
     }
+
+    [Fact]
+    public async Task Sweep_ConcurrencyConflict_MergesSentStatusFromServer()
+    {
+        var jobId = Guid.NewGuid();
+        var completedJob = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Completed,
+            Category = "board",
+            CompletedUtc = DateTime.UtcNow.AddMinutes(-5),
+            ETag = "etag-1",
+            TotalRecipients = 2,
+            SentCount = 1,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Unknown,
+                },
+                new()
+                {
+                    Email = "b@test.com",
+                    Status = EmailJobRecipientStatus.Pending,
+                    DeliveryStatus = DeliveryStatus.Unknown,
+                },
+            },
+        };
+
+        // Server copy: another processor already sent b@test.com
+        var serverCopy = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Completed,
+            Category = "board",
+            CompletedUtc = DateTime.UtcNow.AddMinutes(-5),
+            ETag = "etag-2",
+            TotalRecipients = 2,
+            SentCount = 2,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Unknown,
+                },
+                new()
+                {
+                    Email = "b@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    SentUtc = new DateTime(2026, 4, 15, 1, 0, 0, DateTimeKind.Utc),
+                    Provider = "SES",
+                },
+            },
+        };
+
+        _jobRepo
+            .Setup(r => r.GetRecentlyCompletedJobsAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<EmailJob> { completedJob });
+
+        // First UpdateAsync throws concurrency conflict; second succeeds
+        var updateCallCount = 0;
+        _jobRepo
+            .Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
+            .Returns<EmailJob>(j =>
+            {
+                if (++updateCallCount == 1)
+                    throw new EmailJobConcurrencyException();
+                return Task.CompletedTask;
+            });
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(serverCopy);
+
+        _deliveryEventRepo
+            .Setup(r => r.GetByJobIdAsync(jobId))
+            .ReturnsAsync(
+                new List<EmailDeliveryEvent>
+                {
+                    new()
+                    {
+                        Id = EmailDeliveryEvent.MakeId(jobId, "a@test.com", DeliveryStatus.Delivered),
+                        JobId = jobId,
+                        Email = "a@test.com",
+                        DeliveryStatus = DeliveryStatus.Delivered,
+                        ReceivedUtc = DateTime.UtcNow,
+                    },
+                }
+            );
+
+        var processor = CreateProcessor();
+        await processor.SweepCompletedJobDeliveryEventsAsync(CancellationToken.None);
+
+        // Verify retry succeeded (2 calls: first threw, second succeeded)
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Exactly(2));
+
+        // Verify merge adopted Sent status from server for b@test.com
+        var recipientB = completedJob.Recipients.Single(r => r.Email == "b@test.com");
+        Assert.Equal(EmailJobRecipientStatus.Sent, recipientB.Status);
+        Assert.Equal(new DateTime(2026, 4, 15, 1, 0, 0, DateTimeKind.Utc), recipientB.SentUtc);
+
+        // Verify delivery event was still applied to a@test.com
+        var recipientA = completedJob.Recipients.Single(r => r.Email == "a@test.com");
+        Assert.Equal(DeliveryStatus.Delivered, recipientA.DeliveryStatus);
+
+        // Verify ETag was updated to server's
+        Assert.Equal("etag-2", completedJob.ETag);
+    }
+
+    [Fact]
+    public async Task Sweep_ConcurrencyConflict_ServerCancelled_ReturnsFalse()
+    {
+        var jobId = Guid.NewGuid();
+        var completedJob = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Completed,
+            Category = "board",
+            CompletedUtc = DateTime.UtcNow.AddMinutes(-5),
+            ETag = "etag-1",
+            TotalRecipients = 1,
+            SentCount = 1,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Unknown,
+                },
+            },
+        };
+
+        var cancelledServerCopy = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Cancelled,
+            ETag = "etag-2",
+        };
+
+        _jobRepo
+            .Setup(r => r.GetRecentlyCompletedJobsAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<EmailJob> { completedJob });
+
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).ThrowsAsync(new EmailJobConcurrencyException());
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(cancelledServerCopy);
+
+        _deliveryEventRepo
+            .Setup(r => r.GetByJobIdAsync(jobId))
+            .ReturnsAsync(
+                new List<EmailDeliveryEvent>
+                {
+                    new()
+                    {
+                        Id = EmailDeliveryEvent.MakeId(jobId, "a@test.com", DeliveryStatus.Delivered),
+                        JobId = jobId,
+                        Email = "a@test.com",
+                        DeliveryStatus = DeliveryStatus.Delivered,
+                        ReceivedUtc = DateTime.UtcNow,
+                    },
+                }
+            );
+
+        var processor = CreateProcessor();
+        await processor.SweepCompletedJobDeliveryEventsAsync(CancellationToken.None);
+
+        // Only one attempt — gave up after seeing Cancelled
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Once);
+    }
 }

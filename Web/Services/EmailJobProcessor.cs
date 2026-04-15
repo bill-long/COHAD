@@ -168,10 +168,9 @@ namespace Web.Services
 
         /// <summary>
         /// Persists job state with optimistic concurrency (If-Match / ETag).
-        /// On conflict, re-reads to get a fresh ETag and retries. Only the ETag is
-        /// refreshed — no field merging is needed because webhooks now write to the
-        /// separate EmailDeliveryEvents container, so the processor is the sole writer
-        /// of the job document.
+        /// On conflict, re-reads the server copy, merges recipient state (adopts Sent
+        /// status and delivery-event promotions from the server to avoid reverting
+        /// progress), refreshes the ETag, and retries.
         /// Returns false when the server copy is cancelled, missing, or contention persists.
         /// </summary>
         private static async Task<bool> TryPersistJobAsync(IEmailJobRepository repo, EmailJob job, int maxAttempts = 3)
@@ -190,6 +189,9 @@ namespace Web.Services
                         return false;
                     if (latest.Status == EmailJobStatus.Cancelled)
                         return false;
+                    MergeJobFromServer(job, latest);
+                    NormalizePendingDelivered(job);
+                    RecalculateCounts(job);
                     job.ETag = latest.ETag;
                 }
             }
