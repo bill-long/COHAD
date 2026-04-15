@@ -563,8 +563,17 @@ namespace Web.Services
 
                     if (await ApplyDeliveryEventsAsync(job, deliveryEventRepo, deliveryActionService, _logger))
                     {
-                        await TryPersistJobAsync(repo, job);
-                        _logger.LogInformation("Applied late delivery events to completed job {JobId}", job.Id);
+                        if (await TryPersistJobAsync(repo, job))
+                        {
+                            _logger.LogInformation("Applied late delivery events to completed job {JobId}", job.Id);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "Applied late delivery events to completed job {JobId}, but persist failed; a later sweep will retry",
+                                job.Id
+                            );
+                        }
                     }
                 }
             }
