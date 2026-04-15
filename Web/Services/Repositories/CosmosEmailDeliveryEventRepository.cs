@@ -51,7 +51,9 @@ namespace Web.Services.Repositories
             {
                 PatchOperation.Set("/deliveryStatus", deliveryEvent.DeliveryStatus.ToString()),
                 PatchOperation.Set("/provider", deliveryEvent.Provider),
-                PatchOperation.Set("/receivedUtc", deliveryEvent.ReceivedUtc),
+                // Do not patch /receivedUtc — preserve the original receive
+                // timestamp from the initial CreateItemAsync. Webhook retries
+                // carry a later ReceivedUtc that would overwrite the true time.
                 PatchOperation.Set("/ttl", DocumentTtlSeconds),
             };
 

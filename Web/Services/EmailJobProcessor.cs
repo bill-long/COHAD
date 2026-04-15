@@ -353,8 +353,10 @@ namespace Web.Services
                 return;
             }
 
-            // Resume incomplete jobs from a previous run
-            await ResumeIncompleteJobsAsync(stoppingToken);
+            // Resume incomplete jobs from a previous run, but skip non-stalled
+            // InProgress jobs — in a multi-instance deployment another processor
+            // may still be actively working on them.
+            await ResumeIncompleteJobsAsync(stoppingToken, stallCheckOnly: true);
 
             // Run queue processing and periodic stall watchdog concurrently
             await Task.WhenAll(ProcessQueueLoopAsync(stoppingToken), StallWatchdogLoopAsync(stoppingToken));

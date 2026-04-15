@@ -1177,6 +1177,63 @@ public sealed class EmailJobProcessorTests
     }
 
     [Fact]
+    public async Task Startup_SkipsNonStalledInProgressJobs()
+    {
+        // A non-stalled InProgress job should NOT be enqueued at startup
+        // because another processor instance may still be actively working on it.
+        var jobId = Guid.NewGuid();
+        var activeJob = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.InProgress,
+            Category = "board",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            TotalRecipients = 2,
+            SentCount = 1,
+            StartedUtc = DateTime.UtcNow.AddMinutes(-5),
+            LastProgressUtc = DateTime.UtcNow.AddMinutes(-1), // recent progress — NOT stalled
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "done@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    SentUtc = DateTime.UtcNow,
+                },
+                new()
+                {
+                    Email = "pending@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Pending,
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob> { activeJob });
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(activeJob);
+
+        var processor = CreateProcessor();
+        using var cts = new CancellationTokenSource();
+        await processor.StartAsync(cts.Token);
+
+        // Give the startup resume path time to run
+        await Task.Delay(200);
+
+        cts.Cancel();
+        try
+        {
+            await processor.StopAsync(CancellationToken.None);
+        }
+        catch (OperationCanceledException) { }
+
+        // The non-stalled InProgress job should not be claimed or processed
+        _jobRepo.Verify(r => r.TryClaimAsync(It.IsAny<EmailJob>()), Times.Never);
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Never);
+        // Job status should remain unchanged
+        Assert.Equal(EmailJobStatus.InProgress, activeJob.Status);
+    }
+
+    [Fact]
     public async Task Resume_StalledInProgressJob_WithPartialSends_MarksPartiallyCompleted()
     {
         var jobId = Guid.NewGuid();
