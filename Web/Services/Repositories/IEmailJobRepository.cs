@@ -45,9 +45,9 @@ namespace Web.Services.Repositories
 
         /// <summary>
         /// Returns recently finished jobs with status Completed, PartiallyCompleted, or Failed
-        /// (CompletedUtc &gt;= completedAfterUtc), ordered by CompletedUtc ascending. Cancelled
-        /// jobs are excluded. Used by the stall watchdog to apply late-arriving delivery events
-        /// to jobs that have already finished sending.
+        /// (CompletedUtc &gt;= completedAfterUtc), ordered by CompletedUtc descending (newest first).
+        /// Cancelled jobs are excluded. Used by the stall watchdog to apply late-arriving delivery
+        /// events to jobs that have already finished sending.
         /// </summary>
         Task<List<EmailJob>> GetRecentlyCompletedJobsAsync(DateTime completedAfterUtc, int limit);
 
