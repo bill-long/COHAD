@@ -9,8 +9,9 @@ namespace Web.Services.Repositories
     public interface IEmailDeliveryEventRepository
     {
         /// <summary>
-        /// Stores a delivery event. Uses upsert semantics — if an event with the same ID
-        /// already exists, it is overwritten (idempotent for webhook retries).
+        /// Stores a delivery event. Uses idempotent upsert semantics — if an event with the same ID
+        /// already exists, it is merged with the stored event rather than fully overwritten, preserving
+        /// existing values except for fields that the repository implementation explicitly updates.
         /// </summary>
         Task AddAsync(EmailDeliveryEvent deliveryEvent);
 

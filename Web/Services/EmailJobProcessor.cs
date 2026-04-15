@@ -520,7 +520,11 @@ namespace Web.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to resume incomplete email jobs on startup");
+                _logger.LogError(
+                    ex,
+                    "Failed to resume incomplete email jobs (stallCheckOnly={StallCheckOnly})",
+                    stallCheckOnly
+                );
             }
         }
 
@@ -593,9 +597,9 @@ namespace Web.Services
                     return;
                 }
 
-                // Claim the job with retries — concurrent webhook writes can change the
-                // ETag between our read and the conditional write, so a single attempt is
-                // not reliable under webhook load.
+                // Claim the job with retries — concurrent updates (other processor instances,
+                // cancellations, stall-watchdog writes) can change the ETag between our read
+                // and the conditional write, so a single attempt is not always sufficient.
                 job.Status = EmailJobStatus.InProgress;
                 job.StartedUtc ??= DateTime.UtcNow;
                 job.LastProgressUtc ??= job.StartedUtc;

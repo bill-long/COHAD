@@ -44,9 +44,10 @@ namespace Web.Services.Repositories
         Task<List<EmailJob>> GetTerminalJobsOlderThanAsync(DateTime cutoffUtc, int limit);
 
         /// <summary>
-        /// Returns terminal jobs that completed recently (CompletedUtc &gt;= completedAfterUtc),
-        /// ordered by CompletedUtc ascending. Used by the stall watchdog to apply late-arriving
-        /// delivery events to jobs that have already finished sending.
+        /// Returns recently finished jobs with status Completed, PartiallyCompleted, or Failed
+        /// (CompletedUtc &gt;= completedAfterUtc), ordered by CompletedUtc ascending. Cancelled
+        /// jobs are excluded. Used by the stall watchdog to apply late-arriving delivery events
+        /// to jobs that have already finished sending.
         /// </summary>
         Task<List<EmailJob>> GetRecentlyCompletedJobsAsync(DateTime completedAfterUtc, int limit);
 
