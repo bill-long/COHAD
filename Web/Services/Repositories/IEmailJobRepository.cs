@@ -44,6 +44,14 @@ namespace Web.Services.Repositories
         Task<List<EmailJob>> GetTerminalJobsOlderThanAsync(DateTime cutoffUtc, int limit);
 
         /// <summary>
+        /// Returns recently finished jobs with status Completed, PartiallyCompleted, or Failed
+        /// (CompletedUtc &gt;= completedAfterUtc), ordered by CompletedUtc descending (newest first).
+        /// Cancelled jobs are excluded. Used by the stall watchdog to apply late-arriving delivery
+        /// events to jobs that have already finished sending.
+        /// </summary>
+        Task<List<EmailJob>> GetRecentlyCompletedJobsAsync(DateTime completedAfterUtc, int limit);
+
+        /// <summary>
         /// Returns the first job with the given <see cref="EmailJob.InternetMessageId"/>
         /// sent from the specified mailbox, or null.
         /// Used by <see cref="CommitteeMailPoller"/> as an idempotency check to avoid creating

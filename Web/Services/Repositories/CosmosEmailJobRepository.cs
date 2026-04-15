@@ -122,7 +122,12 @@ namespace Web.Services.Repositories
             while (iterator.HasMoreResults)
             {
                 var response = await iterator.ReadNextAsync();
-                results.AddRange(response.Select(CosmosLegacyDocumentMapper.ToEmailJob));
+                foreach (var doc in response)
+                {
+                    var job = CosmosLegacyDocumentMapper.ToEmailJob(doc);
+                    job.ETag = doc.Value<string>("_etag");
+                    results.Add(job);
+                }
             }
 
             return results;
@@ -166,6 +171,39 @@ namespace Web.Services.Repositories
             {
                 var response = await iterator.ReadNextAsync();
                 results.AddRange(response.Select(CosmosLegacyDocumentMapper.ToEmailJob));
+            }
+
+            return results;
+        }
+
+        public async Task<List<EmailJob>> GetRecentlyCompletedJobsAsync(DateTime completedAfterUtc, int limit)
+        {
+            var clampedLimit = Math.Clamp(limit, 1, 250);
+
+            // Return terminal jobs (not Cancelled — those have no meaningful delivery events)
+            // that completed within the given window, newest first so a bounded
+            // result set doesn't repeatedly surface the oldest completions.
+            var query = new CosmosQueryDefinition(
+                $"SELECT TOP {clampedLimit} * FROM c "
+                    + "WHERE c.CompletedUtc >= @completedAfterUtc AND c.Status IN (@completed, @partial, @failed) "
+                    + "ORDER BY c.CompletedUtc DESC"
+            )
+                .WithParameter("@completedAfterUtc", completedAfterUtc)
+                .WithParameter("@completed", nameof(EmailJobStatus.Completed))
+                .WithParameter("@partial", nameof(EmailJobStatus.PartiallyCompleted))
+                .WithParameter("@failed", nameof(EmailJobStatus.Failed));
+
+            var iterator = _emailJobContainer.GetItemQueryIterator<JObject>(query);
+            var results = new List<EmailJob>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                foreach (var doc in response)
+                {
+                    var job = CosmosLegacyDocumentMapper.ToEmailJob(doc);
+                    job.ETag = doc.Value<string>("_etag");
+                    results.Add(job);
+                }
             }
 
             return results;

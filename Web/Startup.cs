@@ -305,6 +305,7 @@ namespace Web
                 services.AddSingleton<IEmailJobRepository>(sp => new MockEmailJobRepository(
                     sp.GetRequiredService<IDocumentFileStore>()
                 ));
+                services.AddSingleton<IEmailDeliveryEventRepository, MockEmailDeliveryEventRepository>();
                 services.AddSingleton<IHeldMessageRepository, MockHeldMessageRepository>();
             }
             else
@@ -382,6 +383,10 @@ namespace Web
 
                 services.AddScoped<IEmailJobRepository>(sp => new CosmosEmailJobRepository(
                     sp.GetRequiredService<CosmosClient>().GetContainer(db, "EmailJobs")
+                ));
+
+                services.AddScoped<IEmailDeliveryEventRepository>(sp => new CosmosEmailDeliveryEventRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "EmailDeliveryEvents")
                 ));
 
                 services.AddScoped<IHeldMessageRepository>(sp => new CosmosHeldMessageRepository(

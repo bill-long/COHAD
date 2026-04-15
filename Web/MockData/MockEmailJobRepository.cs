@@ -138,6 +138,26 @@ namespace Web.MockData
             }
         }
 
+        public Task<List<EmailJob>> GetRecentlyCompletedJobsAsync(DateTime completedAfterUtc, int limit)
+        {
+            lock (_jobs)
+            {
+                var effectiveLimit = Math.Clamp(limit, 1, 250);
+                var list = _jobs
+                    .Values.Where(j =>
+                        j.CompletedUtc >= completedAfterUtc
+                        && j.Status != EmailJobStatus.Queued
+                        && j.Status != EmailJobStatus.InProgress
+                        && j.Status != EmailJobStatus.Cancelled
+                    )
+                    .OrderByDescending(j => j.CompletedUtc)
+                    .Take(effectiveLimit)
+                    .Select(CloneJob)
+                    .ToList();
+                return Task.FromResult(list);
+            }
+        }
+
         public Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId, string fromEmail)
         {
             if (string.IsNullOrEmpty(internetMessageId))
@@ -147,7 +167,8 @@ namespace Web.MockData
             {
                 var match = _jobs.Values.FirstOrDefault(j =>
                     j.InternetMessageId == internetMessageId
-                    && string.Equals(j.FromEmail, fromEmail, StringComparison.OrdinalIgnoreCase));
+                    && string.Equals(j.FromEmail, fromEmail, StringComparison.OrdinalIgnoreCase)
+                );
                 return Task.FromResult(match != null ? CloneJob(match) : (EmailJob?)null);
             }
         }
@@ -298,13 +319,16 @@ namespace Web.MockData
                 ReplyToEmail = job.ReplyToEmail,
                 ReplyToDisplay = job.ReplyToDisplay,
                 ETag = job.ETag,
-                Attachments = job.Attachments?.Select(a => new EmailJobAttachment
-                {
-                    FileName = a.FileName,
-                    BlobPath = a.BlobPath,
-                    ContentType = a.ContentType,
-                    Size = a.Size,
-                }).ToList() ?? new(),
+                Attachments =
+                    job.Attachments?.Select(a => new EmailJobAttachment
+                        {
+                            FileName = a.FileName,
+                            BlobPath = a.BlobPath,
+                            ContentType = a.ContentType,
+                            Size = a.Size,
+                        })
+                        .ToList()
+                    ?? new(),
                 Recipients =
                     job.Recipients?.Select(r => new EmailJobRecipient
                         {

@@ -60,6 +60,7 @@ public sealed class EmailControllerJobTests
         // Use a real cleanup service wired to our mocks. The controller treats cleanup as best-effort.
         _cleanup = new EmailJobCleanupService(
             _jobRepo.Object,
+            new Mock<IEmailDeliveryEventRepository>().Object,
             _fileStore.Object,
             config,
             NullLogger<EmailJobCleanupService>.Instance
@@ -73,6 +74,14 @@ public sealed class EmailControllerJobTests
         var serviceProvider = new Mock<IServiceProvider>();
         serviceProvider.Setup(sp => sp.GetService(typeof(IEmailJobRepository))).Returns(_jobRepo.Object);
         serviceProvider.Setup(sp => sp.GetService(typeof(IDocumentFileStore))).Returns(_fileStore.Object);
+        var deliveryEventRepo = new Mock<IEmailDeliveryEventRepository>();
+        deliveryEventRepo.Setup(r => r.GetByJobIdAsync(It.IsAny<Guid>())).ReturnsAsync(new List<EmailDeliveryEvent>());
+        serviceProvider
+            .Setup(sp => sp.GetService(typeof(IEmailDeliveryEventRepository)))
+            .Returns(deliveryEventRepo.Object);
+        serviceProvider
+            .Setup(sp => sp.GetService(typeof(IEmailDeliveryActionService)))
+            .Returns(new Mock<IEmailDeliveryActionService>().Object);
         scope.Setup(s => s.ServiceProvider).Returns(serviceProvider.Object);
         scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
 

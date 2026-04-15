@@ -2,12 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -18,15 +15,13 @@ using Moq;
 using Web.Configuration;
 using Web.Controllers;
 using Web.Models;
-using Web.Services;
 using Web.Services.Repositories;
 
 namespace Web.UnitTests;
 
 public sealed class SesWebhookControllerTests
 {
-    private readonly Mock<IEmailJobRepository> _jobRepo = new();
-    private readonly Mock<IEmailDeliveryActionService> _deliveryAction = new();
+    private readonly Mock<IEmailDeliveryEventRepository> _deliveryEventRepo = new();
     private readonly Mock<IHttpClientFactory> _httpFactory = new();
 
     private SesWebhookController CreateController(
@@ -40,8 +35,7 @@ public sealed class SesWebhookControllerTests
         var sesOpts = Options.Create(new SesOptions { AllowedTopicArns = allowedTopicArns ?? new List<string>() });
 
         var controller = new SesWebhookController(
-            _jobRepo.Object,
-            _deliveryAction.Object,
+            _deliveryEventRepo.Object,
             _httpFactory.Object,
             sesOpts,
             env.Object,
@@ -104,24 +98,9 @@ public sealed class SesWebhookControllerTests
     }
 
     [Fact]
-    public async Task Notification_updates_delivery_status_for_delivery_event()
+    public async Task Notification_stores_delivery_event_for_delivery()
     {
         var jobId = Guid.NewGuid();
-        var job = new EmailJob
-        {
-            Id = jobId,
-            Category = "board",
-            Recipients = new List<EmailJobRecipient>
-            {
-                new()
-                {
-                    Email = "user@test.com",
-                    Status = EmailJobRecipientStatus.Sent,
-                    Provider = "Ses",
-                },
-            },
-        };
-        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
 
         var sesMessage = JsonSerializer.Serialize(
             new
@@ -152,30 +131,25 @@ public sealed class SesWebhookControllerTests
         var result = await controller.HandleNotification();
 
         Assert.IsType<OkResult>(result);
-        Assert.Equal(DeliveryStatus.Delivered, job.Recipients[0].DeliveryStatus);
-        Assert.Equal("ses-msg-1", job.Recipients[0].ProviderMessageId);
-        _jobRepo.Verify(r => r.UpdateAsync(job), Times.Once);
+        _deliveryEventRepo.Verify(
+            r =>
+                r.AddAsync(
+                    It.Is<EmailDeliveryEvent>(e =>
+                        e.JobId == jobId
+                        && e.Email == "user@test.com"
+                        && e.DeliveryStatus == DeliveryStatus.Delivered
+                        && e.ProviderMessageId == "ses-msg-1"
+                        && e.Provider == "Ses"
+                    )
+                ),
+            Times.Once
+        );
     }
 
     [Fact]
-    public async Task Notification_triggers_opt_out_on_permanent_bounce()
+    public async Task Notification_stores_delivery_event_on_permanent_bounce()
     {
         var jobId = Guid.NewGuid();
-        var job = new EmailJob
-        {
-            Id = jobId,
-            Category = "board",
-            Recipients = new List<EmailJobRecipient>
-            {
-                new()
-                {
-                    Email = "bounced@test.com",
-                    Status = EmailJobRecipientStatus.Sent,
-                    Provider = "Ses",
-                },
-            },
-        };
-        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
 
         var sesMessage = JsonSerializer.Serialize(
             new
@@ -210,32 +184,24 @@ public sealed class SesWebhookControllerTests
 
         await controller.HandleNotification();
 
-        Assert.Equal(DeliveryStatus.Bounced, job.Recipients[0].DeliveryStatus);
-        _deliveryAction.Verify(
-            d => d.ProcessDeliveryEventAsync("bounced@test.com", DeliveryStatus.Bounced, "board"),
+        _deliveryEventRepo.Verify(
+            r =>
+                r.AddAsync(
+                    It.Is<EmailDeliveryEvent>(e =>
+                        e.JobId == jobId
+                        && e.Email == "bounced@test.com"
+                        && e.DeliveryStatus == DeliveryStatus.Bounced
+                        && e.Provider == "Ses"
+                    )
+                ),
             Times.Once
         );
     }
 
     [Fact]
-    public async Task Transient_bounce_maps_to_Deferred()
+    public async Task Transient_bounce_stores_deferred_event()
     {
         var jobId = Guid.NewGuid();
-        var job = new EmailJob
-        {
-            Id = jobId,
-            Category = "board",
-            Recipients = new List<EmailJobRecipient>
-            {
-                new()
-                {
-                    Email = "user@test.com",
-                    Status = EmailJobRecipientStatus.Sent,
-                    Provider = "Ses",
-                },
-            },
-        };
-        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
 
         var sesMessage = JsonSerializer.Serialize(
             new
@@ -265,33 +231,21 @@ public sealed class SesWebhookControllerTests
 
         await controller.HandleNotification();
 
-        Assert.Equal(DeliveryStatus.Deferred, job.Recipients[0].DeliveryStatus);
-        // Deferred is not a hard bounce — no opt-out
-        _deliveryAction.Verify(
-            d => d.ProcessDeliveryEventAsync(It.IsAny<string>(), It.IsAny<DeliveryStatus>(), It.IsAny<string?>()),
-            Times.Never
+        _deliveryEventRepo.Verify(
+            r =>
+                r.AddAsync(
+                    It.Is<EmailDeliveryEvent>(e =>
+                        e.JobId == jobId && e.Email == "user@test.com" && e.DeliveryStatus == DeliveryStatus.Deferred
+                    )
+                ),
+            Times.Once
         );
     }
 
     [Fact]
-    public async Task Complaint_maps_to_SpamReport_and_triggers_opt_out()
+    public async Task Complaint_stores_spam_report_event()
     {
         var jobId = Guid.NewGuid();
-        var job = new EmailJob
-        {
-            Id = jobId,
-            Category = "welcome",
-            Recipients = new List<EmailJobRecipient>
-            {
-                new()
-                {
-                    Email = "complainer@test.com",
-                    Status = EmailJobRecipientStatus.Sent,
-                    Provider = "Ses",
-                },
-            },
-        };
-        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
 
         var sesMessage = JsonSerializer.Serialize(
             new
@@ -324,9 +278,15 @@ public sealed class SesWebhookControllerTests
 
         await controller.HandleNotification();
 
-        Assert.Equal(DeliveryStatus.SpamReport, job.Recipients[0].DeliveryStatus);
-        _deliveryAction.Verify(
-            d => d.ProcessDeliveryEventAsync("complainer@test.com", DeliveryStatus.SpamReport, "welcome"),
+        _deliveryEventRepo.Verify(
+            r =>
+                r.AddAsync(
+                    It.Is<EmailDeliveryEvent>(e =>
+                        e.JobId == jobId
+                        && e.Email == "complainer@test.com"
+                        && e.DeliveryStatus == DeliveryStatus.SpamReport
+                    )
+                ),
             Times.Once
         );
     }
@@ -363,7 +323,7 @@ public sealed class SesWebhookControllerTests
         var result = await controller.HandleNotification();
 
         Assert.IsType<OkResult>(result);
-        _jobRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
+        _deliveryEventRepo.Verify(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()), Times.Never);
     }
 
     [Fact]
@@ -425,88 +385,98 @@ public sealed class SesWebhookControllerTests
     [Fact]
     public void BuildSnsStringToSign_Notification_includes_correct_fields_in_canonical_order()
     {
-        var message = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "msg-123",
-            Message = "Hello world",
-            Timestamp = "2025-01-01T00:00:00.000Z",
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-        }));
+        var message = JsonSerializer.Deserialize<JsonElement>(
+            JsonSerializer.Serialize(
+                new
+                {
+                    Type = "Notification",
+                    MessageId = "msg-123",
+                    Message = "Hello world",
+                    Timestamp = "2025-01-01T00:00:00.000Z",
+                    TopicArn = "arn:aws:sns:us-west-2:123:test",
+                }
+            )
+        );
 
         var result = SesWebhookController.BuildSnsStringToSign(message);
 
         // Assert the full canonical string with correct field ordering per AWS SNS spec
         var expected =
-            "Message\nHello world\n" +
-            "MessageId\nmsg-123\n" +
-            "Timestamp\n2025-01-01T00:00:00.000Z\n" +
-            "TopicArn\narn:aws:sns:us-west-2:123:test\n" +
-            "Type\nNotification\n";
+            "Message\nHello world\n"
+            + "MessageId\nmsg-123\n"
+            + "Timestamp\n2025-01-01T00:00:00.000Z\n"
+            + "TopicArn\narn:aws:sns:us-west-2:123:test\n"
+            + "Type\nNotification\n";
         Assert.Equal(expected, result);
     }
 
     [Fact]
     public void BuildSnsStringToSign_SubscriptionConfirmation_includes_SubscribeURL_and_Token()
     {
-        var message = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(new
-        {
-            Type = "SubscriptionConfirmation",
-            MessageId = "msg-456",
-            Message = "Please confirm",
-            SubscribeURL = "https://sns.us-west-2.amazonaws.com/confirm",
-            Token = "tok-789",
-            Timestamp = "2025-01-01T00:00:00.000Z",
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-        }));
+        var message = JsonSerializer.Deserialize<JsonElement>(
+            JsonSerializer.Serialize(
+                new
+                {
+                    Type = "SubscriptionConfirmation",
+                    MessageId = "msg-456",
+                    Message = "Please confirm",
+                    SubscribeURL = "https://sns.us-west-2.amazonaws.com/confirm",
+                    Token = "tok-789",
+                    Timestamp = "2025-01-01T00:00:00.000Z",
+                    TopicArn = "arn:aws:sns:us-west-2:123:test",
+                }
+            )
+        );
 
         var result = SesWebhookController.BuildSnsStringToSign(message);
 
         // Assert the full canonical string with correct field ordering per AWS SNS spec
         var expected =
-            "Message\nPlease confirm\n" +
-            "MessageId\nmsg-456\n" +
-            "SubscribeURL\nhttps://sns.us-west-2.amazonaws.com/confirm\n" +
-            "Timestamp\n2025-01-01T00:00:00.000Z\n" +
-            "Token\ntok-789\n" +
-            "TopicArn\narn:aws:sns:us-west-2:123:test\n" +
-            "Type\nSubscriptionConfirmation\n";
+            "Message\nPlease confirm\n"
+            + "MessageId\nmsg-456\n"
+            + "SubscribeURL\nhttps://sns.us-west-2.amazonaws.com/confirm\n"
+            + "Timestamp\n2025-01-01T00:00:00.000Z\n"
+            + "Token\ntok-789\n"
+            + "TopicArn\narn:aws:sns:us-west-2:123:test\n"
+            + "Type\nSubscriptionConfirmation\n";
         Assert.Equal(expected, result);
     }
 
     [Fact]
     public void BuildSnsStringToSign_includes_Subject_when_present()
     {
-        var message = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "msg-123",
-            Message = "Hello",
-            Subject = "Test Subject",
-            Timestamp = "2025-01-01T00:00:00.000Z",
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-        }));
+        var message = JsonSerializer.Deserialize<JsonElement>(
+            JsonSerializer.Serialize(
+                new
+                {
+                    Type = "Notification",
+                    MessageId = "msg-123",
+                    Message = "Hello",
+                    Subject = "Test Subject",
+                    Timestamp = "2025-01-01T00:00:00.000Z",
+                    TopicArn = "arn:aws:sns:us-west-2:123:test",
+                }
+            )
+        );
 
         var result = SesWebhookController.BuildSnsStringToSign(message);
 
         var expected =
-            "Message\nHello\n" +
-            "MessageId\nmsg-123\n" +
-            "Subject\nTest Subject\n" +
-            "Timestamp\n2025-01-01T00:00:00.000Z\n" +
-            "TopicArn\narn:aws:sns:us-west-2:123:test\n" +
-            "Type\nNotification\n";
+            "Message\nHello\n"
+            + "MessageId\nmsg-123\n"
+            + "Subject\nTest Subject\n"
+            + "Timestamp\n2025-01-01T00:00:00.000Z\n"
+            + "TopicArn\narn:aws:sns:us-west-2:123:test\n"
+            + "Type\nNotification\n";
         Assert.Equal(expected, result);
     }
 
     [Fact]
     public void BuildSnsStringToSign_returns_null_when_Type_missing()
     {
-        var message = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(new
-        {
-            MessageId = "msg-123",
-            Message = "Hello",
-        }));
+        var message = JsonSerializer.Deserialize<JsonElement>(
+            JsonSerializer.Serialize(new { MessageId = "msg-123", Message = "Hello" })
+        );
 
         var result = SesWebhookController.BuildSnsStringToSign(message);
 
@@ -519,15 +489,17 @@ public sealed class SesWebhookControllerTests
     public async Task Production_rejects_notification_when_signature_verification_fails()
     {
         var controller = CreateController(environment: "Production");
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-1",
-            Message = "{}",
-            Timestamp = DateTime.UtcNow.ToString("o"),
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-            // No SigningCertURL or Signature — verification will fail
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-1",
+                Message = "{}",
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                TopicArn = "arn:aws:sns:us-west-2:123:test",
+                // No SigningCertURL or Signature — verification will fail
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -539,15 +511,17 @@ public sealed class SesWebhookControllerTests
     public async Task DevMode_accepts_notification_when_signature_verification_fails()
     {
         var controller = CreateController(environment: "MockData");
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-1",
-            Message = "{}",
-            Timestamp = DateTime.UtcNow.ToString("o"),
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-            // No SigningCertURL — verification will fail but dev mode accepts
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-1",
+                Message = "{}",
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                TopicArn = "arn:aws:sns:us-west-2:123:test",
+                // No SigningCertURL — verification will fail but dev mode accepts
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -562,14 +536,16 @@ public sealed class SesWebhookControllerTests
     public async Task DevMode_accepts_notification_without_Timestamp()
     {
         var controller = CreateController(environment: "MockData");
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-ts-1",
-            Message = "{}",
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-            // No Timestamp — dev mode tolerates this
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-ts-1",
+                Message = "{}",
+                TopicArn = "arn:aws:sns:us-west-2:123:test",
+                // No Timestamp — dev mode tolerates this
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -580,14 +556,16 @@ public sealed class SesWebhookControllerTests
     public async Task DevMode_accepts_notification_with_invalid_Timestamp()
     {
         var controller = CreateController(environment: "MockData");
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-ts-2",
-            Message = "{}",
-            Timestamp = "not-a-date",
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-ts-2",
+                Message = "{}",
+                Timestamp = "not-a-date",
+                TopicArn = "arn:aws:sns:us-west-2:123:test",
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -599,14 +577,16 @@ public sealed class SesWebhookControllerTests
     {
         var controller = CreateController();
         var futureTime = DateTime.UtcNow.AddMinutes(10); // Beyond the 5-min future tolerance
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-ts-3",
-            Message = "{}",
-            Timestamp = futureTime.ToString("o"),
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-ts-3",
+                Message = "{}",
+                Timestamp = futureTime.ToString("o"),
+                TopicArn = "arn:aws:sns:us-west-2:123:test",
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -619,14 +599,16 @@ public sealed class SesWebhookControllerTests
     {
         var controller = CreateController();
         var oldTime = DateTime.UtcNow.AddMinutes(-15); // Beyond the 10-min max age
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-ts-4",
-            Message = "{}",
-            Timestamp = oldTime.ToString("o"),
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-ts-4",
+                Message = "{}",
+                Timestamp = oldTime.ToString("o"),
+                TopicArn = "arn:aws:sns:us-west-2:123:test",
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -639,14 +621,16 @@ public sealed class SesWebhookControllerTests
     {
         var controller = CreateController();
         var recentTime = DateTime.UtcNow.AddSeconds(-30); // Recent, within the 10-min window
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-ts-5",
-            Message = "{}",
-            Timestamp = recentTime.ToString("o"),
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-ts-5",
+                Message = "{}",
+                Timestamp = recentTime.ToString("o"),
+                TopicArn = "arn:aws:sns:us-west-2:123:test",
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -663,14 +647,16 @@ public sealed class SesWebhookControllerTests
         var controller = CreateController(
             allowedTopicArns: new List<string> { "arn:aws:sns:us-west-2:123:allowed-topic" }
         );
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-arn-1",
-            Message = "{}",
-            Timestamp = DateTime.UtcNow.ToString("o"),
-            TopicArn = "arn:aws:sns:us-west-2:123:rogue-topic",
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-arn-1",
+                Message = "{}",
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                TopicArn = "arn:aws:sns:us-west-2:123:rogue-topic",
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -684,14 +670,16 @@ public sealed class SesWebhookControllerTests
         var controller = CreateController(
             allowedTopicArns: new List<string> { "arn:aws:sns:us-west-2:123:allowed-topic" }
         );
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-arn-2",
-            Message = "{}",
-            Timestamp = DateTime.UtcNow.ToString("o"),
-            // No TopicArn
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-arn-2",
+                Message = "{}",
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                // No TopicArn
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -705,14 +693,16 @@ public sealed class SesWebhookControllerTests
         var controller = CreateController(
             allowedTopicArns: new List<string> { "arn:aws:sns:us-west-2:123:allowed-topic" }
         );
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-arn-3",
-            Message = "{}",
-            Timestamp = DateTime.UtcNow.ToString("o"),
-            TopicArn = "arn:aws:sns:us-west-2:123:allowed-topic",
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-arn-3",
+                Message = "{}",
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                TopicArn = "arn:aws:sns:us-west-2:123:allowed-topic",
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -725,14 +715,16 @@ public sealed class SesWebhookControllerTests
     public async Task Empty_allowlist_accepts_any_TopicArn()
     {
         var controller = CreateController(allowedTopicArns: new List<string>());
-        var body = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-arn-4",
-            Message = "{}",
-            Timestamp = DateTime.UtcNow.ToString("o"),
-            TopicArn = "arn:aws:sns:us-west-2:123:any-topic",
-        });
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                Type = "Notification",
+                MessageId = "sns-arn-4",
+                Message = "{}",
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                TopicArn = "arn:aws:sns:us-west-2:123:any-topic",
+            }
+        );
         SetRequestBody(controller, body);
 
         var result = await controller.HandleNotification();
@@ -740,102 +732,49 @@ public sealed class SesWebhookControllerTests
         Assert.IsType<OkResult>(result);
     }
 
-    // ─── SES webhook delivery event fixes Pending/Failed recipient status ───
+    // ─── SES webhook stores delivery events (no direct job mutation) ───
 
     [Fact]
-    public async Task Notification_fixes_Pending_recipient_status_to_Sent()
+    public async Task Notification_stores_event_for_delivery_with_pending_recipient()
     {
         var jobId = Guid.NewGuid();
-        var job = new EmailJob
-        {
-            Id = jobId,
-            Category = "board",
-            Recipients = new List<EmailJobRecipient>
+
+        var sesMessage = JsonSerializer.Serialize(
+            new
             {
-                new()
+                notificationType = "Delivery",
+                mail = new
                 {
-                    Email = "user@test.com",
-                    Status = EmailJobRecipientStatus.Pending, // Stuck as Pending
-                    Provider = "Ses",
+                    messageId = "ses-msg-fix-1",
+                    tags = new { cohad_job_id = new[] { jobId.ToString() }, cohad_email = new[] { "user@test.com" } },
                 },
-            },
-        };
-        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+            }
+        );
 
-        var sesMessage = JsonSerializer.Serialize(new
-        {
-            notificationType = "Delivery",
-            mail = new
+        var snsMessage = JsonSerializer.Serialize(
+            new
             {
-                messageId = "ses-msg-fix-1",
-                tags = new { cohad_job_id = new[] { jobId.ToString() }, cohad_email = new[] { "user@test.com" } },
-            },
-        });
-
-        var snsMessage = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-fix-1",
-            Message = sesMessage,
-            Timestamp = DateTime.UtcNow.ToString("o"),
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-        });
+                Type = "Notification",
+                MessageId = "sns-fix-1",
+                Message = sesMessage,
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                TopicArn = "arn:aws:sns:us-west-2:123:test",
+            }
+        );
 
         var controller = CreateController();
         SetRequestBody(controller, snsMessage);
 
         await controller.HandleNotification();
 
-        Assert.Equal(EmailJobRecipientStatus.Sent, job.Recipients[0].Status);
-        Assert.NotNull(job.Recipients[0].SentUtc);
-        Assert.Equal(1, job.SentCount);
-    }
-
-    [Fact]
-    public async Task Notification_fixes_Failed_recipient_status_to_Sent()
-    {
-        var jobId = Guid.NewGuid();
-        var job = new EmailJob
-        {
-            Id = jobId,
-            Category = "board",
-            Recipients = new List<EmailJobRecipient>
-            {
-                new()
-                {
-                    Email = "user@test.com",
-                    Status = EmailJobRecipientStatus.Failed, // Stuck as Failed
-                    Provider = "Ses",
-                },
-            },
-        };
-        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
-
-        var sesMessage = JsonSerializer.Serialize(new
-        {
-            notificationType = "Delivery",
-            mail = new
-            {
-                messageId = "ses-msg-fix-2",
-                tags = new { cohad_job_id = new[] { jobId.ToString() }, cohad_email = new[] { "user@test.com" } },
-            },
-        });
-
-        var snsMessage = JsonSerializer.Serialize(new
-        {
-            Type = "Notification",
-            MessageId = "sns-fix-2",
-            Message = sesMessage,
-            Timestamp = DateTime.UtcNow.ToString("o"),
-            TopicArn = "arn:aws:sns:us-west-2:123:test",
-        });
-
-        var controller = CreateController();
-        SetRequestBody(controller, snsMessage);
-
-        await controller.HandleNotification();
-
-        Assert.Equal(EmailJobRecipientStatus.Sent, job.Recipients[0].Status);
-        Assert.NotNull(job.Recipients[0].SentUtc);
+        _deliveryEventRepo.Verify(
+            r =>
+                r.AddAsync(
+                    It.Is<EmailDeliveryEvent>(e =>
+                        e.JobId == jobId && e.Email == "user@test.com" && e.DeliveryStatus == DeliveryStatus.Delivered
+                    )
+                ),
+            Times.Once
+        );
     }
 }

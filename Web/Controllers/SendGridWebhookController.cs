@@ -22,8 +22,7 @@ namespace Web.Controllers
     public class SendGridWebhookController : ControllerBase
     {
         private readonly ISendGridWebhookVerifier _verifier;
-        private readonly IEmailJobRepository _emailJobRepository;
-        private readonly IEmailDeliveryActionService _deliveryActionService;
+        private readonly IEmailDeliveryEventRepository _deliveryEventRepository;
         private readonly ILogger<SendGridWebhookController> _logger;
         private readonly bool _isDevelopment;
 
@@ -41,15 +40,13 @@ namespace Web.Controllers
 
         public SendGridWebhookController(
             ISendGridWebhookVerifier verifier,
-            IEmailJobRepository emailJobRepository,
-            IEmailDeliveryActionService deliveryActionService,
+            IEmailDeliveryEventRepository deliveryEventRepository,
             IWebHostEnvironment env,
             ILogger<SendGridWebhookController> logger
         )
         {
             _verifier = verifier;
-            _emailJobRepository = emailJobRepository;
-            _deliveryActionService = deliveryActionService;
+            _deliveryEventRepository = deliveryEventRepository;
             _logger = logger;
             _isDevelopment = env.IsDevelopment() || env.IsEnvironment("MockData");
         }
@@ -194,6 +191,15 @@ namespace Web.Controllers
             jobIdStr = jobIdStr.Trim();
             email = email.Trim();
 
+            if (string.IsNullOrEmpty(jobIdStr) || string.IsNullOrEmpty(email))
+            {
+                _logger.LogDebug(
+                    "SendGrid event {EventType} has whitespace-only cohad_job_id or cohad_email — skipping.",
+                    eventType
+                );
+                return;
+            }
+
             if (!Guid.TryParse(jobIdStr, out var jobId))
             {
                 _logger.LogWarning("SendGrid event has invalid cohad_job_id: {JobId}", jobIdStr);
@@ -207,104 +213,19 @@ namespace Web.Controllers
             if (evt.TryGetProperty("sg_message_id", out var sgMsgProp))
                 sgMessageId = sgMsgProp.GetString();
 
-            // Update the job recipient with concurrency retry
-            const int maxRetries = 5;
-            for (var attempt = 1; attempt <= maxRetries; attempt++)
+            // Write the delivery event to its own container — no contention possible.
+            var deliveryEvent = new EmailDeliveryEvent
             {
-                var job = await _emailJobRepository.GetByIdAsync(jobId);
-                if (job == null)
-                {
-                    _logger.LogDebug("SendGrid event for unknown job {JobId} — skipping.", jobId);
-                    return;
-                }
+                Id = EmailDeliveryEvent.MakeId(jobId, email, deliveryStatus),
+                JobId = jobId,
+                Email = email,
+                DeliveryStatus = deliveryStatus,
+                ProviderMessageId = sgMessageId,
+                Provider = "SendGrid",
+                ReceivedUtc = DateTime.UtcNow,
+            };
 
-                var recipient = job.Recipients?.FirstOrDefault(r =>
-                    string.Equals(r.Email, email, StringComparison.OrdinalIgnoreCase)
-                );
-                if (recipient == null)
-                {
-                    _logger.LogDebug("SendGrid event for job {JobId} — recipient {Email} not found.", jobId, email);
-                    return;
-                }
-
-                try
-                {
-                    // Update delivery status only when the new status is more severe,
-                    // but allow ProviderMessageId to be populated independently when
-                    // a later webhook event includes sg_message_id.
-                    var shouldUpdateStatus = DeliveryStatusHelper.ShouldUpdate(
-                        recipient.DeliveryStatus,
-                        deliveryStatus
-                    );
-                    var shouldSetProviderMessageId =
-                        !string.IsNullOrEmpty(sgMessageId) && string.IsNullOrEmpty(recipient.ProviderMessageId);
-
-                    if (shouldUpdateStatus)
-                    {
-                        recipient.DeliveryStatus = deliveryStatus;
-                        recipient.DeliveryStatusUpdatedUtc = DateTime.UtcNow;
-                    }
-
-                    if (shouldSetProviderMessageId)
-                    {
-                        recipient.ProviderMessageId = sgMessageId;
-                    }
-
-                    // Any delivery event from SendGrid proves the email was sent —
-                    // fix Status if the processor's post-send persist was lost to a
-                    // concurrency conflict and left the recipient stuck as Pending
-                    // or Failed.
-                    var shouldFixRecipientStatus =
-                        recipient.Status == EmailJobRecipientStatus.Pending
-                        || recipient.Status == EmailJobRecipientStatus.Failed;
-                    if (shouldFixRecipientStatus)
-                    {
-                        recipient.Status = EmailJobRecipientStatus.Sent;
-                        recipient.SentUtc ??= DateTime.UtcNow;
-                        job.SentCount = (job.Recipients ?? new()).Count(r => r.Status == EmailJobRecipientStatus.Sent);
-                        job.FailedCount = (job.Recipients ?? new()).Count(r =>
-                            r.Status == EmailJobRecipientStatus.Failed
-                        );
-                    }
-
-                    if (shouldUpdateStatus || shouldSetProviderMessageId || shouldFixRecipientStatus)
-                    {
-                        await _emailJobRepository.UpdateAsync(job);
-                    }
-
-                    // Auto opt-out for bounce/spam regardless of status transition —
-                    // if UpdateAsync succeeded but a prior opt-out attempt failed, SendGrid
-                    // retries and DeliveryStatusHelper.ShouldUpdate would be false; running the
-                    // action unconditionally ensures the opt-out isn't permanently missed.
-                    // The action service is idempotent (no-op if already opted out).
-                    if (deliveryStatus == DeliveryStatus.Bounced || deliveryStatus == DeliveryStatus.SpamReport)
-                    {
-                        await _deliveryActionService.ProcessDeliveryEventAsync(email, deliveryStatus, job.Category);
-                    }
-
-                    return;
-                }
-                catch (EmailJobConcurrencyException) when (attempt < maxRetries)
-                {
-                    _logger.LogWarning(
-                        "Concurrency conflict updating delivery status for job {JobId}, recipient {Email}. Retry {Attempt}/{MaxRetries}.",
-                        jobId,
-                        email,
-                        attempt,
-                        maxRetries
-                    );
-                }
-            }
-
-            // All retries exhausted — throw so the outer handler returns 500 and SendGrid
-            // retries the entire batch.
-            _logger.LogWarning(
-                "Exhausted concurrency retries updating delivery status for job {JobId}, recipient {Email}, status {DeliveryStatus}.",
-                jobId,
-                email,
-                deliveryStatus
-            );
-            throw new EmailJobConcurrencyException();
+            await _deliveryEventRepository.AddAsync(deliveryEvent);
         }
 
         internal static DeliveryStatus MapEventToDeliveryStatus(string eventType)
