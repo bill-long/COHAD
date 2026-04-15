@@ -171,6 +171,33 @@ namespace Web.Services.Repositories
             return results;
         }
 
+        public async Task<List<EmailJob>> GetRecentlyCompletedJobsAsync(DateTime completedAfterUtc, int limit)
+        {
+            var clampedLimit = Math.Clamp(limit, 1, 250);
+
+            // Return terminal jobs (not Cancelled — those have no meaningful delivery events)
+            // that completed within the given window.
+            var query = new CosmosQueryDefinition(
+                $"SELECT TOP {clampedLimit} * FROM c "
+                    + "WHERE c.CompletedUtc >= @completedAfterUtc AND c.Status IN (@completed, @partial, @failed) "
+                    + "ORDER BY c.CompletedUtc ASC"
+            )
+                .WithParameter("@completedAfterUtc", completedAfterUtc)
+                .WithParameter("@completed", nameof(EmailJobStatus.Completed))
+                .WithParameter("@partial", nameof(EmailJobStatus.PartiallyCompleted))
+                .WithParameter("@failed", nameof(EmailJobStatus.Failed));
+
+            var iterator = _emailJobContainer.GetItemQueryIterator<JObject>(query);
+            var results = new List<EmailJob>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                results.AddRange(response.Select(CosmosLegacyDocumentMapper.ToEmailJob));
+            }
+
+            return results;
+        }
+
         public async Task<EmailJob?> GetByInternetMessageIdAsync(string internetMessageId, string fromEmail)
         {
             if (string.IsNullOrEmpty(internetMessageId))

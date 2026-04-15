@@ -378,6 +378,7 @@ namespace Web.Services
                 {
                     await Task.Delay(TimeSpan.FromMinutes(_stallWatchdogIntervalMinutes), stoppingToken);
                     await ResumeIncompleteJobsAsync(stoppingToken, stallCheckOnly: true);
+                    await SweepCompletedJobDeliveryEventsAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -520,6 +521,45 @@ namespace Web.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to resume incomplete email jobs on startup");
+            }
+        }
+
+        /// <summary>
+        /// Applies late-arriving delivery events to recently-completed jobs. Webhooks
+        /// for the last batch of recipients often arrive after the job reaches terminal
+        /// status. This sweep updates recipient DeliveryStatus fields and runs delivery
+        /// actions (auto opt-out on bounce/spam) that would otherwise be missed.
+        /// </summary>
+        internal async Task SweepCompletedJobDeliveryEventsAsync(CancellationToken ct)
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var repo = scope.ServiceProvider.GetRequiredService<IEmailJobRepository>();
+                var deliveryEventRepo = scope.ServiceProvider.GetRequiredService<IEmailDeliveryEventRepository>();
+                var deliveryActionService = scope.ServiceProvider.GetRequiredService<IEmailDeliveryActionService>();
+
+                // Look back 30 minutes — webhooks almost always arrive within a few minutes,
+                // but this gives a generous buffer. The watchdog runs every ~5 minutes, so
+                // each job is checked a handful of times before falling out of the window.
+                var completedAfterUtc = DateTime.UtcNow.AddMinutes(-30);
+                var jobs = await repo.GetRecentlyCompletedJobsAsync(completedAfterUtc, 50);
+
+                foreach (var job in jobs)
+                {
+                    if (ct.IsCancellationRequested)
+                        break;
+
+                    if (await ApplyDeliveryEventsAsync(job, deliveryEventRepo, deliveryActionService, _logger))
+                    {
+                        await TryPersistJobAsync(repo, job);
+                        _logger.LogInformation("Applied late delivery events to completed job {JobId}", job.Id);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to sweep delivery events for completed jobs");
             }
         }
 

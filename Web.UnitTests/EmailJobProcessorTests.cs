@@ -2133,4 +2133,163 @@ public sealed class EmailJobProcessorTests
         // Should not downgrade from Bounced to Delivered
         Assert.Equal(DeliveryStatus.Bounced, job.Recipients[0].DeliveryStatus);
     }
+
+    // ───────────────────────────────────────────────────
+    // SweepCompletedJobDeliveryEventsAsync
+    // ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Sweep_AppliesLateDeliveryEvents_ToCompletedJob()
+    {
+        var jobId = Guid.NewGuid();
+        var completedJob = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Completed,
+            Category = "board",
+            CompletedUtc = DateTime.UtcNow.AddMinutes(-5),
+            TotalRecipients = 2,
+            SentCount = 2,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Unknown,
+                },
+                new()
+                {
+                    Email = "b@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Unknown,
+                },
+            },
+        };
+
+        _jobRepo
+            .Setup(r => r.GetRecentlyCompletedJobsAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<EmailJob> { completedJob });
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        _deliveryEventRepo
+            .Setup(r => r.GetByJobIdAsync(jobId))
+            .ReturnsAsync(
+                new List<EmailDeliveryEvent>
+                {
+                    new()
+                    {
+                        Id = EmailDeliveryEvent.MakeId(jobId, "a@test.com", DeliveryStatus.Delivered),
+                        JobId = jobId,
+                        Email = "a@test.com",
+                        DeliveryStatus = DeliveryStatus.Delivered,
+                        ReceivedUtc = DateTime.UtcNow,
+                    },
+                    new()
+                    {
+                        Id = EmailDeliveryEvent.MakeId(jobId, "b@test.com", DeliveryStatus.Bounced),
+                        JobId = jobId,
+                        Email = "b@test.com",
+                        DeliveryStatus = DeliveryStatus.Bounced,
+                        ReceivedUtc = DateTime.UtcNow,
+                    },
+                }
+            );
+
+        var processor = CreateProcessor();
+        await processor.SweepCompletedJobDeliveryEventsAsync(CancellationToken.None);
+
+        Assert.Equal(DeliveryStatus.Delivered, completedJob.Recipients[0].DeliveryStatus);
+        Assert.Equal(DeliveryStatus.Bounced, completedJob.Recipients[1].DeliveryStatus);
+        _jobRepo.Verify(r => r.UpdateAsync(It.Is<EmailJob>(j => j.Id == jobId)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Sweep_RunsDeliveryAction_ForUnprocessedBounce()
+    {
+        var jobId = Guid.NewGuid();
+        var completedJob = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.PartiallyCompleted,
+            Category = "social",
+            CompletedUtc = DateTime.UtcNow.AddMinutes(-2),
+            TotalRecipients = 1,
+            SentCount = 1,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "bounced@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Unknown,
+                },
+            },
+        };
+
+        _jobRepo
+            .Setup(r => r.GetRecentlyCompletedJobsAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<EmailJob> { completedJob });
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        _deliveryEventRepo
+            .Setup(r => r.GetByJobIdAsync(jobId))
+            .ReturnsAsync(
+                new List<EmailDeliveryEvent>
+                {
+                    new()
+                    {
+                        Id = EmailDeliveryEvent.MakeId(jobId, "bounced@test.com", DeliveryStatus.Bounced),
+                        JobId = jobId,
+                        Email = "bounced@test.com",
+                        DeliveryStatus = DeliveryStatus.Bounced,
+                        ActionProcessed = false,
+                        ReceivedUtc = DateTime.UtcNow,
+                    },
+                }
+            );
+
+        var processor = CreateProcessor();
+        await processor.SweepCompletedJobDeliveryEventsAsync(CancellationToken.None);
+
+        _deliveryActionService.Verify(
+            s => s.ProcessDeliveryEventAsync("bounced@test.com", DeliveryStatus.Bounced, "social"),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task Sweep_NoDeliveryEvents_DoesNotPersist()
+    {
+        var jobId = Guid.NewGuid();
+        var completedJob = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Completed,
+            Category = "board",
+            CompletedUtc = DateTime.UtcNow.AddMinutes(-3),
+            TotalRecipients = 1,
+            SentCount = 1,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    Status = EmailJobRecipientStatus.Sent,
+                    DeliveryStatus = DeliveryStatus.Delivered,
+                },
+            },
+        };
+
+        _jobRepo
+            .Setup(r => r.GetRecentlyCompletedJobsAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<EmailJob> { completedJob });
+
+        // Default mock returns empty delivery events list
+
+        var processor = CreateProcessor();
+        await processor.SweepCompletedJobDeliveryEventsAsync(CancellationToken.None);
+
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Never);
+    }
 }
