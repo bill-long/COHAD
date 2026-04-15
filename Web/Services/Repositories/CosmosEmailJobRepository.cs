@@ -181,11 +181,12 @@ namespace Web.Services.Repositories
             var clampedLimit = Math.Clamp(limit, 1, 250);
 
             // Return terminal jobs (not Cancelled — those have no meaningful delivery events)
-            // that completed within the given window.
+            // that completed within the given window, newest first so a bounded
+            // result set doesn't repeatedly surface the oldest completions.
             var query = new CosmosQueryDefinition(
                 $"SELECT TOP {clampedLimit} * FROM c "
                     + "WHERE c.CompletedUtc >= @completedAfterUtc AND c.Status IN (@completed, @partial, @failed) "
-                    + "ORDER BY c.CompletedUtc ASC"
+                    + "ORDER BY c.CompletedUtc DESC"
             )
                 .WithParameter("@completedAfterUtc", completedAfterUtc)
                 .WithParameter("@completed", nameof(EmailJobStatus.Completed))

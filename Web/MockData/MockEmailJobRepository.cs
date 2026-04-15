@@ -150,7 +150,7 @@ namespace Web.MockData
                         && j.Status != EmailJobStatus.InProgress
                         && j.Status != EmailJobStatus.Cancelled
                     )
-                    .OrderBy(j => j.CompletedUtc)
+                    .OrderByDescending(j => j.CompletedUtc)
                     .Take(effectiveLimit)
                     .Select(CloneJob)
                     .ToList();
