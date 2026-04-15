@@ -1,8 +1,8 @@
 import { Injectable, Inject } from '@angular/core';
 import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted, LoadDirectory, LoadUser } from '../state';
-import { Observable, Subject } from 'rxjs';
+import { Observable, Subject, of } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
-import { filter, switchMap } from 'rxjs/operators';
+import { filter, switchMap, map, tap, catchError } from 'rxjs/operators';
 import { Home } from '../models';
 
 @Injectable({
@@ -24,71 +24,53 @@ export class HomeService {
       );
   }
 
-  saveHomeAndReloadAll(home: Home) {
-    const obs = new Observable<boolean>(o => {
-      this.httpClient.put('api/home', home).subscribe(
-        result => {
-          this.dispatcher.next(new LoadAllHomes());
-          this.dispatcher.next(new LoadDirectory());
-          o.next(true);
-          o.complete();
-        },
-        err => {
-          this.dispatcher.next(new LoadAllHomes());
-          o.next(false);
-          o.complete();
-        },
-      );
-    });
-
-    return obs;
+  saveHomeAndReloadAll(home: Home): Observable<boolean> {
+    return this.httpClient.put('api/home', home).pipe(
+      tap(() => {
+        this.dispatcher.next(new LoadAllHomes());
+        this.dispatcher.next(new LoadDirectory());
+      }),
+      map(() => true),
+      catchError(() => {
+        this.dispatcher.next(new LoadAllHomes());
+        return of(false);
+      }),
+    );
   }
 
-  saveHomeAndReloadMine(home: Home) {
-    const obs = new Observable<boolean>(o => {
-      this.httpClient.put('api/home', home).subscribe(
-        result => {
-          this.dispatcher.next(new LoadUser());
-          this.dispatcher.next(new LoadDirectory());
-          o.next(true);
-          o.complete();
-        },
-        err => {
-          this.dispatcher.next(new LoadUser());
-          o.next(false);
-          o.complete();
-        },
-      );
-    });
-
-    return obs;
+  saveHomeAndReloadMine(home: Home): Observable<boolean> {
+    return this.httpClient.put('api/home', home).pipe(
+      tap(() => {
+        this.dispatcher.next(new LoadUser());
+        this.dispatcher.next(new LoadDirectory());
+      }),
+      map(() => true),
+      catchError(() => {
+        this.dispatcher.next(new LoadUser());
+        return of(false);
+      }),
+    );
   }
 
-  removeAssociatedUser(homeId: string, userUniqueId: string, reloadAllOnSave: boolean) {
-    const obs = new Observable<boolean>(o => {
-      this.httpClient.delete(`api/home/${homeId}/owners/${encodeURIComponent(userUniqueId)}`).subscribe(
-        result => {
-          if (reloadAllOnSave) {
-            this.dispatcher.next(new LoadAllHomes());
-          } else {
-            this.dispatcher.next(new LoadUser());
-          }
-          this.dispatcher.next(new LoadDirectory());
-          o.next(true);
-          o.complete();
-        },
-        err => {
-          if (reloadAllOnSave) {
-            this.dispatcher.next(new LoadAllHomes());
-          } else {
-            this.dispatcher.next(new LoadUser());
-          }
-          o.next(false);
-          o.complete();
-        },
-      );
-    });
-
-    return obs;
+  removeAssociatedUser(homeId: string, userUniqueId: string, reloadAllOnSave: boolean): Observable<boolean> {
+    return this.httpClient.delete(`api/home/${encodeURIComponent(homeId)}/owners/${encodeURIComponent(userUniqueId)}`).pipe(
+      tap(() => {
+        if (reloadAllOnSave) {
+          this.dispatcher.next(new LoadAllHomes());
+        } else {
+          this.dispatcher.next(new LoadUser());
+        }
+        this.dispatcher.next(new LoadDirectory());
+      }),
+      map(() => true),
+      catchError(() => {
+        if (reloadAllOnSave) {
+          this.dispatcher.next(new LoadAllHomes());
+        } else {
+          this.dispatcher.next(new LoadUser());
+        }
+        return of(false);
+      }),
+    );
   }
 }
