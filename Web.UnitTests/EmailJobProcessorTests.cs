@@ -1090,7 +1090,8 @@ public sealed class EmailJobProcessorTests
             ContentBlobPath = $"email-jobs/{jobId:D}.html",
             TotalRecipients = 2,
             SentCount = 1,
-            LastProgressUtc = DateTime.UtcNow,
+            StartedUtc = DateTime.UtcNow.AddMinutes(-60),
+            LastProgressUtc = DateTime.UtcNow.AddMinutes(-45), // stalled — previous process died
             Recipients = new List<EmailJobRecipient>
             {
                 new EmailJobRecipient
@@ -1548,6 +1549,97 @@ public sealed class EmailJobProcessorTests
             c => c.SendCoreAsync("EmailJobCompleted", It.IsAny<object[]>(), It.IsAny<CancellationToken>()),
             Times.Once
         );
+    }
+
+    // ───────────────────────────────────────────────────
+    // InProgress stall guard (prevents duplicate processing)
+    // ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task InProgressWithRecentProgress_Skips()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.InProgress,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Active job",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            StartedUtc = DateTime.UtcNow.AddMinutes(-5),
+            LastProgressUtc = DateTime.UtcNow.AddMinutes(-1), // recent progress
+            TotalRecipients = 1,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Pending,
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+
+        var processor = CreateProcessor();
+        await RunProcessorForSingleJob(processor, jobId);
+
+        // Should NOT attempt to claim — job has recent progress
+        _jobRepo.Verify(r => r.TryClaimAsync(It.IsAny<EmailJob>()), Times.Never);
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task InProgressButStalled_ProceedsToClaim()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.InProgress,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Stalled job",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            StartedUtc = DateTime.UtcNow.AddMinutes(-60),
+            LastProgressUtc = DateTime.UtcNow.AddMinutes(-45), // stalled (>30 min default)
+            TotalRecipients = 1,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "a@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Pending,
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.TryClaimAsync(It.IsAny<EmailJob>())).ReturnsAsync(true);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+        _fileStore
+            .Setup(f => f.DownloadAsync(job.ContentBlobPath))
+            .ReturnsAsync(
+                new DocumentFileResult
+                {
+                    Stream = new MemoryStream("<p>Hello</p>"u8.ToArray()),
+                    ContentType = "text/html",
+                }
+            );
+
+        var processor = CreateProcessor();
+        await RunProcessorForSingleJob(processor, jobId);
+
+        // Should have attempted to claim the stalled job
+        _jobRepo.Verify(r => r.TryClaimAsync(It.IsAny<EmailJob>()), Times.Once);
+        Assert.Equal(EmailJobStatus.Completed, job.Status);
     }
 
     // ───────────────────────────────────────────────────

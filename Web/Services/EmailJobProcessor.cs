@@ -631,6 +631,31 @@ namespace Web.Services
                     return;
                 }
 
+                // Guard against claiming jobs that another instance is actively processing.
+                // Only re-claim InProgress jobs that have truly stalled (no progress for
+                // StallAfterMinutes). Without this, a re-enqueued InProgress job could be
+                // claimed concurrently, causing duplicate sends.
+                if (job.Status == EmailJobStatus.InProgress)
+                {
+                    var thresholdMinutes = Math.Clamp(_stallAfterMinutes, 1, 24 * 60);
+                    var lastProgress = job.LastProgressUtc ?? job.StartedUtc ?? job.CreatedUtc;
+                    if (DateTime.UtcNow - lastProgress < TimeSpan.FromMinutes(thresholdMinutes))
+                    {
+                        _logger.LogInformation(
+                            "Email job {JobId} is InProgress with recent progress ({LastProgressUtc}) — skipping to avoid duplicate processing",
+                            jobId,
+                            lastProgress
+                        );
+                        return;
+                    }
+
+                    _logger.LogWarning(
+                        "Email job {JobId} is InProgress but stalled since {LastProgressUtc} — attempting to reclaim",
+                        jobId,
+                        lastProgress
+                    );
+                }
+
                 // Claim the job with retries — concurrent updates (other processor instances,
                 // cancellations, stall-watchdog writes) can change the ETag between our read
                 // and the conditional write, so a single attempt is not always sufficient.
