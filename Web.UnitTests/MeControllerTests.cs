@@ -61,6 +61,7 @@ public sealed class MeControllerTests
             .Build();
         var cleanup = new EmailJobCleanupService(
             cleanupJobRepo.Object,
+            new Mock<IEmailDeliveryEventRepository>().Object,
             fileStore,
             cleanupConfig,
             NullLogger<EmailJobCleanupService>.Instance

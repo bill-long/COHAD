@@ -16,6 +16,7 @@ public sealed class EmailJobCleanupServiceTests
     public async Task RunOnceBestEffortAsync_DeletesBlobAndJob_ForTerminalJobsOlderThanCutoff()
     {
         var repo = new Mock<IEmailJobRepository>(MockBehavior.Strict);
+        var deliveryEventRepo = new Mock<IEmailDeliveryEventRepository>();
         var store = new Mock<IDocumentFileStore>(MockBehavior.Strict);
 
         var oldJob = new EmailJob
@@ -43,6 +44,7 @@ public sealed class EmailJobCleanupServiceTests
 
         var svc = new EmailJobCleanupService(
             repo.Object,
+            deliveryEventRepo.Object,
             store.Object,
             config,
             NullLogger<EmailJobCleanupService>.Instance
@@ -51,6 +53,7 @@ public sealed class EmailJobCleanupServiceTests
 
         store.Verify(s => s.DeleteAsync(oldJob.ContentBlobPath), Times.Once);
         repo.Verify(r => r.DeleteAsync(oldJob.Id), Times.Once);
+        deliveryEventRepo.Verify(r => r.DeleteByJobIdAsync(oldJob.Id), Times.Once);
         repo.Verify(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 25), Times.Once);
     }
 
@@ -58,6 +61,7 @@ public sealed class EmailJobCleanupServiceTests
     public async Task RunOnceBestEffortAsync_DoesNotThrow_WhenBlobDeleteFails_DoesNotDeleteJobRow()
     {
         var repo = new Mock<IEmailJobRepository>(MockBehavior.Strict);
+        var deliveryEventRepo = new Mock<IEmailDeliveryEventRepository>();
         var store = new Mock<IDocumentFileStore>(MockBehavior.Strict);
 
         var oldJob = new EmailJob
@@ -84,6 +88,7 @@ public sealed class EmailJobCleanupServiceTests
 
         var svc = new EmailJobCleanupService(
             repo.Object,
+            deliveryEventRepo.Object,
             store.Object,
             config,
             NullLogger<EmailJobCleanupService>.Instance
@@ -99,6 +104,7 @@ public sealed class EmailJobCleanupServiceTests
     public async Task RunOnceBestEffortAsync_UsesConfiguredBatchSize()
     {
         var repo = new Mock<IEmailJobRepository>(MockBehavior.Strict);
+        var deliveryEventRepo = new Mock<IEmailDeliveryEventRepository>();
         var store = new Mock<IDocumentFileStore>(MockBehavior.Strict);
 
         repo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 3)).ReturnsAsync(new List<EmailJob>());
@@ -115,6 +121,7 @@ public sealed class EmailJobCleanupServiceTests
 
         var svc = new EmailJobCleanupService(
             repo.Object,
+            deliveryEventRepo.Object,
             store.Object,
             config,
             NullLogger<EmailJobCleanupService>.Instance
@@ -122,5 +129,51 @@ public sealed class EmailJobCleanupServiceTests
         await svc.RunOnceBestEffortAsync();
 
         repo.Verify(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 3), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunOnceBestEffortAsync_DoesNotDeleteJob_WhenDeliveryEventDeleteFails()
+    {
+        var repo = new Mock<IEmailJobRepository>(MockBehavior.Strict);
+        var deliveryEventRepo = new Mock<IEmailDeliveryEventRepository>();
+        var store = new Mock<IDocumentFileStore>(MockBehavior.Strict);
+
+        var oldJob = new EmailJob
+        {
+            Id = Guid.NewGuid(),
+            Status = EmailJobStatus.Completed,
+            CreatedUtc = DateTime.UtcNow.AddDays(-60),
+            ContentBlobPath = $"email-jobs/{Guid.NewGuid():D}.html",
+        };
+
+        repo.Setup(r => r.GetTerminalJobsOlderThanAsync(It.IsAny<DateTime>(), 25))
+            .ReturnsAsync(new List<EmailJob> { oldJob });
+        store.Setup(s => s.DeleteAsync(oldJob.ContentBlobPath)).Returns(Task.CompletedTask);
+        deliveryEventRepo
+            .Setup(r => r.DeleteByJobIdAsync(oldJob.Id))
+            .ThrowsAsync(new InvalidOperationException("Cosmos unavailable"));
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["EmailJobs:RetentionDays"] = "30",
+                    ["EmailJobs:CleanupBatchSize"] = "25",
+                }
+            )
+            .Build();
+
+        var svc = new EmailJobCleanupService(
+            repo.Object,
+            deliveryEventRepo.Object,
+            store.Object,
+            config,
+            NullLogger<EmailJobCleanupService>.Instance
+        );
+        await svc.RunOnceBestEffortAsync();
+
+        deliveryEventRepo.Verify(r => r.DeleteByJobIdAsync(oldJob.Id), Times.Once);
+        // Job should NOT be deleted so a later pass can retry event cleanup
+        repo.Verify(r => r.DeleteAsync(It.IsAny<Guid>()), Times.Never);
     }
 }

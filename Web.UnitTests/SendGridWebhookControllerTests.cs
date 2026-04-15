@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Web.Controllers;
@@ -21,8 +20,7 @@ namespace Web.UnitTests
     public class SendGridWebhookControllerTests
     {
         private readonly Mock<ISendGridWebhookVerifier> _verifier = new();
-        private readonly Mock<IEmailJobRepository> _jobRepo = new();
-        private readonly Mock<IEmailDeliveryActionService> _deliveryAction = new();
+        private readonly Mock<IEmailDeliveryEventRepository> _deliveryEventRepo = new();
         private readonly Mock<IWebHostEnvironment> _env = new();
 
         public SendGridWebhookControllerTests()
@@ -35,8 +33,7 @@ namespace Web.UnitTests
         {
             var controller = new SendGridWebhookController(
                 _verifier.Object,
-                _jobRepo.Object,
-                _deliveryAction.Object,
+                _deliveryEventRepo.Object,
                 _env.Object,
                 NullLogger<SendGridWebhookController>.Instance
             );
@@ -63,26 +60,6 @@ namespace Web.UnitTests
         }
 
         private static readonly Guid TestJobId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-
-        private EmailJob CreateTestJob(string recipientEmail = "user@example.com")
-        {
-            return new EmailJob
-            {
-                Id = TestJobId,
-                Status = EmailJobStatus.Completed,
-                Category = "board",
-                Recipients = new List<EmailJobRecipient>
-                {
-                    new()
-                    {
-                        Email = recipientEmail,
-                        HomeId = Guid.NewGuid(),
-                        Status = EmailJobRecipientStatus.Sent,
-                        SentUtc = DateTime.UtcNow,
-                    },
-                },
-            };
-        }
 
         private string BuildEventPayload(
             string eventType,
@@ -172,77 +149,97 @@ namespace Web.UnitTests
         // ─── Event processing ───
 
         [Fact]
-        public async Task DeliveredEvent_UpdatesRecipientStatus()
+        public async Task DeliveredEvent_StoresDeliveryEvent()
         {
             SetupVerifierNotConfigured();
-            var job = CreateTestJob();
-            _jobRepo.Setup(r => r.GetByIdAsync(TestJobId)).ReturnsAsync(job);
 
             var body = BuildEventPayload("delivered", TestJobId.ToString(), "user@example.com", "abc123");
             var controller = CreateController(body);
 
             await controller.HandleEvents();
 
-            Assert.Equal(DeliveryStatus.Delivered, job.Recipients[0].DeliveryStatus);
-            Assert.NotNull(job.Recipients[0].DeliveryStatusUpdatedUtc);
-            Assert.Equal("abc123", job.Recipients[0].ProviderMessageId);
-            _jobRepo.Verify(r => r.UpdateAsync(job), Times.Once);
+            _deliveryEventRepo.Verify(
+                r =>
+                    r.AddAsync(
+                        It.Is<EmailDeliveryEvent>(e =>
+                            e.JobId == TestJobId
+                            && e.Email == "user@example.com"
+                            && e.DeliveryStatus == DeliveryStatus.Delivered
+                            && e.ProviderMessageId == "abc123"
+                            && e.Provider == "SendGrid"
+                        )
+                    ),
+                Times.Once
+            );
         }
 
         [Fact]
-        public async Task BounceEvent_UpdatesStatusAndTriggersOptOut()
+        public async Task BounceEvent_StoresDeliveryEvent()
         {
             SetupVerifierNotConfigured();
-            var job = CreateTestJob();
-            _jobRepo.Setup(r => r.GetByIdAsync(TestJobId)).ReturnsAsync(job);
 
             var body = BuildEventPayload("bounce", TestJobId.ToString(), "user@example.com");
             var controller = CreateController(body);
 
             await controller.HandleEvents();
 
-            Assert.Equal(DeliveryStatus.Bounced, job.Recipients[0].DeliveryStatus);
-            _deliveryAction.Verify(
-                s => s.ProcessDeliveryEventAsync("user@example.com", DeliveryStatus.Bounced, "board"),
+            _deliveryEventRepo.Verify(
+                r =>
+                    r.AddAsync(
+                        It.Is<EmailDeliveryEvent>(e =>
+                            e.JobId == TestJobId
+                            && e.Email == "user@example.com"
+                            && e.DeliveryStatus == DeliveryStatus.Bounced
+                            && e.Provider == "SendGrid"
+                        )
+                    ),
                 Times.Once
             );
         }
 
         [Fact]
-        public async Task SpamReportEvent_TriggersOptOut()
+        public async Task SpamReportEvent_StoresDeliveryEvent()
         {
             SetupVerifierNotConfigured();
-            var job = CreateTestJob();
-            _jobRepo.Setup(r => r.GetByIdAsync(TestJobId)).ReturnsAsync(job);
 
             var body = BuildEventPayload("spamreport", TestJobId.ToString(), "user@example.com");
             var controller = CreateController(body);
 
             await controller.HandleEvents();
 
-            Assert.Equal(DeliveryStatus.SpamReport, job.Recipients[0].DeliveryStatus);
-            _deliveryAction.Verify(
-                s => s.ProcessDeliveryEventAsync("user@example.com", DeliveryStatus.SpamReport, "board"),
+            _deliveryEventRepo.Verify(
+                r =>
+                    r.AddAsync(
+                        It.Is<EmailDeliveryEvent>(e =>
+                            e.JobId == TestJobId
+                            && e.Email == "user@example.com"
+                            && e.DeliveryStatus == DeliveryStatus.SpamReport
+                        )
+                    ),
                 Times.Once
             );
         }
 
         [Fact]
-        public async Task DeferredEvent_DoesNotTriggerOptOut()
+        public async Task DeferredEvent_StoresDeliveryEvent()
         {
             SetupVerifierNotConfigured();
-            var job = CreateTestJob();
-            _jobRepo.Setup(r => r.GetByIdAsync(TestJobId)).ReturnsAsync(job);
 
             var body = BuildEventPayload("deferred", TestJobId.ToString(), "user@example.com");
             var controller = CreateController(body);
 
             await controller.HandleEvents();
 
-            Assert.Equal(DeliveryStatus.Deferred, job.Recipients[0].DeliveryStatus);
-            _deliveryAction.Verify(
-                s => s.ProcessDeliveryEventAsync(It.IsAny<string>(), It.IsAny<DeliveryStatus>(), It.IsAny<string>()),
-                Times.Never
+            _deliveryEventRepo.Verify(
+                r =>
+                    r.AddAsync(
+                        It.Is<EmailDeliveryEvent>(e =>
+                            e.JobId == TestJobId
+                            && e.Email == "user@example.com"
+                            && e.DeliveryStatus == DeliveryStatus.Deferred
+                        )
+                    ),
+                Times.Once
             );
         }
 
@@ -257,37 +254,7 @@ namespace Web.UnitTests
 
             await controller.HandleEvents();
 
-            _jobRepo.Verify(r => r.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
-        }
-
-        [Fact]
-        public async Task UnknownJob_SkipsGracefully()
-        {
-            SetupVerifierNotConfigured();
-            _jobRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((EmailJob?)null);
-
-            var body = BuildEventPayload("delivered", TestJobId.ToString(), "user@example.com");
-            var controller = CreateController(body);
-
-            var result = await controller.HandleEvents();
-
-            Assert.IsType<OkResult>(result);
-            _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Never);
-        }
-
-        [Fact]
-        public async Task UnknownRecipient_SkipsGracefully()
-        {
-            SetupVerifierNotConfigured();
-            var job = CreateTestJob("other@example.com");
-            _jobRepo.Setup(r => r.GetByIdAsync(TestJobId)).ReturnsAsync(job);
-
-            var body = BuildEventPayload("delivered", TestJobId.ToString(), "notfound@example.com");
-            var controller = CreateController(body);
-
-            await controller.HandleEvents();
-
-            _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Never);
+            _deliveryEventRepo.Verify(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()), Times.Never);
         }
 
         // ─── Status severity ───
@@ -330,8 +297,9 @@ namespace Web.UnitTests
             SetupVerifierConfigured(validSignature: true);
             var controller = CreateController("[]");
             // Timestamp present but no Signature header
-            controller.HttpContext.Request.Headers["X-Twilio-Email-Event-Webhook-Timestamp"] =
-                DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+            controller.HttpContext.Request.Headers["X-Twilio-Email-Event-Webhook-Timestamp"] = DateTimeOffset
+                .UtcNow.ToUnixTimeSeconds()
+                .ToString();
 
             var result = await controller.HandleEvents();
 
@@ -370,11 +338,9 @@ namespace Web.UnitTests
         public async Task BatchError_Returns500()
         {
             SetupVerifierNotConfigured();
-            // Return a fresh job on every GetByIdAsync call so in-memory mutation
-            // doesn't short-circuit the retry logic.
-            _jobRepo.Setup(r => r.GetByIdAsync(TestJobId)).Returns(() => Task.FromResult<EmailJob?>(CreateTestJob()));
-            _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
-                .ThrowsAsync(new EmailJobConcurrencyException());
+            _deliveryEventRepo
+                .Setup(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()))
+                .ThrowsAsync(new InvalidOperationException("Cosmos unavailable"));
 
             var body = BuildEventPayload("delivered", TestJobId.ToString(), "user@example.com");
             var controller = CreateController(body);
@@ -384,105 +350,6 @@ namespace Web.UnitTests
             // The controller should catch the exception and return 500 so SendGrid retries
             var statusResult = Assert.IsType<StatusCodeResult>(result);
             Assert.Equal(500, statusResult.StatusCode);
-        }
-
-        // ─── Recipient status fix for Pending/Failed ───
-
-        [Fact]
-        public async Task DeliveryEvent_FixesPendingRecipient_ToSent()
-        {
-            SetupVerifierNotConfigured();
-            var job = new EmailJob
-            {
-                Id = TestJobId,
-                Status = EmailJobStatus.InProgress,
-                Category = "board",
-                Recipients = new List<EmailJobRecipient>
-                {
-                    new()
-                    {
-                        Email = "user@example.com",
-                        HomeId = Guid.NewGuid(),
-                        Status = EmailJobRecipientStatus.Pending, // Stuck as Pending
-                    },
-                },
-            };
-            _jobRepo.Setup(r => r.GetByIdAsync(TestJobId)).ReturnsAsync(job);
-
-            var body = BuildEventPayload("delivered", TestJobId.ToString(), "user@example.com");
-            var controller = CreateController(body);
-
-            await controller.HandleEvents();
-
-            Assert.Equal(EmailJobRecipientStatus.Sent, job.Recipients[0].Status);
-            Assert.NotNull(job.Recipients[0].SentUtc);
-            Assert.Equal(1, job.SentCount);
-            Assert.Equal(0, job.FailedCount);
-        }
-
-        [Fact]
-        public async Task DeliveryEvent_FixesFailedRecipient_ToSent()
-        {
-            SetupVerifierNotConfigured();
-            var job = new EmailJob
-            {
-                Id = TestJobId,
-                Status = EmailJobStatus.InProgress,
-                Category = "board",
-                Recipients = new List<EmailJobRecipient>
-                {
-                    new()
-                    {
-                        Email = "user@example.com",
-                        HomeId = Guid.NewGuid(),
-                        Status = EmailJobRecipientStatus.Failed, // Stuck as Failed
-                    },
-                },
-            };
-            _jobRepo.Setup(r => r.GetByIdAsync(TestJobId)).ReturnsAsync(job);
-
-            var body = BuildEventPayload("delivered", TestJobId.ToString(), "user@example.com");
-            var controller = CreateController(body);
-
-            await controller.HandleEvents();
-
-            Assert.Equal(EmailJobRecipientStatus.Sent, job.Recipients[0].Status);
-            Assert.NotNull(job.Recipients[0].SentUtc);
-        }
-
-        [Fact]
-        public async Task BounceEvent_AlwaysTriggersOptOut_EvenWhenStatusAlreadyBounced()
-        {
-            SetupVerifierNotConfigured();
-            var job = new EmailJob
-            {
-                Id = TestJobId,
-                Status = EmailJobStatus.Completed,
-                Category = "board",
-                Recipients = new List<EmailJobRecipient>
-                {
-                    new()
-                    {
-                        Email = "user@example.com",
-                        HomeId = Guid.NewGuid(),
-                        Status = EmailJobRecipientStatus.Sent,
-                        SentUtc = DateTime.UtcNow,
-                        DeliveryStatus = DeliveryStatus.Bounced, // Already bounced
-                    },
-                },
-            };
-            _jobRepo.Setup(r => r.GetByIdAsync(TestJobId)).ReturnsAsync(job);
-
-            var body = BuildEventPayload("bounce", TestJobId.ToString(), "user@example.com");
-            var controller = CreateController(body);
-
-            await controller.HandleEvents();
-
-            // Opt-out should still fire (idempotent — ensures opt-out isn't permanently missed on retries)
-            _deliveryAction.Verify(
-                s => s.ProcessDeliveryEventAsync("user@example.com", DeliveryStatus.Bounced, "board"),
-                Times.Once
-            );
         }
 
         // ─── Invalid JSON body ───

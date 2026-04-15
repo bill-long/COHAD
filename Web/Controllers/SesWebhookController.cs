@@ -17,7 +17,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Web.Configuration;
 using Web.Models;
-using Web.Services;
 using Web.Services.Repositories;
 
 namespace Web.Controllers
@@ -27,8 +26,7 @@ namespace Web.Controllers
     [AllowAnonymous]
     public class SesWebhookController : ControllerBase
     {
-        private readonly IEmailJobRepository _emailJobRepository;
-        private readonly IEmailDeliveryActionService _deliveryActionService;
+        private readonly IEmailDeliveryEventRepository _deliveryEventRepository;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<SesWebhookController> _logger;
         private readonly bool _isDevelopment;
@@ -85,16 +83,14 @@ namespace Web.Controllers
             new();
 
         public SesWebhookController(
-            IEmailJobRepository emailJobRepository,
-            IEmailDeliveryActionService deliveryActionService,
+            IEmailDeliveryEventRepository deliveryEventRepository,
             IHttpClientFactory httpClientFactory,
             IOptions<SesOptions> sesOptions,
             IWebHostEnvironment env,
             ILogger<SesWebhookController> logger
         )
         {
-            _emailJobRepository = emailJobRepository;
-            _deliveryActionService = deliveryActionService;
+            _deliveryEventRepository = deliveryEventRepository;
             _httpClientFactory = httpClientFactory;
             _logger = logger;
             _isDevelopment = env.IsDevelopment() || env.IsEnvironment("MockData");
@@ -318,95 +314,20 @@ namespace Web.Controllers
                 sesMessageId = msgIdProp.GetString();
             }
 
-            // Update the job recipient with concurrency retry
-            const int maxRetries = 3;
-            for (var attempt = 1; attempt <= maxRetries; attempt++)
+            // Write the delivery event to its own container — no contention possible.
+            var deliveryEvent = new EmailDeliveryEvent
             {
-                var job = await _emailJobRepository.GetByIdAsync(jobId);
-                if (job == null)
-                {
-                    _logger.LogDebug("SES event for unknown job {JobId} — skipping.", jobId);
-                    return Ok();
-                }
+                Id = EmailDeliveryEvent.MakeId(jobId, email, deliveryStatus),
+                JobId = jobId,
+                Email = email,
+                DeliveryStatus = deliveryStatus,
+                ProviderMessageId = sesMessageId,
+                Provider = "Ses",
+                ReceivedUtc = DateTime.UtcNow,
+            };
 
-                var recipient = job.Recipients?.FirstOrDefault(r =>
-                    string.Equals(r.Email, email, StringComparison.OrdinalIgnoreCase)
-                );
-                if (recipient == null)
-                {
-                    _logger.LogDebug("SES event for job {JobId} — recipient {Email} not found.", jobId, email);
-                    return Ok();
-                }
-
-                try
-                {
-                    var shouldUpdateStatus = DeliveryStatusHelper.ShouldUpdate(
-                        recipient.DeliveryStatus,
-                        deliveryStatus
-                    );
-                    var shouldSetProviderMessageId =
-                        !string.IsNullOrEmpty(sesMessageId) && string.IsNullOrEmpty(recipient.ProviderMessageId);
-
-                    if (shouldUpdateStatus)
-                    {
-                        recipient.DeliveryStatus = deliveryStatus;
-                        recipient.DeliveryStatusUpdatedUtc = DateTime.UtcNow;
-                    }
-
-                    if (shouldSetProviderMessageId)
-                    {
-                        recipient.ProviderMessageId = sesMessageId;
-                    }
-
-                    // Any delivery event from the provider proves the email was sent —
-                    // fix Status if the processor's post-send persist was lost to a
-                    // concurrency conflict and left the recipient stuck as Pending
-                    // or Failed.
-                    var shouldFixRecipientStatus =
-                        recipient.Status == EmailJobRecipientStatus.Pending
-                        || recipient.Status == EmailJobRecipientStatus.Failed;
-                    if (shouldFixRecipientStatus)
-                    {
-                        recipient.Status = EmailJobRecipientStatus.Sent;
-                        recipient.SentUtc ??= DateTime.UtcNow;
-                        job.SentCount = (job.Recipients ?? new()).Count(r => r.Status == EmailJobRecipientStatus.Sent);
-                        job.FailedCount = (job.Recipients ?? new()).Count(r =>
-                            r.Status == EmailJobRecipientStatus.Failed
-                        );
-                    }
-
-                    if (shouldUpdateStatus || shouldSetProviderMessageId || shouldFixRecipientStatus)
-                    {
-                        await _emailJobRepository.UpdateAsync(job);
-                    }
-
-                    if (deliveryStatus == DeliveryStatus.Bounced || deliveryStatus == DeliveryStatus.SpamReport)
-                    {
-                        await _deliveryActionService.ProcessDeliveryEventAsync(email, deliveryStatus, job.Category);
-                    }
-
-                    return Ok();
-                }
-                catch (EmailJobConcurrencyException) when (attempt < maxRetries)
-                {
-                    _logger.LogWarning(
-                        "Concurrency conflict updating delivery status for job {JobId}, recipient {Email}. Retry {Attempt}/{MaxRetries}.",
-                        jobId,
-                        email,
-                        attempt,
-                        maxRetries
-                    );
-                }
-            }
-
-            // All retries exhausted — log and return 500 so SNS retries the notification.
-            _logger.LogWarning(
-                "Exhausted concurrency retries updating delivery status for job {JobId}, recipient {Email}, status {DeliveryStatus}.",
-                jobId,
-                email,
-                deliveryStatus
-            );
-            return StatusCode(500);
+            await _deliveryEventRepository.AddAsync(deliveryEvent);
+            return Ok();
         }
 
         private static (string? jobId, string? email) ExtractCorrelationTags(JsonElement sesEvent)

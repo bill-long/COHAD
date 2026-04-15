@@ -9,18 +9,21 @@ namespace Web.Services;
 public sealed class EmailJobCleanupService
 {
     private readonly IEmailJobRepository _repo;
+    private readonly IEmailDeliveryEventRepository _deliveryEventRepo;
     private readonly IDocumentFileStore _fileStore;
     private readonly ILogger<EmailJobCleanupService> _logger;
     private readonly IConfiguration _config;
 
     public EmailJobCleanupService(
         IEmailJobRepository repo,
+        IEmailDeliveryEventRepository deliveryEventRepo,
         IDocumentFileStore fileStore,
         IConfiguration config,
         ILogger<EmailJobCleanupService> logger
     )
     {
         _repo = repo;
+        _deliveryEventRepo = deliveryEventRepo;
         _fileStore = fileStore;
         _config = config;
         _logger = logger;
@@ -73,6 +76,23 @@ public sealed class EmailJobCleanupService
                 {
                     // Do not delete the job row if the blob couldn't be removed; otherwise we'd orphan the blob
                     // and lose the path needed to retry deletion on a later cleanup pass.
+                    continue;
+                }
+
+                try
+                {
+                    // Delete dependent delivery events before removing the job row.
+                    // If this fails, keep the job so a later cleanup pass can retry
+                    // and avoid orphaning events.
+                    await _deliveryEventRepo.DeleteByJobIdAsync(job.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Email job retention: failed to delete delivery events for job {JobId}",
+                        job.Id
+                    );
                     continue;
                 }
 
