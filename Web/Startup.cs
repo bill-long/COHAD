@@ -572,25 +572,7 @@ namespace Web
             app.UseHttpsRedirection();
 
             // 301 redirects for legacy Wix routes that crawlers still index.
-            app.Use(
-                async (context, next) =>
-                {
-                    var path = context.Request.Path.Value;
-                    if (
-                        path != null
-                        && (
-                            path.Equals("/faq", StringComparison.OrdinalIgnoreCase)
-                            || path.Equals("/about-us", StringComparison.OrdinalIgnoreCase)
-                        )
-                    )
-                    {
-                        context.Response.StatusCode = StatusCodes.Status301MovedPermanently;
-                        context.Response.Headers.Location = "/about";
-                        return;
-                    }
-                    await next();
-                }
-            );
+            MapLegacyWixRedirects(app);
 
             app.UseResponseCompression();
             app.UseStaticFiles(
@@ -667,6 +649,29 @@ namespace Web
                     spa.UseProxyToSpaDevelopmentServer("http://127.0.0.1:4200");
                 }
             });
+        }
+
+        internal static void MapLegacyWixRedirects(IApplicationBuilder app)
+        {
+            app.Use(
+                async (context, next) =>
+                {
+                    var path = context.Request.Path.Value;
+                    if (
+                        path != null
+                        && (
+                            path.Equals("/faq", StringComparison.OrdinalIgnoreCase)
+                            || path.Equals("/about-us", StringComparison.OrdinalIgnoreCase)
+                        )
+                    )
+                    {
+                        context.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+                        context.Response.Headers.Location = "/about" + context.Request.QueryString;
+                        return;
+                    }
+                    await next();
+                }
+            );
         }
     }
 }

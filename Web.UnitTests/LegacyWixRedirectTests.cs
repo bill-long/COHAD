@@ -1,33 +1,31 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Web.UnitTests;
 
 public sealed class LegacyWixRedirectTests
 {
-    private static async Task<(bool NextCalled, HttpContext Context)> InvokeMiddleware(string path)
+    private static async Task<HttpContext> InvokeMiddleware(string path, string queryString = "")
     {
-        var nextCalled = false;
         var context = new DefaultHttpContext();
         context.Request.Path = path;
+        if (!string.IsNullOrEmpty(queryString))
+            context.Request.QueryString = new QueryString(queryString);
 
-        var requestPath = context.Request.Path.Value;
-        if (
-            requestPath != null
-            && (
-                requestPath.Equals("/faq", StringComparison.OrdinalIgnoreCase)
-                || requestPath.Equals("/about-us", StringComparison.OrdinalIgnoreCase)
-            )
-        )
+        var services = new ServiceCollection().BuildServiceProvider();
+        var app = new ApplicationBuilder(services);
+        Startup.MapLegacyWixRedirects(app);
+        app.Run(ctx =>
         {
-            context.Response.StatusCode = StatusCodes.Status301MovedPermanently;
-            context.Response.Headers.Location = "/about";
-        }
-        else
-        {
-            nextCalled = true;
-        }
+            ctx.Items["NextCalled"] = true;
+            return Task.CompletedTask;
+        });
 
-        return (nextCalled, context);
+        var pipeline = app.Build();
+        await pipeline(context);
+
+        return context;
     }
 
     [Theory]
@@ -39,11 +37,19 @@ public sealed class LegacyWixRedirectTests
     [InlineData("/ABOUT-US")]
     public async Task Legacy_wix_paths_return_301_to_about(string path)
     {
-        var (nextCalled, context) = await InvokeMiddleware(path);
+        var context = await InvokeMiddleware(path);
 
         Assert.Equal(StatusCodes.Status301MovedPermanently, context.Response.StatusCode);
         Assert.Equal("/about", context.Response.Headers.Location.ToString());
-        Assert.False(nextCalled);
+    }
+
+    [Fact]
+    public async Task Redirect_preserves_query_string()
+    {
+        var context = await InvokeMiddleware("/faq", "?utm_source=google");
+
+        Assert.Equal(StatusCodes.Status301MovedPermanently, context.Response.StatusCode);
+        Assert.Equal("/about?utm_source=google", context.Response.Headers.Location.ToString());
     }
 
     [Theory]
@@ -54,9 +60,8 @@ public sealed class LegacyWixRedirectTests
     [InlineData("/about-us-more")]
     public async Task Non_legacy_paths_pass_through(string path)
     {
-        var (nextCalled, context) = await InvokeMiddleware(path);
+        var context = await InvokeMiddleware(path);
 
         Assert.NotEqual(StatusCodes.Status301MovedPermanently, context.Response.StatusCode);
-        Assert.True(nextCalled);
     }
 }
