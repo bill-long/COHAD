@@ -570,6 +570,28 @@ namespace Web
             );
 
             app.UseHttpsRedirection();
+
+            // 301 redirects for legacy Wix routes that crawlers still index.
+            app.Use(
+                async (context, next) =>
+                {
+                    var path = context.Request.Path.Value;
+                    if (
+                        path != null
+                        && (
+                            path.Equals("/faq", StringComparison.OrdinalIgnoreCase)
+                            || path.Equals("/about-us", StringComparison.OrdinalIgnoreCase)
+                        )
+                    )
+                    {
+                        context.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+                        context.Response.Headers.Location = "/about";
+                        return;
+                    }
+                    await next();
+                }
+            );
+
             app.UseResponseCompression();
             app.UseStaticFiles(
                 new StaticFileOptions
