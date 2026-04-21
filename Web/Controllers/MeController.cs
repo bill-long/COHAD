@@ -279,8 +279,8 @@ namespace Web.Controllers
                     if (resolvedEmail == null)
                     {
                         var nameMatch = homeResidents.FirstOrDefault(r =>
-                            string.Equals(r.GivenName, admin.GivenName, StringComparison.OrdinalIgnoreCase)
-                            && string.Equals(r.Surname, admin.Surname, StringComparison.OrdinalIgnoreCase)
+                            string.Equals(r.GivenName?.Trim(), admin.GivenName?.Trim(), StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(r.Surname?.Trim(), admin.Surname?.Trim(), StringComparison.OrdinalIgnoreCase)
                         );
                         resolvedEmail = nameMatch
                             ?.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Address))
