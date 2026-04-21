@@ -252,6 +252,9 @@ namespace Web.Controllers
                 if (admin.OwnedHomeIds == null || admin.OwnedHomeIds.Count == 0)
                     continue;
 
+                var adminGivenName = admin.GivenName?.Trim();
+                var adminSurname = admin.Surname?.Trim();
+
                 foreach (var homeId in admin.OwnedHomeIds)
                 {
                     if (!residentsByHome.TryGetValue(homeId, out var homeResidents))
@@ -279,8 +282,8 @@ namespace Web.Controllers
                     if (resolvedEmail == null)
                     {
                         var nameMatch = homeResidents.FirstOrDefault(r =>
-                            string.Equals(r.GivenName?.Trim(), admin.GivenName?.Trim(), StringComparison.OrdinalIgnoreCase)
-                            && string.Equals(r.Surname?.Trim(), admin.Surname?.Trim(), StringComparison.OrdinalIgnoreCase)
+                            string.Equals(r.GivenName?.Trim(), adminGivenName, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(r.Surname?.Trim(), adminSurname, StringComparison.OrdinalIgnoreCase)
                         );
                         resolvedEmail = nameMatch
                             ?.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Address))
