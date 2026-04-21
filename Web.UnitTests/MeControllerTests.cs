@@ -430,6 +430,61 @@ public sealed class MeControllerTests
     }
 
     [Fact]
+    public async Task ResolveAdminRecipients_name_match_trims_whitespace()
+    {
+        var homeId = Guid.NewGuid();
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = "admin1",
+                        GivenName = "Karen",
+                        Surname = "Osborn",
+                        Emails = "karen@signin.example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid> { homeId },
+                    },
+                }
+            );
+
+        var homes = new Mock<IHomeRepository>();
+        homes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(new List<Home> { new Home { Id = homeId } });
+
+        var residents = new Mock<IResidentRepository>();
+        residents
+            .Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(
+                new List<Resident>
+                {
+                    new Resident
+                    {
+                        Id = Guid.NewGuid(),
+                        HomeId = homeId,
+                        GivenName = "Karen ",
+                        Surname = "Osborn ",
+                        EmailAddresses = new List<EmailAddress>
+                        {
+                            new EmailAddress { Address = "karen@home.example.com" },
+                        },
+                    },
+                }
+            );
+
+        var controller = CreateController(users.Object, homes.Object, residentRepository: residents.Object);
+
+        var result = await controller.ResolveAdminRecipients();
+
+        Assert.Single(result);
+        Assert.Equal("karen@home.example.com", result[0].Email);
+    }
+
+    [Fact]
     public async Task ResolveAdminRecipients_skips_admin_with_no_matching_resident()
     {
         var homeId = Guid.NewGuid();
