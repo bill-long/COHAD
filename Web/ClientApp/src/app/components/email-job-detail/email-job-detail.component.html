@@ -117,9 +117,18 @@
             </thead>
             <tbody>
               <ng-container *ngFor="let r of job.recipients">
-                <tr [class.expandable-row]="isAdmin" (click)="isAdmin && toggleRecipientEvents(r.email)">
+                <tr>
                   <td *ngIf="isAdmin" class="cell-expand">
-                    <span class="toggle-arrow" [class.expanded]="expandedRecipients.has(r.email.toLowerCase())">▶</span>
+                    <button
+                      type="button"
+                      class="toggle-arrow"
+                      [class.expanded]="expandedRecipients.has(r.email.toLowerCase())"
+                      (click)="toggleRecipientEvents(r.email)"
+                      [attr.aria-expanded]="expandedRecipients.has(r.email.toLowerCase())"
+                      [attr.aria-label]="(expandedRecipients.has(r.email.toLowerCase()) ? 'Collapse' : 'Expand') + ' delivery events for ' + r.email"
+                    >
+                      ▶
+                    </button>
                   </td>
                   <td class="cell-truncate">{{ r.email }}</td>
                   <td>
@@ -196,6 +205,32 @@
               </ng-container>
             </tbody>
           </table>
+          <!-- Job-scoped payload action — placed once outside the recipient loop because
+               loadDeliveryEvents(true) fetches payloads for every event on the job, not
+               just the currently expanded recipient. -->
+          <div
+            *ngIf="isAdmin && deliveryEvents !== null && expandedRecipients.size > 0 && !payloadsLoaded && !payloadsLoading && !payloadsError"
+            class="payload-action"
+          >
+            <button type="button" class="payload-load-button" (click)="loadDeliveryEvents(true)">
+              Load raw payloads
+            </button>
+            <span>Fetches the full webhook JSON for every event on this job.</span>
+          </div>
+          <div
+            *ngIf="payloadsError"
+            class="payload-action payload-action--error"
+            role="alert"
+          >
+            <button type="button" class="payload-load-button" (click)="loadDeliveryEvents(true)">
+              Retry loading payloads
+            </button>
+            <span>{{ payloadsError }}</span>
+          </div>
+          <div *ngIf="payloadsLoading" class="payload-action">
+            <mat-spinner diameter="14"></mat-spinner>
+            <span>Loading payloads…</span>
+          </div>
         </div>
       </ng-container>
     </mat-card-content>

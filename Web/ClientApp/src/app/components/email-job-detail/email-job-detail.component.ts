@@ -26,7 +26,15 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
   deliveryEvents: EmailDeliveryEventDetail[] | null = null;
   deliveryEventsLoading = false;
   deliveryEventsError: string | null = null;
+  payloadsLoaded = false;
+  payloadsLoading = false;
+  payloadsError: string | null = null;
   private deliveryEventsByEmail = new Map<string, EmailDeliveryEventDetail[]>();
+  // Monotonically increasing request id for delivery-event fetches. Concurrent
+  // calls (e.g., user-initiated payload load racing with a SignalR completion
+  // refresh) can complete out of order; we only apply the response from the
+  // most recently issued request so an older fetch can't overwrite newer state.
+  private deliveryEventsRequestSeq = 0;
 
   /** Queued for this long without starting counts as stale (client-side nudge only). */
   private readonly staleQueuedThresholdMs = 12 * 60 * 1000;
@@ -78,9 +86,13 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
           this.emailJobService.getJob(this.jobId).subscribe({
             next: detail => {
               this.job = detail;
-              // Refresh delivery events if any recipients are expanded
+              // Refresh delivery events if any recipients are expanded.
+              // Preserve the user's payload-loaded preference across the refresh,
+              // and treat an in-flight payload load as "preserve payloads" too —
+              // otherwise this refresh could finish after the payload load and
+              // overwrite payload data with payload-less data.
               if (this.expandedRecipients.size > 0) {
-                this.loadDeliveryEvents();
+                this.loadDeliveryEvents(this.payloadsLoaded || this.payloadsLoading);
               }
             },
             error: err => {
@@ -263,6 +275,10 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
   }
 
   toggleRecipientEvents(email: string): void {
+    // Defense-in-depth: button is only rendered for admins, but the method is
+    // public and could be invoked programmatically. Avoid issuing fetches that
+    // the backend would reject anyway.
+    if (!this.isAdmin) return;
     const key = email.toLowerCase();
     if (this.expandedRecipients.has(key)) {
       this.expandedRecipients.delete(key);
@@ -274,18 +290,58 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
     }
   }
 
-  loadDeliveryEvents(): void {
-    this.deliveryEventsLoading = true;
-    this.deliveryEventsError = null;
-    this.emailJobService.getDeliveryEvents(this.jobId, true).subscribe({
+  /**
+   * Loads delivery events for the current job. Defaults to events-only (no raw
+   * provider payloads) to keep the response small. Pass `includePayload=true`
+   * to also fetch the full webhook JSON for each event (used by the explicit
+   * "Load raw payloads" action and to preserve payload mode across refreshes).
+   *
+   * Concurrent calls are allowed (e.g., a user-initiated payload load can race
+   * with a SignalR completion-event refresh). Each call captures a monotonic
+   * request id and only the response from the most recently issued request is
+   * applied to component state, so an older fetch can never overwrite the
+   * data, error, or payload-mode flags from a newer one.
+   */
+  loadDeliveryEvents(includePayload = false): void {
+    // When fetching payloads after events have already loaded, keep the events
+    // table visible and use a separate spinner so the UI doesn't flash empty.
+    if (includePayload && this.deliveryEvents !== null) {
+      this.payloadsLoading = true;
+      this.payloadsError = null;
+    } else {
+      this.deliveryEventsLoading = true;
+      this.deliveryEventsError = null;
+    }
+    const requestId = ++this.deliveryEventsRequestSeq;
+    this.emailJobService.getDeliveryEvents(this.jobId, includePayload).subscribe({
       next: events => {
+        // Discard stale responses so an older request can't overwrite newer state.
+        if (requestId !== this.deliveryEventsRequestSeq) {
+          return;
+        }
         this.deliveryEvents = events;
         this.buildEventsByEmailMap(events);
         this.deliveryEventsLoading = false;
+        this.payloadsLoading = false;
+        this.payloadsLoaded = includePayload;
+        // Defensive: success unambiguously clears any prior error state.
+        this.deliveryEventsError = null;
+        this.payloadsError = null;
       },
       error: err => {
-        this.deliveryEventsError = httpErrorMessage(err, 'Failed to load delivery events.');
+        if (requestId !== this.deliveryEventsRequestSeq) {
+          return;
+        }
+        // Failed payload re-fetches must not blank the events table that's
+        // already on screen. Surface the error in a payload-scoped slot
+        // instead of the main events-load error slot.
+        if (includePayload && this.deliveryEvents !== null) {
+          this.payloadsError = httpErrorMessage(err, 'Failed to load delivery payloads.');
+        } else {
+          this.deliveryEventsError = httpErrorMessage(err, 'Failed to load delivery events.');
+        }
         this.deliveryEventsLoading = false;
+        this.payloadsLoading = false;
       },
     });
   }
