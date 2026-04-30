@@ -464,26 +464,39 @@ namespace Web
                     );
                 }
 
-                services.AddSingleton<PostmarkEmailTransport>(sp =>
-                {
-                    var opts = sp.GetRequiredService<IOptions<PostmarkOptions>>().Value;
-                    var logProtocol = Configuration.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
-                    return new PostmarkEmailTransport(
-                        opts,
-                        logProtocol,
-                        sp.GetRequiredService<ILogger<PostmarkEmailTransport>>()
-                    );
-                });
+                var logProtocol = Configuration.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
             }
 
             services.AddSingleton<EmailTransportRouter>(sp =>
             {
                 var defaultTransport = sp.GetRequiredService<IEmailTransport>();
                 var opts = sp.GetRequiredService<IOptions<PostmarkOptions>>();
-                var postmark = opts.Value.Enabled
-                    ? (IEmailTransport)sp.GetRequiredService<PostmarkEmailTransport>()
-                    : defaultTransport;
-                return new EmailTransportRouter(defaultTransport, postmark, opts);
+                if (opts.Value.Enabled)
+                {
+                    var pmOpts = opts.Value;
+                    var logProt = Configuration.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
+                    var pmLogger = sp.GetRequiredService<ILogger<PostmarkEmailTransport>>();
+                    var broadcast = new PostmarkEmailTransport(
+                        pmOpts.BroadcastSmtpHost,
+                        pmOpts.ServerToken,
+                        pmOpts.BroadcastStream,
+                        pmOpts.TimeoutSeconds,
+                        pmOpts.MaxIdleSeconds,
+                        logProt,
+                        pmLogger
+                    );
+                    var transactional = new PostmarkEmailTransport(
+                        pmOpts.TransactionalSmtpHost,
+                        pmOpts.ServerToken,
+                        pmOpts.TransactionalStream,
+                        pmOpts.TimeoutSeconds,
+                        pmOpts.MaxIdleSeconds,
+                        logProt,
+                        pmLogger
+                    );
+                    return new EmailTransportRouter(defaultTransport, broadcast, transactional, opts);
+                }
+                return new EmailTransportRouter(defaultTransport, defaultTransport, defaultTransport, opts);
             });
 
             // Retention cleanup (invoked on submission; best-effort)

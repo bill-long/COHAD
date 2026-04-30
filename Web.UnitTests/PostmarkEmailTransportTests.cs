@@ -1,4 +1,4 @@
-using Web.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Web.Services;
 using Xunit;
 
@@ -9,11 +9,14 @@ public sealed class PostmarkEmailTransportTests
     [Fact]
     public void ProviderName_Is_Postmark()
     {
-        var opts = new PostmarkOptions { ServerToken = "test-token" };
         using var transport = new PostmarkEmailTransport(
-            opts,
+            "smtp.postmarkapp.com",
+            "test-token",
+            "outbound",
+            30,
+            60,
             logSmtpProtocolOnFailure: false,
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<PostmarkEmailTransport>.Instance
+            NullLogger<PostmarkEmailTransport>.Instance
         );
         Assert.Equal("Postmark", transport.ProviderName);
     }
@@ -21,13 +24,31 @@ public sealed class PostmarkEmailTransportTests
     [Fact]
     public void Dispose_Is_Safe_When_Never_Connected()
     {
-        var opts = new PostmarkOptions { ServerToken = "test-token" };
         var transport = new PostmarkEmailTransport(
-            opts,
+            "smtp.postmarkapp.com",
+            "test-token",
+            "outbound",
+            30,
+            60,
             logSmtpProtocolOnFailure: false,
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<PostmarkEmailTransport>.Instance
+            NullLogger<PostmarkEmailTransport>.Instance
         );
         transport.Dispose();
         transport.Dispose(); // double-dispose safety
+    }
+
+    [Fact]
+    public void BroadcastInstance_UsesCorrectHost()
+    {
+        using var transport = new PostmarkEmailTransport(
+            "smtp-broadcasts.postmarkapp.com",
+            "test-token",
+            "broadcast",
+            30,
+            60,
+            logSmtpProtocolOnFailure: false,
+            NullLogger<PostmarkEmailTransport>.Instance
+        );
+        Assert.Equal("Postmark", transport.ProviderName);
     }
 }

@@ -44,7 +44,7 @@ public sealed class EmailJobProcessorTests
     private static EmailTransportRouter CreateRouterFromTransport(IEmailTransport transport)
     {
         var postmarkOptions = Options.Create(new PostmarkOptions { Enabled = false });
-        return new EmailTransportRouter(transport, transport, postmarkOptions);
+        return new EmailTransportRouter(transport, transport, transport, postmarkOptions);
     }
 
     private EmailJobProcessor CreateProcessor(

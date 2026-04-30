@@ -45,5 +45,25 @@ namespace Web.Configuration
         /// are routed to Postmark (opt-in per recipient).
         /// </summary>
         public List<string> RoutedRecipients { get; set; } = new();
+
+        /// <summary>
+        /// Per-operation timeout in seconds for SMTP connect, authenticate, and send.
+        /// </summary>
+        public int TimeoutSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// Maximum idle time in seconds before forcing an SMTP reconnect.
+        /// </summary>
+        public int MaxIdleSeconds { get; set; } = 60;
+
+        /// <summary>
+        /// SMTP host for transactional emails.
+        /// </summary>
+        public string TransactionalSmtpHost { get; set; } = "smtp.postmarkapp.com";
+
+        /// <summary>
+        /// SMTP host for broadcast emails.
+        /// </summary>
+        public string BroadcastSmtpHost { get; set; } = "smtp-broadcasts.postmarkapp.com";
     }
 }

@@ -127,7 +127,7 @@ public sealed class EmailControllerJobTests
             .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
 
         var postmarkOptions = Options.Create(new PostmarkOptions { Enabled = false });
-        var router = new EmailTransportRouter(mockSmtp.Object, mockSmtp.Object, postmarkOptions);
+        var router = new EmailTransportRouter(mockSmtp.Object, mockSmtp.Object, mockSmtp.Object, postmarkOptions);
 
         return new EmailJobProcessor(
             _queue,

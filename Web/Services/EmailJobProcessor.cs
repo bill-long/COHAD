@@ -1014,7 +1014,7 @@ namespace Web.Services
                                 message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                             }
 
-                            var transport = _transportRouter.GetTransportForRecipient(recipient.Email);
+                            var transport = _transportRouter.GetTransportForRecipient(recipient.Email, job.Category);
                             var result = await transport.SendAsync(message, job.Id.ToString(), recipient.Email, job.Category, ct);
 
                             recipient.Provider = result.ProviderName;
