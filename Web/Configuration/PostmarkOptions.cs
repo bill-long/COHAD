@@ -5,8 +5,8 @@ namespace Web.Configuration
     public class PostmarkOptions
     {
         /// <summary>
-        /// Master switch for Postmark integration. When false, all emails go through
-        /// SendGrid regardless of <see cref="UsePostmarkAsDefault"/>.
+        /// Master switch for Postmark integration. When false, all emails go through the
+        /// fallback transport regardless of <see cref="UsePostmarkAsDefault"/>.
         /// </summary>
         public bool Enabled { get; set; }
 
@@ -41,9 +41,9 @@ namespace Web.Configuration
 
         /// <summary>
         /// When true (default) and Postmark is <see cref="Enabled"/>, all emails are sent
-        /// through Postmark. Set to false to fall back to SendGrid for sending while keeping
-        /// the Postmark webhook receiver active (requires <see cref="WebhookToken"/> but not
-        /// <see cref="ServerToken"/>).
+        /// through Postmark. Set to false to use the fallback transport for sending
+        /// while keeping the Postmark webhook receiver active (requires <see cref="WebhookToken"/>
+        /// but not <see cref="ServerToken"/>).
         /// Controlled via environment variable: Postmark__UsePostmarkAsDefault.
         /// </summary>
         public bool UsePostmarkAsDefault { get; set; } = true;

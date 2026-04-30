@@ -920,8 +920,9 @@ namespace Web.Services
                         // emit a cohad_email tag distinct from a missing/empty value) so webhook handlers
                         // can recognize that per-recipient correlation isn't available.
                         const string groupedSendCorrelation = "__grouped_send__";
-                        // Group sends always use the default transport — per-recipient
-                        // routing is not applicable when multiple recipients share a message.
+                        // Grouped sends use the router's category-aware default transport
+                        // since per-recipient routing is not applicable when multiple
+                        // recipients share a single message.
                         var result = await _transportRouter.GetDefaultTransport(job.Category).SendAsync(message, job.Id.ToString(), groupedSendCorrelation, job.Category, ct);
 
                         var now = DateTime.UtcNow;

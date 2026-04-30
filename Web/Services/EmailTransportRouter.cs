@@ -14,20 +14,20 @@ namespace Web.Services
     /// </summary>
     public class EmailTransportRouter : IDisposable
     {
-        private readonly IEmailTransport _sendGridTransport;
+        private readonly IEmailTransport _fallbackTransport;
         private readonly IEmailTransport _postmarkBroadcast;
         private readonly IEmailTransport _postmarkTransactional;
         private readonly HashSet<string> _transactionalCategories;
         private readonly bool _usePostmark;
 
         public EmailTransportRouter(
-            IEmailTransport sendGridTransport,
+            IEmailTransport fallbackTransport,
             IEmailTransport postmarkBroadcast,
             IEmailTransport postmarkTransactional,
             IOptions<PostmarkOptions> postmarkOptions
         )
         {
-            _sendGridTransport = sendGridTransport;
+            _fallbackTransport = fallbackTransport;
             _postmarkBroadcast = postmarkBroadcast;
             _postmarkTransactional = postmarkTransactional;
             var opts = postmarkOptions.Value;
@@ -39,14 +39,16 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// Returns the appropriate transport for a given recipient and email job category.
+        /// Returns the appropriate transport for a given email job category.
+        /// The recipientEmail parameter is unused under the current global routing model
+        /// but retained for API stability in case per-recipient routing is reintroduced.
         /// </summary>
         public IEmailTransport GetTransportForRecipient(string recipientEmail, string category)
         {
             if (_usePostmark)
                 return _transactionalCategories.Contains(category ?? "") ? _postmarkTransactional : _postmarkBroadcast;
 
-            return _sendGridTransport;
+            return _fallbackTransport;
         }
 
         /// <summary>
@@ -59,14 +61,14 @@ namespace Web.Services
             if (_usePostmark)
                 return _transactionalCategories.Contains(category ?? "") ? _postmarkTransactional : _postmarkBroadcast;
 
-            return _sendGridTransport;
+            return _fallbackTransport;
         }
 
         public void Dispose()
         {
-            if (_postmarkBroadcast is IDisposable broadcast && !ReferenceEquals(_postmarkBroadcast, _sendGridTransport))
+            if (_postmarkBroadcast is IDisposable broadcast && !ReferenceEquals(_postmarkBroadcast, _fallbackTransport))
                 broadcast.Dispose();
-            if (_postmarkTransactional is IDisposable transactional && !ReferenceEquals(_postmarkTransactional, _sendGridTransport))
+            if (_postmarkTransactional is IDisposable transactional && !ReferenceEquals(_postmarkTransactional, _fallbackTransport))
                 transactional.Dispose();
         }
     }
