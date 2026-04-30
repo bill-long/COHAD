@@ -159,46 +159,48 @@
                       {{ deliveryEventsError }}
                     </div>
                     <ng-container *ngIf="!deliveryEventsLoading && !deliveryEventsError && deliveryEvents !== null">
-                      <div *ngIf="getEventsForRecipient(r.email).length === 0" class="empty-state-text">
-                        No delivery events recorded.
-                      </div>
-                      <table *ngIf="getEventsForRecipient(r.email).length > 0" class="events-table">
-                        <thead>
-                          <tr>
-                            <th class="col-evt-time">Time</th>
-                            <th class="col-evt-type">Event</th>
-                            <th class="col-evt-status">Status</th>
-                            <th class="col-evt-provider">Provider</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <ng-container *ngFor="let evt of getEventsForRecipient(r.email)">
+                      <ng-container *ngIf="getEventsForRecipient(r.email) as events">
+                        <div *ngIf="events.length === 0" class="empty-state-text">
+                          No delivery events recorded.
+                        </div>
+                        <table *ngIf="events.length > 0" class="events-table">
+                          <thead>
                             <tr>
-                              <td class="cell-date">{{ evt.receivedUtc | date: 'medium' }}</td>
-                              <td>{{ evt.providerEventType || '—' }}</td>
-                              <td>
-                                <span
-                                  *ngIf="evt.deliveryStatus && evt.deliveryStatus !== 'Unknown'"
-                                  class="status-badge"
-                                  [ngClass]="deliveryStatusClass(evt.deliveryStatus)"
-                                >
-                                  {{ deliveryStatusLabel(evt.deliveryStatus) }}
-                                </span>
-                                <span *ngIf="!evt.deliveryStatus || evt.deliveryStatus === 'Unknown'" class="delivery-unknown">—</span>
-                              </td>
-                              <td>{{ evt.provider || '—' }}</td>
+                              <th class="col-evt-time">Time</th>
+                              <th class="col-evt-type">Event</th>
+                              <th class="col-evt-status">Status</th>
+                              <th class="col-evt-provider">Provider</th>
                             </tr>
-                            <tr *ngIf="evt.providerPayloadJson" class="payload-row">
-                              <td colspan="4">
-                                <details class="payload-details">
-                                  <summary>{{ evt.providerEventType || 'Event' }} payload</summary>
-                                  <pre class="payload-json">{{ evt.providerPayloadJson }}</pre>
-                                </details>
-                              </td>
-                            </tr>
-                          </ng-container>
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            <ng-container *ngFor="let evt of events">
+                              <tr>
+                                <td class="cell-date">{{ evt.receivedUtc | date: 'medium' }}</td>
+                                <td>{{ evt.providerEventType || '—' }}</td>
+                                <td>
+                                  <span
+                                    *ngIf="evt.deliveryStatus && evt.deliveryStatus !== 'Unknown'"
+                                    class="status-badge"
+                                    [ngClass]="deliveryStatusClass(evt.deliveryStatus)"
+                                  >
+                                    {{ deliveryStatusLabel(evt.deliveryStatus) }}
+                                  </span>
+                                  <span *ngIf="!evt.deliveryStatus || evt.deliveryStatus === 'Unknown'" class="delivery-unknown">—</span>
+                                </td>
+                                <td>{{ evt.provider || '—' }}</td>
+                              </tr>
+                              <tr *ngIf="evt.providerPayloadJson" class="payload-row">
+                                <td colspan="4">
+                                  <details class="payload-details">
+                                    <summary>{{ evt.providerEventType || 'Event' }} payload</summary>
+                                    <pre class="payload-json">{{ evt.providerPayloadJson }}</pre>
+                                  </details>
+                                </td>
+                              </tr>
+                            </ng-container>
+                          </tbody>
+                        </table>
+                      </ng-container>
                     </ng-container>
                   </td>
                 </tr>
@@ -218,7 +220,7 @@
             <span>Fetches the full webhook JSON for every event on this job.</span>
           </div>
           <div
-            *ngIf="payloadsError"
+            *ngIf="payloadsError && expandedRecipients.size > 0"
             class="payload-action payload-action--error"
             role="alert"
           >
@@ -227,7 +229,7 @@
             </button>
             <span>{{ payloadsError }}</span>
           </div>
-          <div *ngIf="payloadsLoading" class="payload-action">
+          <div *ngIf="payloadsLoading && expandedRecipients.size > 0" class="payload-action">
             <mat-spinner diameter="14"></mat-spinner>
             <span>Loading payloads…</span>
           </div>

@@ -486,6 +486,17 @@
   .events-table td {
     padding: 3px 5px;
   }
+
+  /* Ensure toggle arrow and payload action button meet 44x44 touch target on mobile. */
+  .toggle-arrow {
+    width: 44px;
+    height: 44px;
+  }
+
+  .payload-load-button {
+    min-height: 44px;
+    padding: 6px 14px;
+  }
 }
 
 @media (max-width: 480px) {
