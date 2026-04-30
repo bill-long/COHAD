@@ -10,7 +10,7 @@ namespace Web.Services
     /// Routes emails to the appropriate transport. When Postmark is enabled and
     /// <see cref="PostmarkOptions.UsePostmarkAsDefault"/> is true, all emails go through
     /// Postmark (broadcast or transactional based on category). Otherwise, emails go
-    /// through the fallback transport (SendGrid).
+    /// through the fallback transport (e.g. SendGrid).
     /// </summary>
     public class EmailTransportRouter : IDisposable
     {
