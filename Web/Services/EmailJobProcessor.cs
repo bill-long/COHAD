@@ -28,7 +28,7 @@ namespace Web.Services
         private readonly EmailJobQueue _queue;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IUnsubscribeTokenService _tokenService;
-        private readonly IEmailTransport _transport;
+        private readonly EmailTransportRouter _transportRouter;
         private readonly IHubContext<EmailJobHub> _hubContext;
         private readonly ILogger<EmailJobProcessor> _logger;
         private readonly string _appBaseUrl;
@@ -312,7 +312,7 @@ namespace Web.Services
             EmailJobQueue queue,
             IServiceScopeFactory scopeFactory,
             IUnsubscribeTokenService tokenService,
-            IEmailTransport transport,
+            EmailTransportRouter transportRouter,
             IHubContext<EmailJobHub> hubContext,
             IConfiguration config,
             IWebHostEnvironment env,
@@ -322,7 +322,7 @@ namespace Web.Services
             _queue = queue;
             _scopeFactory = scopeFactory;
             _tokenService = tokenService;
-            _transport = transport;
+            _transportRouter = transportRouter;
             _hubContext = hubContext;
             _logger = logger;
             _appBaseUrl = (config["AppBaseUrl"] ?? "").TrimEnd('/');
@@ -920,7 +920,9 @@ namespace Web.Services
                         // emit a cohad_email tag distinct from a missing/empty value) so webhook handlers
                         // can recognize that per-recipient correlation isn't available.
                         const string groupedSendCorrelation = "__grouped_send__";
-                        var result = await _transport.SendAsync(message, job.Id.ToString(), groupedSendCorrelation, ct);
+                        // Group sends always use the default transport — per-recipient
+                        // routing is not applicable when multiple recipients share a message.
+                        var result = await _transportRouter.DefaultTransport.SendAsync(message, job.Id.ToString(), groupedSendCorrelation, job.Category, ct);
 
                         var now = DateTime.UtcNow;
                         foreach (var r in pendingRecipients)
@@ -1012,7 +1014,8 @@ namespace Web.Services
                                 message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                             }
 
-                            var result = await _transport.SendAsync(message, job.Id.ToString(), recipient.Email, ct);
+                            var transport = _transportRouter.GetTransportForRecipient(recipient.Email, job.Category);
+                            var result = await transport.SendAsync(message, job.Id.ToString(), recipient.Email, job.Category, ct);
 
                             recipient.Provider = result.ProviderName;
                             if (!string.IsNullOrEmpty(result.ProviderMessageId))
