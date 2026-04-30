@@ -421,9 +421,13 @@ namespace Web
                 services.AddHostedService(sp => sp.GetRequiredService<CommitteeMailPoller>());
             }
 
-            // Email transport
+            // Email transport abstraction (SMTP / Postmark per-recipient routing)
+            services.Configure<PostmarkOptions>(Configuration.GetSection("Postmark"));
             if (useMockData)
             {
+                // MockData environment uses MockEmailTransport for everything — force Postmark disabled
+                // via PostConfigure so IOptions<PostmarkOptions> consumers see a single source of truth.
+                services.PostConfigure<PostmarkOptions>(opts => opts.Enabled = false);
                 services.AddSingleton<IEmailTransport>(new MockData.MockEmailTransport());
             }
             else
@@ -447,15 +451,43 @@ namespace Web
                 });
             }
 
+            var postmarkOptions = Configuration.GetSection("Postmark").Get<PostmarkOptions>() ?? new PostmarkOptions();
+            if (useMockData)
+                postmarkOptions.Enabled = false;
+            if (postmarkOptions.Enabled)
+            {
+                services.AddSingleton<PostmarkEmailTransport>(sp =>
+                {
+                    var opts = sp.GetRequiredService<IOptions<PostmarkOptions>>().Value;
+                    var logProtocol = Configuration.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
+                    return new PostmarkEmailTransport(
+                        opts,
+                        logProtocol,
+                        sp.GetRequiredService<ILogger<PostmarkEmailTransport>>()
+                    );
+                });
+            }
+
+            services.AddSingleton<EmailTransportRouter>(sp =>
+            {
+                var defaultTransport = sp.GetRequiredService<IEmailTransport>();
+                var opts = sp.GetRequiredService<IOptions<PostmarkOptions>>();
+                var postmark = opts.Value.Enabled
+                    ? (IEmailTransport)sp.GetRequiredService<PostmarkEmailTransport>()
+                    : defaultTransport;
+                return new EmailTransportRouter(defaultTransport, postmark, opts);
+            });
+
             // Retention cleanup (invoked on submission; best-effort)
             services.AddScoped<EmailJobCleanupService>();
 
             // Webhook verification and delivery tracking
             services.Configure<SendGridOptions>(Configuration.GetSection("SendGrid"));
             services.AddSingleton<ISendGridWebhookVerifier, SendGridWebhookVerifier>();
+            services.AddSingleton<IPostmarkWebhookVerifier, PostmarkWebhookVerifier>();
             services.AddScoped<IEmailDeliveryActionService, EmailDeliveryActionService>();
 
-            // HttpClientFactory for SNS signature certificate download
+            // HttpClientFactory
             services.AddHttpClient();
         }
 

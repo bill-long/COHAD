@@ -19,6 +19,7 @@ namespace Web.MockData
             MimeMessage message,
             string jobId,
             string recipientEmail,
+            string category,
             CancellationToken ct
         )
         {

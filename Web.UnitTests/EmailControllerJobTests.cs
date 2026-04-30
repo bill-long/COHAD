@@ -13,7 +13,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
+using Web.Configuration;
 using Web.Controllers;
 using Web.Hubs;
 using Web.Models;
@@ -118,16 +120,20 @@ public sealed class EmailControllerJobTests
                     It.IsAny<MimeKit.MimeMessage>(),
                     It.IsAny<string>(),
                     It.IsAny<string>(),
+                    It.IsAny<string>(),
                     It.IsAny<System.Threading.CancellationToken>()
                 )
             )
             .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
 
+        var postmarkOptions = Options.Create(new PostmarkOptions { Enabled = false });
+        var router = new EmailTransportRouter(mockSmtp.Object, mockSmtp.Object, postmarkOptions);
+
         return new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
             tokenService.Object,
-            mockSmtp.Object,
+            router,
             hubContext.Object,
             config,
             env.Object,

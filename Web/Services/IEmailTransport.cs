@@ -29,9 +29,10 @@ namespace Web.Services
     {
         /// <summary>
         /// Sends a fully-constructed MimeMessage through the provider.
-        /// The transport may add provider-specific headers (e.g. X-SMTPAPI for SendGrid correlation).
+        /// The transport may add provider-specific headers (e.g. X-SMTPAPI for SendGrid correlation)
+        /// and may use <paramref name="category"/> to select a provider-specific stream or configuration.
         /// </summary>
-        Task<EmailSendResult> SendAsync(MimeMessage message, string jobId, string recipientEmail, CancellationToken ct);
+        Task<EmailSendResult> SendAsync(MimeMessage message, string jobId, string recipientEmail, string category, CancellationToken ct);
 
         /// <summary>
         /// Provider name for logging and the recipient's Provider field.

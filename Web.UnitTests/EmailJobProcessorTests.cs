@@ -41,6 +41,12 @@ public sealed class EmailJobProcessorTests
             .ReturnsAsync(new List<EmailDeliveryEvent>());
     }
 
+    private static EmailTransportRouter CreateRouterFromTransport(IEmailTransport transport)
+    {
+        var postmarkOptions = Options.Create(new PostmarkOptions { Enabled = false });
+        return new EmailTransportRouter(transport, transport, postmarkOptions);
+    }
+
     private EmailJobProcessor CreateProcessor(
         string environment = "MockData",
         Dictionary<string, string?>? configOverrides = null
@@ -95,6 +101,7 @@ public sealed class EmailJobProcessorTests
                     It.IsAny<MimeKit.MimeMessage>(),
                     It.IsAny<string>(),
                     It.IsAny<string>(),
+                    It.IsAny<string>(),
                     It.IsAny<CancellationToken>()
                 )
             )
@@ -104,7 +111,7 @@ public sealed class EmailJobProcessorTests
             _queue,
             scopeFactory.Object,
             _tokenService.Object,
-            mockSmtp.Object,
+            CreateRouterFromTransport(mockSmtp.Object),
             hubContext.Object,
             config,
             env.Object,
@@ -379,11 +386,12 @@ public sealed class EmailJobProcessorTests
                     It.IsAny<MimeKit.MimeMessage>(),
                     It.IsAny<string>(),
                     It.IsAny<string>(),
+                    It.IsAny<string>(),
                     It.IsAny<CancellationToken>()
                 )
             )
-            .Callback<MimeKit.MimeMessage, string, string, CancellationToken>(
-                (msg, _, rcpt, _) =>
+            .Callback<MimeKit.MimeMessage, string, string, string, CancellationToken>(
+                (msg, _, rcpt, _, _) =>
                 {
                     capturedMessage = msg;
                     capturedRecipientArg = rcpt;
@@ -454,7 +462,7 @@ public sealed class EmailJobProcessorTests
             _queue,
             scopeFactory.Object,
             _tokenService.Object,
-            mockSmtp.Object,
+            CreateRouterFromTransport(mockSmtp.Object),
             hubContext.Object,
             config,
             env.Object,
@@ -468,6 +476,7 @@ public sealed class EmailJobProcessorTests
             t =>
                 t.SendAsync(
                     It.IsAny<MimeKit.MimeMessage>(),
+                    It.IsAny<string>(),
                     It.IsAny<string>(),
                     It.IsAny<string>(),
                     It.IsAny<CancellationToken>()
@@ -768,6 +777,7 @@ public sealed class EmailJobProcessorTests
                         It.IsAny<MimeKit.MimeMessage>(),
                         It.IsAny<string>(),
                         It.IsAny<string>(),
+                        It.IsAny<string>(),
                         It.IsAny<CancellationToken>()
                     )
                 )
@@ -776,7 +786,7 @@ public sealed class EmailJobProcessorTests
                 queue,
                 scopeFactory.Object,
                 _tokenService.Object,
-                mockSmtp2.Object,
+                CreateRouterFromTransport(mockSmtp2.Object),
                 hubContext.Object,
                 config,
                 env.Object,

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -13,33 +14,36 @@ using Web.Configuration;
 namespace Web.Services
 {
     /// <summary>
-    /// Sends emails through SMTP (currently SendGrid relay).
-    /// Manages MailKit SmtpClient lifecycle and adds SendGrid-specific correlation headers.
+    /// Sends emails through Postmark's SMTP relay.
+    /// Manages MailKit SmtpClient lifecycle and adds Postmark-specific metadata and stream headers.
     /// </summary>
-    public sealed class SmtpEmailTransport : IEmailTransport, IDisposable
+    public sealed class PostmarkEmailTransport : IEmailTransport, IDisposable
     {
-        private readonly SmtpOptions _smtpOptions;
+        private readonly PostmarkOptions _options;
         private readonly bool _logSmtpProtocolOnFailure;
-        private readonly ILogger<SmtpEmailTransport> _logger;
+        private readonly ILogger<PostmarkEmailTransport> _logger;
 
         private SmtpClient _smtpClient;
         private MemoryStream _protocolLog;
         private DateTime _lastActivityUtc;
 
-        /// <summary>Maximum bytes the protocol log stream will buffer before silently discarding writes.</summary>
         private const int MaxProtocolLogBytes = 64 * 1024;
         private const int MaxSmtpTranscriptCharsToLog = 32 * 1024;
+        private const int SmtpPort = 587;
+        private const string SmtpHost = "smtp.postmarkapp.com";
+        private const int TimeoutSeconds = 30;
+        private const int MaxIdleSeconds = 60;
         private static readonly Regex Base64LikeRedaction = new(@"[A-Za-z0-9+/=]{40,}", RegexOptions.Compiled);
 
-        public string ProviderName => "SendGrid";
+        public string ProviderName => "Postmark";
 
-        public SmtpEmailTransport(
-            SmtpOptions smtpOptions,
+        public PostmarkEmailTransport(
+            PostmarkOptions options,
             bool logSmtpProtocolOnFailure,
-            ILogger<SmtpEmailTransport> logger
+            ILogger<PostmarkEmailTransport> logger
         )
         {
-            _smtpOptions = smtpOptions;
+            _options = options;
             _logSmtpProtocolOnFailure = logSmtpProtocolOnFailure;
             _logger = logger;
         }
@@ -56,16 +60,16 @@ namespace Web.Services
             {
                 await EnsureConnectedAsync(ct);
 
-                // Reset protocol log between messages to bound memory
                 _protocolLog?.SetLength(0);
 
-                // SendGrid custom args for webhook event correlation
-                message.Headers.Add(
-                    "X-SMTPAPI",
-                    System.Text.Json.JsonSerializer.Serialize(
-                        new { unique_args = new { cohad_job_id = jobId, cohad_email = recipientEmail } }
-                    )
-                );
+                // Postmark correlation metadata (individual headers, not a JSON blob)
+                message.Headers.Add("X-PM-Metadata-cohad_job_id", jobId);
+
+                // Select the appropriate message stream based on email job category
+                var streamId = IsTransactionalCategory(category)
+                    ? _options.TransactionalStream
+                    : _options.BroadcastStream;
+                message.Headers.Add("X-PM-Message-Stream", streamId);
 
                 await _smtpClient.SendAsync(message, ct);
                 _lastActivityUtc = DateTime.UtcNow;
@@ -74,24 +78,23 @@ namespace Web.Services
             }
             catch (OperationCanceledException)
             {
-                throw; // Let cancellation propagate
+                throw;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "SMTP send failed for {Email} in job {JobId}", recipientEmail, jobId);
+                _logger.LogWarning(ex, "Postmark SMTP send failed for {Email} in job {JobId}", recipientEmail, jobId);
 
                 if (_logSmtpProtocolOnFailure && _protocolLog != null)
                 {
                     var transcript = FormatSmtpTranscriptForLogs(_protocolLog);
                     _logger.LogWarning(
-                        "SMTP transcript (redacted) for {Email} in job {JobId}: {SmtpTranscript}",
+                        "Postmark SMTP transcript (redacted) for {Email} in job {JobId}: {SmtpTranscript}",
                         recipientEmail,
                         jobId,
                         transcript
                     );
                 }
 
-                // Dispose the client so the next send forces a fresh connection
                 DisposeSmtpClient();
 
                 return new EmailSendResult
@@ -103,30 +106,31 @@ namespace Web.Services
             }
         }
 
+        private bool IsTransactionalCategory(string category)
+        {
+            if (string.IsNullOrEmpty(category) || _options.TransactionalCategories == null)
+                return false;
+
+            return _options.TransactionalCategories.Any(c =>
+                string.Equals(c, category, StringComparison.OrdinalIgnoreCase));
+        }
+
         private async Task EnsureConnectedAsync(CancellationToken ct)
         {
-            // Force reconnect if the connection has been idle too long.
-            // SendGrid load balancers can silently drop idle TCP connections,
-            // and MailKit's IsConnected only checks local state — it won't
-            // detect a half-open socket until the next read/write times out.
             if (
                 _smtpClient != null
                 && _smtpClient.IsConnected
-                && _smtpOptions.MaxIdleSeconds > 0
-                && (DateTime.UtcNow - _lastActivityUtc).TotalSeconds > _smtpOptions.MaxIdleSeconds
+                && MaxIdleSeconds > 0
+                && (DateTime.UtcNow - _lastActivityUtc).TotalSeconds > MaxIdleSeconds
             )
             {
-                _logger.LogInformation(
-                    "SMTP connection idle for >{MaxIdle}s — reconnecting",
-                    _smtpOptions.MaxIdleSeconds
-                );
+                _logger.LogInformation("Postmark SMTP connection idle for >{MaxIdle}s — reconnecting", MaxIdleSeconds);
                 DisposeSmtpClient();
             }
 
             if (_smtpClient != null && _smtpClient.IsConnected)
                 return;
 
-            // Dispose previous client if it exists but is disconnected
             DisposeSmtpClient();
 
             if (_logSmtpProtocolOnFailure)
@@ -139,16 +143,12 @@ namespace Web.Services
                 _smtpClient = new SmtpClient();
             }
 
-            if (_smtpOptions.TimeoutSeconds > 0)
-                _smtpClient.Timeout = _smtpOptions.TimeoutSeconds * 1000;
+            if (TimeoutSeconds > 0)
+                _smtpClient.Timeout = TimeoutSeconds * 1000;
 
-            await _smtpClient.ConnectAsync(
-                _smtpOptions.SmtpHost,
-                587,
-                MailKit.Security.SecureSocketOptions.StartTls,
-                ct
-            );
-            await _smtpClient.AuthenticateAsync(_smtpOptions.SmtpUser, _smtpOptions.SmtpPassword, ct);
+            await _smtpClient.ConnectAsync(SmtpHost, SmtpPort, MailKit.Security.SecureSocketOptions.StartTls, ct);
+            // Postmark uses the Server API Token as both username and password
+            await _smtpClient.AuthenticateAsync(_options.ServerToken, _options.ServerToken, ct);
             _lastActivityUtc = DateTime.UtcNow;
         }
 
@@ -192,7 +192,6 @@ namespace Web.Services
                 var trimmed = line.TrimStart();
                 var lower = trimmed.ToLowerInvariant();
 
-                // Skip email body content to avoid logging PII/message content
                 if (lower.StartsWith("c: data") || lower == "data")
                 {
                     sb.AppendLine(line);
@@ -201,7 +200,6 @@ namespace Web.Services
                 }
                 if (inDataSection)
                 {
-                    // DATA section ends with a line that is just "."
                     if (trimmed == "c: ." || trimmed == ".")
                     {
                         sb.AppendLine("[DATA content redacted]");
@@ -237,55 +235,6 @@ namespace Web.Services
                 return formatted;
 
             return formatted.Substring(formatted.Length - MaxSmtpTranscriptCharsToLog);
-        }
-    }
-
-    /// <summary>
-    /// A MemoryStream wrapper that silently discards writes once a byte cap is reached,
-    /// preventing unbounded memory growth when logging SMTP protocol transcripts.
-    /// </summary>
-    internal sealed class BoundedMemoryStream : MemoryStream
-    {
-        private readonly int _maxBytes;
-
-        public BoundedMemoryStream(int maxBytes) => _maxBytes = maxBytes;
-
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            var remaining = _maxBytes - (int)Length;
-            if (remaining <= 0)
-                return;
-            base.Write(buffer, offset, Math.Min(count, remaining));
-        }
-
-        public override void Write(ReadOnlySpan<byte> buffer)
-        {
-            var remaining = _maxBytes - (int)Length;
-            if (remaining <= 0)
-                return;
-            base.Write(buffer.Length <= remaining ? buffer : buffer.Slice(0, remaining));
-        }
-
-        public override void WriteByte(byte value)
-        {
-            if (Length < _maxBytes)
-                base.WriteByte(value);
-        }
-
-        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct)
-        {
-            var remaining = _maxBytes - (int)Length;
-            if (remaining <= 0)
-                return Task.CompletedTask;
-            return base.WriteAsync(buffer, offset, Math.Min(count, remaining), ct);
-        }
-
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
-        {
-            var remaining = _maxBytes - (int)Length;
-            if (remaining <= 0)
-                return ValueTask.CompletedTask;
-            return base.WriteAsync(buffer.Length <= remaining ? buffer : buffer.Slice(0, remaining), ct);
         }
     }
 }
