@@ -17,164 +17,171 @@ public sealed class EmailTransportRouterTests
     }
 
     [Fact]
-    public void WhenDisabled_AlwaysReturnsDefault()
+    public void WhenDisabled_AlwaysReturnsSendGrid()
     {
-        var defaultTransport = CreateMockTransport("SendGrid");
+        var sendGrid = CreateMockTransport("SendGrid");
         var broadcast = CreateMockTransport("PostmarkBroadcast");
         var transactional = CreateMockTransport("PostmarkTransactional");
         var options = Options.Create(new PostmarkOptions
         {
             Enabled = false,
-            RoutedRecipients = new List<string> { "test@example.com" },
+            UsePostmarkAsDefault = true,
         });
 
-        var router = new EmailTransportRouter(defaultTransport, broadcast, transactional, options);
+        var router = new EmailTransportRouter(sendGrid, broadcast, transactional, options);
 
-        Assert.Equal("SendGrid", router.GetTransportForRecipient("test@example.com", "board").ProviderName);
-        Assert.Equal("SendGrid", router.GetTransportForRecipient("other@example.com", "board").ProviderName);
+        Assert.Equal("SendGrid", router.GetTransportForRecipient("user@example.com", "board").ProviderName);
+        Assert.Equal("SendGrid", router.GetTransportForRecipient("user@example.com", "registration").ProviderName);
+        Assert.Equal("SendGrid", router.GetDefaultTransport("board").ProviderName);
     }
 
     [Fact]
-    public void WhenEnabled_RoutesBroadcastCategory()
+    public void WhenEnabled_UsePostmarkFalse_ReturnsSendGrid()
     {
-        var defaultTransport = CreateMockTransport("SendGrid");
+        var sendGrid = CreateMockTransport("SendGrid");
         var broadcast = CreateMockTransport("PostmarkBroadcast");
         var transactional = CreateMockTransport("PostmarkTransactional");
         var options = Options.Create(new PostmarkOptions
         {
             Enabled = true,
-            RoutedRecipients = new List<string> { "routed@example.com" },
+            UsePostmarkAsDefault = false,
+        });
+
+        var router = new EmailTransportRouter(sendGrid, broadcast, transactional, options);
+
+        Assert.Equal("SendGrid", router.GetTransportForRecipient("user@example.com", "board").ProviderName);
+        Assert.Equal("SendGrid", router.GetDefaultTransport("board").ProviderName);
+    }
+
+    [Fact]
+    public void WhenEnabled_UsePostmarkTrue_BroadcastCategory()
+    {
+        var sendGrid = CreateMockTransport("SendGrid");
+        var broadcast = CreateMockTransport("PostmarkBroadcast");
+        var transactional = CreateMockTransport("PostmarkTransactional");
+        var options = Options.Create(new PostmarkOptions
+        {
+            Enabled = true,
+            UsePostmarkAsDefault = true,
             TransactionalCategories = new List<string> { "registration", "committee-forward" },
         });
 
-        var router = new EmailTransportRouter(defaultTransport, broadcast, transactional, options);
+        var router = new EmailTransportRouter(sendGrid, broadcast, transactional, options);
 
-        Assert.Equal("PostmarkBroadcast", router.GetTransportForRecipient("routed@example.com", "board").ProviderName);
-        Assert.Equal("PostmarkBroadcast", router.GetTransportForRecipient("routed@example.com", "social").ProviderName);
+        Assert.Equal("PostmarkBroadcast", router.GetTransportForRecipient("anyone@example.com", "board").ProviderName);
+        Assert.Equal("PostmarkBroadcast", router.GetTransportForRecipient("anyone@example.com", "social").ProviderName);
+        Assert.Equal("PostmarkBroadcast", router.GetTransportForRecipient("anyone@example.com", "sunshine").ProviderName);
     }
 
     [Fact]
-    public void WhenEnabled_RoutesTransactionalCategory()
+    public void WhenEnabled_UsePostmarkTrue_TransactionalCategory()
     {
-        var defaultTransport = CreateMockTransport("SendGrid");
+        var sendGrid = CreateMockTransport("SendGrid");
         var broadcast = CreateMockTransport("PostmarkBroadcast");
         var transactional = CreateMockTransport("PostmarkTransactional");
         var options = Options.Create(new PostmarkOptions
         {
             Enabled = true,
-            RoutedRecipients = new List<string> { "routed@example.com" },
+            UsePostmarkAsDefault = true,
             TransactionalCategories = new List<string> { "registration", "committee-forward" },
         });
 
-        var router = new EmailTransportRouter(defaultTransport, broadcast, transactional, options);
+        var router = new EmailTransportRouter(sendGrid, broadcast, transactional, options);
 
-        Assert.Equal("PostmarkTransactional", router.GetTransportForRecipient("routed@example.com", "registration").ProviderName);
-        Assert.Equal("PostmarkTransactional", router.GetTransportForRecipient("routed@example.com", "committee-forward").ProviderName);
+        Assert.Equal("PostmarkTransactional", router.GetTransportForRecipient("anyone@example.com", "registration").ProviderName);
+        Assert.Equal("PostmarkTransactional", router.GetTransportForRecipient("anyone@example.com", "committee-forward").ProviderName);
     }
 
     [Fact]
-    public void NonRoutedRecipient_AlwaysUsesDefault()
+    public void TransactionalCategory_IsCaseInsensitive()
     {
-        var defaultTransport = CreateMockTransport("SendGrid");
+        var sendGrid = CreateMockTransport("SendGrid");
         var broadcast = CreateMockTransport("PostmarkBroadcast");
         var transactional = CreateMockTransport("PostmarkTransactional");
         var options = Options.Create(new PostmarkOptions
         {
             Enabled = true,
-            RoutedRecipients = new List<string> { "routed@example.com" },
-        });
-
-        var router = new EmailTransportRouter(defaultTransport, broadcast, transactional, options);
-
-        Assert.Equal("SendGrid", router.GetTransportForRecipient("other@example.com", "board").ProviderName);
-        Assert.Equal("SendGrid", router.GetTransportForRecipient("other@example.com", "registration").ProviderName);
-    }
-
-    [Fact]
-    public void Routing_IsCaseInsensitive()
-    {
-        var defaultTransport = CreateMockTransport("SendGrid");
-        var broadcast = CreateMockTransport("PostmarkBroadcast");
-        var transactional = CreateMockTransport("PostmarkTransactional");
-        var options = Options.Create(new PostmarkOptions
-        {
-            Enabled = true,
-            RoutedRecipients = new List<string> { "User@Example.COM" },
+            UsePostmarkAsDefault = true,
             TransactionalCategories = new List<string> { "Registration" },
         });
 
-        var router = new EmailTransportRouter(defaultTransport, broadcast, transactional, options);
+        var router = new EmailTransportRouter(sendGrid, broadcast, transactional, options);
 
-        Assert.Equal("PostmarkBroadcast", router.GetTransportForRecipient("user@example.com", "board").ProviderName);
-        Assert.Equal("PostmarkTransactional", router.GetTransportForRecipient("USER@EXAMPLE.COM", "registration").ProviderName);
+        Assert.Equal("PostmarkTransactional", router.GetTransportForRecipient("user@example.com", "registration").ProviderName);
+        Assert.Equal("PostmarkTransactional", router.GetTransportForRecipient("user@example.com", "REGISTRATION").ProviderName);
     }
 
     [Fact]
-    public void Routing_TrimsWhitespace()
+    public void GetDefaultTransport_TransactionalCategory_ReturnsTransactional()
     {
-        var defaultTransport = CreateMockTransport("SendGrid");
+        var sendGrid = CreateMockTransport("SendGrid");
         var broadcast = CreateMockTransport("PostmarkBroadcast");
         var transactional = CreateMockTransport("PostmarkTransactional");
         var options = Options.Create(new PostmarkOptions
         {
             Enabled = true,
-            RoutedRecipients = new List<string> { "  routed@example.com  " },
+            UsePostmarkAsDefault = true,
+            TransactionalCategories = new List<string> { "registration", "committee-forward" },
         });
 
-        var router = new EmailTransportRouter(defaultTransport, broadcast, transactional, options);
+        var router = new EmailTransportRouter(sendGrid, broadcast, transactional, options);
 
-        Assert.Equal("PostmarkBroadcast", router.GetTransportForRecipient("routed@example.com", "board").ProviderName);
-        Assert.Equal("PostmarkBroadcast", router.GetTransportForRecipient("  routed@example.com  ", "board").ProviderName);
+        Assert.Equal("PostmarkTransactional", router.GetDefaultTransport("registration").ProviderName);
+        Assert.Equal("PostmarkTransactional", router.GetDefaultTransport("committee-forward").ProviderName);
     }
 
     [Fact]
-    public void EmptyRoutedRecipients_AllGoToDefault()
+    public void GetDefaultTransport_BroadcastCategory_ReturnsBroadcast()
     {
-        var defaultTransport = CreateMockTransport("SendGrid");
+        var sendGrid = CreateMockTransport("SendGrid");
         var broadcast = CreateMockTransport("PostmarkBroadcast");
         var transactional = CreateMockTransport("PostmarkTransactional");
         var options = Options.Create(new PostmarkOptions
         {
             Enabled = true,
-            RoutedRecipients = new List<string>(),
+            UsePostmarkAsDefault = true,
+            TransactionalCategories = new List<string> { "registration" },
         });
 
-        var router = new EmailTransportRouter(defaultTransport, broadcast, transactional, options);
+        var router = new EmailTransportRouter(sendGrid, broadcast, transactional, options);
 
-        Assert.Equal("SendGrid", router.GetTransportForRecipient("anyone@example.com", "board").ProviderName);
+        Assert.Equal("PostmarkBroadcast", router.GetDefaultTransport("board").ProviderName);
+        Assert.Equal("PostmarkBroadcast", router.GetDefaultTransport(null).ProviderName);
     }
 
     [Fact]
-    public void NullRecipientEmail_ReturnsDefault()
+    public void GetDefaultTransport_WhenDisabled_ReturnsSendGrid()
     {
-        var defaultTransport = CreateMockTransport("SendGrid");
+        var sendGrid = CreateMockTransport("SendGrid");
         var broadcast = CreateMockTransport("PostmarkBroadcast");
         var transactional = CreateMockTransport("PostmarkTransactional");
         var options = Options.Create(new PostmarkOptions
         {
             Enabled = true,
-            RoutedRecipients = new List<string> { "test@example.com" },
+            UsePostmarkAsDefault = false,
         });
 
-        var router = new EmailTransportRouter(defaultTransport, broadcast, transactional, options);
+        var router = new EmailTransportRouter(sendGrid, broadcast, transactional, options);
 
-        Assert.Equal("SendGrid", router.GetTransportForRecipient(null, "board").ProviderName);
+        Assert.Equal("SendGrid", router.GetDefaultTransport("registration").ProviderName);
+        Assert.Equal("SendGrid", router.GetDefaultTransport("board").ProviderName);
     }
 
     [Fact]
-    public void DefaultTransport_ReturnsDefaultRegardlessOfRouting()
+    public void NullCategory_UsesBroadcast()
     {
-        var defaultTransport = CreateMockTransport("SendGrid");
+        var sendGrid = CreateMockTransport("SendGrid");
         var broadcast = CreateMockTransport("PostmarkBroadcast");
         var transactional = CreateMockTransport("PostmarkTransactional");
         var options = Options.Create(new PostmarkOptions
         {
             Enabled = true,
-            RoutedRecipients = new List<string> { "routed@example.com" },
+            UsePostmarkAsDefault = true,
+            TransactionalCategories = new List<string> { "registration" },
         });
 
-        var router = new EmailTransportRouter(defaultTransport, broadcast, transactional, options);
+        var router = new EmailTransportRouter(sendGrid, broadcast, transactional, options);
 
-        Assert.Equal("SendGrid", router.DefaultTransport.ProviderName);
+        Assert.Equal("PostmarkBroadcast", router.GetTransportForRecipient("user@example.com", null).ProviderName);
     }
 }
