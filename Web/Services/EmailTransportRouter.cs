@@ -13,7 +13,7 @@ namespace Web.Services
     /// through the default transport (SendGrid). When Postmark is not enabled, always
     /// returns the default transport.
     /// </summary>
-    public class EmailTransportRouter
+    public class EmailTransportRouter : IDisposable
     {
         private readonly IEmailTransport _defaultTransport;
         private readonly IEmailTransport _postmarkBroadcast;
@@ -60,5 +60,13 @@ namespace Web.Services
         /// per-recipient routing is not applicable.
         /// </summary>
         public IEmailTransport DefaultTransport => _defaultTransport;
+
+        public void Dispose()
+        {
+            if (_postmarkBroadcast is IDisposable broadcast && !ReferenceEquals(_postmarkBroadcast, _defaultTransport))
+                broadcast.Dispose();
+            if (_postmarkTransactional is IDisposable transactional && !ReferenceEquals(_postmarkTransactional, _defaultTransport))
+                transactional.Dispose();
+        }
     }
 }

@@ -100,6 +100,9 @@ namespace Web.Controllers
 
         private async Task ProcessEventAsync(JsonElement evt, string rawBody)
         {
+            if (evt.ValueKind != JsonValueKind.Object)
+                return;
+
             if (!evt.TryGetProperty("RecordType", out var recordTypeProp))
                 return;
 

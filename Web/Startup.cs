@@ -463,8 +463,6 @@ namespace Web
                             + "Set it via user secrets or environment variable (Postmark__ServerToken)."
                     );
                 }
-
-                var logProtocol = Configuration.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");
             }
 
             services.AddSingleton<EmailTransportRouter>(sp =>
