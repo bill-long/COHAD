@@ -34,6 +34,7 @@ public sealed class EmailControllerJobTests
     private readonly Mock<IAuditLogRepository> _audit = new();
     private readonly Mock<IEmailJobRepository> _jobRepo = new();
     private readonly Mock<IDocumentFileStore> _fileStore = new();
+    private readonly Mock<IEmailDeliveryEventRepository> _deliveryEventRepo = new();
     private readonly EmailJobCleanupService _cleanup;
     private readonly EmailJobQueue _queue = new();
 
@@ -109,7 +110,6 @@ public sealed class EmailControllerJobTests
 
         var tokenService = new Mock<IUnsubscribeTokenService>();
 
-        var sesOpts = Microsoft.Extensions.Options.Options.Create(new Web.Configuration.SesOptions());
         var mockSmtp = new Mock<IEmailTransport>();
         mockSmtp.Setup(t => t.ProviderName).Returns("SendGrid");
         mockSmtp
@@ -122,13 +122,12 @@ public sealed class EmailControllerJobTests
                 )
             )
             .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
-        var router = new EmailTransportRouter(mockSmtp.Object, mockSmtp.Object, sesOpts);
 
         return new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
             tokenService.Object,
-            router,
+            mockSmtp.Object,
             hubContext.Object,
             config,
             env.Object,
@@ -150,6 +149,7 @@ public sealed class EmailControllerJobTests
             _queue,
             processor,
             _cleanup,
+            _deliveryEventRepo.Object,
             NullLogger<EmailController>.Instance
         )
         {
@@ -929,5 +929,152 @@ public sealed class EmailControllerJobTests
         var ok = Assert.IsType<OkObjectResult>(result);
         var items = Assert.IsAssignableFrom<List<TestRecipientOption>>(ok.Value);
         Assert.Empty(items);
+    }
+
+    // ──────────────────────────────────────────────
+    // GetJobDeliveryEvents tests
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetJobDeliveryEvents_returns_404_when_job_not_found()
+    {
+        _jobRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((EmailJob?)null);
+
+        var controller = CreateController();
+        var result = await controller.GetJobDeliveryEvents(Guid.NewGuid());
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task GetJobDeliveryEvents_returns_empty_list_when_no_events()
+    {
+        var jobId = Guid.NewGuid();
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(new EmailJob { Id = jobId });
+        _deliveryEventRepo.Setup(r => r.GetByJobIdAsync(jobId)).ReturnsAsync(new List<EmailDeliveryEvent>());
+
+        var controller = CreateController();
+        var result = await controller.GetJobDeliveryEvents(jobId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var events = Assert.IsAssignableFrom<List<EmailDeliveryEventDetail>>(ok.Value);
+        Assert.Empty(events);
+    }
+
+    [Fact]
+    public async Task GetJobDeliveryEvents_returns_events_sorted_by_email_then_time()
+    {
+        var jobId = Guid.NewGuid();
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(new EmailJob { Id = jobId });
+
+        var events = new List<EmailDeliveryEvent>
+        {
+            new()
+            {
+                Id = "e1", JobId = jobId, Email = "z@test.com",
+                DeliveryStatus = DeliveryStatus.Delivered,
+                ProviderEventType = "delivered", Provider = "SendGrid",
+                ReceivedUtc = new DateTime(2026, 4, 15, 10, 0, 0, DateTimeKind.Utc),
+            },
+            new()
+            {
+                Id = "e2", JobId = jobId, Email = "a@test.com",
+                DeliveryStatus = DeliveryStatus.Delivered,
+                ProviderEventType = "delivered", Provider = "SendGrid",
+                ReceivedUtc = new DateTime(2026, 4, 15, 10, 1, 0, DateTimeKind.Utc),
+            },
+            new()
+            {
+                Id = "e3", JobId = jobId, Email = "a@test.com",
+                DeliveryStatus = DeliveryStatus.Deferred,
+                ProviderEventType = "deferred", Provider = "SendGrid",
+                ReceivedUtc = new DateTime(2026, 4, 15, 10, 0, 0, DateTimeKind.Utc),
+            },
+        };
+        _deliveryEventRepo.Setup(r => r.GetByJobIdAsync(jobId)).ReturnsAsync(events);
+
+        var controller = CreateController();
+        var result = await controller.GetJobDeliveryEvents(jobId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var dtos = Assert.IsAssignableFrom<List<EmailDeliveryEventDetail>>(ok.Value);
+        Assert.Equal(3, dtos.Count);
+        // a@test.com events first (alphabetical), sorted by time
+        Assert.Equal("a@test.com", dtos[0].Email);
+        Assert.Equal("deferred", dtos[0].ProviderEventType);
+        Assert.Equal("a@test.com", dtos[1].Email);
+        Assert.Equal("delivered", dtos[1].ProviderEventType);
+        Assert.Equal("z@test.com", dtos[2].Email);
+    }
+
+    [Fact]
+    public async Task GetJobDeliveryEvents_excludes_payload_by_default()
+    {
+        var jobId = Guid.NewGuid();
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(new EmailJob { Id = jobId });
+        _deliveryEventRepo
+            .Setup(r => r.GetByJobIdAsync(jobId))
+            .ReturnsAsync(
+                new List<EmailDeliveryEvent>
+                {
+                    new()
+                    {
+                        Id = "e1", JobId = jobId, Email = "a@test.com",
+                        DeliveryStatus = DeliveryStatus.Delivered,
+                        ProviderPayloadJson = "{\"detail\":\"secret\"}",
+                        ReceivedUtc = DateTime.UtcNow,
+                    },
+                }
+            );
+
+        var controller = CreateController();
+        var result = await controller.GetJobDeliveryEvents(jobId, includePayload: false);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var dtos = Assert.IsAssignableFrom<List<EmailDeliveryEventDetail>>(ok.Value);
+        Assert.Single(dtos);
+        Assert.Null(dtos[0].ProviderPayloadJson);
+    }
+
+    [Fact]
+    public async Task GetJobDeliveryEvents_includes_payload_when_requested()
+    {
+        var jobId = Guid.NewGuid();
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(new EmailJob { Id = jobId });
+        _deliveryEventRepo
+            .Setup(r => r.GetByJobIdAsync(jobId))
+            .ReturnsAsync(
+                new List<EmailDeliveryEvent>
+                {
+                    new()
+                    {
+                        Id = "e1", JobId = jobId, Email = "a@test.com",
+                        DeliveryStatus = DeliveryStatus.Delivered,
+                        ProviderPayloadJson = "{\"detail\":\"data\"}",
+                        ReceivedUtc = DateTime.UtcNow,
+                    },
+                }
+            );
+
+        var controller = CreateController();
+        var result = await controller.GetJobDeliveryEvents(jobId, includePayload: true);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var dtos = Assert.IsAssignableFrom<List<EmailDeliveryEventDetail>>(ok.Value);
+        Assert.Single(dtos);
+        Assert.Equal("{\"detail\":\"data\"}", dtos[0].ProviderPayloadJson);
+    }
+
+    [Fact]
+    public void GetJobDeliveryEvents_requires_administrator_policy()
+    {
+        var method = typeof(EmailController).GetMethod(nameof(EmailController.GetJobDeliveryEvents));
+        Assert.NotNull(method);
+        var attr = method!
+            .GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), false)
+            .Cast<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>()
+            .FirstOrDefault();
+        Assert.NotNull(attr);
+        Assert.Equal("Administrator", attr!.Policy);
     }
 }

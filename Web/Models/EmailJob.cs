@@ -168,7 +168,7 @@ namespace Web.Models
         public string? ProviderMessageId { get; set; }
 
         /// <summary>
-        /// Which email provider sent this message (e.g. "SendGrid", "Ses").
+        /// Which email provider sent this message (e.g. "SendGrid").
         /// </summary>
         public string? Provider { get; set; }
     }

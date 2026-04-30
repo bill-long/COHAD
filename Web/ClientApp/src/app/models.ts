@@ -182,6 +182,17 @@ export interface EmailJobRecipientDetail {
   provider: string | null;
 }
 
+export interface EmailDeliveryEventDetail {
+  email: string;
+  deliveryStatus: DeliveryStatus;
+  providerEventType: string | null;
+  providerEventId: string | null;
+  providerMessageId: string | null;
+  provider: string | null;
+  receivedUtc: string;
+  providerPayloadJson: string | null;
+}
+
 export interface EmailJobProgress {
   jobId: string;
   status: EmailJobStatus;

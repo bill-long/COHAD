@@ -28,7 +28,7 @@ namespace Web.Services
         private readonly EmailJobQueue _queue;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IUnsubscribeTokenService _tokenService;
-        private readonly EmailTransportRouter _transportRouter;
+        private readonly IEmailTransport _transport;
         private readonly IHubContext<EmailJobHub> _hubContext;
         private readonly ILogger<EmailJobProcessor> _logger;
         private readonly string _appBaseUrl;
@@ -261,7 +261,8 @@ namespace Web.Services
                     changed = true;
                 }
 
-                // Any delivery event proves the email was sent — promote Pending/Failed to Sent
+                // Any delivery event proves the email was sent — promote Pending/Failed to Sent.
+                // (NormalizePendingDelivered also performs this on load; this keeps in-flight events consistent.)
                 if (
                     recipient.Status == EmailJobRecipientStatus.Pending
                     || recipient.Status == EmailJobRecipientStatus.Failed
@@ -311,7 +312,7 @@ namespace Web.Services
             EmailJobQueue queue,
             IServiceScopeFactory scopeFactory,
             IUnsubscribeTokenService tokenService,
-            EmailTransportRouter transportRouter,
+            IEmailTransport transport,
             IHubContext<EmailJobHub> hubContext,
             IConfiguration config,
             IWebHostEnvironment env,
@@ -321,7 +322,7 @@ namespace Web.Services
             _queue = queue;
             _scopeFactory = scopeFactory;
             _tokenService = tokenService;
-            _transportRouter = transportRouter;
+            _transport = transport;
             _hubContext = hubContext;
             _logger = logger;
             _appBaseUrl = (config["AppBaseUrl"] ?? "").TrimEnd('/');
@@ -915,14 +916,11 @@ namespace Web.Services
                     }
                     else
                     {
-                        // Always use SMTP for group sends — SES routing is per-recipient
-                        // and group sends intentionally do not support per-recipient webhook
-                        // correlation. Use a sentinel so transports emit a non-empty
-                        // cohad_email tag (empty string would be indistinguishable from
-                        // a bug and would be silently ignored by webhook handlers).
+                        // Group sends use a sentinel correlation tag (a non-empty string so transports
+                        // emit a cohad_email tag distinct from a missing/empty value) so webhook handlers
+                        // can recognize that per-recipient correlation isn't available.
                         const string groupedSendCorrelation = "__grouped_send__";
-                        var transport = _transportRouter.GetTransportForRecipient(groupedSendCorrelation);
-                        var result = await transport.SendAsync(message, job.Id.ToString(), groupedSendCorrelation, ct);
+                        var result = await _transport.SendAsync(message, job.Id.ToString(), groupedSendCorrelation, ct);
 
                         var now = DateTime.UtcNow;
                         foreach (var r in pendingRecipients)
@@ -1014,8 +1012,7 @@ namespace Web.Services
                                 message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                             }
 
-                            var transport = _transportRouter.GetTransportForRecipient(recipient.Email);
-                            var result = await transport.SendAsync(message, job.Id.ToString(), recipient.Email, ct);
+                            var result = await _transport.SendAsync(message, job.Id.ToString(), recipient.Email, ct);
 
                             recipient.Provider = result.ProviderName;
                             if (!string.IsNullOrEmpty(result.ProviderMessageId))

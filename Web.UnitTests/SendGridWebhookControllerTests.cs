@@ -65,7 +65,8 @@ namespace Web.UnitTests
             string eventType,
             string? jobId = null,
             string? email = null,
-            string? sgMessageId = null
+            string? sgMessageId = null,
+            string? sgEventId = null
         )
         {
             var evt = new Dictionary<string, object> { ["event"] = eventType, ["email"] = email ?? "user@example.com" };
@@ -75,6 +76,8 @@ namespace Web.UnitTests
                 evt["cohad_email"] = email;
             if (sgMessageId != null)
                 evt["sg_message_id"] = sgMessageId;
+            if (sgEventId != null)
+                evt["sg_event_id"] = sgEventId;
 
             return JsonSerializer.Serialize(new[] { evt });
         }
@@ -363,6 +366,137 @@ namespace Web.UnitTests
             var result = await controller.HandleEvents();
 
             Assert.IsType<BadRequestResult>(result);
+        }
+        // ─── Provider event metadata ───
+
+        [Fact]
+        public async Task DeliveredEvent_PopulatesProviderEventTypeAndPayload()
+        {
+            SetupVerifierNotConfigured();
+
+            var body = BuildEventPayload(
+                "delivered",
+                TestJobId.ToString(),
+                "user@example.com",
+                sgMessageId: "msg-1",
+                sgEventId: "evt-abc"
+            );
+            var controller = CreateController(body);
+
+            await controller.HandleEvents();
+
+            _deliveryEventRepo.Verify(
+                r =>
+                    r.AddAsync(
+                        It.Is<EmailDeliveryEvent>(e =>
+                            e.ProviderEventType == "delivered"
+                            && e.ProviderEventId == "evt-abc"
+                            && e.ProviderMessageId == "msg-1"
+                            && e.ProviderPayloadJson != null
+                            && e.ProviderPayloadJson.Contains("\"event\"")
+                            && e.ProviderPayloadJson.Contains("\"delivered\"")
+                        )
+                    ),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public async Task DistinctSgEventIds_ProduceDistinctDocumentIds()
+        {
+            SetupVerifierNotConfigured();
+
+            string? id1 = null;
+            string? id2 = null;
+            _deliveryEventRepo
+                .Setup(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()))
+                .Callback<EmailDeliveryEvent>(e =>
+                {
+                    if (id1 == null) id1 = e.Id;
+                    else id2 = e.Id;
+                })
+                .Returns(Task.CompletedTask);
+
+            var body1 = BuildEventPayload("deferred", TestJobId.ToString(), "user@example.com", sgEventId: "evt-1");
+            await CreateController(body1).HandleEvents();
+
+            var body2 = BuildEventPayload("deferred", TestJobId.ToString(), "user@example.com", sgEventId: "evt-2");
+            await CreateController(body2).HandleEvents();
+
+            Assert.NotNull(id1);
+            Assert.NotNull(id2);
+            Assert.NotEqual(id1, id2);
+        }
+
+        [Fact]
+        public async Task SameSgEventId_ProducesSameDocumentId_ForDedup()
+        {
+            SetupVerifierNotConfigured();
+
+            string? id1 = null;
+            string? id2 = null;
+            _deliveryEventRepo
+                .Setup(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()))
+                .Callback<EmailDeliveryEvent>(e =>
+                {
+                    if (id1 == null) id1 = e.Id;
+                    else id2 = e.Id;
+                })
+                .Returns(Task.CompletedTask);
+
+            var body = BuildEventPayload("delivered", TestJobId.ToString(), "user@example.com", sgEventId: "evt-same");
+            await CreateController(body).HandleEvents();
+            await CreateController(body).HandleEvents();
+
+            Assert.NotNull(id1);
+            Assert.NotNull(id2);
+            Assert.Equal(id1, id2);
+        }
+
+        [Fact]
+        public async Task MissingSgEventId_FallsBackToDeliveryStatusForId()
+        {
+            SetupVerifierNotConfigured();
+
+            string? deferredId = null;
+            string? deliveredId = null;
+            _deliveryEventRepo
+                .Setup(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()))
+                .Callback<EmailDeliveryEvent>(e =>
+                {
+                    if (e.DeliveryStatus == DeliveryStatus.Deferred) deferredId = e.Id;
+                    if (e.DeliveryStatus == DeliveryStatus.Delivered) deliveredId = e.Id;
+                })
+                .Returns(Task.CompletedTask);
+
+            // Two events of different status, both without sg_event_id — IDs must differ
+            await CreateController(BuildEventPayload("deferred", TestJobId.ToString(), "user@example.com")).HandleEvents();
+            await CreateController(BuildEventPayload("delivered", TestJobId.ToString(), "user@example.com")).HandleEvents();
+
+            Assert.NotNull(deferredId);
+            Assert.NotNull(deliveredId);
+            Assert.NotEqual(deferredId, deliveredId);
+
+            // Two events of same status, both without sg_event_id — IDs must match (legacy dedup)
+            string? firstId = null;
+            string? secondId = null;
+            _deliveryEventRepo.Reset();
+            _deliveryEventRepo
+                .Setup(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()))
+                .Callback<EmailDeliveryEvent>(e =>
+                {
+                    if (firstId == null) firstId = e.Id;
+                    else secondId = e.Id;
+                })
+                .Returns(Task.CompletedTask);
+
+            var body = BuildEventPayload("bounce", TestJobId.ToString(), "user@example.com");
+            await CreateController(body).HandleEvents();
+            await CreateController(body).HandleEvents();
+
+            Assert.NotNull(firstId);
+            Assert.NotNull(secondId);
+            Assert.Equal(firstId, secondId);
         }
     }
 }

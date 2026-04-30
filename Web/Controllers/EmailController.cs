@@ -28,6 +28,7 @@ namespace Web.Controllers
         private readonly EmailJobQueue _emailJobQueue;
         private readonly EmailJobProcessor _emailJobProcessor;
         private readonly EmailJobCleanupService _emailJobCleanup;
+        private readonly IEmailDeliveryEventRepository _deliveryEventRepository;
         private readonly ILogger<EmailController> _logger;
 
         public EmailController(
@@ -40,6 +41,7 @@ namespace Web.Controllers
             EmailJobQueue emailJobQueue,
             EmailJobProcessor emailJobProcessor,
             EmailJobCleanupService emailJobCleanup,
+            IEmailDeliveryEventRepository deliveryEventRepository,
             ILogger<EmailController> logger
         )
         {
@@ -52,6 +54,7 @@ namespace Web.Controllers
             _emailJobQueue = emailJobQueue;
             _emailJobProcessor = emailJobProcessor;
             _emailJobCleanup = emailJobCleanup;
+            _deliveryEventRepository = deliveryEventRepository;
             _logger = logger;
         }
 
@@ -156,6 +159,24 @@ namespace Web.Controllers
                 return NotFound();
 
             return Ok(EmailJobDetail.FromJob(job));
+        }
+
+        [HttpGet("jobs/{id:guid}/delivery-events")]
+        [Authorize(Policy = "Administrator")]
+        public async Task<IActionResult> GetJobDeliveryEvents(Guid id, [FromQuery] bool includePayload = false)
+        {
+            var job = await _emailJobRepository.GetByIdAsync(id);
+            if (job == null)
+                return NotFound();
+
+            var events = await _deliveryEventRepository.GetByJobIdAsync(id);
+            var dtos = events
+                .OrderBy(e => e.Email, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(e => e.ReceivedUtc)
+                .Select(e => EmailDeliveryEventDetail.FromEvent(e, includePayload))
+                .ToList();
+
+            return Ok(dtos);
         }
 
         [HttpPost("jobs/{id:guid}/retry")]

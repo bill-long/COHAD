@@ -51,6 +51,7 @@ namespace Web.Services.Repositories
             {
                 PatchOperation.Set("/deliveryStatus", deliveryEvent.DeliveryStatus.ToString()),
                 PatchOperation.Set("/provider", deliveryEvent.Provider),
+                PatchOperation.Set("/providerEventType", deliveryEvent.ProviderEventType),
                 // Do not patch /receivedUtc — preserve the original receive
                 // timestamp from the initial CreateItemAsync. Webhook retries
                 // carry a later ReceivedUtc that would overwrite the true time.
@@ -61,6 +62,16 @@ namespace Web.Services.Repositories
             if (!string.IsNullOrEmpty(deliveryEvent.ProviderMessageId))
             {
                 patchOps.Add(PatchOperation.Set("/providerMessageId", deliveryEvent.ProviderMessageId));
+            }
+
+            if (!string.IsNullOrEmpty(deliveryEvent.ProviderEventId))
+            {
+                patchOps.Add(PatchOperation.Set("/providerEventId", deliveryEvent.ProviderEventId));
+            }
+
+            if (!string.IsNullOrEmpty(deliveryEvent.ProviderPayloadJson))
+            {
+                patchOps.Add(PatchOperation.Set("/providerPayloadJson", deliveryEvent.ProviderPayloadJson));
             }
 
             // Allow one-way transition: false→true only (processor marks processed)
@@ -182,9 +193,12 @@ namespace Web.Services.Repositories
                 ["jobId"] = e.JobId.ToString("D"),
                 ["email"] = e.Email,
                 ["deliveryStatus"] = e.DeliveryStatus.ToString(),
+                ["providerEventType"] = e.ProviderEventType,
+                ["providerEventId"] = e.ProviderEventId,
                 ["providerMessageId"] = e.ProviderMessageId,
                 ["provider"] = e.Provider,
                 ["receivedUtc"] = e.ReceivedUtc,
+                ["providerPayloadJson"] = e.ProviderPayloadJson,
                 ["actionProcessed"] = e.ActionProcessed,
                 ["ttl"] = DocumentTtlSeconds,
             };
@@ -198,9 +212,12 @@ namespace Web.Services.Repositories
                 DeliveryStatus = Enum.TryParse<DeliveryStatus>(doc.Value<string>("deliveryStatus"), out var ds)
                     ? ds
                     : DeliveryStatus.Unknown,
+                ProviderEventType = doc.Value<string>("providerEventType"),
+                ProviderEventId = doc.Value<string>("providerEventId"),
                 ProviderMessageId = doc.Value<string>("providerMessageId"),
                 Provider = doc.Value<string>("provider"),
                 ReceivedUtc = doc.Value<DateTime?>("receivedUtc") ?? DateTime.MinValue,
+                ProviderPayloadJson = doc.Value<string>("providerPayloadJson"),
                 ActionProcessed = doc.Value<bool?>("actionProcessed") ?? false,
             };
     }

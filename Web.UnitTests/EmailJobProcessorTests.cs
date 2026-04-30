@@ -87,7 +87,6 @@ public sealed class EmailJobProcessorTests
 
         var config = new ConfigurationBuilder().AddInMemoryCollection(defaults).Build();
 
-        var sesOpts = Options.Create(new SesOptions());
         var mockSmtp = new Mock<IEmailTransport>();
         mockSmtp.Setup(t => t.ProviderName).Returns("SendGrid");
         mockSmtp
@@ -100,13 +99,12 @@ public sealed class EmailJobProcessorTests
                 )
             )
             .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
-        var router = new EmailTransportRouter(mockSmtp.Object, mockSmtp.Object, sesOpts);
 
         return new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
             _tokenService.Object,
-            router,
+            mockSmtp.Object,
             hubContext.Object,
             config,
             env.Object,
@@ -452,14 +450,11 @@ public sealed class EmailJobProcessorTests
             )
             .Build();
 
-        var sesOpts = Options.Create(new SesOptions());
-        var router = new EmailTransportRouter(mockSmtp.Object, mockSmtp.Object, sesOpts);
-
         var processor = new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
             _tokenService.Object,
-            router,
+            mockSmtp.Object,
             hubContext.Object,
             config,
             env.Object,
@@ -765,7 +760,6 @@ public sealed class EmailJobProcessorTests
                 .Build();
 
             var queue = new EmailJobQueue();
-            var sesOpts2 = Options.Create(new SesOptions());
             var mockSmtp2 = new Mock<IEmailTransport>();
             mockSmtp2.Setup(t => t.ProviderName).Returns("SendGrid");
             mockSmtp2
@@ -778,12 +772,11 @@ public sealed class EmailJobProcessorTests
                     )
                 )
                 .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
-            var router2 = new EmailTransportRouter(mockSmtp2.Object, mockSmtp2.Object, sesOpts2);
             var processor = new EmailJobProcessor(
                 queue,
                 scopeFactory.Object,
                 _tokenService.Object,
-                router2,
+                mockSmtp2.Object,
                 hubContext.Object,
                 config,
                 env.Object,
@@ -2555,7 +2548,7 @@ public sealed class EmailJobProcessorTests
                     Email = "b@test.com",
                     Status = EmailJobRecipientStatus.Sent,
                     SentUtc = new DateTime(2026, 4, 15, 1, 0, 0, DateTimeKind.Utc),
-                    Provider = "SES",
+                    Provider = "SendGrid",
                 },
             },
         };

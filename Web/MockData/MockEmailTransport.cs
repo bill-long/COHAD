@@ -9,7 +9,7 @@ namespace Web.MockData
     /// <summary>
     /// No-op email transport for MockData environment.
     /// Returns a successful result with a fake message ID so the transport
-    /// abstraction works end-to-end without real SMTP or SES credentials.
+    /// abstraction works end-to-end without real SMTP or SendGrid credentials.
     /// </summary>
     public sealed class MockEmailTransport : IEmailTransport
     {

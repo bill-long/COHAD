@@ -3,7 +3,7 @@ using Web.Models;
 namespace Web.Services
 {
     /// <summary>
-    /// Shared delivery-status severity logic used by both SendGrid and SES webhook controllers.
+    /// Shared delivery-status severity logic used by webhook controllers.
     /// </summary>
     public static class DeliveryStatusHelper
     {

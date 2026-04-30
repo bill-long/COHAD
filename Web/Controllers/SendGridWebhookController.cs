@@ -213,16 +213,28 @@ namespace Web.Controllers
             if (evt.TryGetProperty("sg_message_id", out var sgMsgProp))
                 sgMessageId = sgMsgProp.GetString();
 
+            // sg_event_id is unique per webhook event — use it as the dedup key when available
+            // so distinct events of the same type (e.g. multiple "deferred") aren't collapsed.
+            // Fall back to the delivery status (legacy behavior) when missing.
+            string? sgEventId = null;
+            if (evt.TryGetProperty("sg_event_id", out var sgEventIdProp))
+                sgEventId = sgEventIdProp.GetString();
+
+            var dedupKey = !string.IsNullOrEmpty(sgEventId) ? sgEventId : deliveryStatus.ToString();
+
             // Write the delivery event to its own container — no contention possible.
             var deliveryEvent = new EmailDeliveryEvent
             {
-                Id = EmailDeliveryEvent.MakeId(jobId, email, deliveryStatus),
+                Id = EmailDeliveryEvent.MakeId(jobId, email, dedupKey),
                 JobId = jobId,
                 Email = email,
                 DeliveryStatus = deliveryStatus,
+                ProviderEventType = eventType,
+                ProviderEventId = sgEventId,
                 ProviderMessageId = sgMessageId,
                 Provider = "SendGrid",
                 ReceivedUtc = DateTime.UtcNow,
+                ProviderPayloadJson = evt.GetRawText(),
             };
 
             await _deliveryEventRepository.AddAsync(deliveryEvent);

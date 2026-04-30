@@ -21,11 +21,14 @@ namespace Web.MockData
                 {
                     if (existing.ActionProcessed)
                         deliveryEvent.ActionProcessed = true;
-                    if (
-                        string.IsNullOrEmpty(deliveryEvent.ProviderMessageId)
-                        && !string.IsNullOrEmpty(existing.ProviderMessageId)
-                    )
+                    if (string.IsNullOrEmpty(deliveryEvent.ProviderMessageId) && !string.IsNullOrEmpty(existing.ProviderMessageId))
                         deliveryEvent.ProviderMessageId = existing.ProviderMessageId;
+                    if (string.IsNullOrEmpty(deliveryEvent.ProviderEventType) && !string.IsNullOrEmpty(existing.ProviderEventType))
+                        deliveryEvent.ProviderEventType = existing.ProviderEventType;
+                    if (string.IsNullOrEmpty(deliveryEvent.ProviderEventId) && !string.IsNullOrEmpty(existing.ProviderEventId))
+                        deliveryEvent.ProviderEventId = existing.ProviderEventId;
+                    if (string.IsNullOrEmpty(deliveryEvent.ProviderPayloadJson) && !string.IsNullOrEmpty(existing.ProviderPayloadJson))
+                        deliveryEvent.ProviderPayloadJson = existing.ProviderPayloadJson;
                 }
 
                 _events[deliveryEvent.Id] = Clone(deliveryEvent);
@@ -66,9 +69,12 @@ namespace Web.MockData
                 JobId = e.JobId,
                 Email = e.Email,
                 DeliveryStatus = e.DeliveryStatus,
+                ProviderEventType = e.ProviderEventType,
+                ProviderEventId = e.ProviderEventId,
                 ProviderMessageId = e.ProviderMessageId,
                 Provider = e.Provider,
                 ReceivedUtc = e.ReceivedUtc,
+                ProviderPayloadJson = e.ProviderPayloadJson,
                 ActionProcessed = e.ActionProcessed,
             };
     }
