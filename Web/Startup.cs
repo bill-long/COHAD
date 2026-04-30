@@ -454,12 +454,12 @@ namespace Web
             var postmarkOptions = Configuration.GetSection("Postmark").Get<PostmarkOptions>() ?? new PostmarkOptions();
             if (useMockData)
                 postmarkOptions.Enabled = false;
-            if (postmarkOptions.Enabled)
+            if (postmarkOptions.Enabled && postmarkOptions.UsePostmarkAsDefault)
             {
                 if (string.IsNullOrWhiteSpace(postmarkOptions.ServerToken))
                 {
                     throw new InvalidOperationException(
-                        "Postmark is enabled, but Postmark:ServerToken is missing or empty. "
+                        "Postmark is enabled with UsePostmarkAsDefault, but Postmark:ServerToken is missing or empty. "
                             + "Set it via user secrets or environment variable (Postmark__ServerToken)."
                     );
                 }
@@ -469,7 +469,7 @@ namespace Web
             {
                 var defaultTransport = sp.GetRequiredService<IEmailTransport>();
                 var opts = sp.GetRequiredService<IOptions<PostmarkOptions>>();
-                if (opts.Value.Enabled)
+                if (opts.Value.Enabled && opts.Value.UsePostmarkAsDefault)
                 {
                     var pmOpts = opts.Value;
                     var logProt = Configuration.GetValue<bool>("EmailJobs:LogSmtpProtocolOnFailure");

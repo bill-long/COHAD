@@ -7,37 +7,31 @@ using Web.Configuration;
 namespace Web.Services
 {
     /// <summary>
-    /// Routes email recipients to the appropriate transport. Recipients listed in
-    /// <see cref="PostmarkOptions.RoutedRecipients"/> are sent via Postmark (using the
-    /// broadcast or transactional instance based on email job category); all others go
-    /// through the default transport (SendGrid). When Postmark is not enabled, always
-    /// returns the default transport.
+    /// Routes emails to the appropriate transport. When Postmark is enabled and
+    /// <see cref="PostmarkOptions.UsePostmarkAsDefault"/> is true, all emails go through
+    /// Postmark (broadcast or transactional based on category). Otherwise, emails go
+    /// through the fallback transport (SendGrid).
     /// </summary>
     public class EmailTransportRouter : IDisposable
     {
-        private readonly IEmailTransport _defaultTransport;
+        private readonly IEmailTransport _sendGridTransport;
         private readonly IEmailTransport _postmarkBroadcast;
         private readonly IEmailTransport _postmarkTransactional;
-        private readonly HashSet<string> _postmarkRecipients;
         private readonly HashSet<string> _transactionalCategories;
-        private readonly bool _postmarkEnabled;
+        private readonly bool _usePostmark;
 
         public EmailTransportRouter(
-            IEmailTransport defaultTransport,
+            IEmailTransport sendGridTransport,
             IEmailTransport postmarkBroadcast,
             IEmailTransport postmarkTransactional,
             IOptions<PostmarkOptions> postmarkOptions
         )
         {
-            _defaultTransport = defaultTransport;
+            _sendGridTransport = sendGridTransport;
             _postmarkBroadcast = postmarkBroadcast;
             _postmarkTransactional = postmarkTransactional;
             var opts = postmarkOptions.Value;
-            _postmarkEnabled = opts.Enabled;
-            _postmarkRecipients = new HashSet<string>(
-                (opts.RoutedRecipients ?? Enumerable.Empty<string>()).Select(r => r.Trim()).Where(r => r.Length > 0),
-                StringComparer.OrdinalIgnoreCase
-            );
+            _usePostmark = opts.Enabled && opts.UsePostmarkAsDefault;
             _transactionalCategories = new HashSet<string>(
                 opts.TransactionalCategories ?? Enumerable.Empty<string>(),
                 StringComparer.OrdinalIgnoreCase
@@ -49,23 +43,30 @@ namespace Web.Services
         /// </summary>
         public IEmailTransport GetTransportForRecipient(string recipientEmail, string category)
         {
-            if (_postmarkEnabled && _postmarkRecipients.Contains(recipientEmail?.Trim() ?? ""))
+            if (_usePostmark)
                 return _transactionalCategories.Contains(category ?? "") ? _postmarkTransactional : _postmarkBroadcast;
 
-            return _defaultTransport;
+            return _sendGridTransport;
         }
 
         /// <summary>
-        /// Returns the default transport (SendGrid). Used for grouped sends where
-        /// per-recipient routing is not applicable.
+        /// Returns the transport for grouped sends based on category.
+        /// Grouped sends can't do per-recipient routing but still need
+        /// the correct stream (broadcast vs transactional).
         /// </summary>
-        public IEmailTransport DefaultTransport => _defaultTransport;
+        public IEmailTransport GetDefaultTransport(string category)
+        {
+            if (_usePostmark)
+                return _transactionalCategories.Contains(category ?? "") ? _postmarkTransactional : _postmarkBroadcast;
+
+            return _sendGridTransport;
+        }
 
         public void Dispose()
         {
-            if (_postmarkBroadcast is IDisposable broadcast && !ReferenceEquals(_postmarkBroadcast, _defaultTransport))
+            if (_postmarkBroadcast is IDisposable broadcast && !ReferenceEquals(_postmarkBroadcast, _sendGridTransport))
                 broadcast.Dispose();
-            if (_postmarkTransactional is IDisposable transactional && !ReferenceEquals(_postmarkTransactional, _defaultTransport))
+            if (_postmarkTransactional is IDisposable transactional && !ReferenceEquals(_postmarkTransactional, _sendGridTransport))
                 transactional.Dispose();
         }
     }

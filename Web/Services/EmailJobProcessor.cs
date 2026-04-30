@@ -922,7 +922,7 @@ namespace Web.Services
                         const string groupedSendCorrelation = "__grouped_send__";
                         // Group sends always use the default transport — per-recipient
                         // routing is not applicable when multiple recipients share a message.
-                        var result = await _transportRouter.DefaultTransport.SendAsync(message, job.Id.ToString(), groupedSendCorrelation, job.Category, ct);
+                        var result = await _transportRouter.GetDefaultTransport(job.Category).SendAsync(message, job.Id.ToString(), groupedSendCorrelation, job.Category, ct);
 
                         var now = DateTime.UtcNow;
                         foreach (var r in pendingRecipients)

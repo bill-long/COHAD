@@ -5,8 +5,8 @@ namespace Web.Configuration
     public class PostmarkOptions
     {
         /// <summary>
-        /// Master switch for Postmark integration. When false, all emails go through the default
-        /// transport (SendGrid) regardless of <see cref="RoutedRecipients"/>.
+        /// Master switch for Postmark integration. When false, all emails go through
+        /// SendGrid regardless of <see cref="UsePostmarkAsDefault"/>.
         /// </summary>
         public bool Enabled { get; set; }
 
@@ -40,11 +40,13 @@ namespace Web.Configuration
         public List<string> TransactionalCategories { get; set; } = new() { "registration", "committee-forward" };
 
         /// <summary>
-        /// Recipient email addresses that should be routed through Postmark during
-        /// the parallel testing phase. When empty and Postmark is enabled, no emails
-        /// are routed to Postmark (opt-in per recipient).
+        /// When true (default) and Postmark is <see cref="Enabled"/>, all emails are sent
+        /// through Postmark. Set to false to fall back to SendGrid for sending while keeping
+        /// the Postmark webhook receiver active (requires <see cref="WebhookToken"/> but not
+        /// <see cref="ServerToken"/>).
+        /// Controlled via environment variable: Postmark__UsePostmarkAsDefault.
         /// </summary>
-        public List<string> RoutedRecipients { get; set; } = new();
+        public bool UsePostmarkAsDefault { get; set; } = true;
 
         /// <summary>
         /// Per-operation timeout in seconds for SMTP connect, authenticate, and send.
