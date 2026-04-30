@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { EmailJobDetail, EmailJobSummary, TestRecipientOption } from '../models';
+import { EmailDeliveryEventDetail, EmailJobDetail, EmailJobSummary, TestRecipientOption } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class EmailJobService {
@@ -25,5 +25,10 @@ export class EmailJobService {
 
   cancelJob(id: string): Observable<EmailJobSummary> {
     return this.httpClient.post<EmailJobSummary>(`api/email/jobs/${id}/cancel`, null);
+  }
+
+  getDeliveryEvents(jobId: string, includePayload = false): Observable<EmailDeliveryEventDetail[]> {
+    const params = includePayload ? '?includePayload=true' : '';
+    return this.httpClient.get<EmailDeliveryEventDetail[]>(`api/email/jobs/${jobId}/delivery-events${params}`);
   }
 }

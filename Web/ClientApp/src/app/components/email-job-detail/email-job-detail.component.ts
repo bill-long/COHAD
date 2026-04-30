@@ -1,11 +1,12 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, Inject, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription } from 'rxjs';
-import { DeliveryStatus, EmailJobDetail, EmailJobStatus, EmailJobRecipientStatus } from 'src/app/models';
+import { Observable, Subscription } from 'rxjs';
+import { DeliveryStatus, EmailDeliveryEventDetail, EmailJobDetail, EmailJobStatus, EmailJobRecipientStatus } from 'src/app/models';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
 import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
+import { ApplicationState, applicationState } from 'src/app/state';
 
 @Component({
   selector: 'app-email-job-detail',
@@ -18,6 +19,14 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
   loading = true;
   errorText: string | null = null;
   actionInProgress = false;
+
+  // Delivery events (admin-only, lazy-loaded per-recipient expand)
+  isAdmin = false;
+  expandedRecipients = new Set<string>();
+  deliveryEvents: EmailDeliveryEventDetail[] | null = null;
+  deliveryEventsLoading = false;
+  deliveryEventsError: string | null = null;
+  private deliveryEventsByEmail = new Map<string, EmailDeliveryEventDetail[]>();
 
   /** Queued for this long without starting counts as stale (client-side nudge only). */
   private readonly staleQueuedThresholdMs = 12 * 60 * 1000;
@@ -32,6 +41,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
     private router: Router,
     private emailJobService: EmailJobService,
     private emailJobNotifications: EmailJobNotificationsService,
+    @Inject(applicationState) private readonly appState$: Observable<ApplicationState>,
   ) {}
 
   ngOnInit(): void {
@@ -40,6 +50,9 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
     this.emailJobNotifications.connect();
 
     this.subscriptions.push(
+      this.appState$.subscribe(s => {
+        this.isAdmin = s.apiUser?.roles?.includes('Administrator') ?? false;
+      }),
       this.emailJobNotifications.progress$.subscribe(event => {
         if (this.job && event.jobId === this.job.id) {
           this.job = {
@@ -65,6 +78,10 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
           this.emailJobService.getJob(this.jobId).subscribe({
             next: detail => {
               this.job = detail;
+              // Refresh delivery events if any recipients are expanded
+              if (this.expandedRecipients.size > 0) {
+                this.loadDeliveryEvents();
+              }
             },
             error: err => {
               this.errorText = httpErrorMessage(err, 'Failed to refresh email job details.');
@@ -242,6 +259,53 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
         return 'Spam';
       default:
         return status;
+    }
+  }
+
+  toggleRecipientEvents(email: string): void {
+    const key = email.toLowerCase();
+    if (this.expandedRecipients.has(key)) {
+      this.expandedRecipients.delete(key);
+    } else {
+      this.expandedRecipients.add(key);
+      if (this.deliveryEvents === null) {
+        this.loadDeliveryEvents();
+      }
+    }
+  }
+
+  loadDeliveryEvents(): void {
+    this.deliveryEventsLoading = true;
+    this.deliveryEventsError = null;
+    this.emailJobService.getDeliveryEvents(this.jobId, true).subscribe({
+      next: events => {
+        this.deliveryEvents = events;
+        this.buildEventsByEmailMap(events);
+        this.deliveryEventsLoading = false;
+      },
+      error: err => {
+        this.deliveryEventsError = httpErrorMessage(err, 'Failed to load delivery events.');
+        this.deliveryEventsLoading = false;
+      },
+    });
+  }
+
+  getEventsForRecipient(email: string): EmailDeliveryEventDetail[] {
+    return this.deliveryEventsByEmail.get(email.toLowerCase()) ?? [];
+  }
+
+  private buildEventsByEmailMap(events: EmailDeliveryEventDetail[]): void {
+    this.deliveryEventsByEmail.clear();
+    for (const evt of events) {
+      const key = evt.email.toLowerCase();
+      if (!this.deliveryEventsByEmail.has(key)) {
+        this.deliveryEventsByEmail.set(key, []);
+      }
+      this.deliveryEventsByEmail.get(key)!.push(evt);
+    }
+    // Sort each recipient's events chronologically
+    for (const evts of this.deliveryEventsByEmail.values()) {
+      evts.sort((a, b) => new Date(a.receivedUtc).getTime() - new Date(b.receivedUtc).getTime());
     }
   }
 }

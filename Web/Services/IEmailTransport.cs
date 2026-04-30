@@ -9,12 +9,12 @@ namespace Web.Services
         public bool Success { get; set; }
 
         /// <summary>
-        /// Provider-specific message ID for webhook correlation (e.g. sg_message_id, SES MessageId).
+        /// Provider-specific message ID for webhook correlation (e.g. sg_message_id).
         /// </summary>
         public string ProviderMessageId { get; set; }
 
         /// <summary>
-        /// Provider name stored on the recipient (e.g. "SendGrid", "Ses").
+        /// Provider name stored on the recipient (e.g. "SendGrid").
         /// </summary>
         public string ProviderName { get; set; }
 
@@ -22,7 +22,7 @@ namespace Web.Services
     }
 
     /// <summary>
-    /// Abstraction over email transport providers (SMTP/SendGrid, SES).
+    /// Abstraction over email transport providers (currently SMTP/SendGrid).
     /// Each implementation handles connection lifecycle and provider-specific details.
     /// </summary>
     public interface IEmailTransport

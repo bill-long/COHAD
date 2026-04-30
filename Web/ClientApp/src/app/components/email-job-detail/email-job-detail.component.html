@@ -107,6 +107,7 @@
           <table *ngIf="job.recipients && job.recipients.length > 0" class="recipients-table">
             <thead>
               <tr>
+                <th *ngIf="isAdmin" class="col-expand"></th>
                 <th class="col-email">Email</th>
                 <th class="col-r-status">Status</th>
                 <th class="col-delivery">Delivery</th>
@@ -115,25 +116,84 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let r of job.recipients">
-                <td class="cell-truncate">{{ r.email }}</td>
-                <td>
-                  <span class="status-badge" [ngClass]="recipientStatusClass(r.status)">{{ r.status }}</span>
-                </td>
-                <td class="col-delivery">
-                  <span
-                    *ngIf="r.deliveryStatus && r.deliveryStatus !== 'Unknown'"
-                    class="status-badge"
-                    [ngClass]="deliveryStatusClass(r.deliveryStatus)"
-                    [title]="r.deliveryStatusUpdatedUtc ? (r.deliveryStatusUpdatedUtc | date: 'medium') : ''"
-                  >
-                    {{ deliveryStatusLabel(r.deliveryStatus) }}
-                  </span>
-                  <span *ngIf="!r.deliveryStatus || r.deliveryStatus === 'Unknown'" class="delivery-unknown">—</span>
-                </td>
-                <td class="cell-truncate error-text">{{ r.error }}</td>
-                <td class="cell-date">{{ r.sentUtc | date: 'mediumTime' }}</td>
-              </tr>
+              <ng-container *ngFor="let r of job.recipients">
+                <tr [class.expandable-row]="isAdmin" (click)="isAdmin && toggleRecipientEvents(r.email)">
+                  <td *ngIf="isAdmin" class="cell-expand">
+                    <span class="toggle-arrow" [class.expanded]="expandedRecipients.has(r.email.toLowerCase())">▶</span>
+                  </td>
+                  <td class="cell-truncate">{{ r.email }}</td>
+                  <td>
+                    <span class="status-badge" [ngClass]="recipientStatusClass(r.status)">{{ r.status }}</span>
+                  </td>
+                  <td class="col-delivery">
+                    <span
+                      *ngIf="r.deliveryStatus && r.deliveryStatus !== 'Unknown'"
+                      class="status-badge"
+                      [ngClass]="deliveryStatusClass(r.deliveryStatus)"
+                      [title]="r.deliveryStatusUpdatedUtc ? (r.deliveryStatusUpdatedUtc | date: 'medium') : ''"
+                    >
+                      {{ deliveryStatusLabel(r.deliveryStatus) }}
+                    </span>
+                    <span *ngIf="!r.deliveryStatus || r.deliveryStatus === 'Unknown'" class="delivery-unknown">—</span>
+                  </td>
+                  <td class="cell-truncate error-text">{{ r.error }}</td>
+                  <td class="cell-date">{{ r.sentUtc | date: 'mediumTime' }}</td>
+                </tr>
+                <!-- Inline delivery events for this recipient (admin only) -->
+                <tr *ngIf="isAdmin && expandedRecipients.has(r.email.toLowerCase())" class="recipient-events-row">
+                  <td [attr.colspan]="6">
+                    <div *ngIf="deliveryEventsLoading" class="recipient-events-loading">
+                      <mat-spinner diameter="18"></mat-spinner>
+                      <span>Loading…</span>
+                    </div>
+                    <div *ngIf="deliveryEventsError" class="cohad-inline-alert cohad-inline-alert--error">
+                      {{ deliveryEventsError }}
+                    </div>
+                    <ng-container *ngIf="!deliveryEventsLoading && !deliveryEventsError && deliveryEvents !== null">
+                      <div *ngIf="getEventsForRecipient(r.email).length === 0" class="empty-state-text">
+                        No delivery events recorded.
+                      </div>
+                      <table *ngIf="getEventsForRecipient(r.email).length > 0" class="events-table">
+                        <thead>
+                          <tr>
+                            <th class="col-evt-time">Time</th>
+                            <th class="col-evt-type">Event</th>
+                            <th class="col-evt-status">Status</th>
+                            <th class="col-evt-provider">Provider</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <ng-container *ngFor="let evt of getEventsForRecipient(r.email)">
+                            <tr>
+                              <td class="cell-date">{{ evt.receivedUtc | date: 'medium' }}</td>
+                              <td>{{ evt.providerEventType || '—' }}</td>
+                              <td>
+                                <span
+                                  *ngIf="evt.deliveryStatus && evt.deliveryStatus !== 'Unknown'"
+                                  class="status-badge"
+                                  [ngClass]="deliveryStatusClass(evt.deliveryStatus)"
+                                >
+                                  {{ deliveryStatusLabel(evt.deliveryStatus) }}
+                                </span>
+                                <span *ngIf="!evt.deliveryStatus || evt.deliveryStatus === 'Unknown'" class="delivery-unknown">—</span>
+                              </td>
+                              <td>{{ evt.provider || '—' }}</td>
+                            </tr>
+                            <tr *ngIf="evt.providerPayloadJson" class="payload-row">
+                              <td colspan="4">
+                                <details class="payload-details">
+                                  <summary>{{ evt.providerEventType || 'Event' }} payload</summary>
+                                  <pre class="payload-json">{{ evt.providerPayloadJson }}</pre>
+                                </details>
+                              </td>
+                            </tr>
+                          </ng-container>
+                        </tbody>
+                      </table>
+                    </ng-container>
+                  </td>
+                </tr>
+              </ng-container>
             </tbody>
           </table>
         </div>

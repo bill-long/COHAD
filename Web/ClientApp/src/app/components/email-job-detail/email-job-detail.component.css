@@ -308,3 +308,143 @@
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
+
+/* Delivery Events — inline per-recipient expand */
+.col-expand {
+  width: 30px;
+  padding: 0 4px !important;
+}
+
+.cell-expand {
+  text-align: center;
+  cursor: pointer;
+  padding: 0 4px !important;
+}
+
+.expandable-row {
+  cursor: pointer;
+}
+
+.expandable-row:hover {
+  background: var(--surface-subtle);
+}
+
+.toggle-arrow {
+  display: inline-block;
+  font-size: 0.65rem;
+  transition: transform 200ms ease;
+  color: var(--text-muted);
+}
+
+.toggle-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+.recipient-events-row > td {
+  padding: 8px 12px 12px !important;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.recipient-events-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.empty-state-text {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 0.25rem 0;
+  font-size: 0.85rem;
+}
+
+.events-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.events-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-bottom: 2px solid var(--border-faint);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.events-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-faint);
+  vertical-align: middle;
+  font-size: 0.85rem;
+}
+
+.col-evt-time {
+  width: 180px;
+}
+.col-evt-type {
+  width: auto;
+}
+.col-evt-status {
+  width: 90px;
+}
+.col-evt-provider {
+  width: 90px;
+}
+
+.payload-row td {
+  padding: 0 8px 4px !important;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.payload-details summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+.payload-details summary:hover {
+  color: var(--primary-sage);
+}
+
+.payload-json {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-faint);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 250px;
+  overflow-y: auto;
+  margin: 4px 0 0;
+}
+
+@media (max-width: 600px) {
+  .col-evt-provider {
+    display: none;
+  }
+
+  .col-evt-time {
+    width: auto;
+  }
+
+  .events-table th,
+  .events-table td {
+    padding: 3px 5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .col-evt-status {
+    display: none;
+  }
+}

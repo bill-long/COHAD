@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Amazon.SimpleEmailV2;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -422,13 +421,9 @@ namespace Web
                 services.AddHostedService(sp => sp.GetRequiredService<CommitteeMailPoller>());
             }
 
-            // Email transport abstraction (SMTP / SES per-recipient routing)
-            services.Configure<SesOptions>(Configuration.GetSection("Ses"));
+            // Email transport
             if (useMockData)
             {
-                // MockData environment uses MockEmailTransport for everything — force SES disabled
-                // via PostConfigure so IOptions<SesOptions> consumers see a single source of truth.
-                services.PostConfigure<SesOptions>(opts => opts.Enabled = false);
                 services.AddSingleton<IEmailTransport>(new MockData.MockEmailTransport());
             }
             else
@@ -451,45 +446,6 @@ namespace Web
                     );
                 });
             }
-
-            var sesOptions = Configuration.GetSection("Ses").Get<SesOptions>() ?? new SesOptions();
-            if (useMockData)
-                sesOptions.Enabled = false;
-            if (sesOptions.Enabled)
-            {
-                if (string.IsNullOrWhiteSpace(sesOptions.Region))
-                {
-                    throw new InvalidOperationException(
-                        "SES is enabled, but Ses:Region is missing or empty. "
-                            + "Configure a valid AWS region system name such as 'us-west-2'."
-                    );
-                }
-
-                var sesRegion = Amazon.RegionEndpoint.EnumerableAllRegions.FirstOrDefault(r =>
-                    string.Equals(r.SystemName, sesOptions.Region, StringComparison.OrdinalIgnoreCase)
-                );
-
-                if (sesRegion == null)
-                {
-                    throw new InvalidOperationException(
-                        $"SES is enabled, but Ses:Region '{sesOptions.Region}' is not a valid AWS region system name."
-                    );
-                }
-
-                services.AddSingleton<IAmazonSimpleEmailServiceV2>(sp =>
-                {
-                    return new Amazon.SimpleEmailV2.AmazonSimpleEmailServiceV2Client(sesRegion);
-                });
-                services.AddSingleton<SesEmailTransport>();
-            }
-
-            services.AddSingleton<EmailTransportRouter>(sp =>
-            {
-                var smtp = sp.GetRequiredService<IEmailTransport>();
-                // When SES is disabled, use SMTP as the SES transport fallback (router always returns SMTP)
-                var ses = sesOptions.Enabled ? (IEmailTransport)sp.GetRequiredService<SesEmailTransport>() : smtp;
-                return new EmailTransportRouter(smtp, ses, sp.GetRequiredService<IOptions<SesOptions>>());
-            });
 
             // Retention cleanup (invoked on submission; best-effort)
             services.AddScoped<EmailJobCleanupService>();
