@@ -456,6 +456,14 @@ namespace Web
                 postmarkOptions.Enabled = false;
             if (postmarkOptions.Enabled)
             {
+                if (string.IsNullOrWhiteSpace(postmarkOptions.ServerToken))
+                {
+                    throw new InvalidOperationException(
+                        "Postmark is enabled, but Postmark:ServerToken is missing or empty. "
+                            + "Set it via user secrets or environment variable (Postmark__ServerToken)."
+                    );
+                }
+
                 services.AddSingleton<PostmarkEmailTransport>(sp =>
                 {
                     var opts = sp.GetRequiredService<IOptions<PostmarkOptions>>().Value;
