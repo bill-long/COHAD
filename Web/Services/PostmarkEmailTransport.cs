@@ -6,7 +6,6 @@ using MailKit;
 using MailKit.Net.Smtp;
 using Microsoft.Extensions.Logging;
 using MimeKit;
-using Web.Configuration;
 
 namespace Web.Services
 {

@@ -25,7 +25,6 @@ namespace Web.Services
         private DateTime _lastActivityUtc;
 
         private const int MaxProtocolLogBytes = 64 * 1024;
-        private const int MaxSmtpTranscriptCharsToLog = 32 * 1024;
 
         public string ProviderName => "SendGrid";
 
