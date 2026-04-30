@@ -26,6 +26,9 @@ namespace Web.UnitTests
         public PostmarkWebhookControllerTests()
         {
             _env.Setup(e => e.EnvironmentName).Returns("MockData");
+            _deliveryEventRepo
+                .Setup(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()))
+                .Returns(Task.CompletedTask);
         }
 
         private PostmarkWebhookController CreateController(string body)
