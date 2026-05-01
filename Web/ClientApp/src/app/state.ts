@@ -102,15 +102,28 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
 
       if (action instanceof AuthenticatedUserChanged) {
         const hasAccessToken = action.authUser?.accessToken != null;
+        const currentSub = state.authUser?.identityClaims?.sub;
+        const newSub = action.authUser?.identityClaims?.sub;
+        const isSamePrincipalRefresh =
+          hasAccessToken &&
+          state.authUser?.accessToken != null &&
+          currentSub != null &&
+          newSub != null &&
+          currentSub === newSub;
         newState = {
           allHomes: state.allHomes,
           allUsers: state.allUsers,
           authUser: action.authUser,
-          // Always clear apiUser when auth identity changes to prevent stale role/navigation state.
-          apiUser: null,
+          // Preserve apiUser during same-principal token refreshes to avoid UI flicker.
+          // Clear on initial login or principal change to prevent stale role/navigation state.
+          apiUser: isSamePrincipalRefresh ? state.apiUser : null,
           directory: state.directory,
           operationsInProgress: state.operationsInProgress,
-          authBootstrapStatus: hasAccessToken ? 'inProgress' : 'idle',
+          authBootstrapStatus: hasAccessToken
+            ? isSamePrincipalRefresh
+              ? state.authBootstrapStatus
+              : 'inProgress'
+            : 'idle',
           authSessionResolved: state.authSessionResolved,
         };
       } else if (action instanceof AuthSessionResolved) {
