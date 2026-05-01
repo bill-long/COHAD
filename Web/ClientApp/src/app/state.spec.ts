@@ -61,6 +61,56 @@ describe('application state auth bootstrap', () => {
     expect(latestState.apiUser?.uniqueId).toBe('u-1');
   });
 
+  it('preserves apiUser and authBootstrapStatus during same-principal token refresh', () => {
+    const dispatcher = new Subject<Action>();
+    const state$ = applicationStateFactory(initialStateValue, dispatcher);
+    let latestState: ApplicationState = initialStateValue;
+    state$.subscribe(s => (latestState = s));
+
+    // Initial login
+    dispatcher.next(new AuthenticatedUserChanged(createAuthUser()));
+    dispatcher.next(new LoadUserCompleted(createApiUser()));
+    expect(latestState.authBootstrapStatus).toBe('completed');
+    expect(latestState.apiUser?.uniqueId).toBe('u-1');
+
+    // Token refresh (same sub, different token)
+    const refreshedAuth = createAuthUser();
+    refreshedAuth.accessToken = 'token-2';
+    dispatcher.next(new AuthenticatedUserChanged(refreshedAuth));
+
+    expect(latestState.authBootstrapStatus).toBe('completed');
+    expect(latestState.apiUser?.uniqueId).toBe('u-1');
+  });
+
+  it('clears apiUser and sets inProgress when principal changes', () => {
+    const dispatcher = new Subject<Action>();
+    const state$ = applicationStateFactory(initialStateValue, dispatcher);
+    let latestState: ApplicationState = initialStateValue;
+    state$.subscribe(s => (latestState = s));
+
+    // Initial login
+    dispatcher.next(new AuthenticatedUserChanged(createAuthUser()));
+    dispatcher.next(new LoadUserCompleted(createApiUser()));
+    expect(latestState.authBootstrapStatus).toBe('completed');
+
+    // Different user signs in (different sub)
+    const differentUser: AuthUser = {
+      accessToken: 'token-different',
+      identityClaims: {
+        emails: ['other@example.com'],
+        family_name: 'Other',
+        given_name: 'User',
+        idp: 'idp',
+        sub: 'different-sub',
+        streetAddress: '',
+      },
+    };
+    dispatcher.next(new AuthenticatedUserChanged(differentUser));
+
+    expect(latestState.authBootstrapStatus).toBe('inProgress');
+    expect(latestState.apiUser).toBeNull();
+  });
+
   it('returns to idle and clears apiUser on sign out', () => {
     const dispatcher = new Subject<Action>();
     const state$ = applicationStateFactory(initialStateValue, dispatcher);
