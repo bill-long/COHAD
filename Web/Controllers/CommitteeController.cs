@@ -974,8 +974,8 @@ namespace Web.Controllers
             );
 
             await _heldMessageHub.Clients
-                .Group(HeldMessageNotificationsHub.AdminGroupName)
-                .SendAsync("HeldMessageResolved", new { id = messageId.ToString("D"), committeeId = key });
+                .Group(HeldMessageNotificationsHub.CommitteeGroupName(key))
+                .SendAsync("HeldMessagesChanged", new { committeeId = key });
 
             return Ok(new { JobId = job.Id, Status = "Approved" });
         }
@@ -1019,33 +1019,37 @@ namespace Web.Controllers
             );
 
             await _heldMessageHub.Clients
-                .Group(HeldMessageNotificationsHub.AdminGroupName)
-                .SendAsync("HeldMessageResolved", new { id = messageId.ToString("D"), committeeId = key });
+                .Group(HeldMessageNotificationsHub.CommitteeGroupName(key))
+                .SendAsync("HeldMessagesChanged", new { committeeId = key });
 
             return Ok(new { Status = "Rejected" });
         }
 
         /// <summary>
-        /// Returns all held messages with status Held across all committees.
+        /// Returns held messages (status Held) for every committee the caller can manage —
+        /// all committees for an Administrator, the caller's own committees otherwise.
         /// Used by the notification service to populate the badge on initial load.
         /// </summary>
         [HttpGet("admin/held-messages/pending")]
-        [Authorize(Policy = "Administrator")]
+        [Authorize(Policy = "CommitteeEditor")]
         public async Task<IActionResult> GetAllPendingHeldMessages()
         {
             var apiUser = await GetApiUserAsync();
             if (apiUser == null)
                 return Forbid();
 
-            var committees = await _committeeRepository.GetAllAsync();
+            var committees = (await _committeeRepository.GetAllAsync())
+                .Where(c => CanManageCommittee(apiUser, c))
+                .ToList();
             var committeeMap = committees.ToDictionary(c => c.Id, c => c.DisplayName);
 
             var allHeld = new List<object>();
             foreach (var c in committees)
             {
-                var held = await _heldMessageRepository.GetByCommitteeIdAsync(c.Id);
+                // Filter to Held in the query so the row limit counts only pending messages
+                // (resolved/expired rows must not crowd out older still-pending ones).
+                var held = await _heldMessageRepository.GetByCommitteeIdAsync(c.Id, status: HeldMessageStatus.Held);
                 allHeld.AddRange(held
-                    .Where(h => h.Status == HeldMessageStatus.Held)
                     .Select(h => new
                     {
                         id = h.Id.ToString("D"),
@@ -1158,14 +1162,8 @@ namespace Web.Controllers
             return await _userRepository.GetByUniqueIdAsync(uniqueId);
         }
 
-        private static bool CanManageCommittee(Models.User user, Committee committee)
-        {
-            if (user.Roles == null)
-                return false;
-            if (user.Roles.Contains(Models.User.Role.Administrator))
-                return true;
-            return committee.ManagementRole.HasValue && user.Roles.Contains(committee.ManagementRole.Value);
-        }
+        private static bool CanManageCommittee(Models.User user, Committee committee) =>
+            CommitteeAuthorization.CanManage(user, committee);
 
         private async Task<IReadOnlyDictionary<Guid, Resident>> ResolveResidentsForCommittees(
             IEnumerable<Committee> committees

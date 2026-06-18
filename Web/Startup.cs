@@ -238,6 +238,9 @@ namespace Web
                 );
 
                 // Any role that can manage at least one committee — used for committee admin endpoints.
+                // Keep this set in sync with the frontend `rolePermissions.manageCommitteesRoles`
+                // (Web/ClientApp/src/app/services/rolepermission.service.ts); they gate the same feature
+                // (committee admin + held-message notifications) on the server and client respectively.
                 options.AddPolicy(
                     "CommitteeEditor",
                     policy =>

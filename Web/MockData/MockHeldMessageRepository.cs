@@ -68,12 +68,12 @@ namespace Web.MockData
             return Task.CompletedTask;
         }
 
-        public Task<List<HeldMessage>> GetByCommitteeIdAsync(string committeeId, int limit = 50)
+        public Task<List<HeldMessage>> GetByCommitteeIdAsync(string committeeId, int limit = 50, HeldMessageStatus? status = null)
         {
             lock (_messages)
             {
                 var list = _messages
-                    .Values.Where(m => m.CommitteeId == committeeId)
+                    .Values.Where(m => m.CommitteeId == committeeId && (!status.HasValue || m.Status == status.Value))
                     .OrderByDescending(m => m.HeldUtc)
                     .Take(Math.Clamp(limit, 1, 200))
                     .Select(Clone)

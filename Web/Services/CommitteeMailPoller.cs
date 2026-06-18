@@ -544,19 +544,12 @@ namespace Web.Services
 
             try
             {
+                // Signal-only: carry just the committee id. Clients re-fetch the pending list via
+                // the authorized REST endpoint, so message details never flow to a stale connection
+                // whose owner's moderation rights were revoked after they connected.
                 await _heldMessageHub.Clients
-                    .Group(HeldMessageNotificationsHub.AdminGroupName)
-                    .SendAsync("HeldMessageCreated", new
-                    {
-                        id = held.Id.ToString("D"),
-                        committeeId = held.CommitteeId,
-                        committeeDisplayName = committee.DisplayName,
-                        senderEmail = held.SenderEmail,
-                        senderName = held.SenderName,
-                        subject = held.Subject,
-                        receivedUtc = held.ReceivedUtc,
-                        heldUtc = held.HeldUtc,
-                    }, ct);
+                    .Group(HeldMessageNotificationsHub.CommitteeGroupName(held.CommitteeId))
+                    .SendAsync("HeldMessagesChanged", new { committeeId = held.CommitteeId }, ct);
             }
             catch (Exception ex)
             {

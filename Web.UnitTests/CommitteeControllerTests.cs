@@ -97,7 +97,8 @@ public sealed class CommitteeControllerTests
         string idp = "google.com",
         IHeldMessageRepository? heldMessageRepo = null,
         IEmailJobRepository? emailJobRepo = null,
-        IServiceProvider? serviceProvider = null
+        IServiceProvider? serviceProvider = null,
+        Mock<IHubClients>? hubClientsMock = null
     )
     {
         committeeRepo ??= Mock.Of<ICommitteeRepository>();
@@ -113,7 +114,7 @@ public sealed class CommitteeControllerTests
         var hubClientProxy = new Mock<IClientProxy>();
         hubClientProxy.Setup(p => p.SendCoreAsync(It.IsAny<string>(), It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
-        var hubClients = new Mock<IHubClients>();
+        var hubClients = hubClientsMock ?? new Mock<IHubClients>();
         hubClients.Setup(c => c.Group(It.IsAny<string>())).Returns(hubClientProxy.Object);
         var hubContext = new Mock<IHubContext<HeldMessageNotificationsHub>>();
         hubContext.Setup(h => h.Clients).Returns(hubClients.Object);
@@ -1866,6 +1867,118 @@ public sealed class CommitteeControllerTests
         var result = await c.GetHeldMessageBody("social", heldId);
 
         Assert.IsType<ForbidResult>(result);
+    }
+
+    // ── Pending held messages (notification badge) ──────────────────
+
+    private static List<HeldMessage> HeldList(string committeeId, params HeldMessageStatus[] statuses)
+    {
+        return statuses
+            .Select((s, i) => new HeldMessage
+            {
+                Id = Guid.NewGuid(),
+                CommitteeId = committeeId,
+                CommitteeEmail = $"{committeeId}@cohad.org",
+                InternetMessageId = $"<{committeeId}-{i}@example.com>",
+                SenderEmail = "sender@example.com",
+                Subject = $"{committeeId} {i}",
+                Status = s,
+                ReceivedUtc = DateTime.UtcNow,
+                HeldUtc = DateTime.UtcNow,
+            })
+            .ToList();
+    }
+
+    [Fact]
+    public async Task GetAllPendingHeldMessages_admin_sees_all_committees_held_only()
+    {
+        var board = SampleCommittee("board");
+        board.ManagementRole = User.Role.Board;
+        var social = SampleCommittee("social");
+        social.ManagementRole = User.Role.SocialCommittee;
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { board, social });
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        // The endpoint must request only Held from the repo (so resolved rows can't crowd out the
+        // limit); these setups only return for status: Held.
+        mockHeldRepo.Setup(r => r.GetByCommitteeIdAsync("board", It.IsAny<int>(), HeldMessageStatus.Held))
+            .ReturnsAsync(HeldList("board", HeldMessageStatus.Held));
+        mockHeldRepo.Setup(r => r.GetByCommitteeIdAsync("social", It.IsAny<int>(), HeldMessageStatus.Held))
+            .ReturnsAsync(HeldList("social", HeldMessageStatus.Held));
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            userRepo: AdminUserRepo()
+        );
+        var result = await c.GetAllPendingHeldMessages();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Equal(2, ((System.Collections.IEnumerable)ok.Value!).Cast<object>().Count());
+        Assert.Contains("board", json);
+        Assert.Contains("social", json);
+        // Status filtering happens in the query, never as an unfiltered fetch.
+        mockHeldRepo.Verify(r => r.GetByCommitteeIdAsync(It.IsAny<string>(), It.IsAny<int>(), HeldMessageStatus.Held), Times.Exactly(2));
+        mockHeldRepo.Verify(r => r.GetByCommitteeIdAsync(It.IsAny<string>(), It.IsAny<int>(), (HeldMessageStatus?)null), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetAllPendingHeldMessages_committee_role_sees_only_own_committee()
+    {
+        var board = SampleCommittee("board");
+        board.ManagementRole = User.Role.Board;
+        var social = SampleCommittee("social");
+        social.ManagementRole = User.Role.SocialCommittee;
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { board, social });
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByCommitteeIdAsync("board", It.IsAny<int>(), HeldMessageStatus.Held))
+            .ReturnsAsync(HeldList("board", HeldMessageStatus.Held));
+        mockHeldRepo.Setup(r => r.GetByCommitteeIdAsync("social", It.IsAny<int>(), It.IsAny<HeldMessageStatus?>()))
+            .ReturnsAsync(HeldList("social", HeldMessageStatus.Held));
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            userRepo: RoleUserRepo(User.Role.Board)
+        );
+        var result = await c.GetAllPendingHeldMessages();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Contains("board", json);
+        Assert.DoesNotContain("social", json);
+        // The social committee's held messages must never be queried for a Board-only user.
+        mockHeldRepo.Verify(r => r.GetByCommitteeIdAsync("social", It.IsAny<int>(), It.IsAny<HeldMessageStatus?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RejectHeldMessage_broadcasts_to_committee_group()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = SampleHeldMessage(heldId);
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var hubClients = new Mock<IHubClients>();
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            hubClientsMock: hubClients
+        );
+
+        await c.RejectHeldMessage("board", heldId);
+
+        hubClients.Verify(h => h.Group("held:committee:board"), Times.Once);
     }
 
     [Fact]

@@ -273,3 +273,6 @@ vendor-import-output/
 
 # Claude Code — machine-local settings
 .claude/settings.local.json
+
+# Git Bash / MSYS2 crash artifacts
+*.stackdump
