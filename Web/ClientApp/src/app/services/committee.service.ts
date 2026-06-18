@@ -68,6 +68,17 @@ export interface HeldMessage {
   reviewedUtc: string | null;
 }
 
+export interface HeldMessageBody {
+  available: boolean;
+  reason?: string;
+  isHtml?: boolean;
+  body?: string;
+  senderEmail: string | null;
+  senderName: string | null;
+  subject: string | null;
+  receivedUtc: string;
+}
+
 export interface ResidentPickerItem {
   id: string;
   displayName: string;
@@ -122,6 +133,12 @@ export class CommitteeService {
 
   getHeldMessages(key: string): Observable<HeldMessage[]> {
     return this.httpClient.get<HeldMessage[]>(`api/committee/admin/${encodeURIComponent(key)}/forwarding/held`);
+  }
+
+  getHeldMessageBody(key: string, messageId: string): Observable<HeldMessageBody> {
+    return this.httpClient.get<HeldMessageBody>(
+      `api/committee/admin/${encodeURIComponent(key)}/forwarding/held/${encodeURIComponent(messageId)}/body`,
+    );
   }
 
   approveHeldMessage(key: string, messageId: string): Observable<{ jobId: string; status: string }> {
