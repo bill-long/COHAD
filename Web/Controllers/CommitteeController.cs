@@ -689,7 +689,7 @@ namespace Web.Controllers
             var original = await TryFetchOriginalMessageAsync(graphReader, committee, held);
             if (original?.Body == null || string.IsNullOrEmpty(original.Body.Content))
             {
-                return Ok(Unavailable(held, "The original message could not be found in the mailbox."));
+                return Ok(Unavailable(held, "The original message body could not be retrieved — it may be empty, no longer in the mailbox, or temporarily unavailable."));
             }
 
             // Body is returned as-is (no server-side sanitization). The client renders HTML

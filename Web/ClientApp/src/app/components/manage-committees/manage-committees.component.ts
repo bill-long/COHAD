@@ -619,18 +619,19 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Wraps the untrusted email HTML in a document with a Content-Security-Policy that
-   * blocks (or, once the admin opts in, allows) remote content. The wrapper's CSP applies
-   * to the whole document, including any nested html/head the email may carry. The iframe
-   * sandbox already disables scripts; this adds image/style/font control and blocks
-   * base-uri/form hijacking on top.
+   * Wraps the still-untrusted email HTML in a document with a Content-Security-Policy that
+   * blocks (or, once the admin opts in, allows) remote content. This does NOT sanitize the
+   * body — the security boundary is the sandboxed iframe (no scripts, no navigation, opaque
+   * origin) plus this CSP. The wrapper's CSP applies to the whole document, including any
+   * nested html/head the email may carry, and blocks base-uri/form hijacking on top.
    *
-   * `<meta http-equiv="refresh">` is stripped first: CSP does not govern document
-   * self-navigation, so without this an email could auto-navigate the frame to a remote
-   * URL (a tracking beacon) even while images are blocked.
+   * `<meta http-equiv="refresh">` is removed first as defense-in-depth: CSP does not govern
+   * document self-navigation, so an email could otherwise try to auto-navigate the frame to a
+   * remote URL (a tracking beacon). (The sandbox already blocks meta-refresh, since it lacks
+   * allow-scripts; this removal is belt-and-suspenders.)
    */
   private buildBodyDoc(html: string, imagesBlocked: boolean): SafeHtml {
-    const sanitized = html.replace(/<meta\b[^>]*http-equiv\s*=\s*["']?\s*refresh\b[^>]*>/gi, '');
+    const withoutMetaRefresh = html.replace(/<meta\b[^>]*http-equiv\s*=\s*["']?\s*refresh\b[^>]*>/gi, '');
     // Remote sources are appended only when the admin opts in via "Display images".
     // img-src additionally allows cid: (embedded message parts) once unblocked.
     const remote = imagesBlocked ? '' : ' http: https:';
@@ -643,7 +644,9 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
       `<!DOCTYPE html><html><head><meta charset="utf-8">` +
       `<meta http-equiv="Content-Security-Policy" content="${csp}">` +
       `<meta name="referrer" content="no-referrer">` +
-      `</head><body>${sanitized}</body></html>`;
+      `</head><body>${withoutMetaRefresh}</body></html>`;
+    // bypassSecurityTrustHtml is safe ONLY because this string is bound to the sandboxed
+    // iframe's srcdoc; never bind it to a parent-page [innerHTML].
     return this.sanitizer.bypassSecurityTrustHtml(doc);
   }
 
