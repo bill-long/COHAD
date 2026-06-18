@@ -128,6 +128,9 @@ namespace Web.Controllers
             var residents = await _residentRepository.GetAllAsync();
             return Ok(
                 residents
+                    // Committee members are adults; exclude children (they have no surname/email and
+                    // shouldn't be selectable, e.g. searching "Justin" returning a child).
+                    .Where(r => r.ResidentType != Resident.Type.Child)
                     .OrderBy(r => r.GivenName)
                     .ThenBy(r => r.Surname)
                     .Select(r => new
@@ -196,6 +199,20 @@ namespace Web.Controllers
             if (!CanManageCommittee(apiUser, committee))
                 return Forbid();
 
+            // Route every validation rejection through here so this class of failure (a 400 the user
+            // sees as a generic "Failed to save") is diagnosable from telemetry: each reason is logged
+            // as a structured warning that surfaces in Application Insights traces.
+            BadRequestObjectResult Invalid(string reason)
+            {
+                _logger.LogWarning(
+                    "Committee update rejected. Committee={CommitteeKey}, User={UserId}, Reason={Reason}",
+                    key,
+                    apiUser.UniqueId,
+                    reason
+                );
+                return BadRequest(reason);
+            }
+
             CommitteeUpdateRequest request;
             try
             {
@@ -206,11 +223,11 @@ namespace Web.Controllers
             }
             catch
             {
-                return BadRequest("Invalid JSON payload.");
+                return Invalid("Invalid JSON payload.");
             }
 
             if (request == null)
-                return BadRequest("Empty request.");
+                return Invalid("Empty request.");
 
             committee.Description = request.Description ?? committee.Description;
 
@@ -235,7 +252,7 @@ namespace Web.Controllers
 
             if (requestMemberIds.Count > 0)
             {
-                return BadRequest($"Duplicate member IDs: {string.Join(", ", requestMemberIds)}");
+                return Invalid($"Duplicate member IDs: {string.Join(", ", requestMemberIds)}");
             }
 
             var updatedMembers = new List<CommitteeMember>();
@@ -248,7 +265,7 @@ namespace Web.Controllers
 
             if (duplicatePhotoKeys.Count > 0)
             {
-                return BadRequest($"Duplicate photo upload keys: {string.Join(", ", duplicatePhotoKeys)}");
+                return Invalid($"Duplicate photo upload keys: {string.Join(", ", duplicatePhotoKeys)}");
             }
 
             var photoLookup = uploadedPhotos.ToDictionary(
@@ -270,7 +287,7 @@ namespace Web.Controllers
 
                 if (unknownPhotoKeys.Count > 0)
                 {
-                    return BadRequest($"Unknown photo upload keys: {string.Join(", ", unknownPhotoKeys)}");
+                    return Invalid($"Unknown photo upload keys: {string.Join(", ", unknownPhotoKeys)}");
                 }
             }
 
@@ -282,7 +299,7 @@ namespace Web.Controllers
             {
                 if (uploadedPhotos.Count > 0)
                 {
-                    return BadRequest("Photo uploads are not allowed when Members is omitted.");
+                    return Invalid("Photo uploads are not allowed when Members is omitted.");
                 }
 
                 // Preserve existing members exactly as-is (no reordering or dedup).
@@ -310,14 +327,14 @@ namespace Web.Controllers
 
                 if (missingResidentIds.Count > 0)
                 {
-                    return BadRequest($"Unknown resident IDs: {string.Join(", ", missingResidentIds)}");
+                    return Invalid($"Unknown resident IDs: {string.Join(", ", missingResidentIds)}");
                 }
 
                 foreach (var mu in request.Members.Where(m => m != null))
                 {
                     if (mu.ResidentId == Guid.Empty)
                     {
-                        return BadRequest("Each member must reference a valid ResidentId.");
+                        return Invalid("Each member must reference a valid ResidentId.");
                     }
 
                     var memberId = (mu.Id.HasValue && mu.Id.Value != Guid.Empty) ? mu.Id.Value : Guid.NewGuid();
@@ -342,7 +359,7 @@ namespace Web.Controllers
                     {
                         if (photoFile.Length > _storageOptions.MaxUploadBytes)
                         {
-                            return BadRequest(
+                            return Invalid(
                                 $"Photo for member {memberId:D} exceeds max allowed size of {_storageOptions.MaxUploadBytes} bytes."
                             );
                         }
@@ -352,13 +369,13 @@ namespace Web.Controllers
                             && !photoFile.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
                         )
                         {
-                            return BadRequest($"Photo for member {memberId:D} must use an image/* Content-Type.");
+                            return Invalid($"Photo for member {memberId:D} must use an image/* Content-Type.");
                         }
 
                         var ext = Path.GetExtension(photoFile.FileName);
                         if (!AllowedPhotoExtensions.Contains(ext))
                         {
-                            return BadRequest($"Unsupported photo format: {ext}");
+                            return Invalid($"Unsupported photo format: {ext}");
                         }
 
                         var result = await _imageUploadHelper.ConvertAndUploadAsync(
