@@ -1,9 +1,9 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Inject, Injectable } from '@angular/core';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { OAuthService } from 'angular-oauth2-oidc';
-import { BehaviorSubject, Observable } from 'rxjs';
-import { distinctUntilChanged, map } from 'rxjs/operators';
+import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged, map } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
 import { ApplicationState, applicationState } from 'src/app/state';
 import { MockAuthTokenService } from './mock-auth-token.service';
@@ -27,6 +27,19 @@ export class HeldMessageNotificationsService {
   private readonly unreadCountSubject = new BehaviorSubject<number>(0);
   private connection: HubConnection | null = null;
   private pendingConnection: HubConnection | null = null;
+
+  /**
+   * Monotonic token guarding against stale/concurrent re-fetches: only the most recently issued
+   * refresh may apply its response, and teardown bumps it so an in-flight response cannot resurrect
+   * cleared state after moderation rights are revoked.
+   */
+  private refreshGeneration = 0;
+  /** Coalesces bursts of hub signals into a single re-fetch. */
+  private readonly hubSignal$ = new Subject<void>();
+  private hubSignalSub: Subscription | null = null;
+
+  /** Debounce window for collapsing a burst of hub signals into one re-fetch. */
+  private static readonly HubRefreshDebounceMs = 400;
 
   readonly notifications$ = this.notificationsSubject.asObservable();
   readonly unreadCount$ = this.unreadCountSubject.asObservable();
@@ -61,6 +74,12 @@ export class HeldMessageNotificationsService {
   }
 
   private initialize(): void {
+    // Hub signals are debounced so a burst of holds collapses into one re-fetch per moderator.
+    if (!this.hubSignalSub) {
+      this.hubSignalSub = this.hubSignal$
+        .pipe(debounceTime(HeldMessageNotificationsService.HubRefreshDebounceMs))
+        .subscribe(() => this.refreshNotifications());
+    }
     this.refreshNotifications();
     this.ensureConnection();
   }
@@ -72,8 +91,13 @@ export class HeldMessageNotificationsService {
    * lost moderation rights after connecting simply receives an empty/filtered list here — no data leak.
    */
   private refreshNotifications(): void {
+    const generation = ++this.refreshGeneration;
     this.httpClient.get<HeldMessageNotification[]>('api/committee/admin/held-messages/pending').subscribe({
       next: notifications => {
+        // Ignore a response superseded by a newer refresh or invalidated by teardown.
+        if (generation !== this.refreshGeneration) {
+          return;
+        }
         const dedupedSorted = this.sortNotifications(this.dedupeNotifications(notifications));
         const previousIds = new Set(this.notificationsSubject.value.map(n => n.id));
         const currentIds = new Set(dedupedSorted.map(n => n.id));
@@ -92,8 +116,16 @@ export class HeldMessageNotificationsService {
         this.notificationsSubject.next(dedupedSorted);
         this.syncUnreadCount();
       },
-      error: () => {
-        // Keep current state on a transient error rather than clearing the badge.
+      error: (err: HttpErrorResponse) => {
+        if (generation !== this.refreshGeneration) {
+          return;
+        }
+        if (err?.status === 401 || err?.status === 403) {
+          // Moderation rights were revoked after connecting — drop all cached metadata and stop
+          // listening so nothing stale remains visible. (Transient 5xx/network errors fall through
+          // and keep the current state rather than clearing the badge on a blip.)
+          this.teardown();
+        }
       },
     });
   }
@@ -110,9 +142,9 @@ export class HeldMessageNotificationsService {
       .withAutomaticReconnect()
       .build();
 
-    // The hub sends a detail-free signal; re-fetch the authorized list so a connection whose
-    // owner's moderation rights changed never receives message content it shouldn't see.
-    connection.on('HeldMessagesChanged', () => this.refreshNotifications());
+    // The hub sends a detail-free signal; re-fetch the authorized list (debounced) so a connection
+    // whose owner's moderation rights changed never receives message content it shouldn't see.
+    connection.on('HeldMessagesChanged', () => this.hubSignal$.next());
 
     this.pendingConnection = connection;
     connection
@@ -153,6 +185,11 @@ export class HeldMessageNotificationsService {
   }
 
   private teardown(): void {
+    // Invalidate any in-flight refresh so a late response can't repopulate cleared state.
+    this.refreshGeneration++;
+    this.hubSignalSub?.unsubscribe();
+    this.hubSignalSub = null;
+
     this.notificationsSubject.next([]);
     this.unreadIds.clear();
     this.syncUnreadCount();

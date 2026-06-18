@@ -69,7 +69,8 @@ namespace Web.Hubs
         {
             try
             {
-                var uniqueId = User.GetUniqueIdFromClaims(Context.User?.Claims ?? Enumerable.Empty<System.Security.Claims.Claim>());
+                // Fully qualified to disambiguate from Context.User (the ClaimsPrincipal).
+                var uniqueId = Web.Models.User.GetUniqueIdFromClaims(Context.User?.Claims ?? Enumerable.Empty<System.Security.Claims.Claim>());
                 var apiUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
                 var committees = await _committeeListCache.GetAllAsync();
 
