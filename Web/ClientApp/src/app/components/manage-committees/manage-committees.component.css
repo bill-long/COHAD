@@ -582,6 +582,9 @@
   height: 320px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
+  /* Intentionally white in all themes: this is the email canvas, and email HTML
+     assumes a light background — rendering it on a dark surface makes dark-texted
+     messages unreadable, which is why mail clients keep a light preview. */
   background: #fff;
 }
 
@@ -592,7 +595,8 @@
   padding: 0.75rem;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--surface-base, #fff);
+  /* Our own chrome (plain-text body) follows the theme so text stays readable. */
+  background: var(--surface-section);
   font-size: 0.85rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
