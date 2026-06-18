@@ -1867,4 +1867,35 @@ public sealed class CommitteeControllerTests
 
         Assert.IsType<ForbidResult>(result);
     }
+
+    [Fact]
+    public async Task GetHeldMessageBody_non_held_status_returns_400()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = SampleHeldMessage(heldId);
+        held.Status = HeldMessageStatus.Approved; // already actioned
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        // A graph reader is registered to prove the 400 short-circuits before any fetch.
+        var graph = new Mock<IGraphMailReader>();
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            serviceProvider: GraphServiceProvider(graph.Object)
+        );
+        var result = await c.GetHeldMessageBody("board", heldId);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        var json = JsonSerializer.Serialize(bad.Value, WebJsonOptions);
+        Assert.Contains("Approved", json);
+        graph.Verify(
+            g => g.GetMessageByInternetIdAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never
+        );
+    }
 }

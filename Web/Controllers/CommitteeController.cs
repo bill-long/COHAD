@@ -669,6 +669,10 @@ namespace Web.Controllers
             var held = await _heldMessageRepository.GetByIdAsync(messageId);
             if (held == null || held.CommitteeId != key)
                 return NotFound();
+            // Only messages still awaiting moderation are previewable, matching the approve/reject
+            // siblings and the route semantics (.../held/...). The UI only ever requests Held bodies.
+            if (held.Status != HeldMessageStatus.Held)
+                return BadRequest(new { error = $"Message is already {held.Status}." });
 
             static object Unavailable(HeldMessage h, string reason) => new
             {
