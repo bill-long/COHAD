@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -690,7 +691,8 @@ namespace Web.Controllers
                 return Ok(Unavailable(held, "Graph API is not configured, so the original message body cannot be retrieved."));
             }
 
-            var original = await TryFetchOriginalMessageAsync(graphReader, committee, held);
+            // This is a read-only preview, so honor request cancellation (client navigated away, timeout).
+            var original = await TryFetchOriginalMessageAsync(graphReader, committee, held, HttpContext.RequestAborted);
             if (original?.Body == null || string.IsNullOrEmpty(original.Body.Content))
             {
                 return Ok(Unavailable(held, "The original message body could not be retrieved — it may be empty, no longer in the mailbox, or temporarily unavailable."));
@@ -715,13 +717,17 @@ namespace Web.Controllers
 
         /// <summary>
         /// Fetches the original message for a held record from its committee mailbox via Graph,
-        /// returning <c>null</c> (and logging a warning) if the lookup fails. Shared by the body
-        /// preview and approve flows so the fetch + error handling stay in one place.
+        /// returning <c>null</c> (and logging a warning) if the lookup fails or <paramref name="graphReader"/>
+        /// is unavailable. Shared by the body preview and approve flows so the fetch + error handling
+        /// stay in one place. Cancellation (<see cref="OperationCanceledException"/>) is propagated, not
+        /// swallowed, so an aborted request doesn't masquerade as a missing body.
         /// </summary>
-        private async Task<Microsoft.Graph.Models.Message> TryFetchOriginalMessageAsync(
-            IGraphMailReader graphReader,
+#nullable enable
+        private async Task<Microsoft.Graph.Models.Message?> TryFetchOriginalMessageAsync(
+            IGraphMailReader? graphReader,
             Committee committee,
-            HeldMessage held
+            HeldMessage held,
+            CancellationToken ct
         )
         {
             if (graphReader == null)
@@ -731,10 +737,11 @@ namespace Web.Controllers
             {
                 return await graphReader.GetMessageByInternetIdAsync(
                     committee.CommitteeEmail,
-                    held.InternetMessageId
+                    held.InternetMessageId,
+                    ct
                 );
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(
                     ex,
@@ -746,6 +753,7 @@ namespace Web.Controllers
                 return null;
             }
         }
+#nullable restore
 
         [HttpPost("admin/{key}/forwarding/held/{messageId:guid}/approve")]
         [Authorize(Policy = "CommitteeEditor")]
@@ -804,10 +812,12 @@ namespace Web.Controllers
                 return Conflict(new { error = "Message was already actioned by another administrator." });
             }
 
-            // Fetch original message body from Graph API (message was moved to Processed folder)
+            // Fetch original message body from Graph API (message was moved to Processed folder).
+            // Not cancellable: the held record is already marked Approved at this point, so aborting
+            // mid-fetch would leave it Approved with no forwarding job created.
             var graphReader = HttpContext.RequestServices.GetService<IGraphMailReader>();
             string originalBodyHtml = null;
-            var original = await TryFetchOriginalMessageAsync(graphReader, committee, held);
+            var original = await TryFetchOriginalMessageAsync(graphReader, committee, held, CancellationToken.None);
             if (original?.Body != null && !string.IsNullOrEmpty(original.Body.Content))
             {
                 originalBodyHtml = original.Body.ContentType == Microsoft.Graph.Models.BodyType.Text
