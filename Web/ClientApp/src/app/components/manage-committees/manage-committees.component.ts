@@ -467,11 +467,12 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     this.committeeService.getHeldMessages(committee.id).subscribe({
       next: messages => {
         this.heldMessages.set(committee.id, messages);
-        // Drop cached body state for this committee's messages that are no longer present
-        // (actioned elsewhere, expired) so heldBodies cannot grow unbounded.
-        const currentIds = new Set(messages.map(m => m.id));
+        // Keep cached body state only for messages still awaiting moderation. A message that
+        // was actioned elsewhere stays in the /held response with a non-Held status, so pruning
+        // on "no longer Held" (not merely "no longer present") keeps heldBodies bounded.
+        const stillHeld = new Set(messages.filter(m => m.status === 'Held').map(m => m.id));
         for (const id of previousIds) {
-          if (!currentIds.has(id)) {
+          if (!stillHeld.has(id)) {
             this.heldBodies.delete(id);
           }
         }
