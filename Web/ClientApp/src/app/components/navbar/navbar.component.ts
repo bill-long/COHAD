@@ -37,6 +37,22 @@ export class NavbarComponent implements OnInit {
   readonly unreadHeldMessageCount$: Observable<number>;
   readonly totalUnreadCount$: Observable<number>;
 
+  // View-model + visibility streams are built once (shared) so the template's `| async` usages
+  // don't recreate them on every change-detection pass.
+  readonly navVm$: Observable<{
+    authUser: AuthUser | null;
+    apiUser: ApiUser | null;
+    authBootstrapCompleted: boolean;
+    showAuthenticatedNav: boolean;
+    showGuestPrivacy: boolean;
+  }>;
+  readonly manageVisible$: Observable<boolean>;
+  readonly adminNotificationsVisible$: Observable<boolean>;
+  /** Held-message notifications are visible to anyone who can moderate a committee (Administrator or a committee role). */
+  readonly heldNotificationsVisible$: Observable<boolean>;
+  /** The bell shows when the user can see either vendor-flag (admin) or held-message (committee) notifications. */
+  readonly notificationBellVisible$: Observable<boolean>;
+
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>,
@@ -60,6 +76,43 @@ export class NavbarComponent implements OnInit {
       this.vendorFlagNotificationsService.unreadCount$,
       this.heldMessageNotificationsService.unreadCount$,
     ]).pipe(map(([a, b]) => a + b));
+
+    this.navVm$ = this.appState.pipe(
+      map(s => {
+        const authBootstrapCompleted = s.authBootstrapStatus === 'completed';
+        const showAuthenticatedNav = authBootstrapCompleted && s.apiUser != null;
+        return {
+          authUser: s.authUser,
+          apiUser: s.apiUser,
+          authBootstrapCompleted,
+          showAuthenticatedNav,
+          showGuestPrivacy: !showAuthenticatedNav,
+        };
+      }),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
+    this.manageVisible$ = this.navVm$.pipe(
+      map(
+        vm =>
+          vm.showAuthenticatedNav &&
+          vm.apiUser !== null &&
+          vm.apiUser.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0,
+      ),
+    );
+    this.adminNotificationsVisible$ = this.navVm$.pipe(
+      map(vm => vm.showAuthenticatedNav && vm.apiUser !== null && vm.apiUser.roles.includes('Administrator')),
+    );
+    this.heldNotificationsVisible$ = this.navVm$.pipe(
+      map(
+        vm =>
+          vm.showAuthenticatedNav &&
+          vm.apiUser !== null &&
+          vm.apiUser.roles.some(r => rolePermissions.manageCommitteesRoles.includes(r)),
+      ),
+    );
+    this.notificationBellVisible$ = combineLatest([this.adminNotificationsVisible$, this.heldNotificationsVisible$]).pipe(
+      map(([admin, held]) => admin || held),
+    );
 
     router.events.subscribe(e => {
       if (e instanceof NavigationStart) {
@@ -106,62 +159,6 @@ export class NavbarComponent implements OnInit {
 
   get authBootstrapCompleted$(): Observable<boolean> {
     return this.appState.pipe(map(s => s.authBootstrapStatus === 'completed'));
-  }
-
-  get navVm$(): Observable<{
-    authUser: AuthUser | null;
-    apiUser: ApiUser | null;
-    authBootstrapCompleted: boolean;
-    showAuthenticatedNav: boolean;
-    showGuestPrivacy: boolean;
-  }> {
-    return this.appState.pipe(
-      map(s => {
-        const authBootstrapCompleted = s.authBootstrapStatus === 'completed';
-        const showAuthenticatedNav = authBootstrapCompleted && s.apiUser != null;
-        return {
-          authUser: s.authUser,
-          apiUser: s.apiUser,
-          authBootstrapCompleted,
-          showAuthenticatedNav,
-          showGuestPrivacy: !showAuthenticatedNav,
-        };
-      }),
-    );
-  }
-
-  get manageVisible$(): Observable<boolean> {
-    return this.navVm$.pipe(
-      map(
-        vm =>
-          vm.showAuthenticatedNav &&
-          vm.apiUser !== null &&
-          vm.apiUser.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0,
-      ),
-    );
-  }
-
-  get adminNotificationsVisible$(): Observable<boolean> {
-    return this.navVm$.pipe(map(vm => vm.showAuthenticatedNav && vm.apiUser !== null && vm.apiUser.roles.includes('Administrator')));
-  }
-
-  /** Held-message notifications are visible to anyone who can moderate a committee (Administrator or a committee role). */
-  get heldNotificationsVisible$(): Observable<boolean> {
-    return this.navVm$.pipe(
-      map(
-        vm =>
-          vm.showAuthenticatedNav &&
-          vm.apiUser !== null &&
-          vm.apiUser.roles.some(r => rolePermissions.manageCommitteesRoles.includes(r)),
-      ),
-    );
-  }
-
-  /** The bell shows when the user can see either vendor-flag (admin) or held-message (committee) notifications. */
-  get notificationBellVisible$(): Observable<boolean> {
-    return combineLatest([this.adminNotificationsVisible$, this.heldNotificationsVisible$]).pipe(
-      map(([admin, held]) => admin || held),
-    );
   }
 
   get isDarkTheme$(): Observable<boolean> {
