@@ -7,6 +7,7 @@ import { distinctUntilChanged, map } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
 import { ApplicationState, applicationState } from 'src/app/state';
 import { MockAuthTokenService } from './mock-auth-token.service';
+import { rolePermissions } from './rolepermission.service';
 
 export interface HeldMessageNotification {
   id: string;
@@ -38,12 +39,12 @@ export class HeldMessageNotificationsService {
   ) {
     appState$
       .pipe(
-        map(s => s.apiUser?.roles?.includes('Administrator') ?? false),
+        map(s => (s.apiUser?.roles ?? []).some(r => rolePermissions.manageCommitteesRoles.includes(r))),
         distinctUntilChanged(),
       )
-      .subscribe(isAdmin => {
-        if (isAdmin) {
-          this.initializeForAdmin();
+      .subscribe(canModerate => {
+        if (canModerate) {
+          this.initialize();
         } else {
           this.teardown();
         }
@@ -59,40 +60,42 @@ export class HeldMessageNotificationsService {
     this.syncUnreadCount();
   }
 
-  removeNotification(id: string): void {
-    this.notificationsSubject.next(this.notificationsSubject.value.filter(n => n.id !== id));
-    this.unreadIds.delete(id);
-    this.syncUnreadCount();
+  private initialize(): void {
+    this.refreshNotifications();
+    this.ensureConnection();
   }
 
-  removeNotificationsForCommittee(committeeId: string): void {
-    const toRemove = this.notificationsSubject.value.filter(n => n.committeeId === committeeId).map(n => n.id);
-    if (toRemove.length === 0) {
-      return;
-    }
-
-    this.notificationsSubject.next(this.notificationsSubject.value.filter(n => n.committeeId !== committeeId));
-    toRemove.forEach(id => this.unreadIds.delete(id));
-    this.syncUnreadCount();
-  }
-
-  private initializeForAdmin(): void {
+  /**
+   * (Re)loads the pending list from the authorized REST endpoint and merges it into local state,
+   * preserving read/unread status for notifications already shown. Used on first load and whenever
+   * the hub signals a change. The hub signal carries no message details, so a connection whose owner
+   * lost moderation rights after connecting simply receives an empty/filtered list here — no data leak.
+   */
+  private refreshNotifications(): void {
     this.httpClient.get<HeldMessageNotification[]>('api/committee/admin/held-messages/pending').subscribe({
       next: notifications => {
         const dedupedSorted = this.sortNotifications(this.dedupeNotifications(notifications));
+        const previousIds = new Set(this.notificationsSubject.value.map(n => n.id));
+        const currentIds = new Set(dedupedSorted.map(n => n.id));
+        // New notifications start unread; preserve read state for ones already shown.
+        dedupedSorted.forEach(n => {
+          if (!previousIds.has(n.id)) {
+            this.unreadIds.add(n.id);
+          }
+        });
+        // Drop unread tracking for notifications that are gone (resolved / expired).
+        for (const id of [...this.unreadIds]) {
+          if (!currentIds.has(id)) {
+            this.unreadIds.delete(id);
+          }
+        }
         this.notificationsSubject.next(dedupedSorted);
-        this.unreadIds.clear();
-        dedupedSorted.forEach(n => this.unreadIds.add(n.id));
         this.syncUnreadCount();
       },
       error: () => {
-        this.notificationsSubject.next([]);
-        this.unreadIds.clear();
-        this.syncUnreadCount();
+        // Keep current state on a transient error rather than clearing the badge.
       },
     });
-
-    this.ensureConnection();
   }
 
   private ensureConnection(): void {
@@ -107,16 +110,9 @@ export class HeldMessageNotificationsService {
       .withAutomaticReconnect()
       .build();
 
-    connection.on('HeldMessageCreated', (notification: HeldMessageNotification) => {
-      const merged = this.dedupeNotifications([notification, ...this.notificationsSubject.value]);
-      this.notificationsSubject.next(this.sortNotifications(merged));
-      this.unreadIds.add(notification.id);
-      this.syncUnreadCount();
-    });
-
-    connection.on('HeldMessageResolved', (payload: { id: string }) => {
-      this.removeNotification(payload.id);
-    });
+    // The hub sends a detail-free signal; re-fetch the authorized list so a connection whose
+    // owner's moderation rights changed never receives message content it shouldn't see.
+    connection.on('HeldMessagesChanged', () => this.refreshNotifications());
 
     this.pendingConnection = connection;
     connection

@@ -145,6 +145,25 @@ export class NavbarComponent implements OnInit {
     return this.navVm$.pipe(map(vm => vm.showAuthenticatedNav && vm.apiUser !== null && vm.apiUser.roles.includes('Administrator')));
   }
 
+  /** Held-message notifications are visible to anyone who can moderate a committee (Administrator or a committee role). */
+  get heldNotificationsVisible$(): Observable<boolean> {
+    return this.navVm$.pipe(
+      map(
+        vm =>
+          vm.showAuthenticatedNav &&
+          vm.apiUser !== null &&
+          vm.apiUser.roles.some(r => rolePermissions.manageCommitteesRoles.includes(r)),
+      ),
+    );
+  }
+
+  /** The bell shows when the user can see either vendor-flag (admin) or held-message (committee) notifications. */
+  get notificationBellVisible$(): Observable<boolean> {
+    return combineLatest([this.adminNotificationsVisible$, this.heldNotificationsVisible$]).pipe(
+      map(([admin, held]) => admin || held),
+    );
+  }
+
   get isDarkTheme$(): Observable<boolean> {
     return this.themeService.isDarkTheme$;
   }

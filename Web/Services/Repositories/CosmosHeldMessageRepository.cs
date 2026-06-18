@@ -29,8 +29,11 @@ namespace Web.Services.Repositories
 
         /// <summary>
         /// Returns held messages for the given committee, ordered by HeldUtc descending.
+        /// When <paramref name="status"/> is supplied, the filter is applied in the query so the
+        /// limit counts only matching rows (otherwise older matching rows can be crowded out by
+        /// more-recent rows of other statuses).
         /// </summary>
-        Task<List<HeldMessage>> GetByCommitteeIdAsync(string committeeId, int limit = 50);
+        Task<List<HeldMessage>> GetByCommitteeIdAsync(string committeeId, int limit = 50, HeldMessageStatus? status = null);
 
         /// <summary>
         /// Returns all held messages with status <see cref="HeldMessageStatus.Held"/> that are
@@ -121,12 +124,15 @@ namespace Web.Services.Repositories
             }
         }
 
-        public async Task<List<HeldMessage>> GetByCommitteeIdAsync(string committeeId, int limit = 50)
+        public async Task<List<HeldMessage>> GetByCommitteeIdAsync(string committeeId, int limit = 50, HeldMessageStatus? status = null)
         {
             var clampedLimit = Math.Clamp(limit, 1, 200);
+            var statusFilter = status.HasValue ? "AND c.Status = @status " : string.Empty;
             var query = new CosmosQueryDefinition(
-                $"SELECT TOP {clampedLimit} * FROM c WHERE c.CommitteeId = @committeeId ORDER BY c.HeldUtc DESC"
+                $"SELECT TOP {clampedLimit} * FROM c WHERE c.CommitteeId = @committeeId {statusFilter}ORDER BY c.HeldUtc DESC"
             ).WithParameter("@committeeId", committeeId);
+            if (status.HasValue)
+                query = query.WithParameter("@status", status.Value.ToString());
 
             var iterator = _container.GetItemQueryIterator<JObject>(query);
             var results = new List<HeldMessage>();

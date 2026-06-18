@@ -10,6 +10,8 @@ export const rolePermissions = {
   ],
   manageUsersRoles: ['Administrator'],
   manageHomesRoles: ['Administrator'],
+  // Keep in sync with the backend "CommitteeEditor" policy (Web/Startup.cs). Drift here means the
+  // committee admin UI / held-message bell shows for a role the API rejects, or hides for one it allows.
   manageCommitteesRoles: [
     'Administrator',
     'WelcomeCommittee',
