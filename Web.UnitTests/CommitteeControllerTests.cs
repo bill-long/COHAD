@@ -98,7 +98,8 @@ public sealed class CommitteeControllerTests
         IHeldMessageRepository? heldMessageRepo = null,
         IEmailJobRepository? emailJobRepo = null,
         IServiceProvider? serviceProvider = null,
-        Mock<IHubClients>? hubClientsMock = null
+        Mock<IHubClients>? hubClientsMock = null,
+        ILogger<CommitteeController>? logger = null
     )
     {
         committeeRepo ??= Mock.Of<ICommitteeRepository>();
@@ -132,7 +133,7 @@ public sealed class CommitteeControllerTests
             new EmailJobQueue(),
             Options.Create(new DocumentStorageOptions()),
             hubContext.Object,
-            Mock.Of<ILogger<CommitteeController>>()
+            logger ?? Mock.Of<ILogger<CommitteeController>>()
         );
 
         var httpContext = new DefaultHttpContext
@@ -1182,6 +1183,81 @@ public sealed class CommitteeControllerTests
                         e.SubjectId == "board" && e.Action.Contains("Alice") && e.Action.Contains("Removed member")
                     )
                 ),
+            Times.Once
+        );
+    }
+
+    // ──────────────────────────────────────────────
+    // Resident picker + validation telemetry
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetResidentsForPicker_excludes_children()
+    {
+        var adult = new Resident
+        {
+            Id = Guid.NewGuid(),
+            GivenName = "Justin",
+            Surname = "Adult",
+            ResidentType = Resident.Type.Homeowner,
+            EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "justin.adult@example.com" } },
+        };
+        var child = new Resident
+        {
+            Id = Guid.NewGuid(),
+            GivenName = "Justin",
+            Surname = "", // children commonly have no surname/email
+            ResidentType = Resident.Type.Child,
+            EmailAddresses = new List<EmailAddress>(),
+        };
+
+        var residentRepo = new Mock<IResidentRepository>();
+        residentRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Resident> { adult, child });
+
+        var c = CreateController(residentRepo: residentRepo.Object);
+        var result = await c.GetResidentsForPicker();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Single(((System.Collections.IEnumerable)ok.Value!).Cast<object>());
+        Assert.Contains(adult.Id.ToString(), json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(child.Id.ToString(), json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Update_validation_failure_logs_warning_for_telemetry()
+    {
+        var committee = SampleCommittee("board");
+        var mockRepo = new Mock<ICommitteeRepository>();
+        mockRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        // A member with no resident selected → the "Each member must reference a valid ResidentId" path.
+        var payload = JsonSerializer.Serialize(
+            new CommitteeUpdateRequest
+            {
+                Description = "x",
+                Members = new List<CommitteeMemberUpdate>
+                {
+                    new() { Id = Guid.NewGuid(), ResidentId = Guid.Empty, DisplayOrder = 1 },
+                },
+            },
+            WebJsonOptions
+        );
+
+        var mockLogger = new Mock<ILogger<CommitteeController>>();
+        var c = CreateController(committeeRepo: mockRepo.Object, logger: mockLogger.Object);
+
+        var result = await c.Update("board", payload, new List<IFormFile>());
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        mockLogger.Verify(
+            l => l.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, _) => v.ToString()!.Contains("Committee update rejected")),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()
+            ),
             Times.Once
         );
     }

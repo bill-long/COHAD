@@ -207,6 +207,13 @@
   margin-bottom: 0.25rem;
 }
 
+.field-resident-group .resident-required-hint {
+  margin-top: -0.75rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--error);
+}
+
 .field-title-row {
   display: flex;
   align-items: center;

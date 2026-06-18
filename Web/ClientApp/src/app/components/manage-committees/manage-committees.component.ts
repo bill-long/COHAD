@@ -1,5 +1,6 @@
 import { Component, Inject, OnDestroy, OnInit } from '@angular/core';
 import { DomSanitizer, SafeHtml, SafeUrl } from '@angular/platform-browser';
+import { httpErrorMessage } from 'src/app/utils/http-error-message';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { Observable, Subscription, forkJoin } from 'rxjs';
 import {
@@ -36,6 +37,9 @@ interface HeldBodyState {
   standalone: false,
 })
 export class ManageCommitteesComponent implements OnInit, OnDestroy {
+  /** Placeholder resident id assigned to a freshly added member until a real resident is picked. */
+  private static readonly EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+
   committees: CommitteeAdmin[] = [];
   allResidents: ResidentPickerItem[] = [];
   loading = false;
@@ -105,9 +109,28 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     this.rawPreviewUrls.clear();
   }
 
+  /** True when a member row has an actual resident selected (not the new-member placeholder). */
+  memberHasResident(member: CommitteeMemberAdmin): boolean {
+    return !!member.residentId && member.residentId !== ManageCommitteesComponent.EMPTY_GUID;
+  }
+
   saveCommittee(committee: CommitteeAdmin): void {
     this.error = '';
     this.success = '';
+
+    // Block the save client-side when a member has no resident selected — otherwise the API
+    // rejects it with a 400 the user only sees as a generic failure.
+    const incomplete = committee.members.find(m => !this.memberHasResident(m));
+    if (incomplete) {
+      // Close any other open edit cleanly, then expand the offending row so the hint shows.
+      if (this.editingMemberId && this.editingMemberId !== incomplete.id) {
+        this.finishEdit();
+      }
+      this.editingMemberId = incomplete.id;
+      this.error = 'Select a resident for every member before saving (a member row has no resident chosen).';
+      return;
+    }
+
     this.savingKey = committee.id;
     const photos = this.pendingPhotos.get(committee.id) ?? new Map<string, File>();
     const uploadedMemberIds = [...photos.keys()];
@@ -124,9 +147,9 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         this.savingKey = null;
         this.success = `${committee.displayName} saved.`;
       },
-      error: () => {
+      error: err => {
         this.savingKey = null;
-        this.error = `Failed to save ${committee.displayName}.`;
+        this.error = httpErrorMessage(err, `Failed to save ${committee.displayName}.`);
       },
     });
   }
@@ -237,7 +260,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     this.newMemberIds.add(newId);
     committee.members.push({
       id: newId,
-      residentId: '00000000-0000-0000-0000-000000000000',
+      residentId: ManageCommitteesComponent.EMPTY_GUID,
       displayName: '',
       title: null,
       bio: null,
@@ -407,6 +430,14 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   saveOrder(): void {
     this.error = '';
     this.success = '';
+
+    // Reordering re-saves every committee (members included); block if any has an unfinished member.
+    const blocking = this.committees.find(c => c.members.some(m => !this.memberHasResident(m)));
+    if (blocking) {
+      this.error = `Select a resident for every member of ${blocking.displayName} before saving the order.`;
+      return;
+    }
+
     this.savingOrder = true;
     let remaining = this.committees.length;
     let failed = false;
