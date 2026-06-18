@@ -599,17 +599,22 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     state.safeBody = this.buildBodyDoc(state.data.body, false);
   }
 
-  /** Heuristic: does the body reference remote images or CSS resources worth offering to load? */
+  /**
+   * Heuristic: does the body reference remote images or CSS resources worth offering to load?
+   * Each pattern uses a single `[\s"']*` class (rather than adjacent `\s*["']?\s*` runs) so it
+   * stays linear-time on hostile bodies — overlapping whitespace quantifiers would allow
+   * catastrophic backtracking (ReDoS) that could freeze the tab.
+   */
   private hasRemoteContent(html: string): boolean {
     return (
       // src / srcset / background attributes pointing at an absolute or protocol-relative URL
-      /(?:src|srcset|background)\s*=\s*["']?\s*(?:https?:)?\/\//i.test(html) ||
+      /(?:src|srcset|background)\s*=[\s"']*(?:https?:)?\/\//i.test(html) ||
       // CSS url(...) in inline styles or <style> blocks
-      /url\(\s*["']?\s*(?:https?:)?\/\//i.test(html) ||
+      /url\([\s"']*(?:https?:)?\/\//i.test(html) ||
       // @import "https://..." (with or without url())
-      /@import\s+(?:url\(\s*)?["']?\s*(?:https?:)?\/\//i.test(html) ||
+      /@import[\s"']+(?:url\([\s"']*)?(?:https?:)?\/\//i.test(html) ||
       // <link rel="stylesheet" href="https://...">
-      /<link\b[^>]*\bhref\s*=\s*["']?\s*(?:https?:)?\/\//i.test(html)
+      /<link\b[^>]*\bhref\s*=[\s"']*(?:https?:)?\/\//i.test(html)
     );
   }
 
@@ -627,11 +632,12 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   private buildBodyDoc(html: string, imagesBlocked: boolean): SafeHtml {
     const sanitized = html.replace(/<meta\b[^>]*http-equiv\s*=\s*["']?\s*refresh\b[^>]*>/gi, '');
     // Remote sources are appended only when the admin opts in via "Display images".
+    // img-src additionally allows cid: (embedded message parts) once unblocked.
     const remote = imagesBlocked ? '' : ' http: https:';
     const csp =
       "default-src 'none'; base-uri 'none'; form-action 'none'; " +
       `style-src 'unsafe-inline' data:${remote}; ` +
-      `img-src data:${imagesBlocked ? '' : ' http: https: cid:'}; ` +
+      `img-src data:${remote}${imagesBlocked ? '' : ' cid:'}; ` +
       `font-src data:${remote};`;
     const doc =
       `<!DOCTYPE html><html><head><meta charset="utf-8">` +

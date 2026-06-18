@@ -654,4 +654,13 @@
     min-height: 44px;
     padding: 0.625rem 0.75rem;
   }
+
+  .held-body-images-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .held-body-images-bar button {
+    min-height: 44px;
+  }
 }
