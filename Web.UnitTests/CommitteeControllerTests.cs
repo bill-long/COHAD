@@ -1653,4 +1653,218 @@ public sealed class CommitteeControllerTests
 
         Assert.IsType<NotFoundResult>(result);
     }
+
+    // ──────────────────────────────────────────────
+    // Held message body preview
+    // ──────────────────────────────────────────────
+
+    private static HeldMessage SampleHeldMessage(Guid id, string committeeId = "board") =>
+        new HeldMessage
+        {
+            Id = id,
+            CommitteeId = committeeId,
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            SenderName = "Sender",
+            Subject = "Test",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Held,
+            ETag = "etag-1",
+        };
+
+    private static IServiceProvider GraphServiceProvider(IGraphMailReader reader)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(reader);
+        return services.BuildServiceProvider();
+    }
+
+    [Fact]
+    public async Task GetHeldMessageBody_returns_html_body()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = SampleHeldMessage(heldId);
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var graph = new Mock<IGraphMailReader>();
+        graph
+            .Setup(g => g.GetMessageByInternetIdAsync("board@cohad.org", "<test@example.com>", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Microsoft.Graph.Models.Message
+            {
+                Body = new Microsoft.Graph.Models.ItemBody
+                {
+                    ContentType = Microsoft.Graph.Models.BodyType.Html,
+                    Content = "<p>Hello spam</p>",
+                },
+            });
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            serviceProvider: GraphServiceProvider(graph.Object)
+        );
+        var result = await c.GetHeldMessageBody("board", heldId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Contains("\"available\":true", json);
+        Assert.Contains("\"isHtml\":true", json);
+        Assert.Contains("Hello spam", json);
+    }
+
+    [Fact]
+    public async Task GetHeldMessageBody_returns_text_body()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = SampleHeldMessage(heldId);
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var graph = new Mock<IGraphMailReader>();
+        graph
+            .Setup(g => g.GetMessageByInternetIdAsync("board@cohad.org", "<test@example.com>", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Microsoft.Graph.Models.Message
+            {
+                Body = new Microsoft.Graph.Models.ItemBody
+                {
+                    ContentType = Microsoft.Graph.Models.BodyType.Text,
+                    Content = "plain text body",
+                },
+            });
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            serviceProvider: GraphServiceProvider(graph.Object)
+        );
+        var result = await c.GetHeldMessageBody("board", heldId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Contains("\"available\":true", json);
+        Assert.Contains("\"isHtml\":false", json);
+        Assert.Contains("plain text body", json);
+    }
+
+    [Fact]
+    public async Task GetHeldMessageBody_without_graph_returns_unavailable()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = SampleHeldMessage(heldId);
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        // No IGraphMailReader registered
+        var services = new ServiceCollection().BuildServiceProvider();
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            serviceProvider: services
+        );
+        var result = await c.GetHeldMessageBody("board", heldId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Contains("\"available\":false", json);
+    }
+
+    [Fact]
+    public async Task GetHeldMessageBody_message_not_in_mailbox_returns_unavailable()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = SampleHeldMessage(heldId);
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var graph = new Mock<IGraphMailReader>();
+        graph
+            .Setup(g => g.GetMessageByInternetIdAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Microsoft.Graph.Models.Message)null);
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            serviceProvider: GraphServiceProvider(graph.Object)
+        );
+        var result = await c.GetHeldMessageBody("board", heldId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Contains("\"available\":false", json);
+    }
+
+    [Fact]
+    public async Task GetHeldMessageBody_wrong_committee_returns_404()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = SampleHeldMessage(heldId, committeeId: "social"); // belongs to a different committee
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.GetHeldMessageBody("board", heldId);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task GetHeldMessageBody_missing_held_returns_404()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync((HeldMessage)null);
+
+        var c = CreateController(committeeRepo: mockCommitteeRepo.Object, heldMessageRepo: mockHeldRepo.Object);
+        var result = await c.GetHeldMessageBody("board", heldId);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task GetHeldMessageBody_forbidden_for_wrong_role()
+    {
+        var social = SampleCommittee("social");
+        social.ManagementRole = User.Role.SocialCommittee;
+        var heldId = Guid.NewGuid();
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("social")).ReturnsAsync(social);
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            userRepo: RoleUserRepo(User.Role.Board)
+        );
+        var result = await c.GetHeldMessageBody("social", heldId);
+
+        Assert.IsType<ForbidResult>(result);
+    }
 }

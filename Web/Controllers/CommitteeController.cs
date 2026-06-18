@@ -652,6 +652,97 @@ namespace Web.Controllers
             );
         }
 
+        [HttpGet("admin/{key}/forwarding/held/{messageId:guid}/body")]
+        [Authorize(Policy = "CommitteeEditor")]
+        public async Task<IActionResult> GetHeldMessageBody(string key, Guid messageId)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var committee = await _committeeRepository.GetByIdAsync(key);
+            if (committee == null)
+                return NotFound();
+            if (!CanManageCommittee(apiUser, committee))
+                return Forbid();
+
+            var held = await _heldMessageRepository.GetByIdAsync(messageId);
+            if (held == null || held.CommitteeId != key)
+                return NotFound();
+
+            static object Unavailable(HeldMessage h, string reason) => new
+            {
+                available = false,
+                reason,
+                h.SenderEmail,
+                h.SenderName,
+                h.Subject,
+                h.ReceivedUtc,
+            };
+
+            var graphReader = HttpContext.RequestServices.GetService<IGraphMailReader>();
+            if (graphReader == null)
+            {
+                return Ok(Unavailable(held, "Graph API is not configured, so the original message body cannot be retrieved."));
+            }
+
+            var original = await TryFetchOriginalMessageAsync(graphReader, committee, held);
+            if (original?.Body == null || string.IsNullOrEmpty(original.Body.Content))
+            {
+                return Ok(Unavailable(held, "The original message could not be found in the mailbox."));
+            }
+
+            // Body is returned as-is (no server-side sanitization). The client renders HTML
+            // inside a sandboxed iframe (scripts disabled, remote content blocked by CSP),
+            // which is the security boundary. Treat the body as untrusted everywhere else.
+            var isHtml = original.Body.ContentType == Microsoft.Graph.Models.BodyType.Html;
+
+            return Ok(new
+            {
+                available = true,
+                isHtml,
+                body = original.Body.Content,
+                held.SenderEmail,
+                held.SenderName,
+                held.Subject,
+                held.ReceivedUtc,
+            });
+        }
+
+        /// <summary>
+        /// Fetches the original message for a held record from its committee mailbox via Graph,
+        /// returning <c>null</c> (and logging a warning) if the lookup fails. Shared by the body
+        /// preview and approve flows so the fetch + error handling stay in one place.
+        /// </summary>
+        private async Task<Microsoft.Graph.Models.Message> TryFetchOriginalMessageAsync(
+            IGraphMailReader graphReader,
+            Committee committee,
+            HeldMessage held
+        )
+        {
+            if (graphReader == null)
+                return null;
+
+            try
+            {
+                return await graphReader.GetMessageByInternetIdAsync(
+                    committee.CommitteeEmail,
+                    held.InternetMessageId
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Could not retrieve original message body for held message {HeldId} ({InternetMessageId}) in {Mailbox}",
+                    held.Id,
+                    held.InternetMessageId,
+                    committee.CommitteeEmail
+                );
+                return null;
+            }
+        }
+
         [HttpPost("admin/{key}/forwarding/held/{messageId:guid}/approve")]
         [Authorize(Policy = "CommitteeEditor")]
         public async Task<IActionResult> ApproveHeldMessage(string key, Guid messageId)
@@ -712,31 +803,12 @@ namespace Web.Controllers
             // Fetch original message body from Graph API (message was moved to Processed folder)
             var graphReader = HttpContext.RequestServices.GetService<IGraphMailReader>();
             string originalBodyHtml = null;
-            Microsoft.Graph.Models.Message original = null;
-            if (graphReader != null)
+            var original = await TryFetchOriginalMessageAsync(graphReader, committee, held);
+            if (original?.Body != null && !string.IsNullOrEmpty(original.Body.Content))
             {
-                try
-                {
-                    original = await graphReader.GetMessageByInternetIdAsync(
-                        committee.CommitteeEmail,
-                        held.InternetMessageId
-                    );
-                    if (original?.Body != null && !string.IsNullOrEmpty(original.Body.Content))
-                    {
-                        originalBodyHtml = original.Body.ContentType == Microsoft.Graph.Models.BodyType.Text
-                            ? $"<pre style=\"white-space:pre-wrap\">{System.Net.WebUtility.HtmlEncode(original.Body.Content)}</pre>"
-                            : original.Body.Content;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(
-                        ex,
-                        "Could not retrieve original message body for {InternetMessageId} in {Mailbox}",
-                        held.InternetMessageId,
-                        committee.CommitteeEmail
-                    );
-                }
+                originalBodyHtml = original.Body.ContentType == Microsoft.Graph.Models.BodyType.Text
+                    ? $"<pre style=\"white-space:pre-wrap\">{System.Net.WebUtility.HtmlEncode(original.Body.Content)}</pre>"
+                    : original.Body.Content;
             }
 
             // Deterministic job ID from held message ID (stable across retries, avoids orphaned blobs)

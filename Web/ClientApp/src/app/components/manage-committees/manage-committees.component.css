@@ -524,13 +524,78 @@
 
 .held-message-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.5rem;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--surface-section);
+}
+
+.held-message-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.held-message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.held-body-loading,
+.held-body-unavailable {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  padding: 0.25rem 0;
+}
+
+.held-body-images-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-section);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.held-body-images-bar > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.held-body-images-icon {
+  font-size: 1.1rem;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.held-body-frame {
+  width: 100%;
+  height: 320px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.held-body-text {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-base, #fff);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .held-message-info {
@@ -574,7 +639,7 @@
     width: 100%;
   }
 
-  .held-message-row {
+  .held-message-summary {
     flex-direction: column;
     align-items: stretch;
   }
