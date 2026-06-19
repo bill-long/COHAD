@@ -100,3 +100,23 @@
   /* Wrapper for scrollHeight; directory content flows across pages inside. */
   display: block;
 }
+
+/* The resident directory starts on a fresh page after the committees section. */
+.directory-after-committees {
+  break-before: page;
+  page-break-before: always;
+}
+
+@media print {
+  /* Keep committee headings with their first member and avoid splitting a member
+     row across pages. Layout itself lives in committees.component.css. */
+  .directory-print-root ::ng-deep .committee-print-heading {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .directory-print-root ::ng-deep .member-print-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

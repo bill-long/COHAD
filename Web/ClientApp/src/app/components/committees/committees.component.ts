@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, Input, OnInit } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { CommitteeCard, CommitteeMemberCard, CommitteeService } from 'src/app/services/committee.service';
 import { MemberBioDialogComponent } from '../member-bio-dialog/member-bio-dialog.component';
@@ -10,6 +10,10 @@ import { MemberBioDialogComponent } from '../member-bio-dialog/member-bio-dialog
   standalone: false,
 })
 export class CommitteesComponent implements OnInit {
+  /** When true, render a compact, non-interactive layout suitable for the printed directory:
+   *  full bios inline (no "Read more" dialog), eager-loaded photos, no page chrome. */
+  @Input() printMode = false;
+
   committees: CommitteeCard[] = [];
   loading = false;
   error = '';
