@@ -67,6 +67,7 @@ export class RenderedPrintableDirectoryComponent {
     // Abort on timeout so the load/error listeners are removed even when an image
     // stalls — otherwise they'd linger and accumulate across repeated print attempts.
     const controller = new AbortController();
+    const { signal } = controller;
     const pending = images.map(
       img =>
         new Promise<void>(resolve => {
@@ -77,8 +78,11 @@ export class RenderedPrintableDirectoryComponent {
             return;
           }
           const done = () => resolve();
-          img.addEventListener('load', done, { once: true, signal: controller.signal });
-          img.addEventListener('error', done, { once: true, signal: controller.signal });
+          img.addEventListener('load', done, { once: true, signal });
+          img.addEventListener('error', done, { once: true, signal });
+          // Also settle on abort (timeout) so Promise.all can resolve and the
+          // captured img references are released rather than pending forever.
+          signal.addEventListener('abort', done, { once: true });
         }),
     );
 
