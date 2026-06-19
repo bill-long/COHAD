@@ -28,6 +28,17 @@ export class ThemeService {
     localStorage.setItem(this.themeStorageKey, nextIsDark ? 'dark' : 'light');
   }
 
+  /**
+   * Temporarily forces light mode without changing the user's stored preference.
+   * Used by print views, whose layout is designed for light mode only — dark-theme
+   * colors print incorrectly. Returns a callback that restores the prior theme.
+   */
+  forceLightTheme(): () => void {
+    const wasDark = this.isDarkThemeSubject.value;
+    this.applyDarkMode(false);
+    return () => this.applyDarkMode(wasDark);
+  }
+
   private applyDarkMode(isDark: boolean): void {
     document.body.classList.toggle(this.darkThemeClass, isDark);
     this.isDarkThemeSubject.next(isDark);
