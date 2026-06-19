@@ -7,6 +7,7 @@ export const rolePermissions = {
     'SocialCommittee',
     'SunshineCommittee',
     'ArchitecturalCommittee',
+    'LandscapeCommittee',
   ],
   manageUsersRoles: ['Administrator'],
   manageHomesRoles: ['Administrator'],
@@ -20,6 +21,7 @@ export const rolePermissions = {
     'SocialCommittee',
     'SunshineCommittee',
     'ArchitecturalCommittee',
+    'LandscapeCommittee',
   ],
   manageEmailRoles: ['Administrator', 'WelcomeCommittee', 'GardenClub', 'Board', 'SocialCommittee', 'SunshineCommittee'],
   manageEventsRoles: [
@@ -30,6 +32,7 @@ export const rolePermissions = {
     'SocialCommittee',
     'SunshineCommittee',
     'ArchitecturalCommittee',
+    'LandscapeCommittee',
   ],
   manageBlogRoles: [
     'Administrator',
@@ -39,6 +42,7 @@ export const rolePermissions = {
     'SocialCommittee',
     'SunshineCommittee',
     'ArchitecturalCommittee',
+    'LandscapeCommittee',
   ],
   manageAuditLogRoles: ['Administrator'],
   printDirectoryRoles: ['Administrator'],

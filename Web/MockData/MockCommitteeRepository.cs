@@ -158,6 +158,16 @@ namespace Web.MockData
                         },
                     },
                 },
+                new Committee
+                {
+                    Id = "landscape",
+                    CommitteeEmail = "landscape@cohad.org",
+                    DisplayName = "Landscape Committee",
+                    Description = "Maintains and improves the community's shared landscaping and common-area grounds.",
+                    DisplayOrder = 7,
+                    ManagementRole = User.Role.LandscapeCommittee,
+                    Members = new List<CommitteeMember>(),
+                },
             };
 
             foreach (var c in committees)
