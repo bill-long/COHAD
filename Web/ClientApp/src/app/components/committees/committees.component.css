@@ -1,3 +1,9 @@
+/* Block host so the element has a reliable scrollHeight/offsetHeight — the print
+   directory measures the #committeesBlock host for duplex page-parity. */
+:host {
+  display: block;
+}
+
 .committees-page {
   max-width: 1000px;
   padding: 2rem 1.25rem;
