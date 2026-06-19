@@ -57,6 +57,7 @@ namespace Web.Models
             SocialCommittee,
             SunshineCommittee,
             ArchitecturalCommittee,
+            LandscapeCommittee,
         }
 
         public static string GetUniqueIdFromClaims(IEnumerable<Claim> claims)

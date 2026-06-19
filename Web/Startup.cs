@@ -220,6 +220,10 @@ namespace Web
                     policy =>
                         policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.ArchitecturalCommittee))
                 );
+                options.AddPolicy(
+                    "LandscapeCommittee",
+                    policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.LandscapeCommittee))
+                );
 
                 // Any role that can send committee emails — used for email job management endpoints and the SignalR hub.
                 options.AddPolicy(
@@ -252,7 +256,8 @@ namespace Web
                                 User.Role.GardenClub,
                                 User.Role.SocialCommittee,
                                 User.Role.SunshineCommittee,
-                                User.Role.ArchitecturalCommittee
+                                User.Role.ArchitecturalCommittee,
+                                User.Role.LandscapeCommittee
                             )
                         )
                 );

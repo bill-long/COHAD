@@ -51,6 +51,7 @@ namespace Web.Controllers
             { Models.User.Role.SocialCommittee, "Social Committee" },
             { Models.User.Role.SunshineCommittee, "Sunshine Committee" },
             { Models.User.Role.ArchitecturalCommittee, "Architectural Committee" },
+            { Models.User.Role.LandscapeCommittee, "Landscape Committee" },
         };
 
         public BlogController(
