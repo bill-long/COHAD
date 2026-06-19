@@ -70,8 +70,10 @@
           </ng-container>
         </ng-container>
         <ng-template #headingNoMembers>
-          <ng-container *ngTemplateOutlet="committeeHeading; context: { $implicit: committee }"></ng-container>
-          <p class="no-members">No members listed.</p>
+          <div class="committee-print-group">
+            <ng-container *ngTemplateOutlet="committeeHeading; context: { $implicit: committee }"></ng-container>
+            <p class="no-members">No members listed.</p>
+          </div>
         </ng-template>
       </section>
     </div>

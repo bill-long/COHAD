@@ -137,5 +137,19 @@ describe('CommitteesComponent', () => {
       // ...while all members still render (second one outside the group).
       expect(el.querySelectorAll('.member-print-row').length).toBe(2);
     });
+
+    it('groups the heading with the no-members placeholder when a committee has no members', () => {
+      const empty = makeCommittee({ members: [], memberCount: 0 });
+      serviceSpy.getAll.and.returnValue(of([empty]));
+      component.committees = [empty];
+      fixture.detectChanges();
+
+      const el: HTMLElement = fixture.nativeElement;
+      const group = el.querySelector('.committee-print-group');
+      expect(group).not.toBeNull();
+      expect(group!.querySelector('.committee-print-heading')).not.toBeNull();
+      expect(group!.querySelector('.no-members')?.textContent).toContain('No members listed');
+      expect(el.querySelectorAll('.member-print-row').length).toBe(0);
+    });
   });
 });
