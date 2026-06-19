@@ -59,31 +59,34 @@ export class RenderedPrintableDirectoryComponent {
       return Promise.resolve();
     }
 
-    const images = Array.from(el.querySelectorAll('img'));
-    const pending = images
-      .filter(img => !img.complete)
-      .map(
-        img =>
-          new Promise<void>(resolve => {
-            // Re-check inside the promise: the image may have finished loading in
-            // the gap after the filter, in which case the load event won't fire again.
-            if (img.complete) {
-              resolve();
-              return;
-            }
-            const done = () => resolve();
-            img.addEventListener('load', done, { once: true });
-            img.addEventListener('error', done, { once: true });
-          }),
-      );
-
-    if (pending.length === 0) {
+    const images = Array.from(el.querySelectorAll('img')).filter(img => !img.complete);
+    if (images.length === 0) {
       return Promise.resolve();
     }
 
+    // Abort on timeout so the load/error listeners are removed even when an image
+    // stalls — otherwise they'd linger and accumulate across repeated print attempts.
+    const controller = new AbortController();
+    const pending = images.map(
+      img =>
+        new Promise<void>(resolve => {
+          // Re-check inside the promise: the image may have finished loading in
+          // the gap after the filter, in which case the load event won't fire again.
+          if (img.complete) {
+            resolve();
+            return;
+          }
+          const done = () => resolve();
+          img.addEventListener('load', done, { once: true, signal: controller.signal });
+          img.addEventListener('error', done, { once: true, signal: controller.signal });
+        }),
+    );
+
     // Never block printing indefinitely if an image stalls.
     const timeout = new Promise<void>(resolve => setTimeout(resolve, 2000));
-    return Promise.race([Promise.all(pending).then(() => undefined), timeout]);
+    return Promise.race([Promise.all(pending).then(() => undefined), timeout]).finally(() =>
+      controller.abort(),
+    );
   }
 
   private updateTrailingBlanks(): void {

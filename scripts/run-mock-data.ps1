@@ -26,10 +26,18 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $MockUrls = 'https://127.0.0.1:5001'
 
 # 32 random bytes as hex (64 chars) — satisfies the >=32 UTF-8 byte HS256 requirement.
+# Uses RandomNumberGenerator.Create().GetBytes(byte[]) + BitConverter so the script
+# works on both Windows PowerShell 5.1 (.NET Framework) and PowerShell 7+ (.NET 5+);
+# the static RandomNumberGenerator.GetBytes(int) and Convert.ToHexString are .NET 5+ only.
 function New-SigningKey {
-    [System.Convert]::ToHexString(
-        [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
-    ).ToLowerInvariant()
+    $bytes = New-Object byte[] 32
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($bytes)
+    } finally {
+        $rng.Dispose()
+    }
+    [System.BitConverter]::ToString($bytes).Replace('-', '').ToLowerInvariant()
 }
 
 if ($Command -eq 'api') {
@@ -42,8 +50,11 @@ if ($Command -eq 'api') {
     exit $LASTEXITCODE
 }
 
-$oneLiner = '$env:MockJwt__SigningKey=([Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))); ' +
-            '$env:UnsubscribeToken__SigningKey=([Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))); ' +
+# Portable across Windows PowerShell 5.1 and PowerShell 7+: a scriptblock generates a
+# 64-char hex key via RandomNumberGenerator.Create().GetBytes(byte[]) + BitConverter.
+$oneLiner = '$k={$b=New-Object byte[] 32;([System.Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($b);[BitConverter]::ToString($b).Replace("-","")}; ' +
+            '$env:MockJwt__SigningKey=(& $k); ' +
+            '$env:UnsubscribeToken__SigningKey=(& $k); ' +
             '$env:ASPNETCORE_ENVIRONMENT="MockData"; ' +
             "`$env:ASPNETCORE_URLS=`"$MockUrls`"; " +
             "dotnet run --no-launch-profile --project `"$Root/Web/Web.csproj`""
