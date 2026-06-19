@@ -136,7 +136,10 @@ namespace Web.Controllers
                     .Select(r => new
                     {
                         r.Id,
-                        DisplayName = $"{r.GivenName} {r.Surname}".Trim(),
+                        DisplayName = PresentationModels.CommitteeMemberHelpers.FormatName(
+                            r.GivenName,
+                            r.Surname
+                        ),
                         Email = r
                             .EmailAddresses?.Select(e => e?.Address)
                             .FirstOrDefault(address => !string.IsNullOrWhiteSpace(address)),
