@@ -52,7 +52,7 @@ if ($Command -eq 'api') {
 
 # Portable across Windows PowerShell 5.1 and PowerShell 7+: a scriptblock generates a
 # 64-char hex key via RandomNumberGenerator.Create().GetBytes(byte[]) + BitConverter.
-$oneLiner = '$k={$b=New-Object byte[] 32;([System.Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($b);[BitConverter]::ToString($b).Replace("-","")}; ' +
+$oneLiner = '$k={$r=[System.Security.Cryptography.RandomNumberGenerator]::Create();$b=New-Object byte[] 32;try{$r.GetBytes($b)}finally{$r.Dispose()};[BitConverter]::ToString($b).Replace("-","").ToLowerInvariant()}; ' +
             '$env:MockJwt__SigningKey=(& $k); ' +
             '$env:UnsubscribeToken__SigningKey=(& $k); ' +
             '$env:ASPNETCORE_ENVIRONMENT="MockData"; ' +
