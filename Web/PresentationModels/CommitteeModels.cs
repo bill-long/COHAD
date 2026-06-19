@@ -164,7 +164,22 @@ namespace Web.PresentationModels
         {
             if (resident == null)
                 return "Unknown";
-            return $"{resident.GivenName} {resident.Surname}".Trim();
+            return FormatName(resident.GivenName, resident.Surname);
+        }
+
+        /// <summary>
+        /// Joins given/surname with a single space, trimming each part. This collapses
+        /// stray internal whitespace from untrimmed stored names (e.g. a trailing space
+        /// on GivenName) so callers never render "John  Doe".
+        /// </summary>
+        internal static string FormatName(string givenName, string surname)
+        {
+            return string.Join(
+                " ",
+                new[] { givenName, surname }
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => s.Trim())
+            );
         }
     }
 }

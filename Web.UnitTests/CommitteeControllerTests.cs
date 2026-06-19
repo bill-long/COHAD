@@ -1225,6 +1225,31 @@ public sealed class CommitteeControllerTests
     }
 
     [Fact]
+    public async Task GetResidentsForPicker_collapses_internal_whitespace_in_display_name()
+    {
+        // Stored name with a trailing space on GivenName must not render as "John  Doe".
+        var resident = new Resident
+        {
+            Id = Guid.NewGuid(),
+            GivenName = "John ",
+            Surname = " Doe",
+            ResidentType = Resident.Type.Homeowner,
+            EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "john.doe@example.com" } },
+        };
+
+        var residentRepo = new Mock<IResidentRepository>();
+        residentRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Resident> { resident });
+
+        var c = CreateController(residentRepo: residentRepo.Object);
+        var result = await c.GetResidentsForPicker();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        Assert.Contains("John Doe", json);
+        Assert.DoesNotContain("John  Doe", json);
+    }
+
+    [Fact]
     public async Task Update_validation_failure_logs_warning_for_telemetry()
     {
         var committee = SampleCommittee("board");
