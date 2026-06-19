@@ -8,7 +8,10 @@
   <section #pageBodyProbe class="print-blank" aria-hidden="true"></section>
 
   <div #directoryPrintRoot class="directory-print-root">
-    <app-directory [hideSearch]="true"></app-directory>
+    <app-committees #committeesBlock [printMode]="true"></app-committees>
+    <div #directoryBlock class="directory-after-committees">
+      <app-directory [hideSearch]="true"></app-directory>
+    </div>
   </div>
 
   <section class="print-blank trailing-blank" *ngFor="let _ of trailingBlankIndices" aria-hidden="true"></section>
