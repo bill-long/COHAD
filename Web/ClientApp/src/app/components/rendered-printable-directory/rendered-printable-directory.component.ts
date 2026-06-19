@@ -1,4 +1,13 @@
-import { Component, ChangeDetectorRef, ElementRef, HostListener, ViewChild } from '@angular/core';
+import {
+  Component,
+  ChangeDetectorRef,
+  ElementRef,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+} from '@angular/core';
+import { ThemeService } from '../../services/theme.service';
 
 @Component({
   selector: 'app-rendered-printable-directory',
@@ -6,7 +15,9 @@ import { Component, ChangeDetectorRef, ElementRef, HostListener, ViewChild } fro
   styleUrls: ['./rendered-printable-directory.component.css'],
   standalone: false,
 })
-export class RenderedPrintableDirectoryComponent {
+export class RenderedPrintableDirectoryComponent implements OnInit, OnDestroy {
+  /** Restores the user's theme when leaving this light-mode-only print view. */
+  private restoreTheme?: () => void;
   @ViewChild('directoryPrintRoot', { static: true })
   directoryPrintRoot?: ElementRef<HTMLElement>;
 
@@ -28,7 +39,18 @@ export class RenderedPrintableDirectoryComponent {
   /** Trailing blank pages before back cover (1 or 2) for duplex parity. */
   trailingBlankCount = 1;
 
-  constructor(private readonly cdr: ChangeDetectorRef) {}
+  constructor(
+    private readonly cdr: ChangeDetectorRef,
+    private readonly themeService: ThemeService,
+  ) {}
+
+  ngOnInit(): void {
+    this.restoreTheme = this.themeService.forceLightTheme();
+  }
+
+  ngOnDestroy(): void {
+    this.restoreTheme?.();
+  }
 
   private static formatMonthYear(d: Date): string {
     const month = d.toLocaleDateString('en-US', { month: 'long' });
