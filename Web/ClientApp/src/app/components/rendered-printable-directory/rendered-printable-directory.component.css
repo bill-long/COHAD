@@ -108,13 +108,11 @@
 }
 
 @media print {
-  /* Keep committee headings with their first member and avoid splitting a member
-     row across pages. Layout itself lives in committees.component.css. */
-  .directory-print-root ::ng-deep .committee-print-heading {
-    break-after: avoid;
-    page-break-after: avoid;
-  }
-
+  /* Keep each committee heading on the same page as its first member: they're wrapped
+     together in .committee-print-group, and break-inside: avoid is far more reliable in
+     print engines than break-after on the heading. Also avoid splitting a member row.
+     Layout itself lives in committees.component.css. */
+  .directory-print-root ::ng-deep .committee-print-group,
   .directory-print-root ::ng-deep .member-print-row {
     break-inside: avoid;
     page-break-inside: avoid;

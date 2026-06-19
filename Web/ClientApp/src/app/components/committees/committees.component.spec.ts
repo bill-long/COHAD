@@ -113,5 +113,43 @@ describe('CommitteesComponent', () => {
       expect(el.querySelector('.committee-description')).toBeNull();
       expect(el.querySelector('.committee-print-name')?.textContent).toContain('Welcome Committee');
     });
+
+    it('groups the heading with the first member so a page break cannot separate them', () => {
+      // Two members: heading + first member share .committee-print-group; the rest are outside it.
+      const base = makeCommittee();
+      const twoMembers = makeCommittee({
+        members: [
+          base.members[0],
+          { ...base.members[0], id: 'm2', displayName: 'Bob Jones', title: null, bio: null },
+        ],
+      });
+      serviceSpy.getAll.and.returnValue(of([twoMembers]));
+      component.committees = [twoMembers];
+      fixture.detectChanges();
+
+      const el: HTMLElement = fixture.nativeElement;
+      const group = el.querySelector('.committee-print-group');
+      expect(group).not.toBeNull();
+      expect(group!.querySelector('.committee-print-heading')).not.toBeNull();
+      // Exactly one member row lives inside the keep-together group (the first one)...
+      expect(group!.querySelectorAll('.member-print-row').length).toBe(1);
+      expect(group!.querySelector('.member-print-name')?.textContent).toContain('Jane Smith');
+      // ...while all members still render (second one outside the group).
+      expect(el.querySelectorAll('.member-print-row').length).toBe(2);
+    });
+
+    it('groups the heading with the no-members placeholder when a committee has no members', () => {
+      const empty = makeCommittee({ members: [], memberCount: 0 });
+      serviceSpy.getAll.and.returnValue(of([empty]));
+      component.committees = [empty];
+      fixture.detectChanges();
+
+      const el: HTMLElement = fixture.nativeElement;
+      const group = el.querySelector('.committee-print-group');
+      expect(group).not.toBeNull();
+      expect(group!.querySelector('.committee-print-heading')).not.toBeNull();
+      expect(group!.querySelector('.no-members')?.textContent).toContain('No members listed');
+      expect(el.querySelectorAll('.member-print-row').length).toBe(0);
+    });
   });
 });

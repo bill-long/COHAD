@@ -51,34 +51,30 @@
       </section>
     </div>
 
-    <!-- Print layout: no description; one member per row with photo on the left, bio beside it. -->
+    <!-- Print layout: no description; one member per row with photo on the left, bio beside it.
+         The heading is grouped with the first member (committee-print-group, break-inside: avoid)
+         so a page break can never separate a committee heading from its first member. -->
     <div class="committees-print-list" *ngIf="printMode && !loading && committees.length > 0">
       <section class="committee-print-section" *ngFor="let committee of committees">
-        <div class="committee-print-heading">
-          <h3 class="committee-print-name">{{ committee.displayName }}</h3>
-          <a class="committee-print-email" href="mailto:{{ committee.committeeEmail }}">{{ committee.committeeEmail }}</a>
-        </div>
-
-        <div class="member-print-row" *ngFor="let member of committee.members">
-          <div class="member-print-photo-frame">
-            <img *ngIf="member.hasPhoto && member.photoDownloadUrl"
-                 class="member-print-photo"
-                 [src]="member.photoDownloadUrl"
-                 [alt]="member.displayName"
-                 [style.object-position]="'center ' + member.photoOffsetY + '%'"
-                 loading="eager">
-            <div *ngIf="!member.hasPhoto || !member.photoDownloadUrl" class="member-print-avatar">
-              <mat-icon>person</mat-icon>
-            </div>
+        <ng-container *ngIf="committee.members.length > 0; else headingNoMembers">
+          <div class="committee-print-group">
+            <ng-container *ngTemplateOutlet="committeeHeading; context: { $implicit: committee }"></ng-container>
+            <ng-container *ngTemplateOutlet="memberRow; context: { $implicit: committee.members[0] }"></ng-container>
           </div>
-          <div class="member-print-details">
-            <span class="member-print-name">{{ member.displayName }}</span>
-            <span class="member-print-title" *ngIf="member.title">{{ member.title }}</span>
-            <p class="member-print-bio" *ngIf="member.bio">{{ member.bio }}</p>
+          <ng-container *ngFor="let member of committee.members; let i = index">
+            <ng-container
+              *ngIf="i > 0"
+              [ngTemplateOutlet]="memberRow"
+              [ngTemplateOutletContext]="{ $implicit: member }"
+            ></ng-container>
+          </ng-container>
+        </ng-container>
+        <ng-template #headingNoMembers>
+          <div class="committee-print-group">
+            <ng-container *ngTemplateOutlet="committeeHeading; context: { $implicit: committee }"></ng-container>
+            <p class="no-members">No members listed.</p>
           </div>
-        </div>
-
-        <p class="no-members" *ngIf="committee.members.length === 0">No members listed.</p>
+        </ng-template>
       </section>
     </div>
 
@@ -87,3 +83,32 @@
     </div>
   </section>
 </div>
+
+<!-- Reusable print-layout fragments (used by the committees-print-list above). -->
+<ng-template #committeeHeading let-committee>
+  <div class="committee-print-heading">
+    <h3 class="committee-print-name">{{ committee.displayName }}</h3>
+    <a class="committee-print-email" href="mailto:{{ committee.committeeEmail }}">{{ committee.committeeEmail }}</a>
+  </div>
+</ng-template>
+
+<ng-template #memberRow let-member>
+  <div class="member-print-row">
+    <div class="member-print-photo-frame">
+      <img *ngIf="member.hasPhoto && member.photoDownloadUrl"
+           class="member-print-photo"
+           [src]="member.photoDownloadUrl"
+           [alt]="member.displayName"
+           [style.object-position]="'center ' + member.photoOffsetY + '%'"
+           loading="eager">
+      <div *ngIf="!member.hasPhoto || !member.photoDownloadUrl" class="member-print-avatar">
+        <mat-icon>person</mat-icon>
+      </div>
+    </div>
+    <div class="member-print-details">
+      <span class="member-print-name">{{ member.displayName }}</span>
+      <span class="member-print-title" *ngIf="member.title">{{ member.title }}</span>
+      <p class="member-print-bio" *ngIf="member.bio">{{ member.bio }}</p>
+    </div>
+  </div>
+</ng-template>
