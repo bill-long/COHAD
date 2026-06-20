@@ -49,6 +49,9 @@ namespace Web.Services
         Task<Notification?> AcknowledgeAsync(Guid notificationId, string? acknowledgedBy, CancellationToken ct = default);
 
         Task<IReadOnlyList<Notification>> GetUnresolvedForAudienceAsync(string audienceKey, int limit = 50, CancellationToken ct = default);
+
+        /// <summary>Returns the notification with the given id, or null if it does not exist.</summary>
+        Task<Notification?> GetByIdAsync(Guid notificationId, CancellationToken ct = default);
     }
 
     public sealed class NotificationService : INotificationService
@@ -142,6 +145,11 @@ namespace Web.Services
         public async Task<IReadOnlyList<Notification>> GetUnresolvedForAudienceAsync(string audienceKey, int limit = 50, CancellationToken ct = default)
         {
             return await _repository.GetUnresolvedByAudienceAsync(audienceKey, limit);
+        }
+
+        public async Task<Notification?> GetByIdAsync(Guid notificationId, CancellationToken ct = default)
+        {
+            return await _repository.GetByIdAsync(notificationId);
         }
 
         private async Task<Notification> ResolveInternalAsync(Notification notification, string? resolvedBy, CancellationToken ct)

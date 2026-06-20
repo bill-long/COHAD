@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.SignalR;
 using Web.Hubs;
 using Web.Models;
 using Web.PresentationModels;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 using Web.Utils;
@@ -27,6 +28,7 @@ namespace Web.Controllers
         private readonly IUserRepository _userRepository;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly IHubContext<VendorFlagNotificationsHub> _vendorFlagNotificationsHub;
+        private readonly INotificationService _notificationService;
 
         public VendorsController(
             IVendorRepository vendorRepository,
@@ -34,7 +36,8 @@ namespace Web.Controllers
             IVendorFlagRepository vendorFlagRepository,
             IUserRepository userRepository,
             IAuditLogRepository auditLogRepository,
-            IHubContext<VendorFlagNotificationsHub> vendorFlagNotificationsHub
+            IHubContext<VendorFlagNotificationsHub> vendorFlagNotificationsHub,
+            INotificationService notificationService
         )
         {
             _vendorRepository = vendorRepository;
@@ -43,6 +46,7 @@ namespace Web.Controllers
             _userRepository = userRepository;
             _auditLogRepository = auditLogRepository;
             _vendorFlagNotificationsHub = vendorFlagNotificationsHub;
+            _notificationService = notificationService;
         }
 
         [HttpGet]
@@ -287,6 +291,10 @@ namespace Web.Controllers
             if (vendorFlags.Count > 0)
             {
                 await Task.WhenAll(vendorFlags.Select(f => _vendorFlagRepository.DeleteByVendorCascadeAsync(id, f.Id)));
+                // The flags are gone; resolve any in-app notifications that pointed at them so they
+                // don't linger unresolved (and never escalate to email) for a vendor that no longer exists.
+                foreach (var f in vendorFlags)
+                    await _notificationService.ResolveAsync(NotificationTargetType.VendorFlag, f.Id.ToString("D"), apiUser.UniqueId);
             }
 
             await _vendorRepository.DeleteAsync(id);
@@ -494,6 +502,14 @@ namespace Web.Controllers
             await _vendorFlagNotificationsHub
                 .Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
                 .SendAsync("VendorFlagCreated", notification);
+            await _notificationService.RaiseAsync(
+                NotificationType.VendorFlag,
+                NotificationAudience.Administrators,
+                NotificationTargetType.VendorFlag,
+                saved.Id.ToString("D"),
+                "Vendor flagged",
+                $"{vendor.Name}: {saved.FlagNote}"
+            );
             return Ok(VendorFlagPresentation.FromStorageModel(saved, includeAuthor: false));
         }
 
@@ -522,6 +538,7 @@ namespace Web.Controllers
             await _vendorFlagNotificationsHub
                 .Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
                 .SendAsync("VendorFlagResolved", new { flagId = flagId.ToString("D"), vendorId = id.ToString("D") });
+            await _notificationService.ResolveAsync(NotificationTargetType.VendorFlag, flagId.ToString("D"), apiUser.UniqueId);
             return Ok();
         }
 

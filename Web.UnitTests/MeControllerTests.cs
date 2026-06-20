@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Web.Controllers;
+using Web.MockData;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
@@ -37,11 +39,17 @@ public sealed class MeControllerTests
         IDocumentFileStore? fileStore = null,
         EmailJobQueue? emailJobQueue = null,
         IResidentRepository? residentRepository = null,
+        INotificationService? notificationService = null,
         string nameId = "u1",
         string idp = "google.com"
     )
     {
         residentRepository ??= CreateDefaultResidentMock();
+        notificationService ??= new NotificationService(
+            new MockNotificationRepository(),
+            new NoOpNotificationRealtimeNotifier(),
+            NullLogger<NotificationService>.Instance
+        );
         emailJobRepository ??= Mock.Of<IEmailJobRepository>();
         fileStore ??= Mock.Of<IDocumentFileStore>();
         emailJobQueue ??= new EmailJobQueue();
@@ -75,6 +83,7 @@ public sealed class MeControllerTests
             fileStore,
             emailJobQueue,
             cleanup,
+            notificationService,
             Mock.Of<ILogger<MeController>>()
         )
         {
@@ -99,6 +108,43 @@ public sealed class MeControllerTests
             },
         };
         return controller;
+    }
+
+    [Fact]
+    public async Task RaiseNewUserNotification_raises_registration_for_administrators()
+    {
+        var notifications = new Mock<INotificationService>();
+        notifications
+            .Setup(s => s.RaiseAsync(
+                It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Notification());
+
+        var controller = CreateController(
+            Mock.Of<IUserRepository>(),
+            Mock.Of<IHomeRepository>(),
+            notificationService: notifications.Object
+        );
+
+        var newUser = new User
+        {
+            UniqueId = "google.comu9",
+            GivenName = "Jane",
+            Surname = "Doe",
+            StreetAddress = "123 Mock Lane",
+            Emails = "jane@example.com",
+        };
+
+        await controller.RaiseNewUserNotification(newUser);
+
+        notifications.Verify(s => s.RaiseAsync(
+            NotificationType.Registration,
+            NotificationAudience.Administrators,
+            NotificationTargetType.User,
+            "google.comu9",
+            "New user registered",
+            It.Is<string>(summary => summary.Contains("Jane Doe") && summary.Contains("123 Mock Lane")),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

@@ -15,6 +15,27 @@ namespace Web.Models
     }
 
     /// <summary>
+    /// Canonical <see cref="Notification.AudienceKey"/> values. Centralized so trigger sites
+    /// (raise) and consumers (the controller's audience resolution) can't drift on the string format.
+    /// </summary>
+    public static class NotificationAudience
+    {
+        /// <summary>Audience for notifications any Administrator may act on (registrations, vendor flags).</summary>
+        public const string Administrators = "role:Administrator";
+
+        /// <summary>Audience for a single committee's moderators (held committee emails).</summary>
+        public static string Committee(string committeeId) => $"committee:{committeeId}";
+    }
+
+    /// <summary>Canonical <see cref="Notification.TargetType"/> values for the underlying domain records.</summary>
+    public static class NotificationTargetType
+    {
+        public const string User = "user";
+        public const string VendorFlag = "vendorFlag";
+        public const string HeldMessage = "heldMessage";
+    }
+
+    /// <summary>
     /// A unified in-app notification about an event that someone may need to act on.
     /// The notification references an underlying domain record (a new <see cref="User"/>, a
     /// <see cref="VendorFlag"/>, a <see cref="HeldMessage"/>) via <see cref="TargetType"/> +

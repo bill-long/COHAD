@@ -28,6 +28,7 @@ namespace Web.Controllers
         private readonly IDocumentFileStore _fileStore;
         private readonly EmailJobQueue _emailJobQueue;
         private readonly EmailJobCleanupService _emailJobCleanup;
+        private readonly INotificationService _notificationService;
         private readonly ILogger<MeController> _logger;
 
         public MeController(
@@ -38,6 +39,7 @@ namespace Web.Controllers
             IDocumentFileStore fileStore,
             EmailJobQueue emailJobQueue,
             EmailJobCleanupService emailJobCleanup,
+            INotificationService notificationService,
             ILogger<MeController> logger
         )
         {
@@ -48,6 +50,7 @@ namespace Web.Controllers
             _fileStore = fileStore;
             _emailJobQueue = emailJobQueue;
             _emailJobCleanup = emailJobCleanup;
+            _notificationService = notificationService;
             _logger = logger;
         }
 
@@ -100,6 +103,9 @@ namespace Web.Controllers
 
             await _userRepository.UpsertAsync(newUser);
 
+            // Raise the unified in-app notification (the durable, first-resort signal) and keep the
+            // existing admin email. The email becomes the escalation path in a later phase.
+            FireAndForget(() => RaiseNewUserNotification(newUser));
             FireAndForget(() => EnqueueNewUserNotification(newUser));
 
             return PresentationUser.FromStorageModel(newUser, new List<Home>());
@@ -118,6 +124,23 @@ namespace Web.Controllers
                     _logger.LogError(ex, "Background side effect failed in MeController.");
                 }
             });
+        }
+
+        internal async Task RaiseNewUserNotification(User newUser)
+        {
+            var name = $"{newUser.GivenName} {newUser.Surname}".Trim();
+            var detail = new[] { name, newUser.StreetAddress, newUser.Emails }
+                .Where(s => !string.IsNullOrWhiteSpace(s));
+            var summary = string.Join(" — ", detail);
+
+            await _notificationService.RaiseAsync(
+                NotificationType.Registration,
+                NotificationAudience.Administrators,
+                NotificationTargetType.User,
+                newUser.UniqueId,
+                "New user registered",
+                summary
+            );
         }
 
         internal async Task EnqueueNewUserNotification(User newUser)

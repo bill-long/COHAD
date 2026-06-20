@@ -100,6 +100,7 @@ namespace Web.Services
             var residentRepo = scope.ServiceProvider.GetRequiredService<IResidentRepository>();
             var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
             var fileStore = scope.ServiceProvider.GetRequiredService<IDocumentFileStore>();
+            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
             var committees = await committeeRepo.GetAllAsync();
             var enabled = committees
@@ -126,6 +127,7 @@ namespace Web.Services
                         residentRepo,
                         userRepo,
                         fileStore,
+                        notificationService,
                         ct
                     );
 
@@ -160,6 +162,7 @@ namespace Web.Services
             IResidentRepository residentRepo,
             IUserRepository userRepo,
             IDocumentFileStore fileStore,
+            INotificationService notificationService,
             CancellationToken ct
         )
         {
@@ -227,6 +230,7 @@ namespace Web.Services
                         residentRepo,
                         userRepo,
                         fileStore,
+                        notificationService,
                         ct
                     );
                 }
@@ -256,6 +260,7 @@ namespace Web.Services
             IResidentRepository residentRepo,
             IUserRepository userRepo,
             IDocumentFileStore fileStore,
+            INotificationService notificationService,
             CancellationToken ct
         )
         {
@@ -325,6 +330,7 @@ namespace Web.Services
                         processedFolderId,
                         heldMessageRepo,
                         userRepo,
+                        notificationService,
                         ct
                     );
                     return;
@@ -502,6 +508,7 @@ namespace Web.Services
             string processedFolderId,
             IHeldMessageRepository heldMessageRepo,
             IUserRepository userRepo,
+            INotificationService notificationService,
             CancellationToken ct
         )
         {
@@ -554,6 +561,27 @@ namespace Web.Services
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to send held-message SignalR notification for {Committee}", committee.DisplayName);
+            }
+
+            // Raise the unified in-app notification for the committee's moderators (durable, survives
+            // reconnects). Best-effort: a notification failure must not abort moving the message to
+            // Processed, which would otherwise re-hold it on the next poll.
+            try
+            {
+                var sender = !string.IsNullOrWhiteSpace(senderName) ? senderName : senderEmail;
+                await notificationService.RaiseAsync(
+                    NotificationType.HeldMessage,
+                    NotificationAudience.Committee(committee.Id),
+                    NotificationTargetType.HeldMessage,
+                    held.Id.ToString("D"),
+                    "Held committee email",
+                    $"{committee.DisplayName}: from {sender} — {subject}",
+                    ct
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to raise held-message notification for {Committee}", committee.DisplayName);
             }
 
             // Move to processed folder using Graph API id (the held record in Cosmos tracks via InternetMessageId)

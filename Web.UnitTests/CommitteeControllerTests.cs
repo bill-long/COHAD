@@ -13,11 +13,13 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
 using Web.Controllers;
 using Web.Hubs;
+using Web.MockData;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -99,10 +101,16 @@ public sealed class CommitteeControllerTests
         IEmailJobRepository? emailJobRepo = null,
         IServiceProvider? serviceProvider = null,
         Mock<IHubClients>? hubClientsMock = null,
-        ILogger<CommitteeController>? logger = null
+        ILogger<CommitteeController>? logger = null,
+        INotificationService? notificationService = null
     )
     {
         committeeRepo ??= Mock.Of<ICommitteeRepository>();
+        notificationService ??= new NotificationService(
+            new MockNotificationRepository(),
+            new NoOpNotificationRealtimeNotifier(),
+            NullLogger<NotificationService>.Instance
+        );
         residentRepo ??= DefaultResidentRepoMock().Object;
         fileStore ??= Mock.Of<IDocumentFileStore>();
         imageUploadHelper ??= DefaultImageUploadHelper();
@@ -133,6 +141,7 @@ public sealed class CommitteeControllerTests
             new EmailJobQueue(),
             Options.Create(new DocumentStorageOptions()),
             hubContext.Object,
+            notificationService,
             logger ?? Mock.Of<ILogger<CommitteeController>>()
         );
 
@@ -1742,6 +1751,40 @@ public sealed class CommitteeControllerTests
 
         // Verify UpdateAsync was called
         mockHeldRepo.Verify(r => r.UpdateAsync(It.Is<HeldMessage>(h => h.Status == HeldMessageStatus.Rejected)), Times.Once);
+    }
+
+    [Fact]
+    public async Task RejectHeldMessage_resolves_held_message_notification()
+    {
+        var committee = SampleCommittee("board");
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            Subject = "Test",
+            Status = HeldMessageStatus.Held,
+            ETag = "etag-1",
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+        var notifications = new Mock<INotificationService>();
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            notificationService: notifications.Object
+        );
+        await c.RejectHeldMessage("board", heldId);
+
+        notifications.Verify(s => s.ResolveAsync(
+            NotificationTargetType.HeldMessage, heldId.ToString("D"), "google.comu1", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
