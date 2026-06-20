@@ -140,7 +140,15 @@ namespace Web.Services
             }
 
             var recipients = emails.ToList();
-            var job = await CreateDigestJobAsync(aged, recipients, now, ct);
+
+            // Persist the job (Queued) but do NOT enqueue yet. Stamp the notifications and record the
+            // digest send first, then enqueue last. Ordering matters for the "emailed at most once"
+            // guarantee under a crash: if we die after stamping but before enqueue, the stamp is durable
+            // so the next sweep won't re-escalate, and the persisted Queued job is picked back up by
+            // EmailJobProcessor.ResumeIncompleteJobsAsync (startup + stall watchdog) and sent. Enqueueing
+            // first (the previous order) could send the digest and then crash before stamping, causing a
+            // duplicate digest on the next sweep.
+            var job = await PersistDigestJobAsync(aged, recipients, now);
 
             // Stamp the aged notifications so they are not escalated again, and record the digest send
             // per recipient. These target independent documents, so run them together.
@@ -153,6 +161,10 @@ namespace Web.Services
                 )
             );
 
+            // Enqueue last. A failure here (e.g. shutdown) leaves the job Queued for recovery rather
+            // than re-sending — the notifications are already stamped, so it is never re-escalated.
+            await _emailJobQueue.EnqueueAsync(job.Id, ct);
+
             _logger.LogInformation(
                 "Escalated {ItemCount} notification(s) for audience {Audience} to {RecipientCount} recipient(s) via job {JobId}",
                 aged.Count,
@@ -162,11 +174,15 @@ namespace Web.Services
             );
         }
 
-        private async Task<EmailJob> CreateDigestJobAsync(
+        /// <summary>
+        /// Builds the digest <see cref="EmailJob"/>, uploads its HTML body, and persists it as Queued.
+        /// Does not enqueue — the caller enqueues after stamping the notifications (see the ordering note
+        /// in <see cref="ProcessAudienceAsync"/>).
+        /// </summary>
+        private async Task<EmailJob> PersistDigestJobAsync(
             List<Notification> aged,
             List<string> recipientEmails,
-            DateTime now,
-            CancellationToken ct
+            DateTime now
         )
         {
             var recipients = recipientEmails
@@ -213,34 +229,6 @@ namespace Web.Services
             catch
             {
                 if (!jobPersisted && !string.IsNullOrEmpty(job.ContentBlobPath))
-                {
-                    try
-                    {
-                        await _fileStore.DeleteAsync(job.ContentBlobPath);
-                    }
-                    catch
-                    { /* best-effort cleanup */
-                    }
-                }
-
-                throw;
-            }
-
-            try
-            {
-                await _emailJobQueue.EnqueueAsync(job.Id, ct);
-            }
-            catch
-            {
-                try
-                {
-                    await _emailJobRepository.DeleteAsync(job.Id);
-                }
-                catch
-                { /* best-effort cleanup */
-                }
-
-                if (!string.IsNullOrEmpty(job.ContentBlobPath))
                 {
                     try
                     {
