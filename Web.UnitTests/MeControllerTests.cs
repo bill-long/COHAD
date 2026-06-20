@@ -569,6 +569,38 @@ public sealed class MeControllerTests
     }
 
     [Fact]
+    public async Task ResolveAdminRecipients_home_less_admin_with_multiple_emails_uses_first()
+    {
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = "admin1",
+                        GivenName = "Admin",
+                        Surname = "One",
+                        Emails = "first@example.com, second@example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid>(),
+                    },
+                }
+            );
+
+        var homes = new Mock<IHomeRepository>();
+        homes.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync(new List<Home>());
+
+        var controller = CreateController(users.Object, homes.Object);
+
+        var result = await controller.ResolveAdminRecipients();
+
+        Assert.Single(result);
+        Assert.Equal("first@example.com", result[0].Email);
+    }
+
+    [Fact]
     public async Task ResolveAdminRecipients_skips_admin_with_no_homes_and_no_email()
     {
         var users = new Mock<IUserRepository>();

@@ -941,6 +941,34 @@ public sealed class EmailControllerJobTests
     }
 
     [Fact]
+    public async Task GetTestRecipients_NoHomes_MultipleEmails_ReturnsEach()
+    {
+        // Emails may hold several comma/semicolon-separated addresses; each should be offered.
+        _users
+            .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "google.comu1",
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "first@example.com; second@example.com",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+
+        var controller = CreateController();
+        var result = await controller.GetTestRecipients();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var items = Assert.IsAssignableFrom<List<TestRecipientOption>>(ok.Value);
+        Assert.Equal(2, items.Count);
+        Assert.Contains(items, i => i.Email == "first@example.com" && i.HomeId == Guid.Empty);
+        Assert.Contains(items, i => i.Email == "second@example.com" && i.HomeId == Guid.Empty);
+    }
+
+    [Fact]
     public async Task GetTestRecipients_NoHomes_NoEmail_ReturnsEmpty()
     {
         _users

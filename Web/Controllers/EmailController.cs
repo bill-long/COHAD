@@ -478,18 +478,22 @@ namespace Web.Controllers
             if (homeIds.Count == 0)
             {
                 // A sender with no associated home (e.g. an Administrator) still needs to be able to
-                // test-send. Fall back to their own account email so the test picker isn't empty and
-                // the test-send validation accepts it. HomeId is Guid.Empty because this is not a
-                // subscription recipient — unsubscribe headers should be suppressed for it.
-                var accountEmail = apiUser.Emails?.Trim();
-                if (!string.IsNullOrWhiteSpace(accountEmail))
+                // test-send. Fall back to their own account email(s) so the test picker isn't empty
+                // and the test-send validation accepts them. Emails may hold several
+                // comma/semicolon-separated addresses, so split rather than using the raw string.
+                // HomeId is Guid.Empty because these are not subscription recipients — unsubscribe
+                // headers should be suppressed for them.
+                foreach (var accountEmail in UserEmailHelpers.SplitEmails(apiUser.Emails))
                 {
-                    result[accountEmail] = new EmailJobRecipient
+                    if (!result.ContainsKey(accountEmail))
                     {
-                        Email = accountEmail,
-                        HomeId = Guid.Empty,
-                        Status = EmailJobRecipientStatus.Pending,
-                    };
+                        result[accountEmail] = new EmailJobRecipient
+                        {
+                            Email = accountEmail,
+                            HomeId = Guid.Empty,
+                            Status = EmailJobRecipientStatus.Pending,
+                        };
+                    }
                 }
 
                 return result;

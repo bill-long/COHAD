@@ -254,7 +254,8 @@ namespace Web.Controllers
                 // would silently never receive administrator notifications.
                 if (admin.OwnedHomeIds == null || admin.OwnedHomeIds.Count == 0)
                 {
-                    var accountEmail = admin.Emails?.Trim();
+                    // Emails may hold several comma/semicolon-separated addresses; deliver to the first.
+                    var accountEmail = UserEmailHelpers.SplitEmails(admin.Emails).FirstOrDefault();
                     if (!string.IsNullOrWhiteSpace(accountEmail) && seen.Add(accountEmail))
                     {
                         result.Add(
