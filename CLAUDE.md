@@ -51,7 +51,11 @@ Or run `./scripts/run-mock-data.sh` with no args and paste the printed one-liner
 
 ### Backend (`Web/`)
 
-- **Repository pattern:** All data access goes through interfaces in `Services/Repositories/`. Production implementations use Cosmos DB; `MockData` environment swaps in in-memory implementations. This is the key abstraction for testability and local development.
+- **Repository pattern:** All data access goes through interfaces in `Services/Repositories/`. Production implementations use Cosmos DB; `MockData` environment swaps in in-memory implementations. This is the key abstraction for testability and local development. A new Cosmos repository should mirror the existing ones (`CosmosEmailJobRepository`, `CosmosHeldMessageRepository`, `CosmosHomeRepository`):
+  - **Id lookups use a point read** — `ReadItemAsync<JObject>(docId, PartitionKey.None)` with `catch (CosmosException ex) when (ex.StatusCode == NotFound) return null` — not a `SELECT ... WHERE c.id` query.
+  - **Populate `ETag` on every read path:** query results from `doc.Value<string>("_etag")` (set it in the `To<Model>` mapper so all query paths get it); point reads and writes (`Add`/`Upsert`) from `response.Headers.ETag` (capture the response — don't discard it).
+  - **Keep the Mock impl behaviorally identical to the Cosmos impl** — same ETag handling, 409 on duplicate id, etc. Divergence between the two is a bug.
+  - **Idempotency keys must be consistent:** the deterministic-id derivation, the dedup pre-check query, and any 409-conflict-recovery re-read must all key on the *same* fields, or duplicates slip through.
 - **Auth:** JWT Bearer — Azure AD B2C in production (`cohadorgb2c.b2clogin.com`), HS256 mock tokens in `MockData` environment (via `GET /api/dev/mock-auth`, loopback only). Role-based authorization uses custom `RoleAuthorizationHandler` + policies (Resident, Administrator, WelcomeCommittee, GardenClub, Board, SocialCommittee, SunshineCommittee).
 - **Role hierarchy:** Every Administrator is also assigned the Resident role. This is enforced at assignment time in `UserController.UpdateUserAssociations`. Controllers using `[Authorize(Policy = "Resident")]` therefore implicitly permit Administrators — do not add a redundant "Resident OR Administrator" check.
 - **Startup:** `Startup.cs` wires auth, DI, and SPA proxy. `MockData` environment is selected solely by `ASPNETCORE_ENVIRONMENT=MockData` — there is no separate feature flag.
@@ -118,3 +122,15 @@ Test expectations:
 - New service logic: test core behavior, edge cases, and error handling
 - Use the existing patterns in `Web.UnitTests/` (Moq mocks, `CreateController` helpers, xUnit `[Fact]`)
 - Run `dotnet test Web.UnitTests/Web.UnitTests.csproj` to verify all tests pass before committing
+
+## Backend code-review checklist
+
+Beyond correctness, check these conventions before opening/refreshing a PR — they recur in review and are easy to miss:
+
+- **Cosmos repositories:** see the repository-pattern conventions under Architecture → Backend (point reads, ETag on every path, Mock/Cosmos parity, consistent idempotency keys).
+- **CancellationToken:** a method that accepts one must observe it — at minimum `ct.ThrowIfCancellationRequested()` up front, applied uniformly across the type's public methods (repositories take no token, so a service can't propagate further, but must still check).
+- **Broad catch + cancellation:** `catch (Exception)` must exclude cancellation — `catch (Exception ex) when (ex is not OperationCanceledException)` — especially in `BackgroundService` paths, so shutdown isn't logged as a failure.
+- **Parallelize independent I/O:** independent awaited calls should use `Task.WhenAll` (Cosmos SDK `Container` is thread-safe and the codebase already does this, e.g. cascade deletes) — fix it, don't just note it.
+- **XML docs:** each member gets exactly one `<summary>` directly above it; inserting a method just above another can detach the next member's doc comment.
+- **Contract enforcement:** an endpoint must enforce what its doc/comment promises (e.g. an "acknowledge only for type X" action must reject other types with 400, not silently act).
+- **Test honesty:** a test's name must match its assertions (a `*_NewestFirst` test must actually assert ordering).
