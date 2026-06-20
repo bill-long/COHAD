@@ -72,6 +72,27 @@ namespace Web.MockData
             return Task.CompletedTask;
         }
 
+        public Task UpsertWithEtagAsync(Notification notification)
+        {
+            lock (_items)
+            {
+                // Mirror Cosmos If-Match: fail with 412 when the stored ETag has moved on.
+                if (_items.TryGetValue(notification.Id, out var current)
+                    && !string.Equals(current.ETag, notification.ETag, StringComparison.Ordinal))
+                {
+                    throw new CosmosException(
+                        "ETag mismatch.", HttpStatusCode.PreconditionFailed, 0, string.Empty, 0);
+                }
+
+                var clone = Clone(notification);
+                clone.ETag = Interlocked.Increment(ref _versionCounter).ToString();
+                _items[clone.Id] = clone;
+                notification.ETag = clone.ETag;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task<List<Notification>> GetUnresolvedByAudienceAsync(string audienceKey, int limit = 50)
         {
             var clampedLimit = Math.Clamp(limit, 1, 200);

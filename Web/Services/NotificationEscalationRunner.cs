@@ -7,6 +7,7 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Web.Models;
@@ -141,14 +142,14 @@ namespace Web.Services
 
             var recipients = emails.ToList();
 
-            // Persist the job (Queued) but do NOT enqueue yet. Stamp the notifications and record the
-            // digest send first, then enqueue last. Ordering matters for the "emailed at most once"
-            // guarantee under a crash: if we die after stamping but before enqueue, the stamp is durable
-            // so the next sweep won't re-escalate, and the persisted Queued job is picked back up by
-            // EmailJobProcessor.ResumeIncompleteJobsAsync (startup + stall watchdog) and sent. Enqueueing
-            // first (the previous order) could send the digest and then crash before stamping, causing a
-            // duplicate digest on the next sweep.
-            var job = await PersistDigestJobAsync(aged, recipients, now);
+            // Build the job in memory (id assigned) but do not persist it yet. We stamp the
+            // notifications and record the digest send FIRST, then persist + enqueue the job. This keeps
+            // the "emailed at most once" guarantee under a crash: once a job is persisted Queued it is
+            // sendable (EmailJobProcessor.ResumeIncompleteJobsAsync re-enqueues Queued jobs on startup),
+            // so the stamp must be durable before the job exists. The cost of this ordering is that a
+            // crash after stamping but before the job is persisted drops that one digest — acceptable
+            // because the in-app notification is the durable channel and email is a best-effort nudge.
+            var (job, htmlBody) = BuildDigestJob(aged, recipients, now);
 
             // Stamp the aged notifications so they are not escalated again, and record the digest send
             // per recipient. These target independent documents, so run them together.
@@ -161,9 +162,8 @@ namespace Web.Services
                 )
             );
 
-            // Enqueue last. A failure here (e.g. shutdown) leaves the job Queued for recovery rather
-            // than re-sending — the notifications are already stamped, so it is never re-escalated.
-            await _emailJobQueue.EnqueueAsync(job.Id, ct);
+            // Now persist the job and enqueue it for the processor.
+            await PersistAndEnqueueJobAsync(job, htmlBody, ct);
 
             _logger.LogInformation(
                 "Escalated {ItemCount} notification(s) for audience {Audience} to {RecipientCount} recipient(s) via job {JobId}",
@@ -175,15 +175,11 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// Builds the digest <see cref="EmailJob"/>, uploads its HTML body, and persists it as Queued.
-        /// Does not enqueue — the caller enqueues after stamping the notifications (see the ordering note
-        /// in <see cref="ProcessAudienceAsync"/>).
+        /// Builds the digest <see cref="EmailJob"/> (with a fresh id) and its HTML body in memory. Does
+        /// not persist or enqueue — the caller stamps the notifications first, then persists + enqueues
+        /// (see the ordering note in <see cref="ProcessAudienceAsync"/>).
         /// </summary>
-        private async Task<EmailJob> PersistDigestJobAsync(
-            List<Notification> aged,
-            List<string> recipientEmails,
-            DateTime now
-        )
+        private (EmailJob Job, string HtmlBody) BuildDigestJob(List<Notification> aged, List<string> recipientEmails, DateTime now)
         {
             var recipients = recipientEmails
                 .Select(e => new EmailJobRecipient
@@ -195,11 +191,10 @@ namespace Web.Services
                 })
                 .ToList();
 
-            var htmlBody = BuildDigestHtml(aged);
-
+            var jobId = Guid.NewGuid();
             var job = new EmailJob
             {
-                Id = Guid.NewGuid(),
+                Id = jobId,
                 Status = EmailJobStatus.Queued,
                 Category = EscalationCategory,
                 FromEmail = "webservice@cohad.org",
@@ -212,9 +207,15 @@ namespace Web.Services
                 TotalRecipients = recipients.Count,
                 Recipients = recipients,
                 GroupRecipients = true,
+                ContentBlobPath = $"email-jobs/{jobId:D}.html",
             };
 
-            job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
+            return (job, BuildDigestHtml(aged));
+        }
+
+        /// <summary>Uploads the digest body, persists the job as Queued, and enqueues it for the processor.</summary>
+        private async Task PersistAndEnqueueJobAsync(EmailJob job, string htmlBody, CancellationToken ct)
+        {
             var jobPersisted = false;
             try
             {
@@ -242,26 +243,45 @@ namespace Web.Services
                 throw;
             }
 
-            return job;
+            // Enqueue last. A failure here (e.g. shutdown) leaves the job Queued for recovery by
+            // EmailJobProcessor.ResumeIncompleteJobsAsync rather than losing it.
+            await _emailJobQueue.EnqueueAsync(job.Id, ct);
         }
 
         private async Task StampEscalatedAsync(List<Notification> aged, Guid jobId, DateTime now)
         {
-            // Re-read each item before stamping so a human resolve that landed between the sweep's read
-            // and this write is not clobbered (UpsertAsync is last-write-wins). Also skip anything
-            // already escalated by a racing sweep.
-            await Task.WhenAll(
-                aged.Select(async n =>
-                {
-                    var fresh = await _notificationRepository.GetByIdAsync(n.Id);
-                    if (fresh == null || fresh.ResolvedUtc != null || fresh.EscalatedUtc != null)
-                        return;
+            await Task.WhenAll(aged.Select(n => StampOneEscalatedAsync(n.Id, jobId, now)));
+        }
 
-                    fresh.EscalatedUtc = now;
-                    fresh.EscalationJobId = jobId;
-                    await _notificationRepository.UpsertAsync(fresh);
-                })
-            );
+        /// <summary>
+        /// Stamps a single notification escalated under optimistic concurrency: re-read, set the
+        /// escalation fields, and write with an ETag precondition. If a concurrent write (typically a
+        /// human resolve) lands first, the conditional write fails and we re-read — skipping the stamp if
+        /// the item is now resolved/escalated — so we never clobber <c>ResolvedUtc</c> or re-email a
+        /// resolved item.
+        /// </summary>
+        private async Task StampOneEscalatedAsync(Guid id, Guid jobId, DateTime now)
+        {
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
+                var fresh = await _notificationRepository.GetByIdAsync(id);
+                if (fresh == null || fresh.ResolvedUtc != null || fresh.EscalatedUtc != null)
+                    return;
+
+                fresh.EscalatedUtc = now;
+                fresh.EscalationJobId = jobId;
+                try
+                {
+                    await _notificationRepository.UpsertWithEtagAsync(fresh);
+                    return;
+                }
+                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+                {
+                    // Lost the race; loop to re-read and re-evaluate before stamping.
+                }
+            }
+
+            _logger.LogWarning("Gave up stamping notification {Id} escalated after a concurrent update", id);
         }
 
         private string BuildDigestHtml(List<Notification> aged)

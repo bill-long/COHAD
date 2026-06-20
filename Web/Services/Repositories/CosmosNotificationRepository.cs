@@ -26,6 +26,14 @@ namespace Web.Services.Repositories
         /// <summary>Replaces an existing notification (used to set resolved/escalated state).</summary>
         Task UpsertAsync(Notification notification);
 
+        /// <summary>
+        /// Replaces a notification only if its stored ETag still matches <see cref="Notification.ETag"/>
+        /// (optimistic concurrency). Throws <see cref="Microsoft.Azure.Cosmos.CosmosException"/> with
+        /// status 412 (PreconditionFailed) if another writer changed the document first, so a caller can
+        /// re-read and avoid clobbering a concurrent update.
+        /// </summary>
+        Task UpsertWithEtagAsync(Notification notification);
+
         /// <summary>Returns unresolved notifications for the audience, newest first.</summary>
         Task<List<Notification>> GetUnresolvedByAudienceAsync(string audienceKey, int limit = 50);
 
@@ -86,6 +94,16 @@ namespace Web.Services.Repositories
         public async Task UpsertAsync(Notification notification)
         {
             var response = await _container.UpsertItemAsync(ToDocument(notification), CosmosPartitionKey.None);
+            notification.ETag = response.Headers.ETag;
+        }
+
+        public async Task UpsertWithEtagAsync(Notification notification)
+        {
+            var response = await _container.UpsertItemAsync(
+                ToDocument(notification),
+                CosmosPartitionKey.None,
+                new ItemRequestOptions { IfMatchEtag = notification.ETag }
+            );
             notification.ETag = response.Headers.ETag;
         }
 
