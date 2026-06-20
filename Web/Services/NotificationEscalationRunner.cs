@@ -78,15 +78,20 @@ namespace Web.Services
             var committees = await _committeeRepository.GetAllAsync();
             audiences.AddRange(committees.Select(c => NotificationAudience.Committee(c.Id)));
 
-            // Sequential on purpose: the per-recipient throttle written while processing one audience
-            // must be visible to the next, so a recipient in several audiences gets at most one digest
-            // per min-interval rather than one per audience.
+            // Sequential on purpose, and we also track who was emailed in this sweep in memory: a
+            // recipient that belongs to several audiences gets at most one digest per sweep even if the
+            // persisted per-recipient throttle write for an earlier audience failed (the per-audience
+            // catch below keeps the sweep going on failure). The in-memory set is the authoritative
+            // cross-audience guard within a sweep; the persisted digest state enforces the throttle
+            // across sweeps.
+            var emailedThisSweep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var audience in audiences)
             {
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    await ProcessAudienceAsync(audience, now, graceCutoff, minDigestInterval, ct);
+                    await ProcessAudienceAsync(audience, now, graceCutoff, minDigestInterval, emailedThisSweep, ct);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -100,6 +105,7 @@ namespace Web.Services
             DateTime now,
             DateTime graceCutoff,
             TimeSpan minDigestInterval,
+            HashSet<string> emailedThisSweep,
             CancellationToken ct
         )
         {
@@ -125,22 +131,26 @@ namespace Web.Services
                 return;
             }
 
+            // Exclude recipients already emailed earlier in this sweep so a recipient in several audiences
+            // is not digested twice in one run. If that leaves no one, defer the aged items to a later
+            // sweep rather than stamping them (so the excluded recipients still get them by email later).
+            var recipients = emails.Where(e => !emailedThisSweep.Contains(e)).ToList();
+            if (recipients.Count == 0)
+                return;
+
             // Throttle is per recipient, but a notification has a single escalated flag, so we send and
-            // stamp as a unit: a digest goes out only when at least one recipient is past the min
-            // interval, and when it does it goes to ALL of the audience's current recipients and stamps
-            // the items once. Sending to only the "due" subset and stamping would permanently drop those
-            // items from the email of any recipient that happened to be throttled on that one sweep
-            // (they would still see them in-app, but never by email). Recording the send for every
-            // recipient keeps the next digest at least a min-interval away.
-            var states = await Task.WhenAll(emails.Select(e => _digestStateRepository.GetAsync(e)));
+            // stamp as a unit: a digest goes out only when at least one remaining recipient is past the
+            // min interval, and when it does it goes to ALL of those recipients and stamps the items once.
+            // Sending to only the "due" subset and stamping would permanently drop those items from the
+            // email of any recipient that happened to be throttled on that one sweep (they would still see
+            // them in-app, but never by email).
+            var states = await Task.WhenAll(recipients.Select(e => _digestStateRepository.GetAsync(e)));
             var anyDue = states.Any(s => s == null || now - s.LastDigestUtc >= minDigestInterval);
             if (!anyDue)
             {
-                // Everyone was recently digested; leave the aged items for a later sweep.
+                // Everyone still eligible was recently digested; leave the aged items for a later sweep.
                 return;
             }
-
-            var recipients = emails.ToList();
 
             // The writes below are deliberately ordered:
             //   1. Stamp the aged notifications escalated, collecting the subset actually stamped for this
@@ -152,8 +162,11 @@ namespace Web.Services
             //   2. Build the digest from the stamped subset only, so the email never lists an item that was
             //      resolved or escalated by someone else between the query and the stamp.
             //   3. Persist + enqueue the job.
-            //   4. Record the per-recipient digest send LAST, so a failure above never throttles recipients
-            //      for a digest that was not actually queued.
+            //   4. Mark these recipients as emailed in this sweep, then record the per-recipient digest
+            //      send. The in-memory mark happens before the persisted write so the cross-audience guard
+            //      holds even if the digest-state write fails; the persisted write is the cross-sweep
+            //      throttle and comes LAST so a failure above never throttles recipients for a digest that
+            //      was not actually queued.
             var jobId = Guid.NewGuid();
             var stamped = await StampEscalatedAsync(aged, jobId, now);
             if (stamped.Count == 0)
@@ -166,6 +179,9 @@ namespace Web.Services
             var (job, htmlBody) = BuildDigestJob(jobId, stamped, recipients, now);
 
             await PersistAndEnqueueJobAsync(job, htmlBody, ct);
+
+            foreach (var e in recipients)
+                emailedThisSweep.Add(e);
 
             await Task.WhenAll(
                 recipients.Select(e =>

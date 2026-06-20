@@ -334,6 +334,31 @@ public sealed class NotificationEscalationRunnerTests
     }
 
     [Fact]
+    public async Task Recipient_in_two_audiences_is_digested_once_per_sweep()
+    {
+        var h = new Harness();
+        h.Committees
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(new List<Committee> { new Committee { Id = "welcome", DisplayName = "Welcome" } });
+        var committeeAudience = NotificationAudience.Committee("welcome");
+        // The same person is the recipient for both audiences.
+        h.RecipientsFor(NotificationAudience.Administrators, "shared@example.com");
+        h.RecipientsFor(committeeAudience, "shared@example.com");
+
+        var adminItem = await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-2));
+        var committeeItem = await AddNotificationAsync(h.Notifications, committeeAudience, DateTime.UtcNow.AddHours(-2), type: NotificationType.HeldMessage);
+
+        await h.Build().RunOnceAsync(CancellationToken.None);
+
+        // Administrators is processed first and emails shared@; the committee audience then has no
+        // remaining recipient, so it sends no second digest and leaves its item for a later sweep.
+        Assert.Single(h.CapturedJobs);
+        Assert.Equal("shared@example.com", Assert.Single(h.CapturedJobs[0].Recipients).Email);
+        Assert.NotNull((await h.Notifications.GetByIdAsync(adminItem.Id))!.EscalatedUtc);
+        Assert.Null((await h.Notifications.GetByIdAsync(committeeItem.Id))!.EscalatedUtc);
+    }
+
+    [Fact]
     public async Task Resolved_notification_is_not_escalated()
     {
         var h = new Harness();
