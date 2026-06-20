@@ -2,7 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json.Linq;
 using Web.Models;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
@@ -44,11 +46,17 @@ namespace Web.Services.Repositories
 
         public async Task<Notification?> GetByIdAsync(Guid id)
         {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.id = @id").WithParameter(
-                "@id",
-                ToDocumentId(id)
-            );
-            return await QuerySingleAsync(query);
+            // Point read rather than a query: cheaper, doesn't depend on the index, and reads the
+            // just-created document reliably on the 409 recovery path (ids are deterministic per target).
+            try
+            {
+                var response = await _container.ReadItemAsync<JObject>(ToDocumentId(id), CosmosPartitionKey.None);
+                return ToNotification(response.Resource);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
         }
 
         public async Task<Notification?> GetByTargetAsync(string targetType, string targetId)
@@ -97,9 +105,7 @@ namespace Web.Services.Repositories
                 var doc = response.FirstOrDefault();
                 if (doc != null)
                 {
-                    var notification = ToNotification(doc);
-                    notification.ETag = doc.Value<string>("_etag");
-                    return notification;
+                    return ToNotification(doc);
                 }
             }
 
@@ -132,6 +138,7 @@ namespace Web.Services.Repositories
                 EscalationJobId = Guid.TryParse(doc.Value<string>("EscalationJobId"), out var jobId)
                     ? jobId
                     : (Guid?)null,
+                ETag = doc.Value<string>("_etag"),
             };
         }
 

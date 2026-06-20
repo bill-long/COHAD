@@ -109,7 +109,9 @@ namespace Web.Services
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
             {
                 // Another caller created it concurrently — return the winner rather than duplicating.
-                var winner = await _repository.GetByTargetAsync(targetType, targetId);
+                // Re-read by the deterministic id (a point read) rather than re-querying by target:
+                // it's cheaper and doesn't depend on the secondary index being immediately queryable.
+                var winner = await _repository.GetByIdAsync(notification.Id);
                 if (winner != null)
                     return winner;
                 throw;

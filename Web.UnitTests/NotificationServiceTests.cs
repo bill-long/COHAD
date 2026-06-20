@@ -185,21 +185,21 @@ public sealed class NotificationServiceTests
     public async Task RaiseAsync_OnConcurrentCreateConflict_ReturnsWinnerWithoutSignaling()
     {
         // Simulate the race window: GetByTarget sees nothing, AddAsync loses the create race (409),
-        // and the re-query then returns the notification the winning caller persisted.
+        // and the recovery re-reads the winner by its deterministic id (a point read, not a target query).
+        var deterministicId = Notification.DeterministicId(NotificationType.Registration, "user", "user-1");
         var winner = new Notification
         {
-            Id = Guid.NewGuid(),
+            Id = deterministicId,
             Type = NotificationType.Registration,
             AudienceKey = Audience,
             TargetType = "user",
             TargetId = "user-1",
         };
         var repo = new Mock<INotificationRepository>();
-        repo.SetupSequence(r => r.GetByTargetAsync("user", "user-1"))
-            .ReturnsAsync((Notification?)null)
-            .ReturnsAsync(winner);
+        repo.Setup(r => r.GetByTargetAsync("user", "user-1")).ReturnsAsync((Notification?)null);
         repo.Setup(r => r.AddAsync(It.IsAny<Notification>()))
             .ThrowsAsync(new CosmosException("conflict", HttpStatusCode.Conflict, 0, string.Empty, 0));
+        repo.Setup(r => r.GetByIdAsync(deterministicId)).ReturnsAsync(winner);
 
         var notifier = new Mock<INotificationRealtimeNotifier>();
         var service = new NotificationService(repo.Object, notifier.Object, NullLogger<NotificationService>.Instance);
@@ -208,6 +208,8 @@ public sealed class NotificationServiceTests
 
         // The loser returns the winner's notification, not a duplicate...
         Assert.Same(winner, result);
+        // ...recovers via the deterministic-id point read...
+        repo.Verify(r => r.GetByIdAsync(deterministicId), Times.Once);
         // ...and must not emit a second "changed" signal for the same target.
         notifier.Verify(n => n.NotifyAudienceChangedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
