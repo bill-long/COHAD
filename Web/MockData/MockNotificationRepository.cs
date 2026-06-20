@@ -74,6 +74,10 @@ namespace Web.MockData
 
         public Task UpsertWithEtagAsync(Notification notification)
         {
+            // Mirror the Cosmos impl: an ETag is required for a conditional write.
+            if (string.IsNullOrEmpty(notification.ETag))
+                throw new InvalidOperationException("UpsertWithEtagAsync requires a notification loaded with its ETag.");
+
             lock (_items)
             {
                 // Mirror Cosmos If-Match: fail with 412 when the stored ETag has moved on.

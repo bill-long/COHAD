@@ -99,6 +99,11 @@ namespace Web.Services.Repositories
 
         public async Task UpsertWithEtagAsync(Notification notification)
         {
+            // Require an ETag: a null/empty IfMatchEtag degrades to an unconditional upsert, silently
+            // defeating the optimistic concurrency this method promises (and diverging from the Mock).
+            if (string.IsNullOrEmpty(notification.ETag))
+                throw new InvalidOperationException("UpsertWithEtagAsync requires a notification loaded with its ETag.");
+
             var response = await _container.UpsertItemAsync(
                 ToDocument(notification),
                 CosmosPartitionKey.None,

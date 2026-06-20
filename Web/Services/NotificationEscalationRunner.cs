@@ -142,28 +142,28 @@ namespace Web.Services
 
             var recipients = emails.ToList();
 
-            // Build the job in memory (id assigned) but do not persist it yet. We stamp the
-            // notifications and record the digest send FIRST, then persist + enqueue the job. This keeps
-            // the "emailed at most once" guarantee under a crash: once a job is persisted Queued it is
-            // sendable (EmailJobProcessor.ResumeIncompleteJobsAsync re-enqueues Queued jobs on startup),
-            // so the stamp must be durable before the job exists. The cost of this ordering is that a
-            // crash after stamping but before the job is persisted drops that one digest — acceptable
-            // because the in-app notification is the durable channel and email is a best-effort nudge.
+            // Build the job in memory (id assigned) but do not persist it yet. The three writes below are
+            // deliberately ordered:
+            //   1. Stamp the notifications escalated. This must be durable BEFORE the job exists: once a
+            //      job is persisted Queued it is sendable (EmailJobProcessor.ResumeIncompleteJobsAsync
+            //      re-enqueues Queued jobs), so stamping first is what makes the "emailed at most once"
+            //      guarantee hold under a crash. The cost is that a crash after stamping but before the
+            //      job is persisted drops that one digest — acceptable because the in-app notification is
+            //      the durable channel and email is a best-effort nudge.
+            //   2. Persist + enqueue the job.
+            //   3. Record the per-recipient digest send LAST, so a failure in step 1 or 2 never throttles
+            //      recipients for a digest that was not actually queued.
             var (job, htmlBody) = BuildDigestJob(aged, recipients, now);
 
-            // Stamp the aged notifications so they are not escalated again, and record the digest send
-            // per recipient. These target independent documents, so run them together.
+            await StampEscalatedAsync(aged, job.Id, now);
+
+            await PersistAndEnqueueJobAsync(job, htmlBody, ct);
+
             await Task.WhenAll(
-                StampEscalatedAsync(aged, job.Id, now),
-                Task.WhenAll(
-                    recipients.Select(e =>
-                        _digestStateRepository.UpsertAsync(new NotificationDigestState { RecipientEmail = e, LastDigestUtc = now })
-                    )
+                recipients.Select(e =>
+                    _digestStateRepository.UpsertAsync(new NotificationDigestState { RecipientEmail = e, LastDigestUtc = now })
                 )
             );
-
-            // Now persist the job and enqueue it for the processor.
-            await PersistAndEnqueueJobAsync(job, htmlBody, ct);
 
             _logger.LogInformation(
                 "Escalated {ItemCount} notification(s) for audience {Audience} to {RecipientCount} recipient(s) via job {JobId}",
