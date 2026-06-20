@@ -28,6 +28,14 @@ namespace Web.Services.Repositories
 
         /// <summary>Returns unresolved notifications for the audience, newest first.</summary>
         Task<List<Notification>> GetUnresolvedByAudienceAsync(string audienceKey, int limit = 50);
+
+        /// <summary>
+        /// Returns unresolved notifications for the audience that have not yet been escalated, oldest
+        /// first. Used by the escalation sweeper, which must see the oldest (most overdue) items even
+        /// when the unresolved backlog is large — newest-first would starve them. Filtering out
+        /// already-escalated items in the query keeps the result bounded to work that still needs doing.
+        /// </summary>
+        Task<List<Notification>> GetUnescalatedByAudienceOldestFirstAsync(string audienceKey, int limit = 200);
     }
 
     public class CosmosNotificationRepository : INotificationRepository
@@ -87,6 +95,27 @@ namespace Web.Services.Repositories
             var query = new CosmosQueryDefinition(
                 $"SELECT TOP {clampedLimit} * FROM c WHERE c.AudienceKey = @audienceKey "
                     + "AND (NOT IS_DEFINED(c.ResolvedUtc) OR IS_NULL(c.ResolvedUtc)) ORDER BY c.CreatedUtc DESC"
+            ).WithParameter("@audienceKey", audienceKey);
+
+            var iterator = _container.GetItemQueryIterator<JObject>(query);
+            var results = new List<Notification>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                results.AddRange(response.Select(ToNotification));
+            }
+
+            return results;
+        }
+
+        public async Task<List<Notification>> GetUnescalatedByAudienceOldestFirstAsync(string audienceKey, int limit = 200)
+        {
+            var clampedLimit = Math.Clamp(limit, 1, 500);
+            var query = new CosmosQueryDefinition(
+                $"SELECT TOP {clampedLimit} * FROM c WHERE c.AudienceKey = @audienceKey "
+                    + "AND (NOT IS_DEFINED(c.ResolvedUtc) OR IS_NULL(c.ResolvedUtc)) "
+                    + "AND (NOT IS_DEFINED(c.EscalatedUtc) OR IS_NULL(c.EscalatedUtc)) "
+                    + "ORDER BY c.CreatedUtc ASC"
             ).WithParameter("@audienceKey", audienceKey);
 
             var iterator = _container.GetItemQueryIterator<JObject>(query);

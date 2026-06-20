@@ -89,6 +89,25 @@ namespace Web.MockData
             }
         }
 
+        public Task<List<Notification>> GetUnescalatedByAudienceOldestFirstAsync(string audienceKey, int limit = 200)
+        {
+            var clampedLimit = Math.Clamp(limit, 1, 500);
+            lock (_items)
+            {
+                var list = _items
+                    .Values.Where(n =>
+                        string.Equals(n.AudienceKey, audienceKey, StringComparison.Ordinal)
+                        && n.ResolvedUtc == null
+                        && n.EscalatedUtc == null
+                    )
+                    .OrderBy(n => n.CreatedUtc)
+                    .Take(clampedLimit)
+                    .Select(Clone)
+                    .ToList();
+                return Task.FromResult(list);
+            }
+        }
+
         private static Notification Clone(Notification n)
         {
             return new Notification

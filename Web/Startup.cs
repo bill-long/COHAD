@@ -315,6 +315,7 @@ namespace Web
                 services.AddSingleton<IEmailDeliveryEventRepository, MockEmailDeliveryEventRepository>();
                 services.AddSingleton<IHeldMessageRepository, MockHeldMessageRepository>();
                 services.AddSingleton<INotificationRepository, MockNotificationRepository>();
+                services.AddSingleton<INotificationDigestStateRepository, MockNotificationDigestStateRepository>();
             }
             else
             {
@@ -405,6 +406,10 @@ namespace Web
                     sp.GetRequiredService<CosmosClient>().GetContainer(db, "Notifications")
                 ));
 
+                services.AddScoped<INotificationDigestStateRepository>(sp => new CosmosNotificationDigestStateRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "NotificationDigestState")
+                ));
+
                 // Graph API for committee mailbox forwarding — registered only when credentials are configured.
                 var graphTenantId = Configuration["Graph:TenantId"];
                 var graphClientId = Configuration["Graph:ClientId"];
@@ -425,6 +430,16 @@ namespace Web
             // changes on their next fetch.
             services.AddSingleton<INotificationRealtimeNotifier, NoOpNotificationRealtimeNotifier>();
             services.AddScoped<INotificationService, NotificationService>();
+
+            // Notification escalation: a background sweep turns aged, unresolved in-app notifications into
+            // throttled email digests. Gated by NotificationEscalation:Enabled (the service self-disables
+            // when off). The runner is scoped; the hosted service creates a scope per sweep.
+            services.Configure<NotificationEscalationOptions>(
+                Configuration.GetSection(NotificationEscalationOptions.SectionName)
+            );
+            services.AddScoped<INotificationRecipientResolver, NotificationRecipientResolver>();
+            services.AddScoped<NotificationEscalationRunner>();
+            services.AddHostedService<NotificationEscalationService>();
 
             // Email job queue and background processor (shared across environments)
             services.AddSingleton<EmailJobQueue>();

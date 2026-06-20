@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Net;
 using System.Security.Claims;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -24,10 +21,6 @@ namespace Web.Controllers
         private readonly IUserRepository _userRepository;
         private readonly IHomeRepository _homeRepository;
         private readonly IResidentRepository _residentRepository;
-        private readonly IEmailJobRepository _emailJobRepository;
-        private readonly IDocumentFileStore _fileStore;
-        private readonly EmailJobQueue _emailJobQueue;
-        private readonly EmailJobCleanupService _emailJobCleanup;
         private readonly INotificationService _notificationService;
         private readonly ILogger<MeController> _logger;
 
@@ -35,10 +28,6 @@ namespace Web.Controllers
             IUserRepository userRepository,
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
-            IEmailJobRepository emailJobRepository,
-            IDocumentFileStore fileStore,
-            EmailJobQueue emailJobQueue,
-            EmailJobCleanupService emailJobCleanup,
             INotificationService notificationService,
             ILogger<MeController> logger
         )
@@ -46,10 +35,6 @@ namespace Web.Controllers
             _userRepository = userRepository;
             _homeRepository = homeRepository;
             _residentRepository = residentRepository;
-            _emailJobRepository = emailJobRepository;
-            _fileStore = fileStore;
-            _emailJobQueue = emailJobQueue;
-            _emailJobCleanup = emailJobCleanup;
             _notificationService = notificationService;
             _logger = logger;
         }
@@ -103,10 +88,10 @@ namespace Web.Controllers
 
             await _userRepository.UpsertAsync(newUser);
 
-            // Raise the unified in-app notification (the durable, first-resort signal) and keep the
-            // existing admin email. The email becomes the escalation path in a later phase.
+            // Raise the unified in-app notification (the durable, first-resort signal). Email is no
+            // longer sent inline here: NotificationEscalationService escalates unacknowledged
+            // registrations to a throttled email digest once they age past the grace period.
             FireAndForget(() => RaiseNewUserNotification(newUser));
-            FireAndForget(() => EnqueueNewUserNotification(newUser));
 
             return PresentationUser.FromStorageModel(newUser, new List<Home>());
         }
@@ -141,219 +126,6 @@ namespace Web.Controllers
                 "New user registered",
                 summary
             );
-        }
-
-        internal async Task EnqueueNewUserNotification(User newUser)
-        {
-            var recipients = await ResolveAdminRecipients();
-            if (recipients.Count == 0)
-            {
-                _logger.LogWarning("No administrator recipients resolved for new user notification.");
-                return;
-            }
-
-            var htmlBody =
-                $"<div>Name: {WebUtility.HtmlEncode(newUser.GivenName)} {WebUtility.HtmlEncode(newUser.Surname)}</div>"
-                + $"<div>Email: {WebUtility.HtmlEncode(newUser.Emails)}</div>"
-                + $"<div>Address: {WebUtility.HtmlEncode(newUser.StreetAddress)}</div>";
-
-            try
-            {
-                await _emailJobCleanup.RunOnceBestEffortAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Email job retention cleanup failed during new user notification (best-effort)."
-                );
-            }
-
-            var job = new EmailJob
-            {
-                Id = Guid.NewGuid(),
-                Status = EmailJobStatus.Queued,
-                Category = "registration",
-                FromEmail = "webservice@cohad.org",
-                FromDisplay = "COHAD Web",
-                Subject = "New User Registered",
-                CreatedUtc = DateTime.UtcNow,
-                CreatedByUserId = "system",
-                CreatedByDisplayName = "System",
-                TotalRecipients = recipients.Count,
-                Recipients = recipients,
-                GroupRecipients = true,
-            };
-
-            job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";
-            var jobPersisted = false;
-            try
-            {
-                using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(htmlBody)))
-                {
-                    await _fileStore.UploadAsync(job.ContentBlobPath, stream, "text/html");
-                }
-
-                await _emailJobRepository.AddAsync(job);
-                jobPersisted = true;
-            }
-            catch
-            {
-                if (!jobPersisted && !string.IsNullOrEmpty(job.ContentBlobPath))
-                {
-                    try
-                    {
-                        await _fileStore.DeleteAsync(job.ContentBlobPath);
-                    }
-                    catch
-                    { /* best-effort cleanup */
-                    }
-                }
-
-                throw;
-            }
-
-            try
-            {
-                await _emailJobQueue.EnqueueAsync(job.Id);
-            }
-            catch
-            {
-                try
-                {
-                    await _emailJobRepository.DeleteAsync(job.Id);
-                }
-                catch
-                { /* best-effort cleanup */
-                }
-
-                if (!string.IsNullOrEmpty(job.ContentBlobPath))
-                {
-                    try
-                    {
-                        await _fileStore.DeleteAsync(job.ContentBlobPath);
-                    }
-                    catch
-                    { /* best-effort cleanup */
-                    }
-                }
-
-                throw;
-            }
-        }
-
-        internal async Task<List<EmailJobRecipient>> ResolveAdminRecipients()
-        {
-            var allUsers = await _userRepository.GetAllAsync();
-            var admins = allUsers
-                .Where(u => u.Roles != null && u.Roles.Contains(Models.User.Role.Administrator))
-                .ToList();
-
-            if (admins.Count == 0)
-                return new List<EmailJobRecipient>();
-
-            var allHomeIds = admins
-                .Where(u => u.OwnedHomeIds != null)
-                .SelectMany(u => u.OwnedHomeIds)
-                .Distinct()
-                .ToList();
-
-            var homes = allHomeIds.Count > 0 ? await _homeRepository.GetByIdsAsync(allHomeIds) : new List<Home>();
-
-            var residentHomeIds = homes.Select(h => h.Id).ToList();
-            var residents =
-                residentHomeIds.Count > 0
-                    ? await _residentRepository.GetByHomeIdsAsync(residentHomeIds)
-                    : new List<Resident>();
-            var residentsByHome = residents.GroupBy(r => r.HomeId).ToDictionary(g => g.Key, g => g.ToList());
-
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var result = new List<EmailJobRecipient>();
-
-            foreach (var admin in admins)
-            {
-                // Home-less admins (e.g. an Administrator with no associated Home) can't be matched
-                // to a resident record, so fall back to their own account email. Without this they
-                // would silently never receive administrator notifications.
-                if (admin.OwnedHomeIds == null || admin.OwnedHomeIds.Count == 0)
-                {
-                    // Emails may hold several comma/semicolon-separated addresses; deliver to the first.
-                    var accountEmail = UserEmailHelpers.SplitEmails(admin.Emails).FirstOrDefault();
-                    if (!string.IsNullOrWhiteSpace(accountEmail) && seen.Add(accountEmail))
-                    {
-                        result.Add(
-                            new EmailJobRecipient
-                            {
-                                Email = accountEmail,
-                                HomeId = Guid.Empty,
-                                Status = EmailJobRecipientStatus.Pending,
-                            }
-                        );
-                    }
-
-                    continue;
-                }
-
-                var adminGivenName = admin.GivenName?.Trim();
-                var adminSurname = admin.Surname?.Trim();
-
-                foreach (var homeId in admin.OwnedHomeIds)
-                {
-                    if (!residentsByHome.TryGetValue(homeId, out var homeResidents))
-                        continue;
-
-                    // Try matching by email first — if matched, use the matched address directly
-                    string? resolvedEmail = null;
-                    if (!string.IsNullOrWhiteSpace(admin.Emails))
-                    {
-                        var emailMatch = homeResidents.FirstOrDefault(r =>
-                            r.EmailAddresses != null
-                            && r.EmailAddresses.Any(e =>
-                                string.Equals(
-                                    e.Address?.Trim(),
-                                    admin.Emails.Trim(),
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                            )
-                        );
-                        if (emailMatch != null)
-                            resolvedEmail = admin.Emails.Trim();
-                    }
-
-                    // Fall back to name matching — use the resident's first non-empty email
-                    if (resolvedEmail == null)
-                    {
-                        var nameMatch = homeResidents.FirstOrDefault(r =>
-                            string.Equals(r.GivenName?.Trim(), adminGivenName, StringComparison.OrdinalIgnoreCase)
-                            && string.Equals(r.Surname?.Trim(), adminSurname, StringComparison.OrdinalIgnoreCase)
-                        );
-                        resolvedEmail = nameMatch
-                            ?.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Address))
-                            ?.Address?.Trim();
-                    }
-
-                    if (string.IsNullOrWhiteSpace(resolvedEmail))
-                        continue;
-
-                    if (seen.Add(resolvedEmail))
-                    {
-                        // Use Guid.Empty for HomeId — this is a transactional notification,
-                        // not a subscription email, so unsubscribe headers should be suppressed.
-                        result.Add(
-                            new EmailJobRecipient
-                            {
-                                Email = resolvedEmail,
-                                HomeId = Guid.Empty,
-                                Status = EmailJobRecipientStatus.Pending,
-                            }
-                        );
-                    }
-
-                    break; // Found a match for this admin, no need to check other homes
-                }
-            }
-
-            return result;
         }
 
         private static void PopulateAssociatedUsers(List<Home> homes, List<User> users)
