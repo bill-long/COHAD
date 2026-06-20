@@ -81,6 +81,7 @@ namespace Web.Services
             CancellationToken ct = default
         )
         {
+            ct.ThrowIfCancellationRequested();
             if (string.IsNullOrEmpty(audienceKey))
                 throw new ArgumentException("Audience key is required.", nameof(audienceKey));
             if (string.IsNullOrEmpty(targetType))
@@ -126,6 +127,7 @@ namespace Web.Services
 
         public async Task<Notification?> ResolveAsync(string targetType, string targetId, string? resolvedBy, CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
             var existing = await _repository.GetByTargetAsync(targetType, targetId);
             if (existing == null)
                 return null;
@@ -135,6 +137,7 @@ namespace Web.Services
 
         public async Task<Notification?> AcknowledgeAsync(Guid notificationId, string? acknowledgedBy, CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
             var existing = await _repository.GetByIdAsync(notificationId);
             if (existing == null)
                 return null;
@@ -144,11 +147,13 @@ namespace Web.Services
 
         public async Task<IReadOnlyList<Notification>> GetUnresolvedForAudienceAsync(string audienceKey, int limit = 50, CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
             return await _repository.GetUnresolvedByAudienceAsync(audienceKey, limit);
         }
 
         public async Task<Notification?> GetByIdAsync(Guid notificationId, CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
             return await _repository.GetByIdAsync(notificationId);
         }
 

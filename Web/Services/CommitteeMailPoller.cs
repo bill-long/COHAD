@@ -579,7 +579,7 @@ namespace Web.Services
                     ct
                 );
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(ex, "Failed to raise held-message notification for {Committee}", committee.DisplayName);
             }

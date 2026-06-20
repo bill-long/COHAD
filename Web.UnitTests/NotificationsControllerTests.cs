@@ -22,10 +22,11 @@ public sealed class NotificationsControllerTests
 {
     private static (NotificationsController controller, INotificationService service) CreateController(
         User apiUser,
-        IEnumerable<Committee>? committees = null
+        IEnumerable<Committee>? committees = null,
+        INotificationService? service = null
     )
     {
-        var service = new NotificationService(
+        service ??= new NotificationService(
             new MockNotificationRepository(),
             new NoOpNotificationRealtimeNotifier(),
             NullLogger<NotificationService>.Instance
@@ -57,7 +58,7 @@ public sealed class NotificationsControllerTests
         new User { UniqueId = "admin-1", Roles = new List<User.Role> { User.Role.Administrator } };
 
     [Fact]
-    public async Task GetMine_ReturnsAdminAndManagedCommitteeNotifications_NewestFirst()
+    public async Task GetMine_ReturnsOnlyNotificationsForAudiencesCallerBelongsTo()
     {
         var committee = new Committee { Id = "c1", ManagementRole = User.Role.GardenClub };
         var (controller, service) = CreateController(
@@ -75,6 +76,40 @@ public sealed class NotificationsControllerTests
         var payload = Assert.IsAssignableFrom<IEnumerable<NotificationPresentation>>(ok.Value).ToList();
         Assert.Single(payload);
         Assert.Equal("held-1", payload[0].TargetId);
+    }
+
+    [Fact]
+    public async Task GetMine_OrdersNotificationsNewestFirstAcrossAudiences()
+    {
+        // Seed via a stubbed service so the CreatedUtc of each audience's notification is deterministic.
+        var older = new Notification
+        {
+            Id = Guid.NewGuid(),
+            AudienceKey = NotificationAudience.Administrators,
+            TargetId = "older",
+            CreatedUtc = DateTime.UtcNow.AddMinutes(-10),
+        };
+        var newer = new Notification
+        {
+            Id = Guid.NewGuid(),
+            AudienceKey = NotificationAudience.Committee("c1"),
+            TargetId = "newer",
+            CreatedUtc = DateTime.UtcNow,
+        };
+        var service = new Mock<INotificationService>();
+        service.Setup(s => s.GetUnresolvedForAudienceAsync(NotificationAudience.Administrators, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Notification> { older });
+        service.Setup(s => s.GetUnresolvedForAudienceAsync(NotificationAudience.Committee("c1"), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Notification> { newer });
+
+        var committee = new Committee { Id = "c1", ManagementRole = User.Role.GardenClub };
+        var (controller, _) = CreateController(Admin(), new[] { committee }, service.Object);
+
+        var result = await controller.GetMine();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsAssignableFrom<IEnumerable<NotificationPresentation>>(ok.Value).ToList();
+        Assert.Equal(new[] { "newer", "older" }, payload.Select(p => p.TargetId).ToArray());
     }
 
     [Fact]
