@@ -1,0 +1,81 @@
+#nullable enable
+using System;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json.Serialization;
+
+namespace Web.Models
+{
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum NotificationType
+    {
+        Registration = 0,
+        VendorFlag = 1,
+        HeldMessage = 2,
+    }
+
+    /// <summary>
+    /// A unified in-app notification about an event that someone may need to act on.
+    /// The notification references an underlying domain record (a new <see cref="User"/>, a
+    /// <see cref="VendorFlag"/>, a <see cref="HeldMessage"/>) via <see cref="TargetType"/> +
+    /// <see cref="TargetId"/> rather than duplicating its content — that record remains the source
+    /// of truth. Two state flags are tracked independently:
+    /// <list type="bullet">
+    /// <item><see cref="ResolvedUtc"/> — a human acted (dismissed/approved/rejected/acknowledged).</item>
+    /// <item><see cref="EscalatedUtc"/> — the notification was already included in an escalation
+    /// email digest, so the sweeper must not email about it again.</item>
+    /// </list>
+    /// </summary>
+    public class Notification
+    {
+        public Guid Id { get; set; }
+
+        public NotificationType Type { get; set; }
+
+        /// <summary>
+        /// The set of people who can act on this notification, e.g. <c>"role:Administrator"</c> or
+        /// <c>"committee:{committeeId}"</c>. Used both to group SignalR pushes and to resolve email
+        /// recipients during escalation.
+        /// </summary>
+        public string AudienceKey { get; set; } = string.Empty;
+
+        /// <summary>Kind of the underlying domain record, e.g. <c>"user"</c>, <c>"vendorFlag"</c>, <c>"heldMessage"</c>.</summary>
+        public string TargetType { get; set; } = string.Empty;
+
+        /// <summary>Identifier of the underlying domain record within <see cref="TargetType"/>.</summary>
+        public string TargetId { get; set; } = string.Empty;
+
+        public string Title { get; set; } = string.Empty;
+
+        public string Summary { get; set; } = string.Empty;
+
+        public DateTime CreatedUtc { get; set; }
+
+        /// <summary>Set when a human acts on the underlying item. Null while the item is still pending.</summary>
+        public DateTime? ResolvedUtc { get; set; }
+
+        public string? ResolvedBy { get; set; }
+
+        /// <summary>Set when this notification has been included in an escalation email digest.</summary>
+        public DateTime? EscalatedUtc { get; set; }
+
+        /// <summary>The <see cref="EmailJob"/> that escalated this notification, if any.</summary>
+        public Guid? EscalationJobId { get; set; }
+
+        [JsonIgnore]
+        public string? ETag { get; set; }
+
+        /// <summary>
+        /// Produces a stable id for a notification target so that a duplicate raise (e.g. two
+        /// concurrent registrations of the same event) maps to the same document and a racing
+        /// create fails with 409 rather than producing a duplicate notification.
+        /// </summary>
+        public static Guid DeterministicId(NotificationType type, string targetType, string targetId)
+        {
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{type}\n{targetType}\n{targetId}"));
+            var guidBytes = new byte[16];
+            Array.Copy(bytes, guidBytes, 16);
+            return new Guid(guidBytes);
+        }
+    }
+}
