@@ -200,7 +200,7 @@ public sealed class NotificationEscalationRunnerTests
     }
 
     [Fact]
-    public async Task Sends_to_all_recipients_when_any_is_due_even_if_some_throttled()
+    public async Task Due_recipient_is_digested_while_throttled_recipient_is_skipped()
     {
         var h = new Harness();
         h.RecipientsFor(NotificationAudience.Administrators, "due@example.com", "throttled@example.com");
@@ -212,17 +212,15 @@ public sealed class NotificationEscalationRunnerTests
 
         await h.Build().RunOnceAsync(CancellationToken.None);
 
-        // The digest goes to BOTH recipients (not just the due one), so the throttled recipient does
-        // not permanently lose the item once it is stamped escalated.
+        // Each recipient is throttled independently: the due one gets a one-recipient digest, the
+        // throttled one is not emailed this sweep (it still sees the item in-app).
         var job = Assert.Single(h.CapturedJobs);
-        Assert.Equal(2, job.Recipients.Count);
-        Assert.Contains(job.Recipients, r => r.Email == "due@example.com");
-        Assert.Contains(job.Recipients, r => r.Email == "throttled@example.com");
+        Assert.Equal("due@example.com", Assert.Single(job.Recipients).Email);
 
+        // The item is escalated once (the throttled recipient won't get it by email, by design).
         var stamped = await h.Notifications.GetByIdAsync(n.Id);
         Assert.NotNull(stamped!.EscalatedUtc);
 
-        // Throttle is refreshed for everyone who was emailed.
         Assert.NotNull(await h.DigestState.GetAsync("due@example.com"));
     }
 
@@ -334,14 +332,14 @@ public sealed class NotificationEscalationRunnerTests
     }
 
     [Fact]
-    public async Task Recipient_in_two_audiences_is_digested_once_per_sweep()
+    public async Task Recipient_in_two_audiences_gets_one_combined_digest()
     {
         var h = new Harness();
         h.Committees
             .Setup(r => r.GetAllAsync())
             .ReturnsAsync(new List<Committee> { new Committee { Id = "welcome", DisplayName = "Welcome" } });
         var committeeAudience = NotificationAudience.Committee("welcome");
-        // The same person is the recipient for both audiences.
+        // The same person is a recipient for both audiences (e.g. an admin who also moderates a committee).
         h.RecipientsFor(NotificationAudience.Administrators, "shared@example.com");
         h.RecipientsFor(committeeAudience, "shared@example.com");
 
@@ -350,12 +348,12 @@ public sealed class NotificationEscalationRunnerTests
 
         await h.Build().RunOnceAsync(CancellationToken.None);
 
-        // Administrators is processed first and emails shared@; the committee audience then has no
-        // remaining recipient, so it sends no second digest and leaves its item for a later sweep.
-        Assert.Single(h.CapturedJobs);
-        Assert.Equal("shared@example.com", Assert.Single(h.CapturedJobs[0].Recipients).Email);
+        // One combined digest to the shared recipient covering BOTH audiences' items; both escalated.
+        var job = Assert.Single(h.CapturedJobs);
+        Assert.Equal("shared@example.com", Assert.Single(job.Recipients).Email);
+        Assert.Equal("COHAD: 2 item(s) need attention", job.Subject);
         Assert.NotNull((await h.Notifications.GetByIdAsync(adminItem.Id))!.EscalatedUtc);
-        Assert.Null((await h.Notifications.GetByIdAsync(committeeItem.Id))!.EscalatedUtc);
+        Assert.NotNull((await h.Notifications.GetByIdAsync(committeeItem.Id))!.EscalatedUtc);
     }
 
     [Fact]

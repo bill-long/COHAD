@@ -72,130 +72,149 @@ namespace Web.Services
             var graceCutoff = now - TimeSpan.FromMinutes(Math.Max(0, _options.GracePeriodMinutes));
             var minDigestInterval = TimeSpan.FromHours(Math.Max(0, _options.MinDigestIntervalHours));
 
-            // Audiences are the Administrators audience plus one per committee; both are bounded and
-            // enumerable, so we can sweep each in turn.
+            // The sweep is recipient-centric, not audience-centric: a recipient (e.g. an Administrator,
+            // who can act on every committee audience) gets ONE combined digest per sweep covering all
+            // their aged items across every audience they belong to. This is what lets us throttle to a
+            // single email per recipient per sweep without dropping any audience's items from that
+            // recipient's email.
             var audiences = new List<string> { NotificationAudience.Administrators };
             var committees = await _committeeRepository.GetAllAsync();
             audiences.AddRange(committees.Select(c => NotificationAudience.Committee(c.Id)));
 
-            // Sequential on purpose, and we also track who was emailed in this sweep in memory: a
-            // recipient that belongs to several audiences gets at most one digest per sweep even if the
-            // persisted per-recipient throttle write for an earlier audience failed (the per-audience
-            // catch below keeps the sweep going on failure). The in-memory set is the authoritative
-            // cross-audience guard within a sweep; the persisted digest state enforces the throttle
-            // across sweeps.
-            var emailedThisSweep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
+            // Gather aged items per recipient (case-insensitive on email, preserving the first casing).
+            var byRecipient = new Dictionary<string, RecipientDigest>(StringComparer.OrdinalIgnoreCase);
             foreach (var audience in audiences)
             {
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    await ProcessAudienceAsync(audience, now, graceCutoff, minDigestInterval, emailedThisSweep, ct);
+                    var candidates = await _notificationRepository.GetUnescalatedByAudienceOldestFirstAsync(audience, 200);
+                    var aged = candidates.Where(n => n.CreatedUtc <= graceCutoff).ToList();
+                    if (aged.Count == 0)
+                        continue;
+
+                    var emails = await _recipientResolver.ResolveAudienceEmailsAsync(audience, ct);
+                    if (emails.Count == 0)
+                    {
+                        // No one to email — leave the items un-escalated so they can be picked up once
+                        // recipients exist (e.g. a committee moderator is added).
+                        _logger.LogWarning(
+                            "{Count} aged notification(s) for audience {Audience} but no recipients resolved",
+                            aged.Count,
+                            audience
+                        );
+                        continue;
+                    }
+
+                    foreach (var email in emails)
+                    {
+                        if (!byRecipient.TryGetValue(email, out var bucket))
+                        {
+                            bucket = new RecipientDigest(email);
+                            byRecipient[email] = bucket;
+                        }
+                        bucket.Items.AddRange(aged);
+                    }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _logger.LogError(ex, "Failed to process escalation for audience {Audience}", audience);
+                    _logger.LogError(ex, "Failed to gather escalations for audience {Audience}", audience);
+                }
+            }
+
+            if (byRecipient.Count == 0)
+                return;
+
+            // Decide which recipients are due (per-recipient throttle, across sweeps via the persisted
+            // digest state). The reads are independent, so fetch them in parallel.
+            ct.ThrowIfCancellationRequested();
+            var buckets = byRecipient.Values.ToList();
+            var states = await Task.WhenAll(buckets.Select(b => _digestStateRepository.GetAsync(b.Email)));
+            var due = new List<RecipientDigest>();
+            for (var i = 0; i < buckets.Count; i++)
+            {
+                var state = states[i];
+                if (state == null || now - state.LastDigestUtc >= minDigestInterval)
+                    due.Add(buckets[i]);
+            }
+
+            if (due.Count == 0)
+                return;
+
+            // Stamp the union of items going to at least one due recipient FIRST (before any job is
+            // persisted), so the "emailed at most once" guarantee holds under a crash: a persisted Queued
+            // job is sendable via EmailJobProcessor.ResumeIncompleteJobsAsync, so the escalation stamp must
+            // be durable before any job exists. Each item is stamped once, with a representative job id
+            // (the first due recipient that carries it); an item that fails to stamp (resolved or escalated
+            // concurrently, or a transient error) is simply left for a later sweep. A crash after stamping
+            // but before a job is persisted drops that one digest — acceptable, the in-app channel is
+            // durable.
+            var itemToRepJob = new Dictionary<Guid, (Notification Item, Guid JobId)>();
+            foreach (var bucket in due)
+            {
+                bucket.JobId = Guid.NewGuid();
+                foreach (var item in bucket.Items)
+                    if (!itemToRepJob.ContainsKey(item.Id))
+                        itemToRepJob[item.Id] = (item, bucket.JobId);
+            }
+
+            var stampedIds = new HashSet<Guid>();
+            var stampResults = await Task.WhenAll(
+                itemToRepJob.Values.Select(async pair =>
+                {
+                    var stamped = await StampOneEscalatedAsync(pair.Item.Id, pair.JobId, now);
+                    return (pair.Item.Id, Stamped: stamped != null);
+                })
+            );
+            foreach (var (id, stamped) in stampResults)
+                if (stamped)
+                    stampedIds.Add(id);
+
+            // Send each due recipient one combined digest of their stamped items, then record the send.
+            foreach (var bucket in due)
+            {
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    var items = bucket.Items
+                        .Where(n => stampedIds.Contains(n.Id))
+                        .GroupBy(n => n.Id)
+                        .Select(g => g.First())
+                        .OrderBy(n => n.CreatedUtc)
+                        .ToList();
+                    if (items.Count == 0)
+                        continue; // all of this recipient's items were resolved/stamped-away or failed to stamp.
+
+                    var (job, htmlBody) = BuildDigestJob(bucket.JobId, items, new List<string> { bucket.Email }, now);
+                    await PersistAndEnqueueJobAsync(job, htmlBody, ct);
+
+                    // Record the send LAST so a failure above never throttles a recipient for a digest that
+                    // was not actually queued.
+                    await _digestStateRepository.UpsertAsync(new NotificationDigestState { RecipientEmail = bucket.Email, LastDigestUtc = now });
+
+                    _logger.LogInformation(
+                        "Escalated {ItemCount} notification(s) to {Recipient} via job {JobId}",
+                        items.Count,
+                        bucket.Email,
+                        job.Id
+                    );
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogError(ex, "Failed to send escalation digest to {Recipient}", bucket.Email);
                 }
             }
         }
 
-        private async Task ProcessAudienceAsync(
-            string audience,
-            DateTime now,
-            DateTime graceCutoff,
-            TimeSpan minDigestInterval,
-            HashSet<string> emailedThisSweep,
-            CancellationToken ct
-        )
+        private sealed class RecipientDigest
         {
-            ct.ThrowIfCancellationRequested();
+            public RecipientDigest(string email) => Email = email;
 
-            // Oldest-first and already filtered to unresolved + un-escalated by the query, so the most
-            // overdue items are never starved by a large backlog. Only the grace check remains in memory.
-            var candidates = await _notificationRepository.GetUnescalatedByAudienceOldestFirstAsync(audience, 200);
-            var aged = candidates.Where(n => n.CreatedUtc <= graceCutoff).ToList();
-            if (aged.Count == 0)
-                return;
+            public string Email { get; }
 
-            var emails = await _recipientResolver.ResolveAudienceEmailsAsync(audience, ct);
-            if (emails.Count == 0)
-            {
-                // No one to email — leave the items un-escalated so they can be picked up once
-                // recipients exist (e.g. an admin/committee member is added).
-                _logger.LogWarning(
-                    "{Count} aged notification(s) for audience {Audience} but no recipients resolved",
-                    aged.Count,
-                    audience
-                );
-                return;
-            }
+            public List<Notification> Items { get; } = new();
 
-            // Exclude recipients already emailed earlier in this sweep so a recipient in several audiences
-            // is not digested twice in one run. If that leaves no one, defer the aged items to a later
-            // sweep rather than stamping them (so the excluded recipients still get them by email later).
-            var recipients = emails.Where(e => !emailedThisSweep.Contains(e)).ToList();
-            if (recipients.Count == 0)
-                return;
-
-            // Throttle is per recipient, but a notification has a single escalated flag, so we send and
-            // stamp as a unit: a digest goes out only when at least one remaining recipient is past the
-            // min interval, and when it does it goes to ALL of those recipients and stamps the items once.
-            // Sending to only the "due" subset and stamping would permanently drop those items from the
-            // email of any recipient that happened to be throttled on that one sweep (they would still see
-            // them in-app, but never by email).
-            var states = await Task.WhenAll(recipients.Select(e => _digestStateRepository.GetAsync(e)));
-            var anyDue = states.Any(s => s == null || now - s.LastDigestUtc >= minDigestInterval);
-            if (!anyDue)
-            {
-                // Everyone still eligible was recently digested; leave the aged items for a later sweep.
-                return;
-            }
-
-            // The writes below are deliberately ordered:
-            //   1. Stamp the aged notifications escalated, collecting the subset actually stamped for this
-            //      job's id. Stamping must be durable BEFORE the job exists: once a job is persisted Queued
-            //      it is sendable (EmailJobProcessor.ResumeIncompleteJobsAsync re-enqueues Queued jobs), so
-            //      stamping first is what makes the "emailed at most once" guarantee hold under a crash.
-            //      The cost is that a crash after stamping but before the job is persisted drops that one
-            //      digest — acceptable because the in-app notification is the durable channel.
-            //   2. Build the digest from the stamped subset only, so the email never lists an item that was
-            //      resolved or escalated by someone else between the query and the stamp.
-            //   3. Persist + enqueue the job.
-            //   4. Mark these recipients as emailed in this sweep, then record the per-recipient digest
-            //      send. The in-memory mark happens before the persisted write so the cross-audience guard
-            //      holds even if the digest-state write fails; the persisted write is the cross-sweep
-            //      throttle and comes LAST so a failure above never throttles recipients for a digest that
-            //      was not actually queued.
-            var jobId = Guid.NewGuid();
-            var stamped = await StampEscalatedAsync(aged, jobId, now);
-            if (stamped.Count == 0)
-            {
-                // Everything aged here was resolved or escalated by someone else first — nothing to send,
-                // and we must not throttle recipients for a digest we never queued.
-                return;
-            }
-
-            var (job, htmlBody) = BuildDigestJob(jobId, stamped, recipients, now);
-
-            await PersistAndEnqueueJobAsync(job, htmlBody, ct);
-
-            foreach (var e in recipients)
-                emailedThisSweep.Add(e);
-
-            await Task.WhenAll(
-                recipients.Select(e =>
-                    _digestStateRepository.UpsertAsync(new NotificationDigestState { RecipientEmail = e, LastDigestUtc = now })
-                )
-            );
-
-            _logger.LogInformation(
-                "Escalated {ItemCount} notification(s) for audience {Audience} to {RecipientCount} recipient(s) via job {JobId}",
-                stamped.Count,
-                audience,
-                recipients.Count,
-                job.Id
-            );
+            public Guid JobId { get; set; }
         }
 
         /// <summary>
@@ -274,16 +293,6 @@ namespace Web.Services
             // Enqueue last. A failure here (e.g. shutdown) leaves the job Queued for recovery by
             // EmailJobProcessor.ResumeIncompleteJobsAsync rather than losing it.
             await _emailJobQueue.EnqueueAsync(job.Id, ct);
-        }
-
-        /// <summary>
-        /// Stamps each aged notification escalated and returns the subset that was actually stamped, so
-        /// the digest can be built from exactly the items now bound to this job.
-        /// </summary>
-        private async Task<List<Notification>> StampEscalatedAsync(List<Notification> aged, Guid jobId, DateTime now)
-        {
-            var results = await Task.WhenAll(aged.Select(n => StampOneEscalatedAsync(n.Id, jobId, now)));
-            return results.Where(r => r != null).Select(r => r!).ToList();
         }
 
         /// <summary>
