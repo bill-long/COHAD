@@ -292,9 +292,10 @@ namespace Web.Controllers
             {
                 await Task.WhenAll(vendorFlags.Select(f => _vendorFlagRepository.DeleteByVendorCascadeAsync(id, f.Id)));
                 // The flags are gone; resolve any in-app notifications that pointed at them so they
-                // don't linger unresolved (and never escalate to email) for a vendor that no longer exists.
-                foreach (var f in vendorFlags)
-                    await _notificationService.ResolveAsync(NotificationTargetType.VendorFlag, f.Id.ToString("D"), apiUser.UniqueId);
+                // don't linger unresolved (and never escalate to email) for a vendor that no longer
+                // exists. Independent resolves — run them in parallel like the cascade deletes above.
+                await Task.WhenAll(vendorFlags.Select(f =>
+                    _notificationService.ResolveAsync(NotificationTargetType.VendorFlag, f.Id.ToString("D"), apiUser.UniqueId)));
             }
 
             await _vendorRepository.DeleteAsync(id);

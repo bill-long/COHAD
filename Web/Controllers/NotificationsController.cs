@@ -48,11 +48,13 @@ namespace Web.Controllers
             if (audiences.Count == 0)
                 return Ok(Array.Empty<NotificationPresentation>());
 
-            var collected = new List<Notification>();
-            foreach (var audience in audiences)
-                collected.AddRange(await _notificationService.GetUnresolvedForAudienceAsync(audience));
+            // The per-audience queries are independent — run them in parallel, then merge and sort.
+            var perAudience = await Task.WhenAll(
+                audiences.Select(a => _notificationService.GetUnresolvedForAudienceAsync(a))
+            );
 
-            var payload = collected
+            var payload = perAudience
+                .SelectMany(list => list)
                 .OrderByDescending(n => n.CreatedUtc)
                 .Select(NotificationPresentation.FromStorageModel)
                 .ToList();
