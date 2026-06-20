@@ -142,20 +142,28 @@ namespace Web.Services
 
             var recipients = emails.ToList();
 
-            // Build the job in memory (id assigned) but do not persist it yet. The three writes below are
-            // deliberately ordered:
-            //   1. Stamp the notifications escalated. This must be durable BEFORE the job exists: once a
-            //      job is persisted Queued it is sendable (EmailJobProcessor.ResumeIncompleteJobsAsync
-            //      re-enqueues Queued jobs), so stamping first is what makes the "emailed at most once"
-            //      guarantee hold under a crash. The cost is that a crash after stamping but before the
-            //      job is persisted drops that one digest — acceptable because the in-app notification is
-            //      the durable channel and email is a best-effort nudge.
-            //   2. Persist + enqueue the job.
-            //   3. Record the per-recipient digest send LAST, so a failure in step 1 or 2 never throttles
-            //      recipients for a digest that was not actually queued.
-            var (job, htmlBody) = BuildDigestJob(aged, recipients, now);
+            // The writes below are deliberately ordered:
+            //   1. Stamp the aged notifications escalated, collecting the subset actually stamped for this
+            //      job's id. Stamping must be durable BEFORE the job exists: once a job is persisted Queued
+            //      it is sendable (EmailJobProcessor.ResumeIncompleteJobsAsync re-enqueues Queued jobs), so
+            //      stamping first is what makes the "emailed at most once" guarantee hold under a crash.
+            //      The cost is that a crash after stamping but before the job is persisted drops that one
+            //      digest — acceptable because the in-app notification is the durable channel.
+            //   2. Build the digest from the stamped subset only, so the email never lists an item that was
+            //      resolved or escalated by someone else between the query and the stamp.
+            //   3. Persist + enqueue the job.
+            //   4. Record the per-recipient digest send LAST, so a failure above never throttles recipients
+            //      for a digest that was not actually queued.
+            var jobId = Guid.NewGuid();
+            var stamped = await StampEscalatedAsync(aged, jobId, now);
+            if (stamped.Count == 0)
+            {
+                // Everything aged here was resolved or escalated by someone else first — nothing to send,
+                // and we must not throttle recipients for a digest we never queued.
+                return;
+            }
 
-            await StampEscalatedAsync(aged, job.Id, now);
+            var (job, htmlBody) = BuildDigestJob(jobId, stamped, recipients, now);
 
             await PersistAndEnqueueJobAsync(job, htmlBody, ct);
 
@@ -167,7 +175,7 @@ namespace Web.Services
 
             _logger.LogInformation(
                 "Escalated {ItemCount} notification(s) for audience {Audience} to {RecipientCount} recipient(s) via job {JobId}",
-                aged.Count,
+                stamped.Count,
                 audience,
                 recipients.Count,
                 job.Id
@@ -175,11 +183,16 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// Builds the digest <see cref="EmailJob"/> (with a fresh id) and its HTML body in memory. Does
-        /// not persist or enqueue — the caller stamps the notifications first, then persists + enqueues
-        /// (see the ordering note in <see cref="ProcessAudienceAsync"/>).
+        /// Builds the digest <see cref="EmailJob"/> (using the already-assigned <paramref name="jobId"/>)
+        /// and its HTML body in memory from the <paramref name="items"/> that were actually stamped for
+        /// this job. Does not persist or enqueue.
         /// </summary>
-        private (EmailJob Job, string HtmlBody) BuildDigestJob(List<Notification> aged, List<string> recipientEmails, DateTime now)
+        private (EmailJob Job, string HtmlBody) BuildDigestJob(
+            Guid jobId,
+            List<Notification> items,
+            List<string> recipientEmails,
+            DateTime now
+        )
         {
             var recipients = recipientEmails
                 .Select(e => new EmailJobRecipient
@@ -191,7 +204,6 @@ namespace Web.Services
                 })
                 .ToList();
 
-            var jobId = Guid.NewGuid();
             var job = new EmailJob
             {
                 Id = jobId,
@@ -199,7 +211,7 @@ namespace Web.Services
                 Category = EscalationCategory,
                 FromEmail = "webservice@cohad.org",
                 FromDisplay = "COHAD Web",
-                Subject = $"COHAD: {aged.Count} item(s) need attention",
+                Subject = $"COHAD: {items.Count} item(s) need attention",
                 CreatedUtc = now,
                 CreatedByUserId = "system:notification-escalation",
                 CreatedByDisplayName = "Notification Escalation",
@@ -210,7 +222,7 @@ namespace Web.Services
                 ContentBlobPath = $"email-jobs/{jobId:D}.html",
             };
 
-            return (job, BuildDigestHtml(aged));
+            return (job, BuildDigestHtml(items));
         }
 
         /// <summary>Uploads the digest body, persists the job as Queued, and enqueues it for the processor.</summary>
@@ -248,32 +260,38 @@ namespace Web.Services
             await _emailJobQueue.EnqueueAsync(job.Id, ct);
         }
 
-        private async Task StampEscalatedAsync(List<Notification> aged, Guid jobId, DateTime now)
+        /// <summary>
+        /// Stamps each aged notification escalated and returns the subset that was actually stamped, so
+        /// the digest can be built from exactly the items now bound to this job.
+        /// </summary>
+        private async Task<List<Notification>> StampEscalatedAsync(List<Notification> aged, Guid jobId, DateTime now)
         {
-            await Task.WhenAll(aged.Select(n => StampOneEscalatedAsync(n.Id, jobId, now)));
+            var results = await Task.WhenAll(aged.Select(n => StampOneEscalatedAsync(n.Id, jobId, now)));
+            return results.Where(r => r != null).Select(r => r!).ToList();
         }
 
         /// <summary>
         /// Stamps a single notification escalated under optimistic concurrency: re-read, set the
-        /// escalation fields, and write with an ETag precondition. If a concurrent write (typically a
-        /// human resolve) lands first, the conditional write fails and we re-read — skipping the stamp if
-        /// the item is now resolved/escalated — so we never clobber <c>ResolvedUtc</c> or re-email a
-        /// resolved item.
+        /// escalation fields, and write with an ETag precondition. Returns the stamped notification, or
+        /// null if it was skipped (already resolved/escalated, or repeatedly lost the race). If a
+        /// concurrent write (typically a human resolve) lands first, the conditional write fails and we
+        /// re-read — skipping the stamp if the item is now resolved/escalated — so we never clobber
+        /// <c>ResolvedUtc</c> or re-email a resolved item.
         /// </summary>
-        private async Task StampOneEscalatedAsync(Guid id, Guid jobId, DateTime now)
+        private async Task<Notification?> StampOneEscalatedAsync(Guid id, Guid jobId, DateTime now)
         {
             for (var attempt = 0; attempt < 2; attempt++)
             {
                 var fresh = await _notificationRepository.GetByIdAsync(id);
                 if (fresh == null || fresh.ResolvedUtc != null || fresh.EscalatedUtc != null)
-                    return;
+                    return null;
 
                 fresh.EscalatedUtc = now;
                 fresh.EscalationJobId = jobId;
                 try
                 {
                     await _notificationRepository.UpsertWithEtagAsync(fresh);
-                    return;
+                    return fresh;
                 }
                 catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
                 {
@@ -282,6 +300,7 @@ namespace Web.Services
             }
 
             _logger.LogWarning("Gave up stamping notification {Id} escalated after a concurrent update", id);
+            return null;
         }
 
         private string BuildDigestHtml(List<Notification> aged)

@@ -347,4 +347,167 @@ public sealed class NotificationEscalationRunnerTests
 
         Assert.Empty(h.CapturedJobs);
     }
+
+    // The next two tests simulate a concurrent resolve landing AFTER the sweep's query but before the
+    // stamp, which the in-memory MockNotificationRepository can't express (its query and point read are
+    // always consistent), so they use a Moq repository whose GetByIdAsync diverges from the query.
+
+    private static Notification AgedNotification(DateTime createdUtc) => new()
+    {
+        Id = Guid.NewGuid(),
+        Type = NotificationType.Registration,
+        AudienceKey = NotificationAudience.Administrators,
+        TargetType = NotificationTargetType.User,
+        TargetId = Guid.NewGuid().ToString(),
+        Title = "New user registered",
+        Summary = "Jane Doe",
+        CreatedUtc = createdUtc,
+        ETag = "1",
+    };
+
+    private static NotificationEscalationRunner BuildRunnerWithRepo(
+        INotificationRepository repo,
+        out List<EmailJob> capturedJobs,
+        out MockNotificationDigestStateRepository digestState
+    )
+    {
+        capturedJobs = new List<EmailJob>();
+        var captured = capturedJobs;
+        digestState = new MockNotificationDigestStateRepository();
+
+        var resolver = new Mock<INotificationRecipientResolver>();
+        resolver
+            .Setup(r => r.ResolveAudienceEmailsAsync(NotificationAudience.Administrators, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { "admin@example.com" });
+        resolver
+            .Setup(r => r.ResolveAudienceEmailsAsync(It.Is<string>(a => a != NotificationAudience.Administrators), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<string>());
+
+        var committees = new Mock<ICommitteeRepository>();
+        committees.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee>());
+
+        var emailJobs = new Mock<IEmailJobRepository>();
+        emailJobs.Setup(r => r.AddAsync(It.IsAny<EmailJob>())).Callback<EmailJob>(j => captured.Add(j)).Returns(Task.CompletedTask);
+
+        var fileStore = new Mock<IDocumentFileStore>();
+        fileStore.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        var options = new NotificationEscalationOptions { Enabled = true, GracePeriodMinutes = 30, MinDigestIntervalHours = 6, MaxItemsPerDigest = 10 };
+
+        return new NotificationEscalationRunner(
+            repo,
+            resolver.Object,
+            committees.Object,
+            digestState,
+            emailJobs.Object,
+            fileStore.Object,
+            new EmailJobQueue(),
+            Microsoft.Extensions.Options.Options.Create(options),
+            NullLogger<NotificationEscalationRunner>.Instance
+        );
+    }
+
+    [Fact]
+    public async Task Digest_excludes_item_resolved_after_the_query()
+    {
+        var keep = AgedNotification(DateTime.UtcNow.AddHours(-3));
+        var raced = AgedNotification(DateTime.UtcNow.AddHours(-2));
+
+        var repo = new Mock<INotificationRepository>();
+        repo.Setup(r => r.GetUnescalatedByAudienceOldestFirstAsync(NotificationAudience.Administrators, It.IsAny<int>()))
+            .ReturnsAsync(new List<Notification> { keep, raced });
+        repo.Setup(r => r.GetUnescalatedByAudienceOldestFirstAsync(It.Is<string>(a => a != NotificationAudience.Administrators), It.IsAny<int>()))
+            .ReturnsAsync(new List<Notification>());
+        repo.Setup(r => r.GetByIdAsync(keep.Id)).ReturnsAsync(keep);
+        // 'raced' was resolved by a human between the query and the stamp.
+        repo.Setup(r => r.GetByIdAsync(raced.Id))
+            .ReturnsAsync(new Notification { Id = raced.Id, AudienceKey = raced.AudienceKey, ResolvedUtc = DateTime.UtcNow, ETag = "2" });
+        repo.Setup(r => r.UpsertWithEtagAsync(It.IsAny<Notification>())).Returns(Task.CompletedTask);
+
+        var capturedHtml = (string?)null;
+        var runner = BuildRunnerWithRepoCapturingHtml(repo.Object, out var capturedJobs, out _, html => capturedHtml = html);
+
+        await runner.RunOnceAsync(CancellationToken.None);
+
+        var job = Assert.Single(capturedJobs);
+        Assert.Equal("COHAD: 1 item(s) need attention", job.Subject);
+        Assert.NotNull(capturedHtml);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(capturedHtml!, "<li>"));
+        // Only the surviving item was stamped (UpsertWithEtag called exactly once).
+        repo.Verify(r => r.UpsertWithEtagAsync(It.Is<Notification>(n => n.Id == keep.Id)), Times.Once);
+        repo.Verify(r => r.UpsertWithEtagAsync(It.Is<Notification>(n => n.Id == raced.Id)), Times.Never);
+    }
+
+    [Fact]
+    public async Task No_job_or_throttle_when_all_items_resolved_after_the_query()
+    {
+        var raced = AgedNotification(DateTime.UtcNow.AddHours(-2));
+
+        var repo = new Mock<INotificationRepository>();
+        repo.Setup(r => r.GetUnescalatedByAudienceOldestFirstAsync(NotificationAudience.Administrators, It.IsAny<int>()))
+            .ReturnsAsync(new List<Notification> { raced });
+        repo.Setup(r => r.GetUnescalatedByAudienceOldestFirstAsync(It.Is<string>(a => a != NotificationAudience.Administrators), It.IsAny<int>()))
+            .ReturnsAsync(new List<Notification>());
+        repo.Setup(r => r.GetByIdAsync(raced.Id))
+            .ReturnsAsync(new Notification { Id = raced.Id, AudienceKey = raced.AudienceKey, ResolvedUtc = DateTime.UtcNow, ETag = "2" });
+
+        var runner = BuildRunnerWithRepo(repo.Object, out var capturedJobs, out var digestState);
+
+        await runner.RunOnceAsync(CancellationToken.None);
+
+        // Nothing stamped → no job and no throttle write.
+        Assert.Empty(capturedJobs);
+        Assert.Null(await digestState.GetAsync("admin@example.com"));
+        repo.Verify(r => r.UpsertWithEtagAsync(It.IsAny<Notification>()), Times.Never);
+    }
+
+    private static NotificationEscalationRunner BuildRunnerWithRepoCapturingHtml(
+        INotificationRepository repo,
+        out List<EmailJob> capturedJobs,
+        out MockNotificationDigestStateRepository digestState,
+        Action<string> onHtml
+    )
+    {
+        capturedJobs = new List<EmailJob>();
+        var captured = capturedJobs;
+        digestState = new MockNotificationDigestStateRepository();
+
+        var resolver = new Mock<INotificationRecipientResolver>();
+        resolver
+            .Setup(r => r.ResolveAudienceEmailsAsync(NotificationAudience.Administrators, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { "admin@example.com" });
+        resolver
+            .Setup(r => r.ResolveAudienceEmailsAsync(It.Is<string>(a => a != NotificationAudience.Administrators), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<string>());
+
+        var committees = new Mock<ICommitteeRepository>();
+        committees.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee>());
+
+        var emailJobs = new Mock<IEmailJobRepository>();
+        emailJobs.Setup(r => r.AddAsync(It.IsAny<EmailJob>())).Callback<EmailJob>(j => captured.Add(j)).Returns(Task.CompletedTask);
+
+        var fileStore = new Mock<IDocumentFileStore>();
+        fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .Callback<string, Stream, string>((_, stream, _) =>
+            {
+                using var sr = new StreamReader(stream, leaveOpen: true);
+                onHtml(sr.ReadToEnd());
+            })
+            .Returns(Task.CompletedTask);
+
+        var options = new NotificationEscalationOptions { Enabled = true, GracePeriodMinutes = 30, MinDigestIntervalHours = 6, MaxItemsPerDigest = 10 };
+
+        return new NotificationEscalationRunner(
+            repo,
+            resolver.Object,
+            committees.Object,
+            digestState,
+            emailJobs.Object,
+            fileStore.Object,
+            new EmailJobQueue(),
+            Microsoft.Extensions.Options.Options.Create(options),
+            NullLogger<NotificationEscalationRunner>.Instance
+        );
+    }
 }
