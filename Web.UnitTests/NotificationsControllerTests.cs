@@ -121,6 +121,22 @@ public sealed class NotificationsControllerTests
     }
 
     [Fact]
+    public async Task Acknowledge_ReturnsBadRequest_ForTypeWithModerationAction()
+    {
+        // An admin is in every committee audience, but a held-message notification must be resolved by
+        // approve/reject — acknowledging it would hide still-pending moderation work.
+        var committee = new Committee { Id = "c1", ManagementRole = User.Role.GardenClub };
+        var (controller, service) = CreateController(Admin(), new[] { committee });
+        var raised = await service.RaiseAsync(NotificationType.HeldMessage, NotificationAudience.Committee("c1"), NotificationTargetType.HeldMessage, "held-1", "Held", "x");
+
+        var result = await controller.Acknowledge(raised.Id);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        var stored = await service.GetByIdAsync(raised.Id);
+        Assert.Null(stored!.ResolvedUtc); // not resolved
+    }
+
+    [Fact]
     public async Task Acknowledge_ReturnsNotFound_WhenMissing()
     {
         var (controller, _) = CreateController(Admin());

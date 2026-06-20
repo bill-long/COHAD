@@ -81,6 +81,12 @@ namespace Web.Controllers
             if (!audiences.Contains(existing.AudienceKey, StringComparer.Ordinal))
                 return Forbid();
 
+            // Only types with no underlying moderation action may be acknowledged. Vendor flags and
+            // held emails must be resolved by dismissing/approving/rejecting them — acknowledging here
+            // would mark the notification resolved while the actual work is still pending.
+            if (!Notification.IsAcknowledgeable(existing.Type))
+                return BadRequest($"Notifications of type {existing.Type} are resolved by their moderation action, not by acknowledgement.");
+
             var acknowledged = await _notificationService.AcknowledgeAsync(id, apiUser.UniqueId);
             if (acknowledged == null)
                 return NotFound();

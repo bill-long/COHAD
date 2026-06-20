@@ -94,6 +94,14 @@ namespace Web.Models
         /// since <paramref name="targetType"/> + <paramref name="targetId"/> already uniquely identify
         /// the underlying record (the notification's <see cref="Type"/> is derived from its target).
         /// </summary>
+        /// <summary>
+        /// True for notification types whose only resolution is an explicit acknowledge/dismiss because
+        /// they have no underlying moderation action (registrations). Types backed by a domain action
+        /// (vendor flags, held emails) must be resolved by that action — acknowledging them directly
+        /// would hide still-pending work and defeat escalation, so callers must reject them.
+        /// </summary>
+        public static bool IsAcknowledgeable(NotificationType type) => type == NotificationType.Registration;
+
         public static Guid DeterministicId(string targetType, string targetId)
         {
             var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{targetType}\n{targetId}"));
