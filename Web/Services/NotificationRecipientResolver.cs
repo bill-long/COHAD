@@ -30,6 +30,11 @@ namespace Web.Services
         private readonly IResidentRepository _residentRepository;
         private readonly ICommitteeRepository _committeeRepository;
 
+        // The resolver is registered scoped and the escalation sweep creates one scope per run, so a
+        // single instance resolves every audience in a sweep. Cache the (expensive) full user list once
+        // per instance rather than re-scanning for the Administrators audience and each committee.
+        private Task<List<Models.User>>? _allUsersTask;
+
         public NotificationRecipientResolver(
             IUserRepository userRepository,
             IHomeRepository homeRepository,
@@ -62,9 +67,12 @@ namespace Web.Services
         /// <summary>
         /// Resolves Administrator emails — the users who can act on the Administrators audience in-app.
         /// </summary>
+        /// <summary>Fetches all users at most once per resolver instance (i.e. once per sweep).</summary>
+        private Task<List<Models.User>> GetAllUsersAsync() => _allUsersTask ??= _userRepository.GetAllAsync();
+
         private async Task<IReadOnlyList<string>> ResolveAdministratorsAsync()
         {
-            var allUsers = await _userRepository.GetAllAsync();
+            var allUsers = await GetAllUsersAsync();
             var admins = allUsers
                 .Where(u => u.Roles != null && u.Roles.Contains(Models.User.Role.Administrator))
                 .ToList();
@@ -84,7 +92,7 @@ namespace Web.Services
             if (committee == null)
                 return Array.Empty<string>();
 
-            var allUsers = await _userRepository.GetAllAsync();
+            var allUsers = await GetAllUsersAsync();
             var moderators = allUsers.Where(u => CommitteeAuthorization.CanManage(u, committee)).ToList();
             return await ResolveUserEmailsAsync(moderators);
         }

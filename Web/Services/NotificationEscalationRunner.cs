@@ -41,6 +41,9 @@ namespace Web.Services
 
         private const string EscalationCategory = "notification-escalation";
 
+        /// <summary>Max concurrent escalation stamps (point read + conditional upsert) per sweep.</summary>
+        private const int MaxStampConcurrency = 16;
+
         public NotificationEscalationRunner(
             INotificationRepository notificationRepository,
             INotificationRecipientResolver recipientResolver,
@@ -158,14 +161,26 @@ namespace Web.Services
                         itemToRepJob[item.Id] = (item, bucket.JobId);
             }
 
-            var stampedIds = new HashSet<Guid>();
+            // Bound the concurrent stamping: a large backlog across many committees could otherwise fan
+            // out into thousands of simultaneous Cosmos point-read + conditional-upsert pairs, spiking RU
+            // and risking 429s. Cap it so the sweep stays steady.
+            using var stampGate = new SemaphoreSlim(MaxStampConcurrency);
             var stampResults = await Task.WhenAll(
                 itemToRepJob.Values.Select(async pair =>
                 {
-                    var stamped = await StampOneEscalatedAsync(pair.Item.Id, pair.JobId, now);
-                    return (pair.Item.Id, Stamped: stamped != null);
+                    await stampGate.WaitAsync(ct);
+                    try
+                    {
+                        var stamped = await StampOneEscalatedAsync(pair.Item.Id, pair.JobId, now);
+                        return (pair.Item.Id, Stamped: stamped != null);
+                    }
+                    finally
+                    {
+                        stampGate.Release();
+                    }
                 })
             );
+            var stampedIds = new HashSet<Guid>();
             foreach (var (id, stamped) in stampResults)
                 if (stamped)
                     stampedIds.Add(id);
