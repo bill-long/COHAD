@@ -249,8 +249,26 @@ namespace Web.Controllers
 
             foreach (var admin in admins)
             {
+                // Home-less admins (e.g. an Administrator with no associated Home) can't be matched
+                // to a resident record, so fall back to their own account email. Without this they
+                // would silently never receive administrator notifications.
                 if (admin.OwnedHomeIds == null || admin.OwnedHomeIds.Count == 0)
+                {
+                    var accountEmail = admin.Emails?.Trim();
+                    if (!string.IsNullOrWhiteSpace(accountEmail) && seen.Add(accountEmail))
+                    {
+                        result.Add(
+                            new EmailJobRecipient
+                            {
+                                Email = accountEmail,
+                                HomeId = Guid.Empty,
+                                Status = EmailJobRecipientStatus.Pending,
+                            }
+                        );
+                    }
+
                     continue;
+                }
 
                 var adminGivenName = admin.GivenName?.Trim();
                 var adminSurname = admin.Surname?.Trim();

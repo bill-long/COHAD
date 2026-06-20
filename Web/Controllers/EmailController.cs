@@ -476,7 +476,24 @@ namespace Web.Controllers
             var homeIds = apiUser.OwnedHomeIds ?? new List<Guid>();
             var result = new Dictionary<string, EmailJobRecipient>(StringComparer.OrdinalIgnoreCase);
             if (homeIds.Count == 0)
+            {
+                // A sender with no associated home (e.g. an Administrator) still needs to be able to
+                // test-send. Fall back to their own account email so the test picker isn't empty and
+                // the test-send validation accepts it. HomeId is Guid.Empty because this is not a
+                // subscription recipient — unsubscribe headers should be suppressed for it.
+                var accountEmail = apiUser.Emails?.Trim();
+                if (!string.IsNullOrWhiteSpace(accountEmail))
+                {
+                    result[accountEmail] = new EmailJobRecipient
+                    {
+                        Email = accountEmail,
+                        HomeId = Guid.Empty,
+                        Status = EmailJobRecipientStatus.Pending,
+                    };
+                }
+
                 return result;
+            }
 
             var homes = await _homeRepository.GetByIdsAsync(homeIds);
             var allResidents = await _residentRepository.GetByHomeIdsAsync(homeIds);

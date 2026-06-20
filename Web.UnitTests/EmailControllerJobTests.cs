@@ -913,7 +913,35 @@ public sealed class EmailControllerJobTests
     }
 
     [Fact]
-    public async Task GetTestRecipients_NoHomes_ReturnsEmpty()
+    public async Task GetTestRecipients_NoHomes_FallsBackToAccountEmail()
+    {
+        // A sender with no associated home (e.g. an Administrator) can still test-send to themselves.
+        _users
+            .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "google.comu1",
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "admin@example.com",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+
+        var controller = CreateController();
+        var result = await controller.GetTestRecipients();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var items = Assert.IsAssignableFrom<List<TestRecipientOption>>(ok.Value);
+        var item = Assert.Single(items);
+        Assert.Equal("admin@example.com", item.Email);
+        Assert.Equal(Guid.Empty, item.HomeId);
+    }
+
+    [Fact]
+    public async Task GetTestRecipients_NoHomes_NoEmail_ReturnsEmpty()
     {
         _users
             .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
@@ -923,8 +951,8 @@ public sealed class EmailControllerJobTests
                     UniqueId = "google.comu1",
                     GivenName = "Test",
                     Surname = "User",
-                    Emails = "test@example.com",
-                    Roles = new List<User.Role> { User.Role.Board },
+                    Emails = "   ",
+                    Roles = new List<User.Role> { User.Role.Administrator },
                     OwnedHomeIds = new List<Guid>(),
                 }
             );
@@ -935,6 +963,86 @@ public sealed class EmailControllerJobTests
         var ok = Assert.IsType<OkObjectResult>(result);
         var items = Assert.IsAssignableFrom<List<TestRecipientOption>>(ok.Value);
         Assert.Empty(items);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_TestEmail_HomeLessSender_SendsToAccountEmail()
+    {
+        // An Administrator with no home must still be able to test-send to their own account email.
+        _users
+            .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "google.comu1",
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "admin@example.com",
+                    Roles = new List<User.Role> { User.Role.Administrator, User.Role.Board },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo.Setup(r => r.AddAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Test",
+            HtmlBody = "<p>hi</p>",
+            IsTestEmail = true,
+            TestRecipientEmails = new List<string> { "admin@example.com" },
+        };
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(emailInfo);
+
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        var summary = Assert.IsType<EmailJobSummary>(accepted.Value);
+        Assert.Equal(1, summary.TotalRecipients);
+        _jobRepo.Verify(
+            r =>
+                r.AddAsync(
+                    It.Is<EmailJob>(j => j.TotalRecipients == 1 && j.Recipients[0].Email == "admin@example.com")
+                ),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_TestEmail_HomeLessSender_RejectsForeignEmail()
+    {
+        // The home-less fallback only allows the sender's own account email — nothing else.
+        _users
+            .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "google.comu1",
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "admin@example.com",
+                    Roles = new List<User.Role> { User.Role.Administrator, User.Role.Board },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+
+        var emailInfo = new EmailInfo
+        {
+            Subject = "Test",
+            HtmlBody = "<p>hi</p>",
+            IsTestEmail = true,
+            TestRecipientEmails = new List<string> { "someone@else.com" },
+        };
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(emailInfo);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("someone@else.com", bad.Value?.ToString());
+        _jobRepo.Verify(r => r.AddAsync(It.IsAny<EmailJob>()), Times.Never);
     }
 
     // ──────────────────────────────────────────────

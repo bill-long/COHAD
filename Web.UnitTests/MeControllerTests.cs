@@ -536,7 +536,7 @@ public sealed class MeControllerTests
     }
 
     [Fact]
-    public async Task ResolveAdminRecipients_skips_admin_with_no_homes()
+    public async Task ResolveAdminRecipients_falls_back_to_account_email_for_admin_with_no_homes()
     {
         var users = new Mock<IUserRepository>();
         users
@@ -549,7 +549,40 @@ public sealed class MeControllerTests
                         UniqueId = "admin1",
                         GivenName = "Admin",
                         Surname = "One",
-                        Emails = "admin@example.com",
+                        Emails = "  admin@example.com  ",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid>(),
+                    },
+                }
+            );
+
+        var homes = new Mock<IHomeRepository>();
+        homes.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync(new List<Home>());
+
+        var controller = CreateController(users.Object, homes.Object);
+
+        var result = await controller.ResolveAdminRecipients();
+
+        Assert.Single(result);
+        Assert.Equal("admin@example.com", result[0].Email);
+        Assert.Equal(Guid.Empty, result[0].HomeId);
+    }
+
+    [Fact]
+    public async Task ResolveAdminRecipients_skips_admin_with_no_homes_and_no_email()
+    {
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = "admin1",
+                        GivenName = "Admin",
+                        Surname = "One",
+                        Emails = "   ",
                         Roles = new List<User.Role> { User.Role.Administrator },
                         OwnedHomeIds = new List<Guid>(),
                     },
@@ -564,6 +597,67 @@ public sealed class MeControllerTests
         var result = await controller.ResolveAdminRecipients();
 
         Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task ResolveAdminRecipients_deduplicates_home_less_admin_against_home_match()
+    {
+        var homeId = Guid.NewGuid();
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new User
+                    {
+                        UniqueId = "admin1",
+                        GivenName = "Admin",
+                        Surname = "One",
+                        Emails = "shared@example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid> { homeId },
+                    },
+                    new User
+                    {
+                        UniqueId = "admin2",
+                        GivenName = "Admin",
+                        Surname = "Two",
+                        Emails = "shared@example.com",
+                        Roles = new List<User.Role> { User.Role.Administrator },
+                        OwnedHomeIds = new List<Guid>(),
+                    },
+                }
+            );
+
+        var homes = new Mock<IHomeRepository>();
+        homes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(new List<Home> { new Home { Id = homeId } });
+
+        var residents = new Mock<IResidentRepository>();
+        residents
+            .Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(
+                new List<Resident>
+                {
+                    new Resident
+                    {
+                        Id = Guid.NewGuid(),
+                        HomeId = homeId,
+                        GivenName = "Admin",
+                        Surname = "One",
+                        EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "shared@example.com" } },
+                    },
+                }
+            );
+
+        var controller = CreateController(users.Object, homes.Object, residentRepository: residents.Object);
+
+        var result = await controller.ResolveAdminRecipients();
+
+        Assert.Single(result);
+        Assert.Equal("shared@example.com", result[0].Email);
     }
 
     [Fact]
