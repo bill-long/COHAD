@@ -314,6 +314,7 @@ namespace Web
                 ));
                 services.AddSingleton<IEmailDeliveryEventRepository, MockEmailDeliveryEventRepository>();
                 services.AddSingleton<IHeldMessageRepository, MockHeldMessageRepository>();
+                services.AddSingleton<INotificationRepository, MockNotificationRepository>();
             }
             else
             {
@@ -400,6 +401,10 @@ namespace Web
                     sp.GetRequiredService<CosmosClient>().GetContainer(db, "HeldMessages")
                 ));
 
+                services.AddScoped<INotificationRepository>(sp => new CosmosNotificationRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "Notifications")
+                ));
+
                 // Graph API for committee mailbox forwarding — registered only when credentials are configured.
                 var graphTenantId = Configuration["Graph:TenantId"];
                 var graphClientId = Configuration["Graph:ClientId"];
@@ -414,6 +419,12 @@ namespace Web
                     services.AddSingleton<IGraphMailReader, GraphMailReader>();
                 }
             }
+
+            // Notification service (shared across environments). The SignalR-backed realtime notifier
+            // is wired in a later phase; until then a no-op notifier is used and clients pick up
+            // changes on their next fetch.
+            services.AddSingleton<INotificationRealtimeNotifier, NoOpNotificationRealtimeNotifier>();
+            services.AddScoped<INotificationService, NotificationService>();
 
             // Email job queue and background processor (shared across environments)
             services.AddSingleton<EmailJobQueue>();
