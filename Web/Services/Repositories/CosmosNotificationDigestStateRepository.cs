@@ -43,8 +43,12 @@ namespace Web.Services.Repositories
                 state.ETag = response.Headers.ETag;
                 return state;
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound && ex.SubStatusCode == 0)
             {
+                // Only a genuinely missing document maps to "no digest state". A 404 with a non-zero
+                // sub-status (e.g. the container/database is missing) is a misconfiguration — let it
+                // surface rather than silently making every recipient look never-digested, which would
+                // make the sweeper escalate as if no one has been throttled.
                 return null;
             }
         }
