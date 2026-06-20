@@ -486,6 +486,35 @@ public sealed class NotificationEscalationRunnerTests
         repo.Verify(r => r.UpsertWithEtagAsync(It.IsAny<Notification>()), Times.Never);
     }
 
+    [Fact]
+    public async Task Transient_stamp_failure_on_one_item_does_not_abort_the_others()
+    {
+        var keep = AgedNotification(DateTime.UtcNow.AddHours(-3));
+        var failing = AgedNotification(DateTime.UtcNow.AddHours(-2));
+
+        var repo = new Mock<INotificationRepository>();
+        repo.Setup(r => r.GetUnescalatedByAudienceOldestFirstAsync(NotificationAudience.Administrators, It.IsAny<int>()))
+            .ReturnsAsync(new List<Notification> { keep, failing });
+        repo.Setup(r => r.GetUnescalatedByAudienceOldestFirstAsync(It.Is<string>(a => a != NotificationAudience.Administrators), It.IsAny<int>()))
+            .ReturnsAsync(new List<Notification>());
+        repo.Setup(r => r.GetByIdAsync(keep.Id)).ReturnsAsync(keep);
+        repo.Setup(r => r.GetByIdAsync(failing.Id)).ReturnsAsync(failing);
+        repo.Setup(r => r.UpsertWithEtagAsync(It.Is<Notification>(n => n.Id == keep.Id))).Returns(Task.CompletedTask);
+        // A transient (non-412) Cosmos error stamping the second item.
+        repo.Setup(r => r.UpsertWithEtagAsync(It.Is<Notification>(n => n.Id == failing.Id)))
+            .ThrowsAsync(new Microsoft.Azure.Cosmos.CosmosException("transient", System.Net.HttpStatusCode.ServiceUnavailable, 0, string.Empty, 0));
+
+        var runner = BuildRunnerWithRepo(repo.Object, out var capturedJobs, out _);
+
+        // Does not throw despite the per-item failure.
+        await runner.RunOnceAsync(CancellationToken.None);
+
+        // The surviving item is still digested; the failing one is simply left for a later sweep.
+        var job = Assert.Single(capturedJobs);
+        Assert.Equal("COHAD: 1 item(s) need attention", job.Subject);
+        repo.Verify(r => r.UpsertWithEtagAsync(It.Is<Notification>(n => n.Id == keep.Id)), Times.Once);
+    }
+
     private static NotificationEscalationRunner BuildRunnerWithRepoCapturingHtml(
         INotificationRepository repo,
         out List<EmailJob> capturedJobs,

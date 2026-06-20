@@ -296,27 +296,38 @@ namespace Web.Services
         /// </summary>
         private async Task<Notification?> StampOneEscalatedAsync(Guid id, Guid jobId, DateTime now)
         {
-            for (var attempt = 0; attempt < 2; attempt++)
+            try
             {
-                var fresh = await _notificationRepository.GetByIdAsync(id);
-                if (fresh == null || fresh.ResolvedUtc != null || fresh.EscalatedUtc != null)
-                    return null;
+                for (var attempt = 0; attempt < 2; attempt++)
+                {
+                    var fresh = await _notificationRepository.GetByIdAsync(id);
+                    if (fresh == null || fresh.ResolvedUtc != null || fresh.EscalatedUtc != null)
+                        return null;
 
-                fresh.EscalatedUtc = now;
-                fresh.EscalationJobId = jobId;
-                try
-                {
-                    await _notificationRepository.UpsertWithEtagAsync(fresh);
-                    return fresh;
+                    fresh.EscalatedUtc = now;
+                    fresh.EscalationJobId = jobId;
+                    try
+                    {
+                        await _notificationRepository.UpsertWithEtagAsync(fresh);
+                        return fresh;
+                    }
+                    catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+                    {
+                        // Lost the race; loop to re-read and re-evaluate before stamping.
+                    }
                 }
-                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
-                {
-                    // Lost the race; loop to re-read and re-evaluate before stamping.
-                }
+
+                _logger.LogWarning("Gave up stamping notification {Id} escalated after a concurrent update", id);
+                return null;
             }
-
-            _logger.LogWarning("Gave up stamping notification {Id} escalated after a concurrent update", id);
-            return null;
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A transient failure stamping one item must not abort Task.WhenAll for the whole audience
+                // (which would orphan items other tasks already stamped, leaving them escalated with no
+                // job). Leave this one un-escalated so a later sweep retries it.
+                _logger.LogWarning(ex, "Failed to stamp notification {Id} escalated; leaving it for a later sweep", id);
+                return null;
+            }
         }
 
         private string BuildDigestHtml(List<Notification> aged)
