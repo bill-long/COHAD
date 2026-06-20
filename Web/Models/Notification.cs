@@ -87,14 +87,6 @@ namespace Web.Models
         public string? ETag { get; set; }
 
         /// <summary>
-        /// Produces a stable id for a notification target so that a duplicate raise (e.g. two
-        /// concurrent registrations of the same event) maps to the same document and a racing
-        /// create fails with 409 rather than producing a duplicate notification. The id is keyed on
-        /// the target alone — matching the service's idempotency check and the 409-recovery re-read —
-        /// since <paramref name="targetType"/> + <paramref name="targetId"/> already uniquely identify
-        /// the underlying record (the notification's <see cref="Type"/> is derived from its target).
-        /// </summary>
-        /// <summary>
         /// True for notification types whose only resolution is an explicit acknowledge/dismiss because
         /// they have no underlying moderation action (registrations). Types backed by a domain action
         /// (vendor flags, held emails) must be resolved by that action — acknowledging them directly
@@ -102,6 +94,14 @@ namespace Web.Models
         /// </summary>
         public static bool IsAcknowledgeable(NotificationType type) => type == NotificationType.Registration;
 
+        /// <summary>
+        /// Produces a stable id for a notification target so that a duplicate raise (e.g. two
+        /// concurrent registrations of the same event) maps to the same document and a racing
+        /// create fails with 409 rather than producing a duplicate notification. The id is keyed on
+        /// the target alone — matching the service's idempotency check and the 409-recovery re-read —
+        /// since <paramref name="targetType"/> + <paramref name="targetId"/> already uniquely identify
+        /// the underlying record (the notification's <see cref="Type"/> is derived from its target).
+        /// </summary>
         public static Guid DeterministicId(string targetType, string targetId)
         {
             var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{targetType}\n{targetId}"));
