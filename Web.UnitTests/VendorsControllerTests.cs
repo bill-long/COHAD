@@ -6,10 +6,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Web.Controllers;
 using Web.Hubs;
+using Web.MockData;
 using Web.Models;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 
@@ -384,23 +387,123 @@ public sealed class VendorsControllerTests
         reviewRepo.Verify(r => r.UpsertAsync(It.Is<VendorReview>(v => v.ReviewText == "Great vendor!")), Times.Once);
     }
 
+    [Fact]
+    public async Task CreateFlag_raises_vendor_flag_notification_for_administrators()
+    {
+        var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        var vendorRepo = new Mock<IVendorRepository>(MockBehavior.Strict);
+        var reviewRepo = new Mock<IVendorReviewRepository>(MockBehavior.Strict);
+        var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+        var flagRepo = new Mock<IVendorFlagRepository>(MockBehavior.Strict);
+        var notifications = new Mock<INotificationService>();
+        var vendorId = Guid.NewGuid();
+
+        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(new User { UniqueId = "idpuser-1", GivenName = "Alex", Surname = "Resident", Roles = new List<User.Role> { User.Role.Resident } });
+        vendorRepo.Setup(r => r.GetByIdAsync(vendorId)).ReturnsAsync(new Vendor { Id = vendorId, Name = "Acme" });
+        flagRepo.Setup(r => r.GetPendingByAuthorAsync(vendorId, "idpuser-1")).ReturnsAsync((VendorFlag?)null);
+        VendorFlag? savedFlag = null;
+        flagRepo.Setup(r => r.UpsertAsync(It.IsAny<VendorFlag>())).ReturnsAsync((VendorFlag f) => { savedFlag = f; return f; });
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var controller = BuildController(userRepo.Object, vendorRepo.Object, reviewRepo.Object, auditRepo.Object, flagRepo.Object, notifications.Object);
+        var result = await controller.CreateFlag(vendorId, new VendorFlagRequest { FlagNote = "spam" });
+
+        Assert.IsType<OkObjectResult>(result);
+        notifications.Verify(s => s.RaiseAsync(
+            NotificationType.VendorFlag,
+            NotificationAudience.Administrators,
+            NotificationTargetType.VendorFlag,
+            It.Is<string>(t => t == savedFlag!.Id.ToString("D")),
+            "Vendor flagged",
+            It.Is<string>(summary => summary.Contains("Acme")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DismissFlag_resolves_vendor_flag_notification()
+    {
+        var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        var vendorRepo = new Mock<IVendorRepository>(MockBehavior.Strict);
+        var reviewRepo = new Mock<IVendorReviewRepository>(MockBehavior.Strict);
+        var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+        var flagRepo = new Mock<IVendorFlagRepository>(MockBehavior.Strict);
+        var notifications = new Mock<INotificationService>();
+        var vendorId = Guid.NewGuid();
+        var flagId = Guid.NewGuid();
+
+        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(new User { UniqueId = "idpuser-1", Roles = new List<User.Role> { User.Role.Administrator } });
+        flagRepo.Setup(r => r.GetByIdAsync(vendorId, flagId))
+            .ReturnsAsync(new VendorFlag { Id = flagId, VendorId = vendorId, Status = "Pending" });
+        flagRepo.Setup(r => r.UpsertAsync(It.IsAny<VendorFlag>())).ReturnsAsync((VendorFlag f) => f);
+        vendorRepo.Setup(r => r.GetByIdAsync(vendorId)).ReturnsAsync(new Vendor { Id = vendorId, Name = "Acme" });
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var controller = BuildController(userRepo.Object, vendorRepo.Object, reviewRepo.Object, auditRepo.Object, flagRepo.Object, notifications.Object);
+        var result = await controller.DismissFlag(vendorId, flagId);
+
+        Assert.IsType<OkResult>(result);
+        notifications.Verify(s => s.ResolveAsync(
+            NotificationTargetType.VendorFlag, flagId.ToString("D"), "idpuser-1", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Delete_resolves_notifications_for_cascaded_flags()
+    {
+        var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        var vendorRepo = new Mock<IVendorRepository>(MockBehavior.Strict);
+        var reviewRepo = new Mock<IVendorReviewRepository>(MockBehavior.Strict);
+        var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+        var flagRepo = new Mock<IVendorFlagRepository>(MockBehavior.Strict);
+        var notifications = new Mock<INotificationService>();
+        var vendorId = Guid.NewGuid();
+        var flagA = Guid.NewGuid();
+        var flagB = Guid.NewGuid();
+
+        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(new User { UniqueId = "idpuser-1", Roles = new List<User.Role> { User.Role.Administrator } });
+        vendorRepo.Setup(r => r.GetByIdAsync(vendorId)).ReturnsAsync(new Vendor { Id = vendorId, Name = "Acme", CreatedByUniqueId = "someone-else" });
+        reviewRepo.Setup(r => r.GetByVendorIdAsync(vendorId)).ReturnsAsync(new List<VendorReview>());
+        flagRepo.Setup(r => r.GetByVendorIdAsync(vendorId))
+            .ReturnsAsync(new List<VendorFlag> { new VendorFlag { Id = flagA, VendorId = vendorId }, new VendorFlag { Id = flagB, VendorId = vendorId } });
+        flagRepo.Setup(r => r.DeleteByVendorCascadeAsync(vendorId, It.IsAny<Guid>())).Returns(Task.CompletedTask);
+        vendorRepo.Setup(r => r.DeleteAsync(vendorId)).Returns(Task.CompletedTask);
+        auditRepo.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var controller = BuildController(userRepo.Object, vendorRepo.Object, reviewRepo.Object, auditRepo.Object, flagRepo.Object, notifications.Object);
+        var result = await controller.Delete(vendorId);
+
+        Assert.IsType<OkResult>(result);
+        notifications.Verify(s => s.ResolveAsync(NotificationTargetType.VendorFlag, flagA.ToString("D"), "idpuser-1", It.IsAny<CancellationToken>()), Times.Once);
+        notifications.Verify(s => s.ResolveAsync(NotificationTargetType.VendorFlag, flagB.ToString("D"), "idpuser-1", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static VendorsController BuildController(
         IUserRepository userRepository,
         IVendorRepository vendorRepository,
         IVendorReviewRepository reviewRepository,
-        IAuditLogRepository auditLogRepository
+        IAuditLogRepository auditLogRepository,
+        IVendorFlagRepository? flagRepository = null,
+        INotificationService? notificationService = null
     )
     {
-        var flagRepo = new Mock<IVendorFlagRepository>(MockBehavior.Loose);
+        flagRepository ??= new Mock<IVendorFlagRepository>(MockBehavior.Loose).Object;
+        notificationService ??= new NotificationService(
+            new MockNotificationRepository(),
+            new NoOpNotificationRealtimeNotifier(),
+            NullLogger<NotificationService>.Instance
+        );
         var hubContext = CreateVendorFlagHubMock();
 
         var controller = new VendorsController(
             vendorRepository,
             reviewRepository,
-            flagRepo.Object,
+            flagRepository,
             userRepository,
             auditLogRepository,
-            hubContext.Object
+            hubContext.Object,
+            notificationService
         )
         {
             ControllerContext = new ControllerContext

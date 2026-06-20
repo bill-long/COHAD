@@ -45,6 +45,7 @@ namespace Web.Controllers
         private readonly EmailJobQueue _emailJobQueue;
         private readonly DocumentStorageOptions _storageOptions;
         private readonly IHubContext<HeldMessageNotificationsHub> _heldMessageHub;
+        private readonly INotificationService _notificationService;
         private readonly ILogger<CommitteeController> _logger;
 
         public CommitteeController(
@@ -60,6 +61,7 @@ namespace Web.Controllers
             EmailJobQueue emailJobQueue,
             IOptions<DocumentStorageOptions> storageOptions,
             IHubContext<HeldMessageNotificationsHub> heldMessageHub,
+            INotificationService notificationService,
             ILogger<CommitteeController> logger
         )
         {
@@ -75,6 +77,7 @@ namespace Web.Controllers
             _emailJobQueue = emailJobQueue;
             _storageOptions = storageOptions.Value;
             _heldMessageHub = heldMessageHub;
+            _notificationService = notificationService;
             _logger = logger;
         }
 
@@ -997,6 +1000,9 @@ namespace Web.Controllers
                 .Group(HeldMessageNotificationsHub.CommitteeGroupName(key))
                 .SendAsync("HeldMessagesChanged", new { committeeId = key });
 
+            await _notificationService.ResolveAsync(
+                NotificationTargetType.HeldMessage, messageId.ToString("D"), apiUser.UniqueId);
+
             return Ok(new { JobId = job.Id, Status = "Approved" });
         }
 
@@ -1041,6 +1047,9 @@ namespace Web.Controllers
             await _heldMessageHub.Clients
                 .Group(HeldMessageNotificationsHub.CommitteeGroupName(key))
                 .SendAsync("HeldMessagesChanged", new { committeeId = key });
+
+            await _notificationService.ResolveAsync(
+                NotificationTargetType.HeldMessage, messageId.ToString("D"), apiUser.UniqueId);
 
             return Ok(new { Status = "Rejected" });
         }
