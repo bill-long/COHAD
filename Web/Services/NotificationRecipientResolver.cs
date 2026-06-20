@@ -54,16 +54,13 @@ namespace Web.Services
 
             var committeeId = NotificationAudience.TryGetCommitteeId(audienceKey);
             if (committeeId != null)
-                return await ResolveCommitteeMembersAsync(committeeId);
+                return await ResolveCommitteeModeratorsAsync(committeeId);
 
             return Array.Empty<string>();
         }
 
         /// <summary>
-        /// Resolves Administrator emails by preferring the resident address that matches an admin's
-        /// account (by email, then by name) for each owned home, and falling back to the admin's own
-        /// account email when they have no associated home. Mirrors the previous inline registration
-        /// notification matching so escalation reaches the same people.
+        /// Resolves Administrator emails — the users who can act on the Administrators audience in-app.
         /// </summary>
         private async Task<IReadOnlyList<string>> ResolveAdministratorsAsync()
         {
@@ -71,11 +68,39 @@ namespace Web.Services
             var admins = allUsers
                 .Where(u => u.Roles != null && u.Roles.Contains(Models.User.Role.Administrator))
                 .ToList();
+            return await ResolveUserEmailsAsync(admins);
+        }
 
-            if (admins.Count == 0)
+        /// <summary>
+        /// Resolves a committee's moderator emails — the users who can act on the committee audience
+        /// in-app, i.e. <see cref="CommitteeAuthorization.CanManage"/> (Administrators plus holders of the
+        /// committee's <see cref="Committee.ManagementRole"/>). This deliberately matches the in-app
+        /// audience rather than the committee's display membership, so escalation emails never leak
+        /// held-message details to members who lack moderation access.
+        /// </summary>
+        private async Task<IReadOnlyList<string>> ResolveCommitteeModeratorsAsync(string committeeId)
+        {
+            var committee = await _committeeRepository.GetByIdAsync(committeeId);
+            if (committee == null)
                 return Array.Empty<string>();
 
-            var allHomeIds = admins
+            var allUsers = await _userRepository.GetAllAsync();
+            var moderators = allUsers.Where(u => CommitteeAuthorization.CanManage(u, committee)).ToList();
+            return await ResolveUserEmailsAsync(moderators);
+        }
+
+        /// <summary>
+        /// Maps a set of users to deliverable email addresses (distinct, case-insensitive). For each user
+        /// with an owned home, prefers the resident address matching their account (by email, then by
+        /// name); a home-less user falls back to their own account email. Shared by the Administrators and
+        /// committee-moderator resolution so both reach people the same way.
+        /// </summary>
+        private async Task<IReadOnlyList<string>> ResolveUserEmailsAsync(List<Models.User> users)
+        {
+            if (users.Count == 0)
+                return Array.Empty<string>();
+
+            var allHomeIds = users
                 .Where(u => u.OwnedHomeIds != null)
                 .SelectMany(u => u.OwnedHomeIds)
                 .Distinct()
@@ -92,42 +117,42 @@ namespace Web.Services
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var result = new List<string>();
 
-            foreach (var admin in admins)
+            foreach (var user in users)
             {
-                // Home-less admins can't be matched to a resident record, so fall back to their own
+                // Home-less users can't be matched to a resident record, so fall back to their own
                 // account email. Without this they would silently never receive escalations.
-                if (admin.OwnedHomeIds == null || admin.OwnedHomeIds.Count == 0)
+                if (user.OwnedHomeIds == null || user.OwnedHomeIds.Count == 0)
                 {
-                    var accountEmail = UserEmailHelpers.SplitEmails(admin.Emails).FirstOrDefault();
+                    var accountEmail = UserEmailHelpers.SplitEmails(user.Emails).FirstOrDefault();
                     if (!string.IsNullOrWhiteSpace(accountEmail) && seen.Add(accountEmail))
                         result.Add(accountEmail);
                     continue;
                 }
 
-                var adminGivenName = admin.GivenName?.Trim();
-                var adminSurname = admin.Surname?.Trim();
+                var userGivenName = user.GivenName?.Trim();
+                var userSurname = user.Surname?.Trim();
 
-                foreach (var homeId in admin.OwnedHomeIds)
+                foreach (var homeId in user.OwnedHomeIds)
                 {
                     if (!residentsByHome.TryGetValue(homeId, out var homeResidents))
                         continue;
 
-                    // Try matching by email first — if a resident email matches one of the admin's
-                    // addresses, use that single matched address. admin.Emails may hold several
+                    // Try matching by email first — if a resident email matches one of the user's
+                    // addresses, use that single matched address. user.Emails may hold several
                     // comma/semicolon-separated addresses, so match each individually (matching the
                     // whole blob as one string would never match and would yield an invalid recipient).
                     string? resolvedEmail = null;
-                    foreach (var adminAddress in UserEmailHelpers.SplitEmails(admin.Emails))
+                    foreach (var userAddress in UserEmailHelpers.SplitEmails(user.Emails))
                     {
                         var emailMatch = homeResidents.FirstOrDefault(r =>
                             r.EmailAddresses != null
                             && r.EmailAddresses.Any(e =>
-                                string.Equals(e.Address?.Trim(), adminAddress, StringComparison.OrdinalIgnoreCase)
+                                string.Equals(e.Address?.Trim(), userAddress, StringComparison.OrdinalIgnoreCase)
                             )
                         );
                         if (emailMatch != null)
                         {
-                            resolvedEmail = adminAddress;
+                            resolvedEmail = userAddress;
                             break;
                         }
                     }
@@ -136,8 +161,8 @@ namespace Web.Services
                     if (resolvedEmail == null)
                     {
                         var nameMatch = homeResidents.FirstOrDefault(r =>
-                            string.Equals(r.GivenName?.Trim(), adminGivenName, StringComparison.OrdinalIgnoreCase)
-                            && string.Equals(r.Surname?.Trim(), adminSurname, StringComparison.OrdinalIgnoreCase)
+                            string.Equals(r.GivenName?.Trim(), userGivenName, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(r.Surname?.Trim(), userSurname, StringComparison.OrdinalIgnoreCase)
                         );
                         resolvedEmail = nameMatch
                             ?.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Address))
@@ -150,36 +175,8 @@ namespace Web.Services
                     if (seen.Add(resolvedEmail))
                         result.Add(resolvedEmail);
 
-                    break; // Found a match for this admin, no need to check other homes.
+                    break; // Found a match for this user, no need to check other homes.
                 }
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Resolves a committee's member emails (the people listed on the committee), via each member's
-        /// linked resident record. These are the recipients for held-committee-email escalations.
-        /// </summary>
-        private async Task<IReadOnlyList<string>> ResolveCommitteeMembersAsync(string committeeId)
-        {
-            var committee = await _committeeRepository.GetByIdAsync(committeeId);
-            var members = committee?.Members;
-            if (members == null || members.Count == 0)
-                return Array.Empty<string>();
-
-            var residentIds = members.Select(m => m.ResidentId).Distinct().ToList();
-            var residents = await _residentRepository.GetByIdsAsync(residentIds);
-
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var result = new List<string>();
-            foreach (var resident in residents)
-            {
-                var email = resident.EmailAddresses
-                    ?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))
-                    ?.Address?.Trim();
-                if (!string.IsNullOrWhiteSpace(email) && seen.Add(email))
-                    result.Add(email);
             }
 
             return result;

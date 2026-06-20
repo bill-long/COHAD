@@ -329,73 +329,82 @@ public sealed class NotificationRecipientResolverTests
     // ── Committee audience ──────────────────────────────────────────────
 
     [Fact]
-    public async Task Committee_resolves_member_emails_via_residents()
+    public async Task Committee_resolves_moderators_admins_and_management_role()
     {
-        var residentA = Guid.NewGuid();
-        var residentB = Guid.NewGuid();
-        var committee = new Committee
-        {
-            Id = "welcome",
-            DisplayName = "Welcome Committee",
-            Members = new List<CommitteeMember>
-            {
-                new CommitteeMember { Id = Guid.NewGuid(), ResidentId = residentA },
-                new CommitteeMember { Id = Guid.NewGuid(), ResidentId = residentB },
-            },
-        };
+        var adminHome = Guid.NewGuid();
+        var chairHome = Guid.NewGuid();
+        var committee = new Committee { Id = "welcome", DisplayName = "Welcome Committee", ManagementRole = User.Role.WelcomeCommittee };
 
         var committees = new Mock<ICommitteeRepository>();
         committees.Setup(r => r.GetByIdAsync("welcome")).ReturnsAsync(committee);
 
-        var residents = new Mock<IResidentRepository>();
-        residents
-            .Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>()))
-            .ReturnsAsync(new List<Resident>
-            {
-                new Resident { Id = residentA, EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "a@example.com" } } },
-                new Resident { Id = residentB, EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "b@example.com" } } },
-            });
-
-        var resolver = CreateResolver(residents: residents.Object, committees: committees.Object);
+        var resolver = CreateResolver(
+            Users(
+                new User
+                {
+                    UniqueId = "admin1",
+                    Emails = "admin@example.com",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                    OwnedHomeIds = new List<Guid> { adminHome },
+                },
+                new User
+                {
+                    UniqueId = "chair1",
+                    Emails = "chair@example.com",
+                    Roles = new List<User.Role> { User.Role.WelcomeCommittee },
+                    OwnedHomeIds = new List<Guid> { chairHome },
+                },
+                // A plain resident who is NOT a moderator of this committee — must be excluded.
+                new User
+                {
+                    UniqueId = "resident1",
+                    Emails = "nobody@example.com",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+                }
+            ),
+            Homes(new Home { Id = adminHome }, new Home { Id = chairHome }),
+            ResidentsByHome(
+                new Resident { HomeId = adminHome, EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "admin@example.com" } } },
+                new Resident { HomeId = chairHome, EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "chair@example.com" } } }
+            ),
+            committees.Object
+        );
 
         var result = await resolver.ResolveAudienceEmailsAsync(NotificationAudience.Committee("welcome"));
 
-        Assert.Equal(new[] { "a@example.com", "b@example.com" }, result.OrderBy(e => e).ToArray());
+        Assert.Equal(new[] { "admin@example.com", "chair@example.com" }, result.OrderBy(e => e).ToArray());
     }
 
     [Fact]
-    public async Task Committee_deduplicates_and_skips_members_without_email()
+    public async Task Committee_excludes_non_moderator_members()
     {
-        var residentA = Guid.NewGuid();
-        var residentB = Guid.NewGuid();
+        // The committee lists a member (by resident link), but that person has no moderation role and
+        // isn't an admin, so they must not receive escalation emails.
         var committee = new Committee
         {
             Id = "garden",
-            Members = new List<CommitteeMember>
-            {
-                new CommitteeMember { Id = Guid.NewGuid(), ResidentId = residentA },
-                new CommitteeMember { Id = Guid.NewGuid(), ResidentId = residentB },
-            },
+            ManagementRole = User.Role.GardenClub,
+            Members = new List<CommitteeMember> { new CommitteeMember { Id = Guid.NewGuid(), ResidentId = Guid.NewGuid() } },
         };
 
         var committees = new Mock<ICommitteeRepository>();
         committees.Setup(r => r.GetByIdAsync("garden")).ReturnsAsync(committee);
 
-        var residents = new Mock<IResidentRepository>();
-        residents
-            .Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>()))
-            .ReturnsAsync(new List<Resident>
+        var resolver = CreateResolver(
+            Users(new User
             {
-                new Resident { Id = residentA, EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "Shared@example.com" } } },
-                new Resident { Id = residentB, EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "shared@example.com" } } },
-            });
-
-        var resolver = CreateResolver(residents: residents.Object, committees: committees.Object);
+                UniqueId = "member1",
+                Emails = "member@example.com",
+                Roles = new List<User.Role> { User.Role.Resident },
+                OwnedHomeIds = new List<Guid>(),
+            }),
+            committees: committees.Object
+        );
 
         var result = await resolver.ResolveAudienceEmailsAsync(NotificationAudience.Committee("garden"));
 
-        // Case-insensitive dedup keeps the first occurrence's casing.
-        Assert.Equal(new[] { "Shared@example.com" }, result);
+        Assert.Empty(result);
     }
 
     [Fact]
