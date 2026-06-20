@@ -52,7 +52,7 @@ Or run `./scripts/run-mock-data.sh` with no args and paste the printed one-liner
 ### Backend (`Web/`)
 
 - **Repository pattern:** All data access goes through interfaces in `Services/Repositories/`. Production implementations use Cosmos DB; `MockData` environment swaps in in-memory implementations. This is the key abstraction for testability and local development. A new Cosmos repository should mirror the existing ones (`CosmosEmailJobRepository`, `CosmosHeldMessageRepository`, `CosmosHomeRepository`):
-  - **Id lookups use a point read** — `ReadItemAsync<JObject>(docId, PartitionKey.None)` with `catch (CosmosException ex) when (ex.StatusCode == NotFound) return null` — not a `SELECT ... WHERE c.id` query.
+  - **Id lookups use a point read** — `ReadItemAsync<JObject>(docId, PartitionKey.None)` with `catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound) return null` — not a `SELECT ... WHERE c.id` query.
   - **Populate `ETag` on every read path:** query results from `doc.Value<string>("_etag")` (set it in the `To<Model>` mapper so all query paths get it); point reads and writes (`Add`/`Upsert`) from `response.Headers.ETag` (capture the response — don't discard it).
   - **Keep the Mock impl behaviorally identical to the Cosmos impl** — same ETag handling, 409 on duplicate id, etc. Divergence between the two is a bug.
   - **Idempotency keys must be consistent:** the deterministic-id derivation, the dedup pre-check query, and any 409-conflict-recovery re-read must all key on the *same* fields, or duplicates slip through.
