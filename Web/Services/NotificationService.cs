@@ -92,7 +92,7 @@ namespace Web.Services
 
             var notification = new Notification
             {
-                Id = Notification.DeterministicId(type, targetType, targetId),
+                Id = Notification.DeterministicId(targetType, targetId),
                 Type = type,
                 AudienceKey = audienceKey,
                 TargetType = targetType,

@@ -78,7 +78,7 @@ public sealed class NotificationServiceTests
 
         var result = await service.RaiseAsync(NotificationType.HeldMessage, "committee:c1", "heldMessage", "held-1", "Held", "x");
 
-        Assert.Equal(Notification.DeterministicId(NotificationType.HeldMessage, "heldMessage", "held-1"), result.Id);
+        Assert.Equal(Notification.DeterministicId("heldMessage", "held-1"), result.Id);
     }
 
     [Theory]
@@ -186,7 +186,7 @@ public sealed class NotificationServiceTests
     {
         // Simulate the race window: GetByTarget sees nothing, AddAsync loses the create race (409),
         // and the recovery re-reads the winner by its deterministic id (a point read, not a target query).
-        var deterministicId = Notification.DeterministicId(NotificationType.Registration, "user", "user-1");
+        var deterministicId = Notification.DeterministicId("user", "user-1");
         var winner = new Notification
         {
             Id = deterministicId,

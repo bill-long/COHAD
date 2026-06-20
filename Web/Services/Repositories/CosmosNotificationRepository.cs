@@ -41,7 +41,8 @@ namespace Web.Services.Repositories
 
         public async Task AddAsync(Notification notification)
         {
-            await _container.CreateItemAsync(ToDocument(notification), CosmosPartitionKey.None);
+            var response = await _container.CreateItemAsync(ToDocument(notification), CosmosPartitionKey.None);
+            notification.ETag = response.Headers.ETag;
         }
 
         public async Task<Notification?> GetByIdAsync(Guid id)
@@ -51,7 +52,9 @@ namespace Web.Services.Repositories
             try
             {
                 var response = await _container.ReadItemAsync<JObject>(ToDocumentId(id), CosmosPartitionKey.None);
-                return ToNotification(response.Resource);
+                var notification = ToNotification(response.Resource);
+                notification.ETag = response.Headers.ETag;
+                return notification;
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
             {
@@ -74,7 +77,8 @@ namespace Web.Services.Repositories
 
         public async Task UpsertAsync(Notification notification)
         {
-            await _container.UpsertItemAsync(ToDocument(notification), CosmosPartitionKey.None);
+            var response = await _container.UpsertItemAsync(ToDocument(notification), CosmosPartitionKey.None);
+            notification.ETag = response.Headers.ETag;
         }
 
         public async Task<List<Notification>> GetUnresolvedByAudienceAsync(string audienceKey, int limit = 50)

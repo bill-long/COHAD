@@ -68,11 +68,14 @@ namespace Web.Models
         /// <summary>
         /// Produces a stable id for a notification target so that a duplicate raise (e.g. two
         /// concurrent registrations of the same event) maps to the same document and a racing
-        /// create fails with 409 rather than producing a duplicate notification.
+        /// create fails with 409 rather than producing a duplicate notification. The id is keyed on
+        /// the target alone — matching the service's idempotency check and the 409-recovery re-read —
+        /// since <paramref name="targetType"/> + <paramref name="targetId"/> already uniquely identify
+        /// the underlying record (the notification's <see cref="Type"/> is derived from its target).
         /// </summary>
-        public static Guid DeterministicId(NotificationType type, string targetType, string targetId)
+        public static Guid DeterministicId(string targetType, string targetId)
         {
-            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{type}\n{targetType}\n{targetId}"));
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{targetType}\n{targetId}"));
             var guidBytes = new byte[16];
             Array.Copy(bytes, guidBytes, 16);
             return new Guid(guidBytes);
