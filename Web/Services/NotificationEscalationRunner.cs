@@ -102,6 +102,8 @@ namespace Web.Services
             CancellationToken ct
         )
         {
+            ct.ThrowIfCancellationRequested();
+
             // Oldest-first and already filtered to unresolved + un-escalated by the query, so the most
             // overdue items are never starved by a large backlog. Only the grace check remains in memory.
             var candidates = await _notificationRepository.GetUnescalatedByAudienceOldestFirstAsync(audience, 200);
@@ -140,12 +142,14 @@ namespace Web.Services
             var recipients = emails.ToList();
             var job = await CreateDigestJobAsync(aged, recipients, now, ct);
 
-            // Stamp the aged notifications so they are not escalated again, then record the digest send
-            // per recipient. Stamping and digest-state writes target independent documents.
-            await StampEscalatedAsync(aged, job.Id, now);
+            // Stamp the aged notifications so they are not escalated again, and record the digest send
+            // per recipient. These target independent documents, so run them together.
             await Task.WhenAll(
-                recipients.Select(e =>
-                    _digestStateRepository.UpsertAsync(new NotificationDigestState { RecipientEmail = e, LastDigestUtc = now })
+                StampEscalatedAsync(aged, job.Id, now),
+                Task.WhenAll(
+                    recipients.Select(e =>
+                        _digestStateRepository.UpsertAsync(new NotificationDigestState { RecipientEmail = e, LastDigestUtc = now })
+                    )
                 )
             );
 

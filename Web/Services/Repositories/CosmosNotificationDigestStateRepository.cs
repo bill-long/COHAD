@@ -51,6 +51,11 @@ namespace Web.Services.Repositories
 
         public async Task UpsertAsync(NotificationDigestState state)
         {
+            // Guard empty/whitespace emails (mirrors GetAsync): an empty email hashes to a shared
+            // deterministic id, so writing it would clobber an unrelated recipient's throttle state.
+            if (string.IsNullOrWhiteSpace(state.RecipientEmail))
+                return;
+
             var response = await _container.UpsertItemAsync(ToDocument(state), CosmosPartitionKey.None);
             state.ETag = response.Headers.ETag;
         }

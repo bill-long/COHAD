@@ -42,6 +42,18 @@ public sealed class MockNotificationDigestStateRepositoryTests
     }
 
     [Fact]
+    public async Task Upsert_ignores_empty_email()
+    {
+        var repo = new MockNotificationDigestStateRepository();
+
+        await repo.UpsertAsync(new NotificationDigestState { RecipientEmail = "   ", LastDigestUtc = DateTime.UtcNow });
+
+        // The empty-email write is a no-op, so an unrelated lookup is unaffected.
+        Assert.Null(await repo.GetAsync(""));
+        Assert.Null(await repo.GetAsync("real@example.com"));
+    }
+
+    [Fact]
     public async Task Upsert_replaces_existing_state()
     {
         var repo = new MockNotificationDigestStateRepository();

@@ -28,6 +28,11 @@ namespace Web.MockData
 
         public Task UpsertAsync(NotificationDigestState state)
         {
+            // Guard empty/whitespace emails (mirrors GetAsync and the Cosmos impl): an empty email
+            // hashes to a shared deterministic id and would clobber unrelated throttle state.
+            if (string.IsNullOrWhiteSpace(state.RecipientEmail))
+                return Task.CompletedTask;
+
             var key = NotificationDigestState.DeterministicId(state.RecipientEmail);
             lock (_items)
             {

@@ -112,22 +112,24 @@ namespace Web.Services
                     if (!residentsByHome.TryGetValue(homeId, out var homeResidents))
                         continue;
 
-                    // Try matching by email first — if matched, use the matched address directly.
+                    // Try matching by email first — if a resident email matches one of the admin's
+                    // addresses, use that single matched address. admin.Emails may hold several
+                    // comma/semicolon-separated addresses, so match each individually (matching the
+                    // whole blob as one string would never match and would yield an invalid recipient).
                     string? resolvedEmail = null;
-                    if (!string.IsNullOrWhiteSpace(admin.Emails))
+                    foreach (var adminAddress in UserEmailHelpers.SplitEmails(admin.Emails))
                     {
                         var emailMatch = homeResidents.FirstOrDefault(r =>
                             r.EmailAddresses != null
                             && r.EmailAddresses.Any(e =>
-                                string.Equals(
-                                    e.Address?.Trim(),
-                                    admin.Emails.Trim(),
-                                    StringComparison.OrdinalIgnoreCase
-                                )
+                                string.Equals(e.Address?.Trim(), adminAddress, StringComparison.OrdinalIgnoreCase)
                             )
                         );
                         if (emailMatch != null)
-                            resolvedEmail = admin.Emails.Trim();
+                        {
+                            resolvedEmail = adminAddress;
+                            break;
+                        }
                     }
 
                     // Fall back to name matching — use the resident's first non-empty email.

@@ -171,6 +171,37 @@ public sealed class NotificationRecipientResolverTests
     }
 
     [Fact]
+    public async Task Administrators_matches_one_of_several_admin_addresses()
+    {
+        var homeId = Guid.NewGuid();
+        var resolver = CreateResolver(
+            Users(new User
+            {
+                UniqueId = "admin1",
+                GivenName = "Admin",
+                Surname = "One",
+                Emails = "signin@example.com; bob@home.example.com",
+                Roles = new List<User.Role> { User.Role.Administrator },
+                OwnedHomeIds = new List<Guid> { homeId },
+            }),
+            Homes(new Home { Id = homeId }),
+            ResidentsByHome(new Resident
+            {
+                Id = Guid.NewGuid(),
+                HomeId = homeId,
+                GivenName = "Different",
+                Surname = "Name",
+                EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "bob@home.example.com" } },
+            })
+        );
+
+        var result = await resolver.ResolveAudienceEmailsAsync(NotificationAudience.Administrators);
+
+        // The single matched address is used, not the whole multi-address blob.
+        Assert.Equal(new[] { "bob@home.example.com" }, result);
+    }
+
+    [Fact]
     public async Task Administrators_falls_back_to_account_email_for_admin_with_no_homes()
     {
         var resolver = CreateResolver(
