@@ -72,6 +72,31 @@ namespace Web.MockData
             return Task.CompletedTask;
         }
 
+        public Task UpsertWithEtagAsync(Notification notification)
+        {
+            // Mirror the Cosmos impl: an ETag is required for a conditional write.
+            if (string.IsNullOrEmpty(notification.ETag))
+                throw new InvalidOperationException("UpsertWithEtagAsync requires a notification loaded with its ETag.");
+
+            lock (_items)
+            {
+                // Mirror Cosmos If-Match: fail with 412 when the stored ETag has moved on.
+                if (_items.TryGetValue(notification.Id, out var current)
+                    && !string.Equals(current.ETag, notification.ETag, StringComparison.Ordinal))
+                {
+                    throw new CosmosException(
+                        "ETag mismatch.", HttpStatusCode.PreconditionFailed, 0, string.Empty, 0);
+                }
+
+                var clone = Clone(notification);
+                clone.ETag = Interlocked.Increment(ref _versionCounter).ToString();
+                _items[clone.Id] = clone;
+                notification.ETag = clone.ETag;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task<List<Notification>> GetUnresolvedByAudienceAsync(string audienceKey, int limit = 50)
         {
             var clampedLimit = Math.Clamp(limit, 1, 200);
@@ -82,6 +107,25 @@ namespace Web.MockData
                         string.Equals(n.AudienceKey, audienceKey, StringComparison.Ordinal) && n.ResolvedUtc == null
                     )
                     .OrderByDescending(n => n.CreatedUtc)
+                    .Take(clampedLimit)
+                    .Select(Clone)
+                    .ToList();
+                return Task.FromResult(list);
+            }
+        }
+
+        public Task<List<Notification>> GetUnescalatedByAudienceOldestFirstAsync(string audienceKey, int limit = 200)
+        {
+            var clampedLimit = Math.Clamp(limit, 1, 500);
+            lock (_items)
+            {
+                var list = _items
+                    .Values.Where(n =>
+                        string.Equals(n.AudienceKey, audienceKey, StringComparison.Ordinal)
+                        && n.ResolvedUtc == null
+                        && n.EscalatedUtc == null
+                    )
+                    .OrderBy(n => n.CreatedUtc)
                     .Take(clampedLimit)
                     .Select(Clone)
                     .ToList();

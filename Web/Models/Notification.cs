@@ -23,8 +23,24 @@ namespace Web.Models
         /// <summary>Audience for notifications any Administrator may act on (registrations, vendor flags).</summary>
         public const string Administrators = "role:Administrator";
 
+        /// <summary>Prefix for a single committee's audience key.</summary>
+        public const string CommitteePrefix = "committee:";
+
         /// <summary>Audience for a single committee's moderators (held committee emails).</summary>
-        public static string Committee(string committeeId) => $"committee:{committeeId}";
+        public static string Committee(string committeeId) => $"{CommitteePrefix}{committeeId}";
+
+        /// <summary>
+        /// Extracts the committee id from a committee audience key, or null if the key is not a
+        /// committee audience. Keeps consumers (e.g. escalation recipient resolution) from re-deriving
+        /// the <see cref="CommitteePrefix"/> format and drifting from <see cref="Committee"/>.
+        /// </summary>
+        public static string? TryGetCommitteeId(string audienceKey)
+        {
+            if (string.IsNullOrEmpty(audienceKey) || !audienceKey.StartsWith(CommitteePrefix, StringComparison.Ordinal))
+                return null;
+            var id = audienceKey.Substring(CommitteePrefix.Length);
+            return string.IsNullOrEmpty(id) ? null : id;
+        }
     }
 
     /// <summary>Canonical <see cref="Notification.TargetType"/> values for the underlying domain records.</summary>
