@@ -64,12 +64,12 @@ namespace Web.Services
             return Array.Empty<string>();
         }
 
-        /// <summary>
-        /// Resolves Administrator emails — the users who can act on the Administrators audience in-app.
-        /// </summary>
         /// <summary>Fetches all users at most once per resolver instance (i.e. once per sweep).</summary>
         private Task<List<Models.User>> GetAllUsersAsync() => _allUsersTask ??= _userRepository.GetAllAsync();
 
+        /// <summary>
+        /// Resolves Administrator emails — the users who can act on the Administrators audience in-app.
+        /// </summary>
         private async Task<IReadOnlyList<string>> ResolveAdministratorsAsync()
         {
             var allUsers = await GetAllUsersAsync();

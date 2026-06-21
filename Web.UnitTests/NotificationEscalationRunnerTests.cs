@@ -308,7 +308,7 @@ public sealed class NotificationEscalationRunnerTests
     }
 
     [Fact]
-    public async Task Escalates_committee_audience_to_committee_members()
+    public async Task Escalates_committee_audience_to_its_moderators()
     {
         var h = new Harness();
         h.Committees
