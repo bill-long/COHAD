@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -26,6 +27,7 @@ namespace Web.Controllers
         private readonly IUserRepository _userRepository;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly INotificationService _notificationService;
+        private readonly ILogger<VendorsController> _logger;
 
         public VendorsController(
             IVendorRepository vendorRepository,
@@ -33,7 +35,8 @@ namespace Web.Controllers
             IVendorFlagRepository vendorFlagRepository,
             IUserRepository userRepository,
             IAuditLogRepository auditLogRepository,
-            INotificationService notificationService
+            INotificationService notificationService,
+            ILogger<VendorsController> logger
         )
         {
             _vendorRepository = vendorRepository;
@@ -42,6 +45,7 @@ namespace Web.Controllers
             _userRepository = userRepository;
             _auditLogRepository = auditLogRepository;
             _notificationService = notificationService;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -457,8 +461,16 @@ namespace Web.Controllers
                 // (e.g. a transient error after Upsert). There is no background sweep that re-raises
                 // vendor-flag notifications, so without this an admin would never see the flag. RaiseAsync
                 // is idempotent on the target, so re-raise here to heal a missing notification before
-                // reporting the duplicate.
-                await RaiseVendorFlagNotificationAsync(existing, vendor);
+                // reporting the duplicate. This heal is best-effort: it must not turn the deterministic
+                // 409 into a 500 if the notification store is momentarily unavailable.
+                try
+                {
+                    await RaiseVendorFlagNotificationAsync(existing, vendor);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Failed to re-raise vendor-flag notification while healing a duplicate report for flag {FlagId}", existing.Id);
+                }
                 return Conflict("You already have a pending report for this vendor.");
             }
 

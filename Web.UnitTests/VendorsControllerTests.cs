@@ -458,6 +458,35 @@ public sealed class VendorsControllerTests
     }
 
     [Fact]
+    public async Task CreateFlag_duplicate_pending_still_returns_409_when_the_heal_raise_throws()
+    {
+        // The duplicate-path re-raise is best-effort: a transient notification-store failure must not
+        // turn the deterministic 409 into a 500 for a resident who already has a pending report.
+        var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        var vendorRepo = new Mock<IVendorRepository>(MockBehavior.Strict);
+        var reviewRepo = new Mock<IVendorReviewRepository>(MockBehavior.Strict);
+        var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+        var flagRepo = new Mock<IVendorFlagRepository>(MockBehavior.Strict);
+        var notifications = new Mock<INotificationService>();
+        var vendorId = Guid.NewGuid();
+
+        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(new User { UniqueId = "idpuser-1", GivenName = "Alex", Surname = "Resident", Roles = new List<User.Role> { User.Role.Resident } });
+        vendorRepo.Setup(r => r.GetByIdAsync(vendorId)).ReturnsAsync(new Vendor { Id = vendorId, Name = "Acme" });
+        flagRepo.Setup(r => r.GetPendingByAuthorAsync(vendorId, "idpuser-1"))
+            .ReturnsAsync(new VendorFlag { Id = Guid.NewGuid(), VendorId = vendorId, FlagNote = "spam", Status = "Pending" });
+        notifications.Setup(s => s.RaiseAsync(
+            It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("notification store unavailable"));
+
+        var controller = BuildController(userRepo.Object, vendorRepo.Object, reviewRepo.Object, auditRepo.Object, flagRepo.Object, notifications.Object);
+        var result = await controller.CreateFlag(vendorId, new VendorFlagRequest { FlagNote = "spam again" });
+
+        Assert.IsType<ConflictObjectResult>(result);
+    }
+
+    [Fact]
     public async Task DismissFlag_resolves_vendor_flag_notification()
     {
         var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
@@ -537,7 +566,8 @@ public sealed class VendorsControllerTests
             flagRepository,
             userRepository,
             auditLogRepository,
-            notificationService
+            notificationService,
+            NullLogger<VendorsController>.Instance
         )
         {
             ControllerContext = new ControllerContext

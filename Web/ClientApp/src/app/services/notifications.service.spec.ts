@@ -45,6 +45,8 @@ interface MockConnection {
   on: jasmine.Spy;
   start: jasmine.Spy;
   stop: jasmine.Spy;
+  onreconnected: jasmine.Spy;
+  onclose: jasmine.Spy;
 }
 
 describe('NotificationsService', () => {
@@ -64,6 +66,11 @@ describe('NotificationsService', () => {
     const lastOn = connection.on.calls.mostRecent();
     expect(lastOn.args[0]).toBe('NotificationsChanged');
     (lastOn.args[1] as () => void)();
+  }
+
+  /** Invokes the most recently registered handler passed to a connection lifecycle spy. */
+  function fireLifecycle(spy: jasmine.Spy): void {
+    (spy.calls.mostRecent().args[0] as () => void)();
   }
 
   beforeAll(() => {
@@ -88,6 +95,8 @@ describe('NotificationsService', () => {
       on: jasmine.createSpy('hubOn'),
       start: jasmine.createSpy('hubStart').and.returnValue(Promise.resolve()),
       stop: jasmine.createSpy('hubStop').and.returnValue(Promise.resolve()),
+      onreconnected: jasmine.createSpy('hubOnReconnected'),
+      onclose: jasmine.createSpy('hubOnClose'),
     };
 
     state$ = new BehaviorSubject<ApplicationState>({ ...initialStateValue, apiUser: null });
@@ -187,7 +196,7 @@ describe('NotificationsService', () => {
     httpMock.expectNone('api/notifications');
   });
 
-  it('keeps the current list and retries after a transient 403 instead of clearing', fakeAsync(() => {
+  it('tolerates a single 403 (keeps the badge) and recovers on retry without tearing down', fakeAsync(() => {
     const service = TestBed.inject(NotificationsService);
     state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
     httpMock.expectOne('api/notifications').flush([notification({ id: 'x' })]);
@@ -196,30 +205,59 @@ describe('NotificationsService', () => {
     service.notifications$.subscribe(n => (list = n));
     expect(list.map(n => n.id)).toEqual(['x']);
 
-    // A momentary token blip surfaces as a 403 on the next refresh — must not blank the bell.
+    // One 403 is treated as a transient token blip — the badge must NOT flicker to empty.
     fireHubSignal();
     tick(400);
     httpMock.expectOne('api/notifications').flush('Forbidden', { status: 403, statusText: 'Forbidden' });
     expect(list.map(n => n.id)).toEqual(['x']);
 
-    // The backoff retry repopulates once the blip clears.
+    // The backoff retry succeeds — state is unchanged, no teardown happened.
     tick(2000);
-    httpMock.expectOne('api/notifications').flush([notification({ id: 'x' }), notification({ id: 'y' })]);
-    expect(list.map(n => n.id)).toContain('y');
+    httpMock.expectOne('api/notifications').flush([notification({ id: 'x' })]);
+    expect(list.map(n => n.id)).toEqual(['x']);
   }));
 
-  it('retries the initial fetch after a transient 5xx', fakeAsync(() => {
+  it('clears the list once a second consecutive 403 confirms a persistent authorization loss', fakeAsync(() => {
     const service = TestBed.inject(NotificationsService);
     state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
-    httpMock.expectOne('api/notifications').flush('boom', { status: 503, statusText: 'Service Unavailable' });
+    httpMock.expectOne('api/notifications').flush([notification({ id: 'x' })]);
 
     let list: AppNotification[] = [];
     service.notifications$.subscribe(n => (list = n));
+
+    // First 403 is tolerated...
+    fireHubSignal();
+    tick(400);
+    httpMock.expectOne('api/notifications').flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+    expect(list.map(n => n.id)).toEqual(['x']);
+
+    // ...the retry is also 403, so the loss is treated as persistent and the stale items are cleared.
+    tick(2000);
+    httpMock.expectOne('api/notifications').flush('Forbidden', { status: 403, statusText: 'Forbidden' });
     expect(list).toEqual([]);
 
+    // Losing the audience tears down and cancels the still-pending backoff retry.
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Resident']) });
+  }));
+
+  it('keeps the current list on a transient 5xx and retries', fakeAsync(() => {
+    const service = TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    httpMock.expectOne('api/notifications').flush([notification({ id: 'x' })]);
+
+    let list: AppNotification[] = [];
+    service.notifications$.subscribe(n => (list = n));
+    expect(list.map(n => n.id)).toEqual(['x']);
+
+    // A 5xx blip must not blank the badge.
+    fireHubSignal();
+    tick(400);
+    httpMock.expectOne('api/notifications').flush('boom', { status: 503, statusText: 'Service Unavailable' });
+    expect(list.map(n => n.id)).toEqual(['x']);
+
     tick(2000);
-    httpMock.expectOne('api/notifications').flush([notification({ id: 'late' })]);
-    expect(list.map(n => n.id)).toEqual(['late']);
+    httpMock.expectOne('api/notifications').flush([notification({ id: 'x' })]);
+    expect(list.map(n => n.id)).toEqual(['x']);
   }));
 
   it('retries the initial hub connect after a transient failure', fakeAsync(() => {
@@ -237,5 +275,35 @@ describe('NotificationsService', () => {
     tick(2000);
     flushMicrotasks();
     expect(connection.start).toHaveBeenCalledTimes(2);
+  }));
+
+  it('reconnects after onclose fires (auto-reconnect exhausted) rather than going silent', fakeAsync(() => {
+    TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    httpMock.expectOne('api/notifications').flush([]);
+    flushMicrotasks();
+    expect(connection.start).toHaveBeenCalledTimes(1);
+
+    // SignalR gave up after its own reconnect window and fired onclose — we must restart.
+    fireLifecycle(connection.onclose);
+    tick(2000);
+    flushMicrotasks();
+    expect(connection.start).toHaveBeenCalledTimes(2);
+  }));
+
+  it('refetches the list when the hub reconnects to reconcile signals missed during the drop', fakeAsync(() => {
+    const service = TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    httpMock.expectOne('api/notifications').flush([]);
+    flushMicrotasks();
+
+    let list: AppNotification[] = [];
+    service.notifications$.subscribe(n => (list = n));
+    expect(list).toEqual([]);
+
+    // A NotificationsChanged signal may have been missed while the connection was down.
+    fireLifecycle(connection.onreconnected);
+    httpMock.expectOne('api/notifications').flush([notification({ id: 'missed' })]);
+    expect(list.map(n => n.id)).toEqual(['missed']);
   }));
 });

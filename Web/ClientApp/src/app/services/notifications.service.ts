@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Inject, Injectable } from '@angular/core';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { OAuthService } from 'angular-oauth2-oidc';
@@ -62,6 +62,12 @@ export class NotificationsService {
   private refreshRetryAttempt = 0;
   private connectRetryHandle: ReturnType<typeof setTimeout> | null = null;
   private connectRetryAttempt = 0;
+  /**
+   * Consecutive 401/403 refresh responses. A single one is tolerated as a transient token blip (the
+   * badge keeps its current items); two in a row is treated as a persistent loss of authorization and
+   * clears the list. Reset by any successful or non-auth refresh.
+   */
+  private consecutiveAuthErrors = 0;
 
   readonly notifications$ = this.notificationsSubject.asObservable();
   /** Unresolved notifications double as the unread badge — the GET only returns unresolved items. */
@@ -131,19 +137,34 @@ export class NotificationsService {
         if (generation !== this.refreshGeneration) {
           return;
         }
+        this.consecutiveAuthErrors = 0;
         this.clearRefreshRetry();
         this.notificationsSubject.next(this.sortNotifications(notifications ?? []));
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         if (generation !== this.refreshGeneration) {
           return;
         }
-        // Every error here is transient. The API returns 403 only when the caller's user record can't
-        // be loaded or the bearer token is momentarily invalid; a genuine loss of rights arrives via
-        // the appState role-drop subscription, which calls teardown(). 5xx/network are blips too. So
-        // keep the current badge intact and retry with backoff — clearing on a transient blip would
-        // blank the bell for the rest of the session, because distinctUntilChanged never re-initializes
-        // while the user's roles are unchanged.
+        if (err?.status === 401 || err?.status === 403) {
+          // A 401/403 is ambiguous: a momentary token blip, or a persistent loss of authorization
+          // (e.g. the user record was deleted, so GetMine Forbids). Tolerate a single one — keep the
+          // current badge so a transient refresh race doesn't flicker the bell to empty — but once a
+          // second consecutive one confirms it isn't a blip, clear the list so items a now-unauthorized
+          // caller shouldn't see don't linger. Either way keep retrying rather than tearing down: a
+          // transient loss recovers, a persistent one just keeps returning an empty list. (We must NOT
+          // teardown here — distinctUntilChanged on the appState role stream would never re-initialize
+          // while cached roles are unchanged, leaving the bell dead for the session. Genuine role
+          // changes still arrive via that stream, which fully tears down.)
+          this.consecutiveAuthErrors++;
+          if (this.consecutiveAuthErrors >= 2) {
+            this.notificationsSubject.next([]);
+          }
+        } else {
+          // A transient 5xx/network error isn't an authorization signal — keep the current badge and
+          // don't count it toward the persistent-auth-loss threshold.
+          this.consecutiveAuthErrors = 0;
+        }
+        // Retry with backoff so a one-off failure doesn't leave the bell stuck.
         this.scheduleRefreshRetry();
       },
     });
@@ -187,6 +208,21 @@ export class NotificationsService {
     // Detail-free signal; re-fetch the authorized list (debounced) so a connection whose owner's
     // rights changed never receives content it shouldn't see.
     connection.on('NotificationsChanged', () => this.hubSignal$.next());
+
+    // A reconnect (after a transient drop) may have missed NotificationsChanged signals during the gap,
+    // so reconcile by re-fetching the authorized list once the connection is restored.
+    connection.onreconnected(() => this.refreshNotifications());
+
+    // withAutomaticReconnect only retries within its own window; once it gives up it fires onclose and
+    // never restarts. Drop the dead connection and schedule our own backoff reconnect so the bell
+    // doesn't go permanently silent after a long outage. (Skip when this connection was already
+    // replaced or intentionally torn down — teardown nulls this.connection before stopping.)
+    connection.onclose(() => {
+      if (this.connection === connection) {
+        this.connection = null;
+        this.scheduleConnectRetry();
+      }
+    });
 
     this.pendingConnection = connection;
     connection
@@ -243,6 +279,7 @@ export class NotificationsService {
   private teardown(): void {
     // Invalidate any in-flight refresh so a late response can't repopulate cleared state.
     this.refreshGeneration++;
+    this.consecutiveAuthErrors = 0;
     this.clearRefreshRetry();
     this.clearConnectRetry();
     this.hubSignalSub?.unsubscribe();
@@ -259,10 +296,13 @@ export class NotificationsService {
     }
 
     if (this.connection) {
-      this.connection.stop().catch(() => {
+      // Null the field BEFORE stopping so the onclose handler (which fires during stop) sees this as an
+      // intentional teardown and does not schedule a reconnect.
+      const live = this.connection;
+      this.connection = null;
+      live.stop().catch(() => {
         // No-op.
       });
-      this.connection = null;
     }
   }
 
