@@ -11,8 +11,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.SignalR;
-using Web.Hubs;
 using Web.Models;
 using Web.Services.Repositories;
 
@@ -28,7 +26,6 @@ namespace Web.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly EmailJobQueue _emailJobQueue;
         private readonly IGraphMailReader _graphMailReader;
-        private readonly IHubContext<HeldMessageNotificationsHub> _heldMessageHub;
         private readonly ILogger<CommitteeMailPoller> _logger;
         private readonly TimeSpan _pollInterval;
         private readonly bool _enabled;
@@ -40,7 +37,6 @@ namespace Web.Services
             IServiceScopeFactory scopeFactory,
             EmailJobQueue emailJobQueue,
             IGraphMailReader graphMailReader,
-            IHubContext<HeldMessageNotificationsHub> heldMessageHub,
             IConfiguration config,
             ILogger<CommitteeMailPoller> logger
         )
@@ -48,7 +44,6 @@ namespace Web.Services
             _scopeFactory = scopeFactory;
             _emailJobQueue = emailJobQueue;
             _graphMailReader = graphMailReader;
-            _heldMessageHub = heldMessageHub;
             _logger = logger;
 
             _enabled = config.GetValue("CommitteeForwarding:Enabled", false);
@@ -549,20 +544,6 @@ namespace Web.Services
                 senderEmail
             );
 
-            try
-            {
-                // Signal-only: carry just the committee id. Clients re-fetch the pending list via
-                // the authorized REST endpoint, so message details never flow to a stale connection
-                // whose owner's moderation rights were revoked after they connected.
-                await _heldMessageHub.Clients
-                    .Group(HeldMessageNotificationsHub.CommitteeGroupName(held.CommitteeId))
-                    .SendAsync("HeldMessagesChanged", new { committeeId = held.CommitteeId }, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send held-message SignalR notification for {Committee}", committee.DisplayName);
-            }
-
             // Raise the unified in-app notification for the committee's moderators (durable, survives
             // reconnects). Best-effort: a notification failure must not abort moving the message to
             // Processed, which would otherwise re-hold it on the next poll.
@@ -576,6 +557,7 @@ namespace Web.Services
                     held.Id.ToString("D"),
                     "Held committee email",
                     $"{committee.DisplayName}: from {sender} — {subject}",
+                    "/manage/committees",
                     ct
                 );
             }

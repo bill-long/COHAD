@@ -17,40 +17,36 @@
         class="notification-bell-button"
         *ngIf="notificationBellVisible$ | async"
         [matMenuTriggerFor]="notificationMenu"
-        [matBadge]="(totalUnreadCount$ | async) || null"
+        [matBadge]="(unreadCount$ | async) || null"
         matBadgeColor="warn"
         aria-label="Notifications">
         <mat-icon>notifications</mat-icon>
       </button>
       <mat-menu #notificationMenu="matMenu" class="notification-menu">
-        <ng-container *ngIf="adminNotificationsVisible$ | async">
-          <ng-container *ngIf="vendorFlagNotifications$ | async as flagNotifications">
-            <ng-container *ngIf="flagNotifications.length > 0">
-              <button mat-menu-item *ngFor="let notification of flagNotifications" (click)="openFlagNotification(notification)">
-                <div class="notification-row">
-                  <div class="notification-title">{{ notification.authorDisplayName }} flagged vendor {{ notification.vendorName }}</div>
-                  <div class="notification-note">{{ notification.flagNote }}</div>
-                </div>
-              </button>
+        <ng-template matMenuContent>
+          <ng-container *ngIf="(notifications$ | async) as notifications">
+            <ng-container *ngIf="notifications.length > 0; else noNotifications">
+              <ng-container *ngFor="let notification of notifications">
+                <button mat-menu-item (click)="openNotification(notification)">
+                  <div class="notification-row">
+                    <div class="notification-title">{{ notification.title }}</div>
+                    <div class="notification-note">{{ notification.summary }}</div>
+                  </div>
+                </button>
+                <button
+                  mat-menu-item
+                  class="notification-ack"
+                  *ngIf="notification.type === 'Registration'"
+                  (click)="acknowledge(notification)">
+                  Acknowledge
+                </button>
+              </ng-container>
             </ng-container>
+            <ng-template #noNotifications>
+              <span class="menu-empty-state">No new notifications</span>
+            </ng-template>
           </ng-container>
-        </ng-container>
-        <ng-container *ngIf="heldNotificationsVisible$ | async">
-          <ng-container *ngIf="heldMessageNotifications$ | async as heldNotifications">
-            <ng-container *ngIf="heldNotifications.length > 0">
-              <mat-divider *ngIf="(adminNotificationsVisible$ | async) && (vendorFlagNotifications$ | async)?.length"></mat-divider>
-              <button mat-menu-item *ngFor="let notification of heldNotifications" (click)="openHeldNotification(notification)">
-                <div class="notification-row">
-                  <div class="notification-title">Message held — {{ notification.committeeDisplayName }}</div>
-                  <div class="notification-note">From: {{ notification.senderEmail || 'unknown' }} · {{ notification.subject || '(no subject)' }}</div>
-                </div>
-              </button>
-            </ng-container>
-          </ng-container>
-        </ng-container>
-        <ng-container *ngIf="(vendorFlagNotifications$ | async)?.length === 0 && (heldMessageNotifications$ | async)?.length === 0">
-          <span class="menu-empty-state">No new notifications</span>
-        </ng-container>
+        </ng-template>
       </mat-menu>
       <button mat-button *ngIf="vm.authUser?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
       <mat-menu #userMenu="matMenu">
@@ -83,39 +79,35 @@
         color="primary"
         *ngIf="notificationBellVisible$ | async"
         [matMenuTriggerFor]="notificationMenuMobile"
-        [matBadge]="(totalUnreadCount$ | async) || null"
+        [matBadge]="(unreadCount$ | async) || null"
         matBadgeColor="warn">
         Notifications
       </button>
       <mat-menu #notificationMenuMobile="matMenu" class="notification-menu">
-        <ng-container *ngIf="adminNotificationsVisible$ | async">
-          <ng-container *ngIf="vendorFlagNotifications$ | async as flagNotifications">
-            <ng-container *ngIf="flagNotifications.length > 0">
-              <button mat-menu-item *ngFor="let notification of flagNotifications" (click)="openFlagNotification(notification)">
-                <div class="notification-row">
-                  <div class="notification-title">{{ notification.authorDisplayName }} flagged vendor {{ notification.vendorName }}</div>
-                  <div class="notification-note">{{ notification.flagNote }}</div>
-                </div>
-              </button>
+        <ng-template matMenuContent>
+          <ng-container *ngIf="(notifications$ | async) as notifications">
+            <ng-container *ngIf="notifications.length > 0; else noNotificationsMobile">
+              <ng-container *ngFor="let notification of notifications">
+                <button mat-menu-item (click)="openNotification(notification)">
+                  <div class="notification-row">
+                    <div class="notification-title">{{ notification.title }}</div>
+                    <div class="notification-note">{{ notification.summary }}</div>
+                  </div>
+                </button>
+                <button
+                  mat-menu-item
+                  class="notification-ack"
+                  *ngIf="notification.type === 'Registration'"
+                  (click)="acknowledge(notification)">
+                  Acknowledge
+                </button>
+              </ng-container>
             </ng-container>
+            <ng-template #noNotificationsMobile>
+              <span class="menu-empty-state">No new notifications</span>
+            </ng-template>
           </ng-container>
-        </ng-container>
-        <ng-container *ngIf="heldNotificationsVisible$ | async">
-          <ng-container *ngIf="heldMessageNotifications$ | async as heldNotifications">
-            <ng-container *ngIf="heldNotifications.length > 0">
-              <mat-divider *ngIf="(adminNotificationsVisible$ | async) && (vendorFlagNotifications$ | async)?.length"></mat-divider>
-              <button mat-menu-item *ngFor="let notification of heldNotifications" (click)="openHeldNotification(notification)">
-                <div class="notification-row">
-                  <div class="notification-title">Message held — {{ notification.committeeDisplayName }}</div>
-                  <div class="notification-note">From: {{ notification.senderEmail || 'unknown' }} · {{ notification.subject || '(no subject)' }}</div>
-                </div>
-              </button>
-            </ng-container>
-          </ng-container>
-        </ng-container>
-        <ng-container *ngIf="(vendorFlagNotifications$ | async)?.length === 0 && (heldMessageNotifications$ | async)?.length === 0">
-          <span class="menu-empty-state">No new notifications</span>
-        </ng-container>
+        </ng-template>
       </mat-menu>
       <ng-container *ngIf="!vm.authUser?.identityClaims?.emails">
         <button mat-menu-item *ngIf="!useMockAuth" (click)="login()" [disabled]="disabled">Sign In</button>

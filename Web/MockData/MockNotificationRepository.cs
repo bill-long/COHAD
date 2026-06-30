@@ -144,6 +144,7 @@ namespace Web.MockData
                 TargetId = n.TargetId,
                 Title = n.Title,
                 Summary = n.Summary,
+                DeepLink = n.DeepLink,
                 CreatedUtc = n.CreatedUtc,
                 ResolvedUtc = n.ResolvedUtc,
                 ResolvedBy = n.ResolvedBy,

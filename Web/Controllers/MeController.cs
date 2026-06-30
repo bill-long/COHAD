@@ -124,7 +124,8 @@ namespace Web.Controllers
                 NotificationTargetType.User,
                 newUser.UniqueId,
                 "New user registered",
-                summary
+                summary,
+                "/manage/users"
             );
         }
 

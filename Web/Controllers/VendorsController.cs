@@ -6,8 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
-using Web.Hubs;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -27,8 +26,8 @@ namespace Web.Controllers
         private readonly IVendorFlagRepository _vendorFlagRepository;
         private readonly IUserRepository _userRepository;
         private readonly IAuditLogRepository _auditLogRepository;
-        private readonly IHubContext<VendorFlagNotificationsHub> _vendorFlagNotificationsHub;
         private readonly INotificationService _notificationService;
+        private readonly ILogger<VendorsController> _logger;
 
         public VendorsController(
             IVendorRepository vendorRepository,
@@ -36,8 +35,8 @@ namespace Web.Controllers
             IVendorFlagRepository vendorFlagRepository,
             IUserRepository userRepository,
             IAuditLogRepository auditLogRepository,
-            IHubContext<VendorFlagNotificationsHub> vendorFlagNotificationsHub,
-            INotificationService notificationService
+            INotificationService notificationService,
+            ILogger<VendorsController> logger
         )
         {
             _vendorRepository = vendorRepository;
@@ -45,8 +44,8 @@ namespace Web.Controllers
             _vendorFlagRepository = vendorFlagRepository;
             _userRepository = userRepository;
             _auditLogRepository = auditLogRepository;
-            _vendorFlagNotificationsHub = vendorFlagNotificationsHub;
             _notificationService = notificationService;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -95,26 +94,6 @@ namespace Web.Controllers
                 .ToList();
 
             return Ok(summaries);
-        }
-
-        [HttpGet("flagged/notifications")]
-        [Authorize(Policy = "Administrator")]
-        public async Task<IActionResult> GetFlagNotifications()
-        {
-            var pendingFlags = await _vendorFlagRepository.GetAllPendingAsync();
-            var vendorsById = (await _vendorRepository.GetAllAsync()).ToDictionary(v => v.Id);
-            var notifications = new List<VendorFlagNotificationPresentation>();
-            foreach (var flag in pendingFlags)
-            {
-                if (!vendorsById.TryGetValue(flag.VendorId, out var vendor))
-                {
-                    continue;
-                }
-
-                notifications.Add(VendorFlagNotificationPresentation.FromStorageModel(flag, vendor));
-            }
-
-            return Ok(notifications.OrderByDescending(n => n.CreatedUtc).ToList());
         }
 
         [HttpGet("{id:guid}")]
@@ -300,9 +279,6 @@ namespace Web.Controllers
 
             await _vendorRepository.DeleteAsync(id);
 
-            await _vendorFlagNotificationsHub
-                .Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
-                .SendAsync("VendorDeleted", new { vendorId = id.ToString("D") });
             await WriteAudit(apiUser, id.ToString("D"), stored.Name, "Deleted vendor.");
             return Ok();
         }
@@ -481,6 +457,20 @@ namespace Web.Controllers
             var existing = await _vendorFlagRepository.GetPendingByAuthorAsync(id, apiUser.UniqueId);
             if (existing != null)
             {
+                // A prior attempt may have saved the flag but failed before raising the notification
+                // (e.g. a transient error after Upsert). There is no background sweep that re-raises
+                // vendor-flag notifications, so without this an admin would never see the flag. RaiseAsync
+                // is idempotent on the target, so re-raise here to heal a missing notification before
+                // reporting the duplicate. This heal is best-effort: it must not turn the deterministic
+                // 409 into a 500 if the notification store is momentarily unavailable.
+                try
+                {
+                    await RaiseVendorFlagNotificationAsync(existing, vendor);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Failed to re-raise vendor-flag notification while healing a duplicate report for flag {FlagId}", existing.Id);
+                }
                 return Conflict("You already have a pending report for this vendor.");
             }
 
@@ -499,19 +489,26 @@ namespace Web.Controllers
 
             var saved = await _vendorFlagRepository.UpsertAsync(flag);
             await WriteAudit(apiUser, id.ToString("D"), vendor.Name, "Flagged vendor.");
-            var notification = VendorFlagNotificationPresentation.FromStorageModel(saved, vendor);
-            await _vendorFlagNotificationsHub
-                .Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
-                .SendAsync("VendorFlagCreated", notification);
-            await _notificationService.RaiseAsync(
+            await RaiseVendorFlagNotificationAsync(saved, vendor);
+            return Ok(VendorFlagPresentation.FromStorageModel(saved, includeAuthor: false));
+        }
+
+        /// <summary>
+        /// Raises the in-app notification for a pending vendor flag. Idempotent on the flag id (via
+        /// <see cref="INotificationService.RaiseAsync"/>), so it can safely re-run to heal a notification
+        /// a prior attempt failed to create.
+        /// </summary>
+        private Task RaiseVendorFlagNotificationAsync(VendorFlag flag, Vendor vendor)
+        {
+            return _notificationService.RaiseAsync(
                 NotificationType.VendorFlag,
                 NotificationAudience.Administrators,
                 NotificationTargetType.VendorFlag,
-                saved.Id.ToString("D"),
+                flag.Id.ToString("D"),
                 "Vendor flagged",
-                $"{vendor.Name}: {saved.FlagNote}"
+                $"{vendor.Name}: {flag.FlagNote}",
+                $"/residents/vendors/{flag.VendorId:D}"
             );
-            return Ok(VendorFlagPresentation.FromStorageModel(saved, includeAuthor: false));
         }
 
         [HttpDelete("{id:guid}/flags/{flagId:guid}")]
@@ -536,9 +533,6 @@ namespace Web.Controllers
             flag.ResolvedUtc = DateTime.UtcNow;
             await _vendorFlagRepository.UpsertAsync(flag);
             await WriteAudit(apiUser, id.ToString("D"), vendor?.Name ?? id.ToString("D"), "Dismissed vendor flag.");
-            await _vendorFlagNotificationsHub
-                .Clients.Group(VendorFlagNotificationsHub.AdminGroupName)
-                .SendAsync("VendorFlagResolved", new { flagId = flagId.ToString("D"), vendorId = id.ToString("D") });
             await _notificationService.ResolveAsync(NotificationTargetType.VendorFlag, flagId.ToString("D"), apiUser.UniqueId);
             return Ok();
         }

@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Web.Controllers;
@@ -37,8 +38,9 @@ public sealed class NotificationsControllerTests
 
         var committeeRepo = new Mock<ICommitteeRepository>();
         committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync((committees ?? Array.Empty<Committee>()).ToList());
+        var committeeCache = new CommitteeListCache(committeeRepo.Object, new MemoryCache(new MemoryCacheOptions()));
 
-        var controller = new NotificationsController(service, userRepo.Object, committeeRepo.Object)
+        var controller = new NotificationsController(service, userRepo.Object, committeeCache)
         {
             ControllerContext = new ControllerContext
             {

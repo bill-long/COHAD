@@ -2,13 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Graph.Models;
 using Moq;
-using Web.Hubs;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
@@ -54,7 +52,7 @@ public sealed class CommitteeMailPollerTests
         notifications
             .Setup(s => s.RaiseAsync(
                 It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Notification());
 
         var services = new ServiceCollection();
@@ -82,20 +80,11 @@ public sealed class CommitteeMailPollerTests
         graphReader.Setup(g => g.GetOrCreateFolderAsync("board@cohad.org", It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("processed-folder");
 
-        var hubProxy = new Mock<IClientProxy>();
-        hubProxy.Setup(p => p.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-        var hubClients = new Mock<IHubClients>();
-        hubClients.Setup(c => c.Group(It.IsAny<string>())).Returns(hubProxy.Object);
-        var hubContext = new Mock<IHubContext<HeldMessageNotificationsHub>>();
-        hubContext.Setup(h => h.Clients).Returns(hubClients.Object);
-
         var config = new ConfigurationBuilder().Build();
         var poller = new CommitteeMailPoller(
             provider.GetRequiredService<IServiceScopeFactory>(),
             new EmailJobQueue(),
             graphReader.Object,
-            hubContext.Object,
             config,
             NullLogger<CommitteeMailPoller>.Instance
         );
@@ -110,6 +99,7 @@ public sealed class CommitteeMailPollerTests
             It.IsAny<string>(),
             "Held committee email",
             It.Is<string>(summary => summary.Contains("Board") && summary.Contains("Stranger") && summary.Contains("Hello")),
+            "/manage/committees",
             It.IsAny<CancellationToken>()), Times.Once);
     }
 }
