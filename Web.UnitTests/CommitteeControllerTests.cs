@@ -1499,6 +1499,118 @@ public sealed class CommitteeControllerTests
     // ──────────────────────────────────────────────
 
     [Fact]
+    public async Task GetPendingHeldMessages_aggregates_across_managed_committees_newest_first()
+    {
+        var board = SampleCommittee("board");
+        var garden = SampleCommittee("garden");
+        garden.DisplayName = "Garden Club";
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { board, garden });
+
+        var older = new HeldMessage
+        {
+            Id = Guid.NewGuid(),
+            CommitteeId = "board",
+            SenderEmail = "a@example.com",
+            Subject = "Older",
+            Status = HeldMessageStatus.Held,
+            HeldUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var newer = new HeldMessage
+        {
+            Id = Guid.NewGuid(),
+            CommitteeId = "garden",
+            SenderEmail = "b@example.com",
+            Subject = "Newer",
+            Status = HeldMessageStatus.Held,
+            HeldUtc = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetByCommitteeIdAsync("board", It.IsAny<int>(), HeldMessageStatus.Held))
+            .ReturnsAsync(new List<HeldMessage> { older });
+        heldRepo.Setup(r => r.GetByCommitteeIdAsync("garden", It.IsAny<int>(), HeldMessageStatus.Held))
+            .ReturnsAsync(new List<HeldMessage> { newer });
+
+        var c = CreateController(committeeRepo: committeeRepo.Object, heldMessageRepo: heldRepo.Object);
+        var result = await c.GetPendingHeldMessages();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsAssignableFrom<IEnumerable<PendingHeldMessagePresentation>>(ok.Value).ToList();
+        Assert.Equal(2, payload.Count);
+        Assert.Equal("Newer", payload[0].Subject);
+        Assert.Equal("Garden Club", payload[0].CommitteeName);
+        Assert.Equal("Older", payload[1].Subject);
+        Assert.Equal("Board", payload[1].CommitteeName);
+    }
+
+    [Fact]
+    public async Task GetPendingHeldMessages_returns_Forbid_when_the_user_record_is_not_found()
+    {
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee>());
+
+        var userRepo = new Mock<IUserRepository>();
+        userRepo.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
+
+        var c = CreateController(committeeRepo: committeeRepo.Object, userRepo: userRepo.Object);
+        var result = await c.GetPendingHeldMessages();
+
+        Assert.IsType<ForbidResult>(result);
+    }
+
+    [Fact]
+    public async Task GetPendingHeldMessages_returns_empty_when_the_caller_manages_no_committees()
+    {
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee>());
+
+        // Strict: with no manageable committees, the held store must never be queried.
+        var heldRepo = new Mock<IHeldMessageRepository>(MockBehavior.Strict);
+
+        var c = CreateController(committeeRepo: committeeRepo.Object, heldMessageRepo: heldRepo.Object);
+        var result = await c.GetPendingHeldMessages();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsAssignableFrom<IEnumerable<PendingHeldMessagePresentation>>(ok.Value).ToList();
+        Assert.Empty(payload);
+    }
+
+    [Fact]
+    public async Task GetPendingHeldMessages_excludes_committees_the_caller_cannot_manage()
+    {
+        // A Garden Club moderator (not an Administrator) sees only Garden Club's held mail.
+        var board = SampleCommittee("board"); // ManagementRole = Board
+        var garden = SampleCommittee("garden");
+        garden.DisplayName = "Garden Club";
+        garden.ManagementRole = User.Role.GardenClub;
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { board, garden });
+
+        // Strict: a setup only for the manageable committee — querying "board" would fail the test.
+        var heldRepo = new Mock<IHeldMessageRepository>(MockBehavior.Strict);
+        heldRepo.Setup(r => r.GetByCommitteeIdAsync("garden", It.IsAny<int>(), HeldMessageStatus.Held))
+            .ReturnsAsync(new List<HeldMessage>
+            {
+                new HeldMessage { Id = Guid.NewGuid(), CommitteeId = "garden", Subject = "G", Status = HeldMessageStatus.Held, HeldUtc = DateTime.UtcNow },
+            });
+
+        var c = CreateController(
+            committeeRepo: committeeRepo.Object,
+            heldMessageRepo: heldRepo.Object,
+            userRepo: RoleUserRepo(User.Role.GardenClub)
+        );
+        var result = await c.GetPendingHeldMessages();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsAssignableFrom<IEnumerable<PendingHeldMessagePresentation>>(ok.Value).ToList();
+        Assert.Single(payload);
+        Assert.Equal("Garden Club", payload[0].CommitteeName);
+    }
+
+    [Fact]
     public async Task ApproveHeldMessage_already_approved_returns_400()
     {
         var committee = SampleCommittee("board");

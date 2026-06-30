@@ -99,7 +99,7 @@ public sealed class CommitteeMailPollerTests
             It.IsAny<string>(),
             "Held committee email",
             It.Is<string>(summary => summary.Contains("Board") && summary.Contains("Stranger") && summary.Contains("Hello")),
-            "/manage/committees",
+            It.Is<string>(deepLink => deepLink.StartsWith("/manage/approvals?message=")),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 }

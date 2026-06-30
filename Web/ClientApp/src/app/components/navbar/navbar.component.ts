@@ -174,7 +174,7 @@ export class NavbarComponent implements OnInit {
       case 'Registration':
         return '/manage/users';
       case 'HeldMessage':
-        return '/manage/committees';
+        return '/manage/approvals';
       case 'VendorFlag':
         return '/residents/vendors';
       default:

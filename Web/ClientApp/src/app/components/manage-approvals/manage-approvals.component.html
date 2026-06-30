@@ -1,0 +1,97 @@
+<div class="approvals">
+  <header class="approvals-header">
+    <h2 class="approvals-title">Approvals</h2>
+    <p class="approvals-subtitle" *ngIf="!loading && pending.length > 0">
+      {{ pending.length }} email{{ pending.length === 1 ? '' : 's' }} waiting for approval
+    </p>
+  </header>
+
+  <div class="approvals-loading" *ngIf="loading">Loading approvals…</div>
+
+  <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="error" role="alert">{{ error }}</div>
+
+  <div class="approvals-empty" *ngIf="!loading && !error && pending.length === 0">
+    No emails waiting for approval.
+  </div>
+
+  <div class="held-message-list" *ngIf="!loading && pending.length > 0">
+    <div
+      class="held-message-row"
+      *ngFor="let msg of pending"
+      [id]="'approval-' + msg.id"
+      [class.held-message-row--highlighted]="highlightedId === msg.id"
+    >
+      <div class="held-message-summary">
+        <div class="held-message-info">
+          <span class="held-committee">{{ msg.committeeName || 'Committee' }}</span>
+          <span class="held-sender">{{ msg.senderName || msg.senderEmail || '(unknown sender)' }}</span>
+          <span class="held-subject" *ngIf="msg.subject">{{ msg.subject }}</span>
+          <span class="held-date">{{ msg.receivedUtc | date: 'medium' }}</span>
+        </div>
+        <div class="held-message-actions">
+          <button
+            type="button"
+            mat-stroked-button
+            (click)="toggleBody(msg)"
+            [attr.aria-expanded]="getBody(msg.id)?.expanded === true"
+          >
+            <mat-icon>{{ getBody(msg.id)?.expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+            View message
+          </button>
+          <button
+            type="button"
+            mat-stroked-button
+            color="primary"
+            [disabled]="actioningId === msg.id"
+            (click)="approve(msg)"
+          >
+            <mat-icon>check</mat-icon> Approve
+          </button>
+          <button
+            type="button"
+            mat-stroked-button
+            color="warn"
+            [disabled]="actioningId === msg.id"
+            (click)="reject(msg)"
+          >
+            <mat-icon>close</mat-icon> Reject
+          </button>
+        </div>
+      </div>
+
+      <div class="held-message-body" *ngIf="getBody(msg.id) as bodyState">
+        <ng-container *ngIf="bodyState.expanded">
+          <div class="held-body-loading" *ngIf="bodyState.loading">Loading message…</div>
+          <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="bodyState.error" role="alert">
+            {{ bodyState.error }}
+          </div>
+
+          <ng-container *ngIf="bodyState.loaded && bodyState.data as body">
+            <div class="held-body-unavailable" *ngIf="!body.available">
+              {{ body.reason || 'The message body is unavailable.' }}
+            </div>
+
+            <ng-container *ngIf="body.available">
+              <ng-container *ngIf="body.isHtml; else textBody">
+                <div class="held-body-images-bar" *ngIf="bodyState.hasRemoteContent && bodyState.imagesBlocked">
+                  <span><mat-icon class="held-body-images-icon">hide_image</mat-icon> Images in this message are blocked.</span>
+                  <button type="button" mat-stroked-button (click)="displayImages(msg.id)">Display images</button>
+                </div>
+                <iframe
+                  class="held-body-frame"
+                  sandbox=""
+                  title="Held message body"
+                  referrerpolicy="no-referrer"
+                  [srcdoc]="bodyState.safeBody"
+                ></iframe>
+              </ng-container>
+              <ng-template #textBody>
+                <pre class="held-body-text">{{ body.body }}</pre>
+              </ng-template>
+            </ng-container>
+          </ng-container>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+</div>
