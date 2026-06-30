@@ -7,7 +7,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { Observable, Subscription } from 'rxjs';
 import { VendorDetail, VendorFlag, VendorReview, VendorsService, vendorCategoryClass } from 'src/app/services/vendors.service';
 import { ApplicationState, applicationState } from 'src/app/state';
-import { VendorFlagNotificationsService } from 'src/app/services/vendor-flag-notifications.service';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { VendorEditorDialogComponent, VendorEditorDialogData } from '../vendor-editor-dialog/vendor-editor-dialog.component';
@@ -52,7 +51,6 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
     private readonly router: Router,
     private readonly formBuilder: FormBuilder,
     private readonly vendorsService: VendorsService,
-    private readonly vendorFlagNotificationsService: VendorFlagNotificationsService,
     private readonly dialog: MatDialog,
     private readonly snackBar: MatSnackBar,
     private readonly telemetry: ApplicationInsightsService,
@@ -379,7 +377,8 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       this.error = null;
       this.vendorsService.dismissFlag(this.vendor!.id, flag.id).subscribe({
         next: () => {
-          this.vendorFlagNotificationsService.removeNotification(flag.id);
+          // Resolution is server-persisted; the unified notification badge updates via the
+          // NotificationsChanged signal raised by the dismiss endpoint.
           this.saving = false;
           this.load(this.vendor!.id);
         },
@@ -437,7 +436,8 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       this.error = null;
       this.vendorsService.deleteVendor(this.vendor!.id).subscribe({
         next: () => {
-          this.vendorFlagNotificationsService.removeNotificationsForVendor(this.vendor!.id);
+          // Deleting the vendor resolves its flags server-side, which clears their unified
+          // notifications via the NotificationsChanged signal.
           this.saving = false;
           this.snackBar.open('Vendor deleted.', '', { duration: 4000 });
           this.router.navigate(['/residents/vendors']);

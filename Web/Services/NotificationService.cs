@@ -31,6 +31,7 @@ namespace Web.Services
             string targetId,
             string title,
             string summary,
+            string? deepLink = null,
             CancellationToken ct = default
         );
 
@@ -78,6 +79,7 @@ namespace Web.Services
             string targetId,
             string title,
             string summary,
+            string? deepLink = null,
             CancellationToken ct = default
         )
         {
@@ -103,6 +105,7 @@ namespace Web.Services
                 TargetId = targetId,
                 Title = title ?? string.Empty,
                 Summary = summary ?? string.Empty,
+                DeepLink = deepLink,
                 CreatedUtc = DateTime.UtcNow,
             };
 
@@ -175,10 +178,11 @@ namespace Web.Services
             {
                 await _notifier.NotifyAudienceChangedAsync(audienceKey, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Best-effort: a failed live signal must not fail the persisted change. Clients still
-                // pick the change up on their next fetch / reconnect.
+                // pick the change up on their next fetch / reconnect. Cancellation (e.g. shutdown of a
+                // background sweep) is allowed to propagate rather than be logged as a send failure.
                 _logger.LogWarning(ex, "Failed to send notification signal to audience {AudienceKey}", audienceKey);
             }
         }

@@ -1,16 +1,14 @@
 import { Component, Inject, OnInit } from '@angular/core';
-import { Observable, Observer, combineLatest, of } from 'rxjs';
+import { Observable, Observer, of } from 'rxjs';
 import { catchError, map, shareReplay } from 'rxjs/operators';
 import { EventsService } from 'src/app/services/events.service';
-import { VendorFlagNotification } from 'src/app/services/vendors.service';
-import { HeldMessageNotification, HeldMessageNotificationsService } from 'src/app/services/held-message-notifications.service';
+import { AppNotification, NotificationsService, NotificationType } from 'src/app/services/notifications.service';
 import { Router, NavigationEnd, NavigationStart } from '@angular/router';
 import { applicationState, ApplicationState, dispatcher, Action, Login, MockLogin, Logout } from 'src/app/state';
 import { ApiUser, AuthUser } from 'src/app/models';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { ThemeService } from 'src/app/services/theme.service';
 import { environment } from 'src/environments/environment';
-import { VendorFlagNotificationsService } from 'src/app/services/vendor-flag-notifications.service';
 
 @Component({
   selector: 'app-navbar',
@@ -31,11 +29,8 @@ export class NavbarComponent implements OnInit {
   /** True when `GET api/events` returns at least one upcoming event (hides nav link if empty or on error). */
   readonly showEventsNav$: Observable<boolean>;
 
-  readonly vendorFlagNotifications$: Observable<VendorFlagNotification[]>;
-  readonly unreadVendorFlagNotificationCount$: Observable<number>;
-  readonly heldMessageNotifications$: Observable<HeldMessageNotification[]>;
-  readonly unreadHeldMessageCount$: Observable<number>;
-  readonly totalUnreadCount$: Observable<number>;
+  readonly notifications$: Observable<AppNotification[]>;
+  readonly unreadCount$: Observable<number>;
 
   // View-model + visibility streams are built once (shared) so the template's `| async` usages
   // don't recreate them on every change-detection pass.
@@ -47,10 +42,7 @@ export class NavbarComponent implements OnInit {
     showGuestPrivacy: boolean;
   }>;
   readonly manageVisible$: Observable<boolean>;
-  readonly adminNotificationsVisible$: Observable<boolean>;
-  /** Held-message notifications are visible to anyone who can moderate a committee (Administrator or a committee role). */
-  readonly heldNotificationsVisible$: Observable<boolean>;
-  /** The bell shows when the user can see either vendor-flag (admin) or held-message (committee) notifications. */
+  /** The bell shows for anyone who can hold a notification audience: Administrators and committee moderators. */
   readonly notificationBellVisible$: Observable<boolean>;
 
   constructor(
@@ -59,8 +51,7 @@ export class NavbarComponent implements OnInit {
     private router: Router,
     private themeService: ThemeService,
     private readonly eventsService: EventsService,
-    private readonly vendorFlagNotificationsService: VendorFlagNotificationsService,
-    private readonly heldMessageNotificationsService: HeldMessageNotificationsService,
+    private readonly notificationsService: NotificationsService,
   ) {
     this.showEventsNav$ = this.eventsService.getUpcoming().pipe(
       map(events => events.length > 0),
@@ -68,14 +59,8 @@ export class NavbarComponent implements OnInit {
       shareReplay({ bufferSize: 1, refCount: true }),
     );
 
-    this.vendorFlagNotifications$ = this.vendorFlagNotificationsService.notifications$;
-    this.unreadVendorFlagNotificationCount$ = this.vendorFlagNotificationsService.unreadCount$;
-    this.heldMessageNotifications$ = this.heldMessageNotificationsService.notifications$;
-    this.unreadHeldMessageCount$ = this.heldMessageNotificationsService.unreadCount$;
-    this.totalUnreadCount$ = combineLatest([
-      this.vendorFlagNotificationsService.unreadCount$,
-      this.heldMessageNotificationsService.unreadCount$,
-    ]).pipe(map(([a, b]) => a + b));
+    this.notifications$ = this.notificationsService.notifications$;
+    this.unreadCount$ = this.notificationsService.unreadCount$;
 
     this.navVm$ = this.appState.pipe(
       map(s => {
@@ -99,19 +84,13 @@ export class NavbarComponent implements OnInit {
           vm.apiUser.roles.filter(r => rolePermissions.manageRoles.includes(r)).length > 0,
       ),
     );
-    this.adminNotificationsVisible$ = this.navVm$.pipe(
-      map(vm => vm.showAuthenticatedNav && vm.apiUser !== null && vm.apiUser.roles.includes('Administrator')),
-    );
-    this.heldNotificationsVisible$ = this.navVm$.pipe(
+    this.notificationBellVisible$ = this.navVm$.pipe(
       map(
         vm =>
           vm.showAuthenticatedNav &&
           vm.apiUser !== null &&
           vm.apiUser.roles.some(r => rolePermissions.manageCommitteesRoles.includes(r)),
       ),
-    );
-    this.notificationBellVisible$ = combineLatest([this.adminNotificationsVisible$, this.heldNotificationsVisible$]).pipe(
-      map(([admin, held]) => admin || held),
     );
 
     router.events.subscribe(e => {
@@ -169,13 +148,37 @@ export class NavbarComponent implements OnInit {
     this.themeService.toggleTheme();
   }
 
-  openFlagNotification(notification: VendorFlagNotification): void {
-    this.vendorFlagNotificationsService.markAsRead(notification.flagId);
-    this.router.navigate(['/residents/vendors', notification.vendorId]);
+  /**
+   * Opens the moderation UI that resolves a notification. Prefers the server-computed deepLink (which
+   * carries the target's parent context, e.g. a flagged vendor's id); falls back to a type-based route
+   * for legacy notifications raised before deepLink existed.
+   */
+  openNotification(notification: AppNotification): void {
+    const route = notification.deepLink || NavbarComponent.fallbackRoute(notification.type);
+    if (route) {
+      this.router.navigateByUrl(route);
+    }
   }
 
-  openHeldNotification(notification: HeldMessageNotification): void {
-    this.heldMessageNotificationsService.markAsRead(notification.id);
-    this.router.navigate(['/manage/committees']);
+  /** Acknowledges a notification that has no other resolving action (registrations). */
+  acknowledge(notification: AppNotification): void {
+    this.notificationsService.acknowledge(notification.id).subscribe({
+      error: () => {
+        // Best-effort from the bell; the badge reconciles on the next refresh/signal.
+      },
+    });
+  }
+
+  private static fallbackRoute(type: NotificationType): string | null {
+    switch (type) {
+      case 'Registration':
+        return '/manage/users';
+      case 'HeldMessage':
+        return '/manage/committees';
+      case 'VendorFlag':
+        return '/residents/vendors';
+      default:
+        return null;
+    }
   }
 }

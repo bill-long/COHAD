@@ -7,11 +7,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Web.Configuration;
-using Web.Hubs;
 using Web.Models;
 using Web.PresentationModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,7 +42,6 @@ namespace Web.Controllers
         private readonly IEmailJobRepository _emailJobRepository;
         private readonly EmailJobQueue _emailJobQueue;
         private readonly DocumentStorageOptions _storageOptions;
-        private readonly IHubContext<HeldMessageNotificationsHub> _heldMessageHub;
         private readonly INotificationService _notificationService;
         private readonly ILogger<CommitteeController> _logger;
 
@@ -60,7 +57,6 @@ namespace Web.Controllers
             IEmailJobRepository emailJobRepository,
             EmailJobQueue emailJobQueue,
             IOptions<DocumentStorageOptions> storageOptions,
-            IHubContext<HeldMessageNotificationsHub> heldMessageHub,
             INotificationService notificationService,
             ILogger<CommitteeController> logger
         )
@@ -76,7 +72,6 @@ namespace Web.Controllers
             _emailJobRepository = emailJobRepository;
             _emailJobQueue = emailJobQueue;
             _storageOptions = storageOptions.Value;
-            _heldMessageHub = heldMessageHub;
             _notificationService = notificationService;
             _logger = logger;
         }
@@ -996,10 +991,6 @@ namespace Web.Controllers
                 job.Id
             );
 
-            await _heldMessageHub.Clients
-                .Group(HeldMessageNotificationsHub.CommitteeGroupName(key))
-                .SendAsync("HeldMessagesChanged", new { committeeId = key });
-
             await _notificationService.ResolveAsync(
                 NotificationTargetType.HeldMessage, messageId.ToString("D"), apiUser.UniqueId);
 
@@ -1044,55 +1035,10 @@ namespace Web.Controllers
                 $"Rejected held message from {held.SenderEmail} (subject: {held.Subject})."
             );
 
-            await _heldMessageHub.Clients
-                .Group(HeldMessageNotificationsHub.CommitteeGroupName(key))
-                .SendAsync("HeldMessagesChanged", new { committeeId = key });
-
             await _notificationService.ResolveAsync(
                 NotificationTargetType.HeldMessage, messageId.ToString("D"), apiUser.UniqueId);
 
             return Ok(new { Status = "Rejected" });
-        }
-
-        /// <summary>
-        /// Returns held messages (status Held) for every committee the caller can manage —
-        /// all committees for an Administrator, the caller's own committees otherwise.
-        /// Used by the notification service to populate the badge on initial load.
-        /// </summary>
-        [HttpGet("admin/held-messages/pending")]
-        [Authorize(Policy = "CommitteeEditor")]
-        public async Task<IActionResult> GetAllPendingHeldMessages()
-        {
-            var apiUser = await GetApiUserAsync();
-            if (apiUser == null)
-                return Forbid();
-
-            var committees = (await _committeeRepository.GetAllAsync())
-                .Where(c => CanManageCommittee(apiUser, c))
-                .ToList();
-            var committeeMap = committees.ToDictionary(c => c.Id, c => c.DisplayName);
-
-            var allHeld = new List<object>();
-            foreach (var c in committees)
-            {
-                // Filter to Held in the query so the row limit counts only pending messages
-                // (resolved/expired rows must not crowd out older still-pending ones).
-                var held = await _heldMessageRepository.GetByCommitteeIdAsync(c.Id, status: HeldMessageStatus.Held);
-                allHeld.AddRange(held
-                    .Select(h => new
-                    {
-                        id = h.Id.ToString("D"),
-                        committeeId = h.CommitteeId,
-                        committeeDisplayName = committeeMap.GetValueOrDefault(h.CommitteeId, h.CommitteeId),
-                        senderEmail = h.SenderEmail,
-                        senderName = h.SenderName,
-                        subject = h.Subject,
-                        receivedUtc = h.ReceivedUtc,
-                        heldUtc = h.HeldUtc,
-                    }));
-            }
-
-            return Ok(allHeld);
         }
 
         // ── Migration (legacy inbox-rule → polling gateway) ─────────────

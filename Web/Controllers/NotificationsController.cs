@@ -19,17 +19,17 @@ namespace Web.Controllers
     {
         private readonly INotificationService _notificationService;
         private readonly IUserRepository _userRepository;
-        private readonly ICommitteeRepository _committeeRepository;
+        private readonly CommitteeListCache _committeeListCache;
 
         public NotificationsController(
             INotificationService notificationService,
             IUserRepository userRepository,
-            ICommitteeRepository committeeRepository
+            CommitteeListCache committeeListCache
         )
         {
             _notificationService = notificationService;
             _userRepository = userRepository;
-            _committeeRepository = committeeRepository;
+            _committeeListCache = committeeListCache;
         }
 
         /// <summary>
@@ -98,18 +98,10 @@ namespace Web.Controllers
 
         private async Task<List<string>> ResolveAudiencesAsync(User user)
         {
-            var audiences = new List<string>();
-            if (user.Roles?.Contains(Models.User.Role.Administrator) == true)
-                audiences.Add(NotificationAudience.Administrators);
-
-            var committees = await _committeeRepository.GetAllAsync();
-            foreach (var committee in committees)
-            {
-                if (CommitteeAuthorization.CanManage(user, committee))
-                    audiences.Add(NotificationAudience.Committee(committee.Id));
-            }
-
-            return audiences;
+            // Shared with NotificationsHub group membership (same resolver, same cached committee list)
+            // so the badge/list and the live push channel always agree on who sees a notification.
+            var committees = await _committeeListCache.GetAllAsync();
+            return NotificationAudienceResolver.Resolve(user, committees).ToList();
         }
 
         private async Task<User?> GetApiUserAsync()

@@ -86,7 +86,7 @@ public sealed class MeControllerTests
         notifications
             .Setup(s => s.RaiseAsync(
                 It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Notification());
 
         var controller = CreateController(
@@ -113,6 +113,7 @@ public sealed class MeControllerTests
             "google.comu9",
             "New user registered",
             It.Is<string>(summary => summary.Contains("Jane Doe") && summary.Contains("123 Mock Lane")),
+            "/manage/users",
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

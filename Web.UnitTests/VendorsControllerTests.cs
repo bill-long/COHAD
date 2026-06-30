@@ -5,11 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Web.Controllers;
-using Web.Hubs;
 using Web.MockData;
 using Web.Models;
 using Web.Services;
@@ -417,6 +415,45 @@ public sealed class VendorsControllerTests
             It.Is<string>(t => t == savedFlag!.Id.ToString("D")),
             "Vendor flagged",
             It.Is<string>(summary => summary.Contains("Acme")),
+            It.Is<string>(deepLink => deepLink == $"/residents/vendors/{vendorId:D}"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateFlag_duplicate_pending_reraises_notification_to_heal_a_prior_failed_raise()
+    {
+        // A prior attempt saved the flag but failed before raising the notification. Because there is no
+        // background sweep that re-raises vendor-flag notifications, the duplicate path must re-raise
+        // (idempotently) so the flag still reaches administrators — otherwise it is invisible forever.
+        var userRepo = new Mock<IUserRepository>(MockBehavior.Strict);
+        var vendorRepo = new Mock<IVendorRepository>(MockBehavior.Strict);
+        var reviewRepo = new Mock<IVendorReviewRepository>(MockBehavior.Strict);
+        var auditRepo = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+        var flagRepo = new Mock<IVendorFlagRepository>(MockBehavior.Strict);
+        var notifications = new Mock<INotificationService>();
+        var vendorId = Guid.NewGuid();
+        var existingFlagId = Guid.NewGuid();
+
+        userRepo.Setup(r => r.GetByUniqueIdAsync("idpuser-1"))
+            .ReturnsAsync(new User { UniqueId = "idpuser-1", GivenName = "Alex", Surname = "Resident", Roles = new List<User.Role> { User.Role.Resident } });
+        vendorRepo.Setup(r => r.GetByIdAsync(vendorId)).ReturnsAsync(new Vendor { Id = vendorId, Name = "Acme" });
+        flagRepo.Setup(r => r.GetPendingByAuthorAsync(vendorId, "idpuser-1"))
+            .ReturnsAsync(new VendorFlag { Id = existingFlagId, VendorId = vendorId, FlagNote = "spam", Status = "Pending" });
+
+        var controller = BuildController(userRepo.Object, vendorRepo.Object, reviewRepo.Object, auditRepo.Object, flagRepo.Object, notifications.Object);
+        var result = await controller.CreateFlag(vendorId, new VendorFlagRequest { FlagNote = "spam again" });
+
+        Assert.IsType<ConflictObjectResult>(result);
+        // No new flag is written, but the notification is re-raised on the existing flag's id.
+        flagRepo.Verify(r => r.UpsertAsync(It.IsAny<VendorFlag>()), Times.Never);
+        notifications.Verify(s => s.RaiseAsync(
+            NotificationType.VendorFlag,
+            NotificationAudience.Administrators,
+            NotificationTargetType.VendorFlag,
+            It.Is<string>(t => t == existingFlagId.ToString("D")),
+            "Vendor flagged",
+            It.Is<string>(summary => summary.Contains("Acme")),
+            It.Is<string>(deepLink => deepLink == $"/residents/vendors/{vendorId:D}"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -494,15 +531,12 @@ public sealed class VendorsControllerTests
             new NoOpNotificationRealtimeNotifier(),
             NullLogger<NotificationService>.Instance
         );
-        var hubContext = CreateVendorFlagHubMock();
-
         var controller = new VendorsController(
             vendorRepository,
             reviewRepository,
             flagRepository,
             userRepository,
             auditLogRepository,
-            hubContext.Object,
             notificationService
         )
         {
@@ -525,20 +559,5 @@ public sealed class VendorsControllerTests
         };
 
         return controller;
-    }
-
-    private static Mock<IHubContext<VendorFlagNotificationsHub>> CreateVendorFlagHubMock()
-    {
-        var clientProxy = new Mock<IClientProxy>(MockBehavior.Loose);
-        clientProxy
-            .Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-
-        var clients = new Mock<IHubClients>(MockBehavior.Loose);
-        clients.Setup(c => c.Group(VendorFlagNotificationsHub.AdminGroupName)).Returns(clientProxy.Object);
-
-        var hubContext = new Mock<IHubContext<VendorFlagNotificationsHub>>(MockBehavior.Loose);
-        hubContext.Setup(h => h.Clients).Returns(clients.Object);
-        return hubContext;
     }
 }

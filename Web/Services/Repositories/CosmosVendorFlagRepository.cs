@@ -15,7 +15,6 @@ namespace Web.Services.Repositories
         Task<List<VendorFlag>> GetByVendorIdAsync(Guid vendorId);
         Task<VendorFlag> GetByIdAsync(Guid vendorId, Guid flagId);
         Task<VendorFlag> GetPendingByAuthorAsync(Guid vendorId, string authorUniqueId);
-        Task<List<VendorFlag>> GetAllPendingAsync();
         Task<VendorFlag> UpsertAsync(VendorFlag flag);
         Task DeleteAsync(Guid vendorId, Guid flagId);
 
@@ -87,20 +86,6 @@ namespace Web.Services.Repositories
             }
 
             return null;
-        }
-
-        public async Task<List<VendorFlag>> GetAllPendingAsync()
-        {
-            var query = new CosmosQueryDefinition("SELECT * FROM c WHERE c.Status = 'Pending'");
-            var iterator = _vendorFlagsContainer.GetItemQueryIterator<JObject>(query);
-            var results = new List<VendorFlag>();
-            while (iterator.HasMoreResults)
-            {
-                var response = await iterator.ReadNextAsync();
-                results.AddRange(response.Select(ToVendorFlag));
-            }
-
-            return results;
         }
 
         public async Task<VendorFlag> UpsertAsync(VendorFlag flag)

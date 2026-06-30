@@ -425,10 +425,10 @@ namespace Web
                 }
             }
 
-            // Notification service (shared across environments). The SignalR-backed realtime notifier
-            // is wired in a later phase; until then a no-op notifier is used and clients pick up
-            // changes on their next fetch.
-            services.AddSingleton<INotificationRealtimeNotifier, NoOpNotificationRealtimeNotifier>();
+            // Notification service (shared across environments). The realtime notifier broadcasts a
+            // detail-free "changed" signal over SignalR (NotificationsHub) so connected clients re-fetch
+            // the authorized list; a failed signal never fails the persisted change (see NotificationService).
+            services.AddSingleton<INotificationRealtimeNotifier, SignalRNotificationRealtimeNotifier>();
             services.AddScoped<INotificationService, NotificationService>();
 
             // Notification escalation: a background sweep turns aged, unresolved in-app notifications into
@@ -649,9 +649,8 @@ namespace Web
             {
                 endpoints.MapEventDeepLinkOpenGraph(env);
                 endpoints.MapBlogDeepLinkOpenGraph(env);
-                endpoints.MapHub<VendorFlagNotificationsHub>("/hubs/vendor-flags");
-                endpoints.MapHub<HeldMessageNotificationsHub>("/hubs/held-messages");
                 endpoints.MapHub<EmailJobHub>("/hubs/email-jobs");
+                endpoints.MapHub<NotificationsHub>("/hubs/notifications");
                 endpoints.MapControllerRoute(name: "default", pattern: "{controller}/{action=Index}/{id?}");
             });
 

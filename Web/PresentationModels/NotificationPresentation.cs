@@ -25,6 +25,9 @@ namespace Web.PresentationModels
 
         public string Summary { get; set; } = string.Empty;
 
+        /// <summary>Relative SPA route the client navigates to when opening the notification (may be null for legacy notifications).</summary>
+        public string? DeepLink { get; set; }
+
         public DateTime CreatedUtc { get; set; }
 
         public static NotificationPresentation FromStorageModel(Notification n)
@@ -38,6 +41,7 @@ namespace Web.PresentationModels
                 TargetId = n.TargetId,
                 Title = n.Title,
                 Summary = n.Summary,
+                DeepLink = n.DeepLink,
                 CreatedUtc = n.CreatedUtc,
             };
         }

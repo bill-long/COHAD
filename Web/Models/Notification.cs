@@ -86,6 +86,15 @@ namespace Web.Models
 
         public string Summary { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Relative SPA route the client navigates to when the notification is opened — the moderation
+        /// UI that resolves the underlying item (e.g. <c>/manage/users</c>, <c>/residents/vendors/{id}</c>,
+        /// <c>/manage/committees</c>). Computed at the raise site because only it knows the target's
+        /// parent context (a vendor flag's vendor id, say). Null for older notifications raised before
+        /// this field existed; the client falls back to a type-based route in that case.
+        /// </summary>
+        public string? DeepLink { get; set; }
+
         public DateTime CreatedUtc { get; set; }
 
         /// <summary>Set when a human acts on the underlying item. Null while the item is still pending.</summary>
