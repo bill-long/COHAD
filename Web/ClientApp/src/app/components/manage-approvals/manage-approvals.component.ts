@@ -274,7 +274,19 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
   private refresh(): void {
     this.committeeService.getPendingHeldMessages().subscribe({
       next: messages => {
-        this.pending = messages ?? [];
+        const next = messages ?? [];
+        // Drop cached body state and any highlight for rows that are gone, so they don't accumulate
+        // for the session or point at a row that no longer exists.
+        const liveIds = new Set(next.map(m => m.id));
+        for (const id of Array.from(this.bodies.keys())) {
+          if (!liveIds.has(id)) {
+            this.bodies.delete(id);
+          }
+        }
+        if (this.highlightedId && !liveIds.has(this.highlightedId)) {
+          this.highlightedId = null;
+        }
+        this.pending = next;
       },
       error: () => {
         // Keep the current list; the next action or a manual reload reconciles.

@@ -149,6 +149,25 @@ describe('ManageApprovalsComponent', () => {
     expect(component.getBody('target')?.expanded).toBeTrue();
   }));
 
+  it('prunes cached body state and the highlight for rows that disappear on refresh', fakeAsync(() => {
+    const component = setup([makePending({ id: 'target', committeeId: 'c-9' }), makePending({ id: 'b' })], { message: 'target' });
+    serviceSpy.getHeldMessageBody.and.returnValue(
+      of({ available: true, isHtml: false, body: 'hi', senderEmail: null, senderName: null, subject: null, receivedUtc: '' }),
+    );
+    component.ngOnInit();
+    tick();
+    expect(component.highlightedId).toBe('target');
+    expect(component.getBody('target')).toBeDefined();
+
+    // Another moderator handles 'target'; acting on 'b' triggers a refresh that no longer returns it.
+    serviceSpy.rejectHeldMessage.and.returnValue(of({ status: 'Rejected' }));
+    serviceSpy.getPendingHeldMessages.and.returnValue(of([]));
+    component.reject(makePending({ id: 'b', committeeId: 'c-1' }));
+
+    expect(component.getBody('target')).toBeUndefined();
+    expect(component.highlightedId).toBeNull();
+  }));
+
   it('notes when a deep-linked message has already been handled', () => {
     const component = setup([makePending({ id: 'still-here' })], { message: 'gone' });
     component.ngOnInit();

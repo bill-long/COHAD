@@ -260,10 +260,10 @@
         </div>
 
         <!-- Held mail is moderated in the Approvals inbox; surface a count + link here. -->
-        <div class="held-pending-hint" *ngIf="getHeldCount(committee.id) > 0">
-          <span class="held-badge">{{ getHeldCount(committee.id) }}</span>
+        <div class="held-pending-hint" *ngIf="getHeldCount(committee.id) as heldCount">
+          <span class="held-badge">{{ heldCount }}</span>
           <span>
-            email{{ getHeldCount(committee.id) === 1 ? '' : 's' }} awaiting approval —
+            email{{ heldCount === 1 ? '' : 's' }} awaiting approval —
             <a routerLink="/manage/approvals">Review in Approvals</a>
           </span>
         </div>
