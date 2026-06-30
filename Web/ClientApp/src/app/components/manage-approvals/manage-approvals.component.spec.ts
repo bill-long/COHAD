@@ -103,14 +103,14 @@ describe('ManageApprovalsComponent', () => {
     const component = setup([makePending({ id: 'a' }), makePending({ id: 'b' })]);
     component.ngOnInit();
     expect(serviceSpy.getPendingHeldMessages).toHaveBeenCalledTimes(1);
-    // The server now reports 'b' was handled elsewhere; only 'a' remains.
-    serviceSpy.getPendingHeldMessages.and.returnValue(of([makePending({ id: 'a' })]));
     serviceSpy.approveHeldMessage.and.returnValue(of({ jobId: 'j', status: 'Approved' }));
+    // We approve 'a'; meanwhile 'b' was handled by another moderator, so the server now returns neither.
+    serviceSpy.getPendingHeldMessages.and.returnValue(of([]));
 
     component.approve(makePending({ id: 'a', committeeId: 'c-1' }));
 
     expect(serviceSpy.getPendingHeldMessages).toHaveBeenCalledTimes(2);
-    expect(component.pending.map(m => m.id)).toEqual(['a']);
+    expect(component.pending).toEqual([]);
   });
 
   it('labels a missing sender as "unknown sender" in the confirmation', () => {
