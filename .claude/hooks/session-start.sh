@@ -2,12 +2,19 @@
 # Installs the .NET SDK (pinned to global.json) so `dotnet build`/`dotnet test`
 # work in Claude Code on the web sessions. Only runs in the remote environment;
 # local machines are assumed to already have the SDK.
+#
+# Runs in async mode: the session starts immediately and the SDK installs in the
+# background while early investigation happens. Trade-off — a build/test issued
+# before the install finishes may not yet see `dotnet`.
 set -euo pipefail
 
-# Local (non-web) sessions: do nothing.
+# Local (non-web) sessions: do nothing (emit no async directive).
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
+
+# Detach and let the session start; the rest runs in the background.
+echo '{"async": true, "asyncTimeout": 600000}'
 
 REPO_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 DOTNET_DIR="$HOME/.dotnet"
