@@ -68,6 +68,18 @@ export interface HeldMessage {
   reviewedUtc: string | null;
 }
 
+/** A held committee email awaiting moderation, enriched with its committee's name for the Approvals inbox. */
+export interface PendingHeldMessage {
+  id: string;
+  committeeId: string;
+  committeeName: string;
+  senderEmail: string | null;
+  senderName: string | null;
+  subject: string | null;
+  receivedUtc: string;
+  heldUtc: string;
+}
+
 export interface HeldMessageBody {
   available: boolean;
   reason?: string;
@@ -133,6 +145,11 @@ export class CommitteeService {
 
   getHeldMessages(key: string): Observable<HeldMessage[]> {
     return this.httpClient.get<HeldMessage[]>(`api/committee/admin/${encodeURIComponent(key)}/forwarding/held`);
+  }
+
+  /** Every held email awaiting moderation across all committees the caller can manage (the Approvals inbox). */
+  getPendingHeldMessages(): Observable<PendingHeldMessage[]> {
+    return this.httpClient.get<PendingHeldMessage[]>('api/committee/admin/held-messages/pending');
   }
 
   getHeldMessageBody(key: string, messageId: string): Observable<HeldMessageBody> {

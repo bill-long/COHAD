@@ -99,7 +99,18 @@ public sealed class CommitteeMailPollerTests
             It.IsAny<string>(),
             "Held committee email",
             It.Is<string>(summary => summary.Contains("Board") && summary.Contains("Stranger") && summary.Contains("Hello")),
-            "/manage/committees",
+            It.Is<string>(deepLink => IsApprovalsDeepLinkWithGuid(deepLink)),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// True when the deep link targets the Approvals inbox with a parseable GUID message id — a helper
+    /// (rather than an inline lambda) because Moq's expression-tree matcher can't contain a discard.
+    /// </summary>
+    private static bool IsApprovalsDeepLinkWithGuid(string deepLink)
+    {
+        const string prefix = "/manage/approvals?message=";
+        return deepLink.StartsWith(prefix, StringComparison.Ordinal)
+            && Guid.TryParse(deepLink.Substring(prefix.Length), out _);
     }
 }

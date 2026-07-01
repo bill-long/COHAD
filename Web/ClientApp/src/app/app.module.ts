@@ -92,6 +92,7 @@ import { EmailJobDetailComponent } from './components/email-job-detail/email-job
 import { GlobalErrorHandler } from './services/global-error-handler';
 import { CommitteesComponent } from './components/committees/committees.component';
 import { ManageCommitteesComponent } from './components/manage-committees/manage-committees.component';
+import { ManageApprovalsComponent } from './components/manage-approvals/manage-approvals.component';
 import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tiptap-email-editor.component';
 
 @NgModule({
@@ -146,6 +147,7 @@ import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tip
     EmailJobDetailComponent,
     CommitteesComponent,
     ManageCommitteesComponent,
+    ManageApprovalsComponent,
   ],
   bootstrap: [AppComponent],
   imports: [

@@ -640,6 +640,45 @@ namespace Web.Controllers
 
         // ── Moderation queue (held messages) ────────────────────────────
 
+        /// <summary>
+        /// Every held committee email awaiting moderation across all committees the caller can manage,
+        /// newest first. Powers the Approvals inbox — a flat cross-committee queue, so a moderator no
+        /// longer has to open each committee to discover held mail. Sources directly from the
+        /// held-message store (not the notification store), so a message whose in-app notification was
+        /// never raised still surfaces here.
+        /// </summary>
+        [HttpGet("admin/held-messages/pending")]
+        [Authorize(Policy = "CommitteeEditor")]
+        public async Task<IActionResult> GetPendingHeldMessages()
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var committees = await _committeeRepository.GetAllAsync();
+            var manageable = committees.Where(c => CanManageCommittee(apiUser, c)).ToList();
+
+            // Independent per-committee reads — run them together (the Cosmos Container is thread-safe).
+            // Pull up to the repository's max page (200) per committee rather than the default 50, so the
+            // authoritative inbox isn't silently truncated. Held mail is a small spam-review queue; a
+            // realistic committee never approaches 200 unmoderated messages.
+            var perCommittee = await Task.WhenAll(
+                manageable.Select(c => _heldMessageRepository.GetByCommitteeIdAsync(c.Id, limit: 200, status: HeldMessageStatus.Held))
+            );
+
+            var nameById = manageable.ToDictionary(c => c.Id, c => c.DisplayName ?? string.Empty, StringComparer.Ordinal);
+            var payload = perCommittee
+                .SelectMany(list => list)
+                .OrderByDescending(m => m.HeldUtc)
+                .Select(m => PendingHeldMessagePresentation.FromStorageModel(
+                    m,
+                    nameById.TryGetValue(m.CommitteeId ?? string.Empty, out var name) ? name : string.Empty
+                ))
+                .ToList();
+
+            return Ok(payload);
+        }
+
         [HttpGet("admin/{key}/forwarding/held")]
         [Authorize(Policy = "CommitteeEditor")]
         public async Task<IActionResult> GetHeldMessages(string key)

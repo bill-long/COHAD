@@ -24,6 +24,9 @@
         <a mat-tab-link *ngIf="manageCommitteesVisible$ | async"
            routerLink="committees" routerLinkActive #rla9="routerLinkActive"
            [active]="rla9.isActive">Committees</a>
+        <a mat-tab-link *ngIf="manageCommitteesVisible$ | async"
+           routerLink="approvals" routerLinkActive #rla10="routerLinkActive"
+           [active]="rla10.isActive">Approvals</a>
         <a mat-tab-link *ngIf="manageAuditVisible$ | async"
            routerLink="audit-log" routerLinkActive #rla8="routerLinkActive"
            [active]="rla8.isActive">Audit Log</a>

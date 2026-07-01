@@ -154,10 +154,22 @@ export class NavbarComponent implements OnInit {
    * for legacy notifications raised before deepLink existed.
    */
   openNotification(notification: AppNotification): void {
-    const route = notification.deepLink || NavbarComponent.fallbackRoute(notification.type);
+    const route = NavbarComponent.routeFor(notification);
     if (route) {
       this.router.navigateByUrl(route);
     }
+  }
+
+  private static routeFor(notification: AppNotification): string | null {
+    // Held-message notifications now resolve in the Approvals inbox. A notification raised before that
+    // move has a stale stored deepLink ('/manage/committees', which no longer hosts moderation), so
+    // derive the route from the target (held-message) id rather than trusting the persisted deepLink.
+    if (notification.type === 'HeldMessage') {
+      return notification.targetId
+        ? `/manage/approvals?message=${encodeURIComponent(notification.targetId)}`
+        : '/manage/approvals';
+    }
+    return notification.deepLink || NavbarComponent.fallbackRoute(notification.type);
   }
 
   /** Acknowledges a notification that has no other resolving action (registrations). */
@@ -174,7 +186,7 @@ export class NavbarComponent implements OnInit {
       case 'Registration':
         return '/manage/users';
       case 'HeldMessage':
-        return '/manage/committees';
+        return '/manage/approvals';
       case 'VendorFlag':
         return '/residents/vendors';
       default:

@@ -37,6 +37,7 @@ import { EmailPreferencesComponent } from './components/email-preferences/email-
 import { EmailJobDetailComponent } from './components/email-job-detail/email-job-detail.component';
 import { CommitteesComponent } from './components/committees/committees.component';
 import { ManageCommitteesComponent } from './components/manage-committees/manage-committees.component';
+import { ManageApprovalsComponent } from './components/manage-approvals/manage-approvals.component';
 
 @Injectable({ providedIn: 'root' })
 export class CohadTitleStrategy extends TitleStrategy {
@@ -198,6 +199,13 @@ const routes: Routes = [
         canActivate: [RoleGuard],
         data: { allowedRoles: rolePermissions.manageCommitteesRoles },
         title: 'Manage Committees',
+      },
+      {
+        path: 'approvals',
+        component: ManageApprovalsComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageCommitteesRoles },
+        title: 'Approvals',
       },
       {
         path: 'audit-log',

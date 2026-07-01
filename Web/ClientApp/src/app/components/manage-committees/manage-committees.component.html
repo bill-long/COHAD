@@ -259,87 +259,13 @@
           </div>
         </div>
 
-        <!-- Held messages (moderation queue) -->
-        <div class="held-messages" *ngIf="getHeldCount(committee.id) > 0">
-          <h3 class="forwarding-heading">
-            Held Messages
-            <span class="held-badge">{{ getHeldCount(committee.id) }}</span>
-          </h3>
-
-          <div class="held-message-list">
-            <div class="held-message-row" *ngFor="let msg of getHeld(committee.id)">
-              <div class="held-message-summary">
-                <div class="held-message-info">
-                  <span class="held-sender">{{ msg.senderName || msg.senderEmail || '(unknown sender)' }}</span>
-                  <span class="held-subject" *ngIf="msg.subject">{{ msg.subject }}</span>
-                  <span class="held-date">{{ msg.receivedUtc | date: 'medium' }}</span>
-                </div>
-                <div class="held-message-actions">
-                  <button
-                    type="button"
-                    mat-stroked-button
-                    (click)="toggleHeldBody(committee, msg)"
-                    [attr.aria-expanded]="getHeldBody(msg.id)?.expanded === true"
-                  >
-                    <mat-icon>{{ getHeldBody(msg.id)?.expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
-                    View message
-                  </button>
-                  <button
-                    type="button"
-                    mat-stroked-button
-                    color="primary"
-                    [disabled]="actioningHeldId === msg.id"
-                    (click)="approveHeld(committee, msg)"
-                  >
-                    <mat-icon>check</mat-icon> Approve
-                  </button>
-                  <button
-                    type="button"
-                    mat-stroked-button
-                    color="warn"
-                    [disabled]="actioningHeldId === msg.id"
-                    (click)="rejectHeld(committee, msg)"
-                  >
-                    <mat-icon>close</mat-icon> Reject
-                  </button>
-                </div>
-              </div>
-
-              <div class="held-message-body" *ngIf="getHeldBody(msg.id) as bodyState">
-                <ng-container *ngIf="bodyState.expanded">
-                  <div class="held-body-loading" *ngIf="bodyState.loading">Loading message…</div>
-                  <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="bodyState.error" role="alert">
-                    {{ bodyState.error }}
-                  </div>
-
-                  <ng-container *ngIf="bodyState.loaded && bodyState.data as body">
-                    <div class="held-body-unavailable" *ngIf="!body.available">
-                      {{ body.reason || 'The message body is unavailable.' }}
-                    </div>
-
-                    <ng-container *ngIf="body.available">
-                      <ng-container *ngIf="body.isHtml; else textBody">
-                        <div class="held-body-images-bar" *ngIf="bodyState.hasRemoteContent && bodyState.imagesBlocked">
-                          <span><mat-icon class="held-body-images-icon">hide_image</mat-icon> Images in this message are blocked.</span>
-                          <button type="button" mat-stroked-button (click)="displayImages(msg.id)">Display images</button>
-                        </div>
-                        <iframe
-                          class="held-body-frame"
-                          sandbox=""
-                          title="Held message body"
-                          referrerpolicy="no-referrer"
-                          [srcdoc]="bodyState.safeBody"
-                        ></iframe>
-                      </ng-container>
-                      <ng-template #textBody>
-                        <pre class="held-body-text">{{ body.body }}</pre>
-                      </ng-template>
-                    </ng-container>
-                  </ng-container>
-                </ng-container>
-              </div>
-            </div>
-          </div>
+        <!-- Held mail is moderated in the Approvals inbox; surface a count + link here. -->
+        <div class="held-pending-hint" *ngIf="getHeldCount(committee.id) as heldCount">
+          <span class="held-badge">{{ heldCount }}</span>
+          <span>
+            email{{ heldCount === 1 ? '' : 's' }} awaiting approval —
+            <a routerLink="/manage/approvals">Review in Approvals</a>
+          </span>
         </div>
       </mat-expansion-panel>
     </mat-accordion>

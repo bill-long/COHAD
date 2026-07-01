@@ -557,7 +557,7 @@ namespace Web.Services
                     held.Id.ToString("D"),
                     "Held committee email",
                     $"{committee.DisplayName}: from {sender} — {subject}",
-                    "/manage/committees",
+                    $"/manage/approvals?message={held.Id:D}",
                     ct
                 );
             }
