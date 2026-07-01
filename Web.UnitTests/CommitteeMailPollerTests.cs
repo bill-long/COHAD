@@ -137,7 +137,7 @@ public sealed class CommitteeMailPollerTests
         var heldRepo = new Mock<IHeldMessageRepository>();
         heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
             .ReturnsAsync(new List<HeldMessage> { held });
-        heldRepo.Setup(r => r.GetByIdAsync(held.Id)).ReturnsAsync(held);
+        // Success path acts on the query row directly (no re-read); GetByIdAsync is only used on conflict.
         heldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
 
         var notifications = new Mock<INotificationService>();
@@ -181,6 +181,15 @@ public sealed class CommitteeMailPollerTests
             It.IsAny<CancellationToken>()), Times.Once);
         // Stamped notified so a later sweep won't re-notify.
         heldRepo.Verify(r => r.UpdateAsync(It.Is<HeldMessage>(m => m.Id == held.Id && m.NotifiedUtc != null)), Times.Once);
+        // The cutoff is derived from the configured window (UtcNow - 60 min), not "now" — a sign error or
+        // ignoring the hold would query with a ~now cutoff and defeat the quarantine.
+        heldRepo.Verify(
+            r => r.GetAwaitingNotificationAsync(
+                It.Is<DateTime>(cutoff =>
+                    cutoff <= DateTime.UtcNow - TimeSpan.FromMinutes(59)
+                    && cutoff >= DateTime.UtcNow - TimeSpan.FromMinutes(61)),
+                It.IsAny<int>()),
+            Times.Once);
     }
 
     [Fact]
@@ -310,11 +319,137 @@ public sealed class CommitteeMailPollerTests
 
         await poller.PollAllCommitteesAsync(CancellationToken.None);
 
-        // The notification raised before the stamp is compensated (resolved) because the message was
-        // actioned concurrently — so it never escalates as an alert for an already-handled message.
-        notifications.Verify(s => s.ResolveAsync(
-            NotificationTargetType.HeldMessage, candidate.Id.ToString("D"), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+        // The notification is raised first...
+        notifications.Verify(s => s.RaiseAsync(
+            NotificationType.HeldMessage, NotificationAudience.Committee("board"), NotificationTargetType.HeldMessage,
+            candidate.Id.ToString("D"), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Once);
+        // ...then compensated (resolved) because the message was actioned concurrently — so it never
+        // escalates as an alert for an already-handled message. Reason is the contract value.
+        notifications.Verify(s => s.ResolveAsync(
+            NotificationTargetType.HeldMessage, candidate.Id.ToString("D"), "system:antispam-hold", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_resolves_phantom_notification_when_message_deleted_during_stamp()
+    {
+        var committee = new Committee { Id = "board", DisplayName = "Board", CommitteeEmail = "board@cohad.org", ForwardingEnabled = false };
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
+
+        var candidate = new HeldMessage
+        {
+            Id = Guid.NewGuid(),
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            Subject = "Hello",
+            Status = HeldMessageStatus.Held,
+            ETag = "1",
+        };
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage> { candidate });
+        heldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>()))
+            .ThrowsAsync(new InvalidOperationException("HeldMessage was modified by another process."));
+        // The re-read finds nothing — the message was deleted concurrently.
+        heldRepo.Setup(r => r.GetByIdAsync(candidate.Id)).ReturnsAsync((HeldMessage?)null);
+
+        var notifications = new Mock<INotificationService>();
+        notifications
+            .Setup(s => s.RaiseAsync(
+                It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Notification());
+        notifications
+            .Setup(s => s.ResolveAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Notification?)null);
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => Mock.Of<IEmailJobRepository>());
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => Mock.Of<IResidentRepository>());
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => notifications.Object);
+        var provider = services.BuildServiceProvider();
+
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            Mock.Of<IGraphMailReader>(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        // A concurrently-deleted message (re-read == null) is also treated as no-longer-Held, so the
+        // raised notification is resolved rather than left to escalate.
+        notifications.Verify(s => s.ResolveAsync(
+            NotificationTargetType.HeldMessage, candidate.Id.ToString("D"), "system:antispam-hold", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_continues_sweep_when_one_message_raise_throws()
+    {
+        var committee = new Committee { Id = "board", DisplayName = "Board", CommitteeEmail = "board@cohad.org", ForwardingEnabled = false };
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
+
+        var failing = new HeldMessage { Id = Guid.NewGuid(), CommitteeId = "board", CommitteeEmail = "board@cohad.org", Subject = "Boom", Status = HeldMessageStatus.Held, ETag = "1" };
+        var ok = new HeldMessage { Id = Guid.NewGuid(), CommitteeId = "board", CommitteeEmail = "board@cohad.org", Subject = "Fine", Status = HeldMessageStatus.Held, ETag = "1" };
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage> { failing, ok });
+        heldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
+
+        var notifications = new Mock<INotificationService>();
+        // The first message's raise throws; the sweep must swallow it and still process the second.
+        notifications
+            .Setup(s => s.RaiseAsync(
+                It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                failing.Id.ToString("D"), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+        notifications
+            .Setup(s => s.RaiseAsync(
+                It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                ok.Id.ToString("D"), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Notification());
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => Mock.Of<IEmailJobRepository>());
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => Mock.Of<IResidentRepository>());
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => notifications.Object);
+        var provider = services.BuildServiceProvider();
+
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            Mock.Of<IGraphMailReader>(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        // Does not throw despite the first message's raise failing.
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        // The second message is still notified and stamped.
+        notifications.Verify(s => s.RaiseAsync(
+            It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+            ok.Id.ToString("D"), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        heldRepo.Verify(r => r.UpdateAsync(It.Is<HeldMessage>(m => m.Id == ok.Id && m.NotifiedUtc != null)), Times.Once);
     }
 
     [Fact]
