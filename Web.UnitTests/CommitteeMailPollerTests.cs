@@ -184,6 +184,69 @@ public sealed class CommitteeMailPollerTests
     }
 
     [Fact]
+    public async Task PollAllCommittees_notifies_administrators_when_held_message_has_no_committee_id()
+    {
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee>());
+
+        // A legacy/corrupt held record with no CommitteeId must not throw on the committee lookup and
+        // must not produce an unresolvable "committee:" audience — it falls back to Administrators.
+        var held = new HeldMessage
+        {
+            Id = Guid.NewGuid(),
+            CommitteeId = null,
+            CommitteeEmail = "board@cohad.org",
+            SenderName = "Stranger",
+            Subject = "Hello",
+            HeldUtc = DateTime.UtcNow.AddHours(-2),
+            Status = HeldMessageStatus.Held,
+            ETag = "1",
+        };
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage> { held });
+        heldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
+
+        var notifications = new Mock<INotificationService>();
+        notifications
+            .Setup(s => s.RaiseAsync(
+                It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Notification());
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => Mock.Of<IEmailJobRepository>());
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => Mock.Of<IResidentRepository>());
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => notifications.Object);
+        var provider = services.BuildServiceProvider();
+
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            Mock.Of<IGraphMailReader>(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        notifications.Verify(s => s.RaiseAsync(
+            NotificationType.HeldMessage,
+            NotificationAudience.Administrators,
+            NotificationTargetType.HeldMessage,
+            held.Id.ToString("D"),
+            "Held committee email",
+            It.Is<string>(summary => summary.Contains("board@cohad.org") && summary.Contains("Stranger")),
+            It.Is<string>(deepLink => IsApprovalsDeepLinkWithGuid(deepLink)),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task PollAllCommittees_resolves_phantom_notification_when_message_actioned_during_stamp()
     {
         var committee = new Committee

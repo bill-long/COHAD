@@ -587,16 +587,31 @@ namespace Web.Services
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    var displayName = byCommitteeId.TryGetValue(held.CommitteeId, out var committee)
-                        ? committee.DisplayName
-                        : held.CommitteeEmail;
+                    // A held message should always carry a CommitteeId, but guard against a legacy/corrupt
+                    // record: an empty id would give an unresolvable "committee:" audience (reaching no one),
+                    // and a null id would throw on the Dictionary lookup. Fall back to Administrators — who
+                    // can manage every committee's held mail — so the message is still surfaced, not dropped.
+                    string audienceKey;
+                    string displayName;
+                    if (string.IsNullOrEmpty(held.CommitteeId))
+                    {
+                        audienceKey = NotificationAudience.Administrators;
+                        displayName = string.IsNullOrWhiteSpace(held.CommitteeEmail) ? "a committee" : held.CommitteeEmail;
+                    }
+                    else
+                    {
+                        audienceKey = NotificationAudience.Committee(held.CommitteeId);
+                        displayName = byCommitteeId.TryGetValue(held.CommitteeId, out var committee)
+                            ? committee.DisplayName
+                            : held.CommitteeEmail;
+                    }
                     var sender = !string.IsNullOrWhiteSpace(held.SenderName) ? held.SenderName : held.SenderEmail;
 
                     // Idempotent on target — a re-raise (e.g. after a failed stamp) maps to the same
                     // notification rather than creating a duplicate.
                     await notificationService.RaiseAsync(
                         NotificationType.HeldMessage,
-                        NotificationAudience.Committee(held.CommitteeId),
+                        audienceKey,
                         NotificationTargetType.HeldMessage,
                         held.Id.ToString("D"),
                         "Held committee email",

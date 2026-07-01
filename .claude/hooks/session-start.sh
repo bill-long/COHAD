@@ -31,7 +31,9 @@ export DOTNET_NOLOGO=1
 # Idempotent: skip the download if the pinned SDK is already present.
 if ! "$DOTNET_DIR/dotnet" --list-sdks 2>/dev/null | grep -q "^${SDK_VERSION} "; then
   echo "Installing .NET SDK ${SDK_VERSION} into ${DOTNET_DIR}..."
-  curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+  # -f fails the download on any HTTP error (so a 404/HTML page is never saved and executed);
+  # --retry rides out transient network blips. set -e then aborts before the install script runs.
+  curl -fsSL --retry 3 https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
   chmod +x /tmp/dotnet-install.sh
   /tmp/dotnet-install.sh --version "$SDK_VERSION" --install-dir "$DOTNET_DIR"
 else
