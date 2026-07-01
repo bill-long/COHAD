@@ -53,4 +53,44 @@ public sealed class MockHeldMessageRepositoryTests
 
         Assert.Equal(2, all.Count);
     }
+
+    [Fact]
+    public async Task GetAwaitingNotificationAsync_returns_only_unnotified_held_messages_past_cutoff()
+    {
+        var repo = new MockHeldMessageRepository();
+        var baseTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var cutoff = baseTime.AddMinutes(15);
+
+        // Eligible: held, un-notified, held before the cutoff.
+        var eligible = Msg("board", HeldMessageStatus.Held, baseTime.AddMinutes(10));
+        await repo.AddAsync(eligible);
+        // Too recent: held after the cutoff (still inside the antispam window).
+        await repo.AddAsync(Msg("board", HeldMessageStatus.Held, baseTime.AddMinutes(20)));
+        // Already notified: excluded even though it is old enough.
+        var notified = Msg("board", HeldMessageStatus.Held, baseTime.AddMinutes(5));
+        notified.NotifiedUtc = baseTime.AddMinutes(8);
+        await repo.AddAsync(notified);
+        // Resolved: not Held, so excluded.
+        await repo.AddAsync(Msg("board", HeldMessageStatus.Approved, baseTime.AddMinutes(1)));
+
+        var awaiting = await repo.GetAwaitingNotificationAsync(cutoff);
+
+        Assert.Single(awaiting);
+        Assert.Equal(eligible.Id, awaiting[0].Id);
+    }
+
+    [Fact]
+    public async Task GetAwaitingNotificationAsync_orders_oldest_held_first()
+    {
+        var repo = new MockHeldMessageRepository();
+        var baseTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var older = Msg("board", HeldMessageStatus.Held, baseTime.AddMinutes(1));
+        var newer = Msg("board", HeldMessageStatus.Held, baseTime.AddMinutes(5));
+        await repo.AddAsync(newer);
+        await repo.AddAsync(older);
+
+        var awaiting = await repo.GetAwaitingNotificationAsync(baseTime.AddMinutes(10));
+
+        Assert.Equal(new[] { older.Id, newer.Id }, awaiting.Select(m => m.Id).ToArray());
+    }
 }

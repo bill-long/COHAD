@@ -17,7 +17,7 @@ namespace Web.UnitTests;
 public sealed class CommitteeMailPollerTests
 {
     [Fact]
-    public async Task PollAllCommittees_holding_unknown_sender_raises_committee_notification()
+    public async Task PollAllCommittees_holding_unknown_sender_holds_without_notifying()
     {
         var committee = new Committee
         {
@@ -43,6 +43,9 @@ public sealed class CommitteeMailPollerTests
         var heldRepo = new Mock<IHeldMessageRepository>();
         heldRepo.Setup(r => r.GetByInternetMessageIdAsync("board", It.IsAny<string>())).ReturnsAsync((HeldMessage?)null);
         heldRepo.Setup(r => r.AddAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
+        // Nothing is past its antispam window this cycle, so the quarantine sweep finds nothing.
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage>());
 
         var residentRepo = new Mock<IResidentRepository>();
         residentRepo.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>())).ReturnsAsync(new List<Resident>());
@@ -91,16 +94,145 @@ public sealed class CommitteeMailPollerTests
 
         await poller.PollAllCommitteesAsync(CancellationToken.None);
 
-        heldRepo.Verify(r => r.AddAsync(It.IsAny<HeldMessage>()), Times.Once);
+        // The message is held (and kept in NotifiedUtc-null quarantine) but no one is notified yet:
+        // notification is deferred to the antispam sweep once the hold window elapses.
+        heldRepo.Verify(r => r.AddAsync(It.Is<HeldMessage>(m => m.NotifiedUtc == null)), Times.Once);
+        notifications.Verify(s => s.RaiseAsync(
+            It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_notifies_held_message_once_past_antispam_hold()
+    {
+        var committee = new Committee
+        {
+            Id = "board",
+            DisplayName = "Board",
+            CommitteeEmail = "board@cohad.org",
+            // Forwarding disabled: only the antispam quarantine sweep should run this cycle.
+            ForwardingEnabled = false,
+        };
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
+
+        var held = new HeldMessage
+        {
+            Id = Guid.NewGuid(),
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<msg-1@example.com>",
+            SenderEmail = "stranger@example.com",
+            SenderName = "Stranger",
+            Subject = "Hello",
+            ReceivedUtc = DateTime.UtcNow.AddHours(-2),
+            HeldUtc = DateTime.UtcNow.AddHours(-2),
+            Status = HeldMessageStatus.Held,
+            NotifiedUtc = null,
+            ETag = "1",
+        };
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage> { held });
+        heldRepo.Setup(r => r.GetByIdAsync(held.Id)).ReturnsAsync(held);
+        heldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
+
+        var notifications = new Mock<INotificationService>();
+        notifications
+            .Setup(s => s.RaiseAsync(
+                It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Notification());
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => Mock.Of<IEmailJobRepository>());
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => Mock.Of<IResidentRepository>());
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => notifications.Object);
+        var provider = services.BuildServiceProvider();
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["CommitteeForwarding:AntispamHoldMinutes"] = "60" })
+            .Build();
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            Mock.Of<IGraphMailReader>(),
+            config,
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
         notifications.Verify(s => s.RaiseAsync(
             NotificationType.HeldMessage,
             NotificationAudience.Committee("board"),
             NotificationTargetType.HeldMessage,
-            It.IsAny<string>(),
+            held.Id.ToString("D"),
             "Held committee email",
             It.Is<string>(summary => summary.Contains("Board") && summary.Contains("Stranger") && summary.Contains("Hello")),
             It.Is<string>(deepLink => IsApprovalsDeepLinkWithGuid(deepLink)),
             It.IsAny<CancellationToken>()), Times.Once);
+        // Stamped notified so a later sweep won't re-notify.
+        heldRepo.Verify(r => r.UpdateAsync(It.Is<HeldMessage>(m => m.Id == held.Id && m.NotifiedUtc != null)), Times.Once);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_skips_held_message_already_notified_or_resolved()
+    {
+        var committee = new Committee
+        {
+            Id = "board",
+            DisplayName = "Board",
+            CommitteeEmail = "board@cohad.org",
+            ForwardingEnabled = false,
+        };
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
+
+        // The query returned it, but a re-read shows a moderator approved it between query and stamp.
+        var candidate = new HeldMessage { Id = Guid.NewGuid(), CommitteeId = "board", Status = HeldMessageStatus.Held };
+        var resolved = new HeldMessage { Id = candidate.Id, CommitteeId = "board", Status = HeldMessageStatus.Approved };
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage> { candidate });
+        heldRepo.Setup(r => r.GetByIdAsync(candidate.Id)).ReturnsAsync(resolved);
+
+        var notifications = new Mock<INotificationService>();
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => Mock.Of<IEmailJobRepository>());
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => Mock.Of<IResidentRepository>());
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => notifications.Object);
+        var provider = services.BuildServiceProvider();
+
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            Mock.Of<IGraphMailReader>(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        notifications.Verify(s => s.RaiseAsync(
+            It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        heldRepo.Verify(r => r.UpdateAsync(It.IsAny<HeldMessage>()), Times.Never);
     }
 
     /// <summary>

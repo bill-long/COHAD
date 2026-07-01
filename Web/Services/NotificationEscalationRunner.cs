@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Web.Models;
@@ -37,6 +38,7 @@ namespace Web.Services
         private readonly IDocumentFileStore _fileStore;
         private readonly EmailJobQueue _emailJobQueue;
         private readonly NotificationEscalationOptions _options;
+        private readonly string _appBaseUrl;
         private readonly ILogger<NotificationEscalationRunner> _logger;
 
         private const string EscalationCategory = "notification-escalation";
@@ -53,6 +55,7 @@ namespace Web.Services
             IDocumentFileStore fileStore,
             EmailJobQueue emailJobQueue,
             IOptions<NotificationEscalationOptions> options,
+            IConfiguration config,
             ILogger<NotificationEscalationRunner> logger
         )
         {
@@ -64,6 +67,8 @@ namespace Web.Services
             _fileStore = fileStore;
             _emailJobQueue = emailJobQueue;
             _options = options.Value;
+            // Same source/normalization as EmailJobProcessor so digest deep links match unsubscribe links.
+            _appBaseUrl = (config["AppBaseUrl"] ?? string.Empty).TrimEnd('/');
             _logger = logger;
         }
 
@@ -367,7 +372,14 @@ namespace Web.Services
             {
                 var title = WebUtility.HtmlEncode(n.Title ?? string.Empty);
                 var summary = WebUtility.HtmlEncode(n.Summary ?? string.Empty);
-                sb.Append("<li><strong>").Append(title).Append("</strong>");
+                var link = BuildDeepLink(n.DeepLink);
+                sb.Append("<li>");
+                // Deep link straight to the item's moderation page when we can build an absolute URL;
+                // otherwise fall back to a plain bold title.
+                if (link != null)
+                    sb.Append("<a href=\"").Append(WebUtility.HtmlEncode(link)).Append("\"><strong>").Append(title).Append("</strong></a>");
+                else
+                    sb.Append("<strong>").Append(title).Append("</strong>");
                 if (!string.IsNullOrWhiteSpace(summary))
                     sb.Append(" — ").Append(summary);
                 sb.Append("</li>");
@@ -377,8 +389,24 @@ namespace Web.Services
             if (overflow > 0)
                 sb.Append("<p>…and ").Append(overflow).Append(" more.</p>");
 
-            sb.Append("<p>Sign in to COHAD to review them.</p>");
+            if (!string.IsNullOrEmpty(_appBaseUrl))
+                sb.Append("<p><a href=\"").Append(WebUtility.HtmlEncode(_appBaseUrl)).Append("\">Sign in to COHAD</a> to review them.</p>");
+            else
+                sb.Append("<p>Sign in to COHAD to review them.</p>");
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Turns a notification's root-relative <see cref="Notification.DeepLink"/> (e.g.
+        /// <c>/manage/approvals?message=...</c>) into an absolute URL under <see cref="_appBaseUrl"/>.
+        /// Returns null when no base URL is configured or the notification has no deep link, so the
+        /// digest degrades to a plain title (matching the pre-deep-link behavior).
+        /// </summary>
+        private string? BuildDeepLink(string? relative)
+        {
+            if (string.IsNullOrEmpty(_appBaseUrl) || string.IsNullOrWhiteSpace(relative))
+                return null;
+            return _appBaseUrl + (relative.StartsWith('/') ? relative : "/" + relative);
         }
     }
 }

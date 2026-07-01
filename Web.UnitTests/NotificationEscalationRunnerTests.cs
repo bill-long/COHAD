@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -28,6 +29,9 @@ public sealed class NotificationEscalationRunnerTests
         public readonly EmailJobQueue Queue = new();
         public readonly List<EmailJob> CapturedJobs = new();
         public string? UploadedHtml;
+
+        /// <summary>When set, digest items are rendered as deep links under this base URL.</summary>
+        public string? AppBaseUrl;
 
         public readonly NotificationEscalationOptions Options = new()
         {
@@ -78,9 +82,15 @@ public sealed class NotificationEscalationRunnerTests
                 FileStore.Object,
                 Queue,
                 Microsoft.Extensions.Options.Options.Create(Options),
+                BuildConfig(AppBaseUrl),
                 NullLogger<NotificationEscalationRunner>.Instance
             );
     }
+
+    private static IConfiguration BuildConfig(string? appBaseUrl) =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["AppBaseUrl"] = appBaseUrl })
+            .Build();
 
     private static async Task<Notification> AddNotificationAsync(
         MockNotificationRepository repo,
@@ -308,6 +318,65 @@ public sealed class NotificationEscalationRunnerTests
     }
 
     [Fact]
+    public async Task Digest_deep_links_items_when_base_url_configured()
+    {
+        var h = new Harness { AppBaseUrl = "https://www.cohad.org/" };
+        var committeeAudience = NotificationAudience.Committee("welcome");
+        h.Committees
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(new List<Committee> { new Committee { Id = "welcome", DisplayName = "Welcome" } });
+        h.RecipientsFor(committeeAudience, "mod@example.com");
+        await h.Notifications.AddAsync(new Notification
+        {
+            Id = Notification.DeterministicId(NotificationTargetType.HeldMessage, "abc"),
+            Type = NotificationType.HeldMessage,
+            AudienceKey = committeeAudience,
+            TargetType = NotificationTargetType.HeldMessage,
+            TargetId = "abc",
+            Title = "Held committee email",
+            Summary = "Welcome: from Stranger — Hello",
+            DeepLink = "/manage/approvals?message=abc",
+            CreatedUtc = DateTime.UtcNow.AddHours(-2),
+        });
+
+        await h.Build().RunOnceAsync(CancellationToken.None);
+
+        Assert.Single(h.CapturedJobs);
+        Assert.NotNull(h.UploadedHtml);
+        // The base URL's trailing slash is normalized away, so the item links to an absolute URL.
+        Assert.Contains(
+            "<a href=\"https://www.cohad.org/manage/approvals?message=abc\"><strong>Held committee email</strong></a>",
+            h.UploadedHtml!
+        );
+    }
+
+    [Fact]
+    public async Task Digest_omits_links_when_no_base_url_configured()
+    {
+        var h = new Harness(); // AppBaseUrl null
+        h.RecipientsFor(NotificationAudience.Administrators, "admin@example.com");
+        await h.Notifications.AddAsync(new Notification
+        {
+            Id = Notification.DeterministicId(NotificationTargetType.User, "u1"),
+            Type = NotificationType.Registration,
+            AudienceKey = NotificationAudience.Administrators,
+            TargetType = NotificationTargetType.User,
+            TargetId = "u1",
+            Title = "New user registered",
+            Summary = "Jane Doe",
+            DeepLink = "/manage/users",
+            CreatedUtc = DateTime.UtcNow.AddHours(-2),
+        });
+
+        await h.Build().RunOnceAsync(CancellationToken.None);
+
+        Assert.NotNull(h.UploadedHtml);
+        // Without a base URL the digest degrades to a plain bold title (no anchor tags at all).
+        Assert.DoesNotContain("<a href", h.UploadedHtml!);
+        Assert.Contains("<strong>New user registered</strong>", h.UploadedHtml!);
+    }
+
+    [Fact]
     public async Task Escalates_committee_audience_to_its_moderators()
     {
         var h = new Harness();
@@ -426,6 +495,7 @@ public sealed class NotificationEscalationRunnerTests
             fileStore.Object,
             new EmailJobQueue(),
             Microsoft.Extensions.Options.Options.Create(options),
+            BuildConfig(null),
             NullLogger<NotificationEscalationRunner>.Instance
         );
     }
@@ -559,6 +629,7 @@ public sealed class NotificationEscalationRunnerTests
             fileStore.Object,
             new EmailJobQueue(),
             Microsoft.Extensions.Options.Options.Create(options),
+            BuildConfig(null),
             NullLogger<NotificationEscalationRunner>.Instance
         );
     }

@@ -96,6 +96,22 @@ namespace Web.MockData
             }
         }
 
+        public Task<List<HeldMessage>> GetAwaitingNotificationAsync(DateTime heldBeforeUtc, int limit = 100)
+        {
+            lock (_messages)
+            {
+                var list = _messages
+                    .Values.Where(m =>
+                        m.Status == HeldMessageStatus.Held && m.NotifiedUtc == null && m.HeldUtc <= heldBeforeUtc
+                    )
+                    .OrderBy(m => m.HeldUtc)
+                    .Take(Math.Clamp(limit, 1, 250))
+                    .Select(Clone)
+                    .ToList();
+                return Task.FromResult(list);
+            }
+        }
+
         private static HeldMessage Clone(HeldMessage m) =>
             new()
             {
@@ -108,6 +124,7 @@ namespace Web.MockData
                 Subject = m.Subject,
                 ReceivedUtc = m.ReceivedUtc,
                 HeldUtc = m.HeldUtc,
+                NotifiedUtc = m.NotifiedUtc,
                 Status = m.Status,
                 ReviewedByUserId = m.ReviewedByUserId,
                 ReviewedUtc = m.ReviewedUtc,

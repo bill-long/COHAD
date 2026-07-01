@@ -40,6 +40,14 @@ namespace Web.Services.Repositories
         /// older than the given cutoff. Used for expiry cleanup.
         /// </summary>
         Task<List<HeldMessage>> GetExpiredAsync(DateTime cutoffUtc, int limit = 100);
+
+        /// <summary>
+        /// Returns held messages with status <see cref="HeldMessageStatus.Held"/> that have not yet been
+        /// notified (<see cref="HeldMessage.NotifiedUtc"/> is null) and whose <see cref="HeldMessage.HeldUtc"/>
+        /// is at or before <paramref name="heldBeforeUtc"/>. Used to surface messages to moderators only
+        /// after the antispam quarantine window has elapsed. Ordered oldest-held first.
+        /// </summary>
+        Task<List<HeldMessage>> GetAwaitingNotificationAsync(DateTime heldBeforeUtc, int limit = 100);
     }
 
     public class CosmosHeldMessageRepository : IHeldMessageRepository
@@ -154,6 +162,29 @@ namespace Web.Services.Repositories
             )
                 .WithParameter("@held", nameof(HeldMessageStatus.Held))
                 .WithParameter("@cutoffUtc", cutoffUtc);
+
+            var iterator = _container.GetItemQueryIterator<JObject>(query);
+            var results = new List<HeldMessage>();
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                results.AddRange(response.Select(CosmosLegacyDocumentMapper.ToHeldMessage));
+            }
+
+            return results;
+        }
+
+        public async Task<List<HeldMessage>> GetAwaitingNotificationAsync(DateTime heldBeforeUtc, int limit = 100)
+        {
+            var clampedLimit = Math.Clamp(limit, 1, 250);
+            var query = new CosmosQueryDefinition(
+                $"SELECT TOP {clampedLimit} * FROM c "
+                    + "WHERE c.Status = @held AND c.HeldUtc <= @heldBeforeUtc "
+                    + "AND (NOT IS_DEFINED(c.NotifiedUtc) OR IS_NULL(c.NotifiedUtc)) "
+                    + "ORDER BY c.HeldUtc ASC"
+            )
+                .WithParameter("@held", nameof(HeldMessageStatus.Held))
+                .WithParameter("@heldBeforeUtc", heldBeforeUtc);
 
             var iterator = _container.GetItemQueryIterator<JObject>(query);
             var results = new List<HeldMessage>();

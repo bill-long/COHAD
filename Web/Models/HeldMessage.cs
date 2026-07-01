@@ -41,6 +41,13 @@ namespace Web.Models
 
         public DateTime HeldUtc { get; set; }
 
+        /// <summary>
+        /// Set once the committee's moderators have been notified about this held message. Null while
+        /// the message is still inside the antispam quarantine window — held (and kept out of forwarding)
+        /// but deliberately not surfaced to people yet, so automatic antispam has time to act on it first.
+        /// </summary>
+        public DateTime? NotifiedUtc { get; set; }
+
         public HeldMessageStatus Status { get; set; }
 
         public string ReviewedByUserId { get; set; }
