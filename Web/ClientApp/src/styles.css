@@ -73,7 +73,16 @@ body.dark-theme {
 }
 
 html {
-  height: 100%;
+  /* Always show a vertical scrollbar so navigating between short and tall pages
+     doesn't shift the layout. This lives on <html> (the scroll root) on purpose:
+     do NOT give <html>/<body> a fixed height plus `overflow-y: scroll`, because a
+     height-clamped overflow scroller on <body> makes <body> the scroller instead
+     of the document. Angular CDK's block-scroll strategy (used by every Material
+     dialog) pins the page by setting position:fixed + top:-scrollY on <html>,
+     which only works when the document itself scrolls. With <body> as the
+     scroller, that offset clips the page content to one viewport height and the
+     rest of the page vanishes when a dialog opens. */
+  overflow-y: scroll;
 }
 
 app-root {
@@ -83,8 +92,10 @@ app-root {
 
 body {
   margin: 0;
-  height: 100%;
-  overflow-y: scroll;
+  /* min-height (not height) so <body> grows with content and never becomes a
+     fixed-height scroll container — see the note on <html> above. 100vh keeps the
+     surface background filling the viewport on short pages. */
+  min-height: 100vh;
   font-family:
     'Inter',
     -apple-system,
