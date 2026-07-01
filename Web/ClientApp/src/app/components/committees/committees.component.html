@@ -4,8 +4,6 @@
       <h1>Our Committees</h1>
       <p>Meet the volunteers who keep Canyon Oaks running.</p>
     </div>
-    <h2 class="committees-print-heading" *ngIf="printMode">Committees</h2>
-
     <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="error" role="alert">{{ error }}</div>
     <div class="loading-state" *ngIf="loading">Loading committees...</div>
 
@@ -54,32 +52,24 @@
     <!-- Print layout: no description; one member per row with photo on the left, bio beside it.
          The heading is grouped with the first member (committee-print-group, break-inside: avoid)
          so a page break can never separate a committee heading from its first member. -->
-    <div class="committees-print-list" *ngIf="printMode && !loading && committees.length > 0">
-      <section class="committee-print-section" *ngFor="let committee of committees">
-        <ng-container *ngIf="committee.members.length > 0; else headingNoMembers">
-          <div class="committee-print-group">
-            <ng-container *ngTemplateOutlet="committeeHeading; context: { $implicit: committee }"></ng-container>
-            <ng-container *ngTemplateOutlet="memberRow; context: { $implicit: committee.members[0] }"></ng-container>
-          </div>
-          <ng-container *ngFor="let member of committee.members; let i = index">
-            <ng-container
-              *ngIf="i > 0"
-              [ngTemplateOutlet]="memberRow"
-              [ngTemplateOutletContext]="{ $implicit: member }"
-            ></ng-container>
-          </ng-container>
+    <div class="committees-print-list" *ngIf="printMode && !loading && printCommittees.length > 0">
+      <section class="committee-print-section" *ngFor="let committee of printCommittees">
+        <div class="committee-print-group">
+          <ng-container *ngTemplateOutlet="committeeHeading; context: { $implicit: committee }"></ng-container>
+          <ng-container *ngTemplateOutlet="memberRow; context: { $implicit: committee.members[0] }"></ng-container>
+        </div>
+        <ng-container *ngFor="let member of committee.members; let i = index">
+          <ng-container
+            *ngIf="i > 0"
+            [ngTemplateOutlet]="memberRow"
+            [ngTemplateOutletContext]="{ $implicit: member }"
+          ></ng-container>
         </ng-container>
-        <ng-template #headingNoMembers>
-          <div class="committee-print-group">
-            <ng-container *ngTemplateOutlet="committeeHeading; context: { $implicit: committee }"></ng-container>
-            <p class="no-members">No members listed.</p>
-          </div>
-        </ng-template>
       </section>
     </div>
 
-    <div *ngIf="!loading && committees.length === 0 && !error" class="empty-state">
-      No committees are available right now.
+    <div *ngIf="!loading && !error && (printMode ? printCommittees.length === 0 : committees.length === 0)" class="empty-state">
+      {{ committees.length === 0 ? 'No committees are available right now.' : 'No committee members to display.' }}
     </div>
   </section>
 </div>

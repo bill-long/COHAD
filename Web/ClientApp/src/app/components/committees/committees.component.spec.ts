@@ -92,10 +92,10 @@ describe('CommitteesComponent', () => {
       fixture.detectChanges();
     });
 
-    it('renders a compact heading instead of the page header', () => {
+    it('omits the page header and the redundant "Committees" heading', () => {
       const el: HTMLElement = fixture.nativeElement;
       expect(el.querySelector('.committees-header')).toBeNull();
-      expect(el.querySelector('.committees-print-heading')?.textContent).toContain('Committees');
+      expect(el.querySelector('.committees-print-heading')).toBeNull();
     });
 
     it('renders one member per row with photo and full bio, and no Read more button', () => {
@@ -124,7 +124,7 @@ describe('CommitteesComponent', () => {
         ],
       });
       serviceSpy.getAll.and.returnValue(of([twoMembers]));
-      component.committees = [twoMembers];
+      component.ngOnInit();
       fixture.detectChanges();
 
       const el: HTMLElement = fixture.nativeElement;
@@ -138,18 +138,30 @@ describe('CommitteesComponent', () => {
       expect(el.querySelectorAll('.member-print-row').length).toBe(2);
     });
 
-    it('groups the heading with the no-members placeholder when a committee has no members', () => {
-      const empty = makeCommittee({ members: [], memberCount: 0 });
-      serviceSpy.getAll.and.returnValue(of([empty]));
-      component.committees = [empty];
+    it('omits committees that have no members from the printed directory', () => {
+      const populated = makeCommittee();
+      const empty = makeCommittee({ id: 'c-empty', displayName: 'Empty Committee', members: [], memberCount: 0 });
+      serviceSpy.getAll.and.returnValue(of([populated, empty]));
+      component.ngOnInit();
       fixture.detectChanges();
 
       const el: HTMLElement = fixture.nativeElement;
-      const group = el.querySelector('.committee-print-group');
-      expect(group).not.toBeNull();
-      expect(group!.querySelector('.committee-print-heading')).not.toBeNull();
-      expect(group!.querySelector('.no-members')?.textContent).toContain('No members listed');
-      expect(el.querySelectorAll('.member-print-row').length).toBe(0);
+      const names = Array.from(el.querySelectorAll('.committee-print-name')).map(n => n.textContent);
+      expect(names.length).toBe(1);
+      expect(names[0]).toContain('Welcome Committee');
+      expect(el.querySelector('.no-members')).toBeNull();
+    });
+
+    it('shows an accurate empty-state (not a blank page) when committees exist but none have members', () => {
+      const empty = makeCommittee({ id: 'c-empty', displayName: 'Empty Committee', members: [], memberCount: 0 });
+      serviceSpy.getAll.and.returnValue(of([empty]));
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('.committees-print-list')).toBeNull();
+      // Committees DO exist (just no members), so the message must not claim there are none.
+      expect(el.querySelector('.empty-state')?.textContent).toContain('No committee members to display');
     });
   });
 });
