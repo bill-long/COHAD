@@ -15,6 +15,9 @@ export class CommitteesComponent implements OnInit {
   @Input() printMode = false;
 
   committees: CommitteeCard[] = [];
+  /** Committees to render in print mode: those with no members are omitted from the printed directory.
+   *  Computed once per load (not a getter) so change detection doesn't re-filter or re-diff each pass. */
+  printCommittees: CommitteeCard[] = [];
   loading = false;
   error = '';
 
@@ -39,10 +42,12 @@ export class CommitteesComponent implements OnInit {
     this.committeeService.getAll().subscribe({
       next: committees => {
         this.committees = committees ?? [];
+        this.printCommittees = this.committees.filter(committee => committee.members.length > 0);
         this.loading = false;
       },
       error: () => {
         this.committees = [];
+        this.printCommittees = [];
         this.loading = false;
         this.error = 'Failed to load committees.';
       },

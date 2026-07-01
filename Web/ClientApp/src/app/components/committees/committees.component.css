@@ -209,13 +209,6 @@
   box-shadow: none;
 }
 
-.committees-print-heading {
-  margin: 0 0 0.75rem;
-  font-size: 1.35rem;
-  font-weight: 600;
-  text-align: center;
-}
-
 .committees-print-list {
   display: flex;
   flex-direction: column;
