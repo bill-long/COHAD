@@ -106,9 +106,16 @@ namespace Web.Services
             var committees = await committeeRepo.GetAllAsync();
 
             // Surface any held (non-directory) messages whose antispam quarantine window has elapsed.
-            // Runs regardless of whether forwarding is currently enabled so a backlog still drains, and
-            // uses the full committee list to resolve display names/audiences for the notifications.
-            await NotifyHeldMessagesPastAntispamHoldAsync(committees, heldMessageRepo, notificationService, ct);
+            // Uses the full committee list to resolve display names/audiences for the notifications.
+            // Isolated in its own try/catch so a sweep failure never aborts committee forwarding below.
+            try
+            {
+                await NotifyHeldMessagesPastAntispamHoldAsync(committees, heldMessageRepo, notificationService, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Antispam-hold notification sweep failed");
+            }
 
             var enabled = committees
                 .Where(c => c.ForwardingEnabled && !string.IsNullOrWhiteSpace(c.CommitteeEmail))
@@ -573,23 +580,19 @@ namespace Web.Services
                 if (!string.IsNullOrEmpty(c.Id))
                     byCommitteeId[c.Id] = c;
 
-            foreach (var candidate in pending)
+            // The query already returns only Held, un-notified messages ordered oldest-first, each with a
+            // usable ETag (set by the mapper), so we act on the returned row directly rather than re-reading.
+            foreach (var held in pending)
             {
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    // Re-read for a fresh copy + ETag: a moderator may have approved/rejected the message
-                    // (or a prior sweep may have notified it) since the query ran.
-                    var held = await heldMessageRepo.GetByIdAsync(candidate.Id);
-                    if (held == null || held.Status != HeldMessageStatus.Held || held.NotifiedUtc != null)
-                        continue;
-
                     var displayName = byCommitteeId.TryGetValue(held.CommitteeId, out var committee)
                         ? committee.DisplayName
                         : held.CommitteeEmail;
                     var sender = !string.IsNullOrWhiteSpace(held.SenderName) ? held.SenderName : held.SenderEmail;
 
-                    // Idempotent on target — if the stamp below fails, a later sweep re-raises to the same
+                    // Idempotent on target — a re-raise (e.g. after a failed stamp) maps to the same
                     // notification rather than creating a duplicate.
                     await notificationService.RaiseAsync(
                         NotificationType.HeldMessage,
@@ -602,6 +605,9 @@ namespace Web.Services
                         ct
                     );
 
+                    // Stamp NotifiedUtc under optimistic concurrency. A success proves no writer touched the
+                    // message between the query and now, so any moderator who approves/rejects later will see
+                    // (and resolve) the notification we just raised.
                     held.NotifiedUtc = DateTime.UtcNow;
                     try
                     {
@@ -609,17 +615,33 @@ namespace Web.Services
                     }
                     catch (InvalidOperationException)
                     {
-                        // Lost the race to a concurrent write (e.g. a moderator approving). RaiseAsync is
-                        // idempotent, so a later sweep re-reads and re-stamps if it is still held & un-notified.
-                        _logger.LogDebug(
-                            "Held message {HeldId} changed concurrently while stamping NotifiedUtc — leaving for a later sweep",
-                            held.Id
-                        );
+                        // A concurrent write (typically a moderator approve/reject) beat our stamp. That
+                        // action's own ResolveAsync may have run before our RaiseAsync above and so found no
+                        // notification to clear — leaving ours orphaned. Re-read and, if the message is no
+                        // longer Held, resolve the notification we raised so it does not escalate as an alert
+                        // for an already-handled message. If it is still Held, a later sweep re-stamps it.
+                        var after = await heldMessageRepo.GetByIdAsync(held.Id);
+                        if (after == null || after.Status != HeldMessageStatus.Held)
+                        {
+                            await notificationService.ResolveAsync(
+                                NotificationTargetType.HeldMessage,
+                                held.Id.ToString("D"),
+                                "system:antispam-hold",
+                                ct
+                            );
+                        }
+                        else
+                        {
+                            _logger.LogDebug(
+                                "Held message {HeldId} changed concurrently while stamping NotifiedUtc — leaving for a later sweep",
+                                held.Id
+                            );
+                        }
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _logger.LogWarning(ex, "Failed to notify held message {HeldId} past antispam hold", candidate.Id);
+                    _logger.LogWarning(ex, "Failed to notify held message {HeldId} past antispam hold", held.Id);
                 }
             }
         }

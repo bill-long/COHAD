@@ -184,7 +184,7 @@ public sealed class CommitteeMailPollerTests
     }
 
     [Fact]
-    public async Task PollAllCommittees_skips_held_message_already_notified_or_resolved()
+    public async Task PollAllCommittees_resolves_phantom_notification_when_message_actioned_during_stamp()
     {
         var committee = new Committee
         {
@@ -197,16 +197,35 @@ public sealed class CommitteeMailPollerTests
         var committeeRepo = new Mock<ICommitteeRepository>();
         committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
 
-        // The query returned it, but a re-read shows a moderator approved it between query and stamp.
-        var candidate = new HeldMessage { Id = Guid.NewGuid(), CommitteeId = "board", Status = HeldMessageStatus.Held };
-        var resolved = new HeldMessage { Id = candidate.Id, CommitteeId = "board", Status = HeldMessageStatus.Approved };
+        var candidate = new HeldMessage
+        {
+            Id = Guid.NewGuid(),
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            Subject = "Hello",
+            Status = HeldMessageStatus.Held,
+            ETag = "1",
+        };
+        // A moderator approves the message concurrently: the stamp loses the ETag race, and a re-read
+        // shows it is no longer Held.
+        var actioned = new HeldMessage { Id = candidate.Id, CommitteeId = "board", Status = HeldMessageStatus.Approved };
 
         var heldRepo = new Mock<IHeldMessageRepository>();
         heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
             .ReturnsAsync(new List<HeldMessage> { candidate });
-        heldRepo.Setup(r => r.GetByIdAsync(candidate.Id)).ReturnsAsync(resolved);
+        heldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>()))
+            .ThrowsAsync(new InvalidOperationException("HeldMessage was modified by another process."));
+        heldRepo.Setup(r => r.GetByIdAsync(candidate.Id)).ReturnsAsync(actioned);
 
         var notifications = new Mock<INotificationService>();
+        notifications
+            .Setup(s => s.RaiseAsync(
+                It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Notification());
+        notifications
+            .Setup(s => s.ResolveAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Notification?)null);
 
         var services = new ServiceCollection();
         services.AddScoped(_ => committeeRepo.Object);
@@ -228,11 +247,71 @@ public sealed class CommitteeMailPollerTests
 
         await poller.PollAllCommitteesAsync(CancellationToken.None);
 
-        notifications.Verify(s => s.RaiseAsync(
-            It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+        // The notification raised before the stamp is compensated (resolved) because the message was
+        // actioned concurrently — so it never escalates as an alert for an already-handled message.
+        notifications.Verify(s => s.ResolveAsync(
+            NotificationTargetType.HeldMessage, candidate.Id.ToString("D"), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_leaves_still_held_message_for_later_sweep_when_stamp_conflicts()
+    {
+        var committee = new Committee { Id = "board", DisplayName = "Board", CommitteeEmail = "board@cohad.org", ForwardingEnabled = false };
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
+
+        var candidate = new HeldMessage
+        {
+            Id = Guid.NewGuid(),
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            Subject = "Hello",
+            Status = HeldMessageStatus.Held,
+            ETag = "1",
+        };
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage> { candidate });
+        heldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>()))
+            .ThrowsAsync(new InvalidOperationException("HeldMessage was modified by another process."));
+        // The conflicting write left the message still Held (e.g. a competing sweep, not a resolve).
+        heldRepo.Setup(r => r.GetByIdAsync(candidate.Id))
+            .ReturnsAsync(new HeldMessage { Id = candidate.Id, CommitteeId = "board", Status = HeldMessageStatus.Held });
+
+        var notifications = new Mock<INotificationService>();
+        notifications
+            .Setup(s => s.RaiseAsync(
+                It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Notification());
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => Mock.Of<IEmailJobRepository>());
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => Mock.Of<IResidentRepository>());
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => notifications.Object);
+        var provider = services.BuildServiceProvider();
+
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            Mock.Of<IGraphMailReader>(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        // Message still Held → do NOT resolve the (legitimate) notification; a later sweep re-stamps it.
+        notifications.Verify(s => s.ResolveAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
-        heldRepo.Verify(r => r.UpdateAsync(It.IsAny<HeldMessage>()), Times.Never);
     }
 
     /// <summary>
