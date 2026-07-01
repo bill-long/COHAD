@@ -101,7 +101,8 @@
     margin: 12px 0 4px 12px;
 }
 
-@media (max-width: 899px) {
+/* 959.98px matches the top navbar's desktop/mobile nav threshold. */
+@media (max-width: 959.98px) {
     .manage-content {
         padding: 4px 8px 16px;
     }

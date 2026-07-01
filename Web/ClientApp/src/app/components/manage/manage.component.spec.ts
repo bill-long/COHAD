@@ -1,7 +1,7 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
-import { BehaviorSubject, Observable, of } from 'rxjs';
+import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
+import { BehaviorSubject, Observable, Subject, of } from 'rxjs';
 import { ManageComponent } from './manage.component';
 import { AppNotification, NotificationsService } from 'src/app/services/notifications.service';
 import { ApplicationState, applicationState, initialStateValue } from 'src/app/state';
@@ -38,12 +38,15 @@ describe('ManageComponent', () => {
   let appStateSubject: BehaviorSubject<ApplicationState>;
   let notificationsSubject: BehaviorSubject<AppNotification[]>;
   let routerSpy: jasmine.SpyObj<Router>;
+  let routerEvents: Subject<unknown>;
 
   function setupTestBed(state: ApplicationState, url = '/manage/users'): void {
     appStateSubject = new BehaviorSubject<ApplicationState>(state);
     notificationsSubject = new BehaviorSubject<AppNotification[]>([]);
+    routerEvents = new Subject<unknown>();
     routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
     (routerSpy as any).url = url;
+    (routerSpy as any).events = routerEvents.asObservable();
 
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
@@ -130,6 +133,32 @@ describe('ManageComponent', () => {
     it('does not redirect when a tool is already selected', () => {
       setupTestBed(makeState(['Administrator', 'Resident']), '/manage/homes');
       component.ngOnInit();
+      expect(routerSpy.navigate).not.toHaveBeenCalled();
+    });
+
+    it('redirects on re-entry to bare /manage from a child route (component reused)', () => {
+      // Start on a child route: no redirect on init.
+      setupTestBed(makeState(['Administrator', 'Resident']), '/manage/homes');
+      component.ngOnInit();
+      expect(routerSpy.navigate).not.toHaveBeenCalled();
+
+      // User navigates back to bare /manage; the parent component is reused, so only a
+      // NavigationEnd — not a fresh ngOnInit — signals the re-entry.
+      (routerSpy as any).url = '/manage';
+      routerEvents.next(new NavigationEnd(1, '/manage', '/manage'));
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['users'], jasmine.objectContaining({ replaceUrl: true }));
+    });
+
+    it('does not yank the user if the profile resolves after they leave /manage', () => {
+      // Bare /manage, but the user has no profile yet (empty groups → redirect is deferred).
+      setupTestBed(makeState(null), '/manage');
+      component.ngOnInit();
+      expect(routerSpy.navigate).not.toHaveBeenCalled();
+
+      // User navigates to a child route before the profile loads...
+      (routerSpy as any).url = '/manage/homes';
+      // ...then the profile arrives. The deferred redirect must see it's no longer on bare /manage.
+      appStateSubject.next(makeState(['Administrator', 'Resident']));
       expect(routerSpy.navigate).not.toHaveBeenCalled();
     });
 
