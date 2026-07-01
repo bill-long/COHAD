@@ -1,18 +1,109 @@
 .manage-container {
+    /* The sidenav container needs a defined block height for side-mode layout. */
     min-height: 80vh;
-    margin: 20px;
+    background: transparent;
 }
 
-nav[mat-tab-nav-bar] {
-    margin-bottom: 16px;
+/* --- Rail ------------------------------------------------------------------ */
+
+.manage-nav {
+    width: 236px;
+    padding: 8px 0 24px;
+    /* Faint hairline rather than a heavy panel edge — keeps the airy feel of the app. */
+    border-right: 1px solid var(--border-faint);
+    background: transparent;
+}
+
+.manage-nav mat-nav-list {
+    padding-top: 0;
+}
+
+/* Group header: a quiet small-caps eyebrow naming the cluster (Directory /
+   Communications / Governance) — the one structural device for the grouping. */
+.manage-nav-group {
+    margin: 20px 22px 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.manage-nav-group:first-of-type {
+    margin-top: 6px;
+}
+
+/* Nav items mirror the top navbar's link treatment: a rounded pill that turns
+   sage-tinted when active and chip-tinted on hover — not a bordered console row. */
+.manage-nav a.mat-mdc-list-item {
+    width: auto;
+    margin: 2px 10px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    transition:
+        background 150ms ease,
+        color 150ms ease;
+}
+
+.manage-nav a.mat-mdc-list-item .mat-mdc-list-item-title {
+    font-weight: inherit;
+    color: inherit;
+}
+
+.manage-nav a.mat-mdc-list-item .mat-icon {
+    color: var(--text-secondary);
+}
+
+.manage-nav a.mat-mdc-list-item:hover {
+    background: var(--surface-chip);
+}
+
+.manage-nav a.active-link {
+    color: var(--primary-sage);
+    background: color-mix(in srgb, var(--primary-sage) 10%, transparent);
+    font-weight: 600;
+}
+
+.manage-nav a.active-link .mat-icon {
+    color: var(--primary-sage);
+}
+
+/* Approvals count — matches the .held-badge used elsewhere for pending held mail. */
+.manage-nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 11px;
+    background: var(--error);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+/* --- Content pane ---------------------------------------------------------- */
+
+.manage-content-pane {
+    background: var(--surface);
 }
 
 .manage-content {
     width: 100%;
+    box-sizing: border-box;
+    padding: 8px 20px 24px;
 }
 
-@media (max-width: 640px) {
-    .manage-container {
-        margin: 12px;
+.manage-menu-toggle {
+    margin: 12px 0 4px 12px;
+}
+
+/* 959.98px matches the top navbar's desktop/mobile nav threshold. */
+@media (max-width: 959.98px) {
+    .manage-content {
+        padding: 4px 8px 16px;
     }
 }

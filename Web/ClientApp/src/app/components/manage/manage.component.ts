@@ -1,10 +1,41 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { Component, DestroyRef, Inject, OnInit } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { filter, map, shareReplay, startWith, switchMap, take } from 'rxjs/operators';
 import { ApiUser } from 'src/app/models';
+import { NotificationsService } from 'src/app/services/notifications.service';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { ApplicationState, applicationState } from 'src/app/state';
 
+/** One tool in the Manage rail. Visibility mirrors the old per-tab getters exactly. */
+interface ManageNavItem {
+  label: string;
+  /** Child route under /manage. */
+  route: string;
+  /** Material icon name. */
+  icon: string;
+  /** Roles that may see this tool (any-of). */
+  roles: string[];
+  /** When true, the tool also requires the Resident role (Events, News). */
+  requireResident?: boolean;
+  /** Live count rendered as a badge; the badge is hidden when the count is 0. */
+  badgeCount$?: Observable<number>;
+}
+
+/** A labelled cluster of tools. A group renders only when at least one of its items is visible. */
+interface ManageNavGroup {
+  label: string;
+  items: ManageNavItem[];
+}
+
+/**
+ * Manage shell: a grouped left nav rail (Directory / Communications / Governance) over a routed
+ * content pane. The rail is a fixed side panel on desktop and a slide-over drawer on mobile.
+ * Tab visibility is unchanged from the previous flat tab bar — the same role checks, now expressed
+ * once as data instead of nine near-identical getters.
+ */
 @Component({
   selector: 'app-manage',
   templateUrl: './manage.component.html',
@@ -12,51 +43,119 @@ import { ApplicationState, applicationState } from 'src/app/state';
   standalone: false,
 })
 export class ManageComponent implements OnInit {
-  constructor(@Inject(applicationState) private appState: Observable<ApplicationState>) {}
+  private readonly apiUser$: Observable<ApiUser | null>;
 
-  ngOnInit(): void {}
+  /** Live count of held committee emails awaiting a decision — the Approvals inbox feed. */
+  readonly approvalsCount$: Observable<number>;
 
-  get apiUser$(): Observable<ApiUser | null> {
-    return this.appState.pipe(map(s => s.apiUser));
-  }
+  /** True below the desktop breakpoint, where the rail becomes an over-mode drawer. */
+  readonly isHandset$: Observable<boolean>;
 
-  get manageUsersVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageUsersRoles.includes(r)).length > 0));
-  }
+  readonly groups: ManageNavGroup[];
 
-  get manageHomesVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageHomesRoles.includes(r)).length > 0));
-  }
+  /** The groups (with their visible items) the current user may see; empty groups are dropped. */
+  readonly visibleGroups$: Observable<ManageNavGroup[]>;
 
-  get manageEmailVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageEmailRoles.includes(r)).length > 0));
-  }
+  constructor(
+    @Inject(applicationState) private readonly appState: Observable<ApplicationState>,
+    private readonly notifications: NotificationsService,
+    private readonly breakpointObserver: BreakpointObserver,
+    private readonly router: Router,
+    private readonly route: ActivatedRoute,
+    private readonly destroyRef: DestroyRef,
+  ) {
+    this.apiUser$ = this.appState.pipe(map(s => s.apiUser));
 
-  get manageAuditVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageAuditLogRoles.includes(r)).length > 0));
-  }
+    this.approvalsCount$ = this.notifications.notifications$.pipe(map(list => list.filter(n => n.type === 'HeldMessage').length));
 
-  get printDirectoryVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.printDirectoryRoles.includes(r)).length > 0));
-  }
+    // 959.98px mirrors the top navbar's desktop/mobile nav threshold (navbar.component.css),
+    // so the rail flips to a drawer at the same width the rest of the app switches navigation.
+    this.isHandset$ = this.breakpointObserver.observe('(max-width: 959.98px)').pipe(
+      map(result => result.matches),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
 
-  get manageDocumentsVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageUsersRoles.includes(r)).length > 0));
-  }
+    this.groups = [
+      {
+        label: 'Directory',
+        items: [
+          { label: 'Users', route: 'users', icon: 'group', roles: rolePermissions.manageUsersRoles },
+          { label: 'Homes', route: 'homes', icon: 'home', roles: rolePermissions.manageHomesRoles },
+          { label: 'Print Directory', route: 'print', icon: 'print', roles: rolePermissions.printDirectoryRoles },
+        ],
+      },
+      {
+        label: 'Communications',
+        items: [
+          { label: 'Email', route: 'send-email', icon: 'mail', roles: rolePermissions.manageEmailRoles },
+          { label: 'News', route: 'blog', icon: 'article', roles: rolePermissions.manageBlogRoles, requireResident: true },
+          { label: 'Events', route: 'events', icon: 'event', roles: rolePermissions.manageEventsRoles, requireResident: true },
+          // Documents mirrors the old getter: gated by the manage-users (Administrator) role set.
+          { label: 'Documents', route: 'documents', icon: 'folder', roles: rolePermissions.manageUsersRoles },
+        ],
+      },
+      {
+        label: 'Governance',
+        items: [
+          { label: 'Committees', route: 'committees', icon: 'diversity_3', roles: rolePermissions.manageCommitteesRoles },
+          {
+            label: 'Approvals',
+            route: 'approvals',
+            icon: 'inbox',
+            roles: rolePermissions.manageCommitteesRoles,
+            badgeCount$: this.approvalsCount$,
+          },
+          { label: 'Audit Log', route: 'audit-log', icon: 'receipt_long', roles: rolePermissions.manageAuditLogRoles },
+        ],
+      },
+    ];
 
-  get manageEventsVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(
-      map(u => u !== null && u.roles.includes('Resident') && u.roles.filter(r => rolePermissions.manageEventsRoles.includes(r)).length > 0),
+    this.visibleGroups$ = this.apiUser$.pipe(
+      map(user =>
+        this.groups
+          .map(group => ({ ...group, items: group.items.filter(item => this.isItemVisible(item, user)) }))
+          .filter(group => group.items.length > 0),
+      ),
+      shareReplay({ bufferSize: 1, refCount: true }),
     );
   }
 
-  get manageBlogVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(
-      map(u => u !== null && u.roles.includes('Resident') && u.roles.filter(r => rolePermissions.manageBlogRoles.includes(r)).length > 0),
-    );
+  ngOnInit(): void {
+    // Open the first tool the user can access when they land on bare /manage (which would otherwise
+    // show a blank pane). Two arrival paths must both work:
+    //   - Initial landing: the navigation that creates this component emits its NavigationEnd *before*
+    //     ngOnInit runs (activation emits the event; ngOnInit runs on the next change-detection tick),
+    //     so that event is already gone — startWith(null) re-checks the current URL synchronously now.
+    //   - Re-entry from a child route: the router reuses this component (no new ngOnInit), so later
+    //     NavigationEnds drive the check (e.g. the navbar 'Manage' link while on /manage/homes).
+    // switchMap cancels a pending profile-wait when a newer navigation supersedes it, so duplicate
+    // waits never pile up; the subscribe re-checks the URL so a late profile load can't yank a user
+    // who has since moved to a child route. takeUntilDestroyed tears the whole thing down with the view.
+    this.router.events
+      .pipe(
+        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+        startWith(null),
+        filter(() => this.isBareManageUrl()),
+        switchMap(() => this.visibleGroups$.pipe(filter(groups => groups.length > 0), take(1))),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(groups => {
+        if (!this.isBareManageUrl()) return;
+        const first = groups[0].items[0];
+        this.router.navigate([first.route], { relativeTo: this.route, replaceUrl: true });
+      });
   }
 
-  get manageCommitteesVisible$(): Observable<boolean> {
-    return this.apiUser$.pipe(map(u => u !== null && u.roles.filter(r => rolePermissions.manageCommitteesRoles.includes(r)).length > 0));
+  /** True when the current URL is /manage with no child tool selected. */
+  private isBareManageUrl(): boolean {
+    const path = this.router.url.split('?')[0].split('#')[0].replace(/\/+$/, '');
+    return path === '/manage';
+  }
+
+  /** Reproduces the previous per-tab visibility logic: role match, plus the Resident requirement. */
+  private isItemVisible(item: ManageNavItem, user: ApiUser | null): boolean {
+    if (user === null) return false;
+    if (item.requireResident && !user.roles.includes('Resident')) return false;
+    return user.roles.some(role => item.roles.includes(role));
   }
 }
