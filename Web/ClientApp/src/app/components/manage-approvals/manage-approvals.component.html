@@ -42,7 +42,7 @@
             type="button"
             mat-stroked-button
             color="primary"
-            [disabled]="actioningId === msg.id"
+            [disabled]="isActioning(msg.id)"
             (click)="approve(msg)"
           >
             <mat-icon>check</mat-icon> Approve
@@ -51,7 +51,7 @@
             type="button"
             mat-stroked-button
             color="warn"
-            [disabled]="actioningId === msg.id"
+            [disabled]="isActioning(msg.id)"
             (click)="reject(msg)"
           >
             <mat-icon>close</mat-icon> Reject

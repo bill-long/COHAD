@@ -8,7 +8,6 @@ import {
   CommitteeMemberAdmin,
   CommitteeService,
   ForwardingSettings,
-  HeldMessage,
   ResidentPickerItem,
 } from 'src/app/services/committee.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
@@ -53,8 +52,8 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   /** Forwarding settings per committee key */
   forwardingSettings = new Map<string, ForwardingSettings>();
 
-  /** Held messages per committee key — used only for the pending count + link to the Approvals inbox. */
-  heldMessages = new Map<string, HeldMessage[]>();
+  /** Pending held-mail count per committee key — drives the count + link to the Approvals inbox. */
+  heldCounts = new Map<string, number>();
 
   /** Tracks which committee is currently saving settings */
   savingSettingsKey: string | null = null;
@@ -472,11 +471,18 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Loads the committee's held mail so the panel can show a pending count + link to the Approvals inbox. */
-  loadHeldMessages(committee: CommitteeAdmin): void {
-    this.committeeService.getHeldMessages(committee.id).subscribe({
+  /**
+   * Loads pending held-mail counts in a single aggregated call (the moderation UI itself lives in the
+   * Approvals inbox now), so each panel can show a count + link without N per-committee fetches.
+   */
+  private loadPendingCounts(): void {
+    this.committeeService.getPendingHeldMessages().subscribe({
       next: messages => {
-        this.heldMessages.set(committee.id, messages);
+        const counts = new Map<string, number>();
+        for (const m of messages ?? []) {
+          counts.set(m.committeeId, (counts.get(m.committeeId) ?? 0) + 1);
+        }
+        this.heldCounts = counts;
       },
       error: () => {
         // Silently ignore — the pending-approvals hint will just not render.
@@ -489,7 +495,7 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
   }
 
   getHeldCount(committeeId: string): number {
-    return (this.heldMessages.get(committeeId) ?? []).filter(m => m.status === 'Held').length;
+    return this.heldCounts.get(committeeId) ?? 0;
   }
 
   toggleForwarding(committee: CommitteeAdmin): void {
@@ -551,8 +557,8 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
         this.loading = false;
         for (const c of this.committees) {
           this.loadForwardingSettings(c);
-          this.loadHeldMessages(c);
         }
+        this.loadPendingCounts();
       },
       error: () => {
         this.committees = [];

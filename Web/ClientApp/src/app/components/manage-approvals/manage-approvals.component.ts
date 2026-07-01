@@ -37,8 +37,9 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
   loading = false;
   error = '';
 
-  /** Id of the message currently being approved/rejected (disables its actions). */
-  actioningId: string | null = null;
+  /** Ids of messages with an Approve/Reject request in flight — guards each row independently so one
+   *  action completing can't re-enable another still-pending row's buttons (double-submit). */
+  private actioning = new Set<string>();
 
   /** Id of the message a deep link pointed at, highlighted so the moderator spots it immediately. */
   highlightedId: string | null = null;
@@ -46,8 +47,12 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
   /** Lazily-loaded body preview state per held message id. */
   bodies = new Map<string, HeldBodyState>();
 
-  /** Message id requested via ?message= — opened and scrolled to once the list loads. */
+  /** Message id requested via ?message= — highlighted/opened/scrolled-to once it appears in the queue. */
   private deepLinkMessageId: string | null = null;
+  /** True once the first load has completed, so a later ?message= change can re-target the queue. */
+  private loaded = false;
+  /** Monotonic token so an out-of-order list fetch (overlapping refreshes) can't apply stale data. */
+  private loadGeneration = 0;
   private routeSub: Subscription | null = null;
 
   constructor(
@@ -60,6 +65,18 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.routeSub = this.route.queryParamMap.subscribe(params => {
       this.deepLinkMessageId = params.get('message');
+      // The first emission is handled by the initial load() below (data isn't here yet). A later one
+      // means the moderator clicked another held-message notification while already on this page
+      // (Angular reuses the component for query-param-only navigations). Clear any prior highlight,
+      // then target the new message: highlight it directly if it's already in the queue, otherwise
+      // do a (non-destructive) re-sync in case it just arrived.
+      if (!this.loaded) return;
+      this.highlightedId = null;
+      if (this.deepLinkMessageId && this.pending.some(m => m.id === this.deepLinkMessageId)) {
+        this.resolveDeepLink();
+      } else if (this.deepLinkMessageId) {
+        this.refresh();
+      }
     });
     this.load();
   }
@@ -68,38 +85,47 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
     this.routeSub?.unsubscribe();
   }
 
+  isActioning(messageId: string): boolean {
+    return this.actioning.has(messageId);
+  }
+
   load(): void {
     this.loading = true;
     this.error = '';
+    const generation = ++this.loadGeneration;
     this.committeeService.getPendingHeldMessages().subscribe({
       next: messages => {
-        this.pending = messages ?? [];
+        if (generation !== this.loadGeneration) return;
         this.loading = false;
-        this.applyDeepLink();
+        this.loaded = true;
+        this.reconcilePending(messages ?? []); // also resolves any pending deep link
       },
       error: () => {
+        if (generation !== this.loadGeneration) return;
         this.pending = [];
         this.loading = false;
+        this.loaded = true;
         this.error = 'Failed to load pending approvals.';
       },
     });
   }
 
-  /** Opens and scrolls to the deep-linked message, or notes that it has already been handled. */
-  private applyDeepLink(): void {
+  /**
+   * If the deep-link target is in the current queue, highlight, open, and scroll to it (one-shot). Runs
+   * after every successful list fetch (via reconcilePending) and on a same-page re-target. If the target
+   * isn't present — already handled, or not in this snapshot — it simply leaves the queue as-is; the
+   * moderator still lands on the inbox showing what's actually pending, which is the useful outcome.
+   */
+  private resolveDeepLink(): void {
     const id = this.deepLinkMessageId;
     if (!id) return;
-    // Only act on the deep link once — clear it so a later background refresh doesn't re-scroll.
-    this.deepLinkMessageId = null;
+    this.deepLinkMessageId = null; // one-shot, whether or not the target was found
 
     const target = this.pending.find(m => m.id === id);
-    if (!target) {
-      this.snackBar.open('That email has already been handled.', 'Dismiss', { duration: 6000 });
-      return;
-    }
+    if (!target) return;
 
     this.highlightedId = id;
-    this.toggleBody(target);
+    this.ensureBodyExpanded(target);
     // Defer until the row has rendered, then bring it into view.
     setTimeout(() => document.getElementById('approval-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }
@@ -108,13 +134,28 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
     return this.bodies.get(messageId);
   }
 
-  /** Expand/collapse the message body preview, lazily fetching it on first open. */
+  /** Expand/collapse the message body preview (user toggle), lazily fetching it on first open. */
   toggleBody(message: PendingHeldMessage): void {
     const existing = this.bodies.get(message.id);
     if (existing) {
       existing.expanded = !existing.expanded;
       if (existing.expanded && !existing.loaded && !existing.loading) {
         this.fetchBody(message);
+      }
+      return;
+    }
+    this.ensureBodyExpanded(message);
+  }
+
+  /** Opens the body preview if it isn't already open (never collapses) — used by the deep-link path. */
+  private ensureBodyExpanded(message: PendingHeldMessage): void {
+    const existing = this.bodies.get(message.id);
+    if (existing) {
+      if (!existing.expanded) {
+        existing.expanded = true;
+        if (!existing.loaded && !existing.loading) {
+          this.fetchBody(message);
+        }
       }
       return;
     }
@@ -218,36 +259,35 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
   }
 
   approve(message: PendingHeldMessage): void {
-    this.actioningId = message.id;
+    this.actioning.add(message.id);
     const sender = this.senderLabel(message);
     this.committeeService.approveHeldMessage(message.committeeId, message.id).subscribe({
       next: () => {
-        this.actioningId = null;
-        this.removeFromQueue(message.id);
+        this.actioning.delete(message.id);
+        this.removeFromQueue(message.id); // drop it immediately; the row can't linger if the re-sync fails
         this.snackBar.open(`Approved — message from ${sender} will be forwarded.`, 'Dismiss', { duration: 5000 });
         this.refresh();
       },
       error: () => {
-        this.actioningId = null;
+        this.actioning.delete(message.id);
         this.snackBar.open(`Failed to approve the message from ${sender}.`, 'Dismiss', { duration: 6000 });
-        // Reconcile: if it failed because another moderator already handled it, the refresh drops the row.
         this.refresh();
       },
     });
   }
 
   reject(message: PendingHeldMessage): void {
-    this.actioningId = message.id;
+    this.actioning.add(message.id);
     const sender = this.senderLabel(message);
     this.committeeService.rejectHeldMessage(message.committeeId, message.id).subscribe({
       next: () => {
-        this.actioningId = null;
+        this.actioning.delete(message.id);
         this.removeFromQueue(message.id);
         this.snackBar.open(`Rejected — message from ${sender} was discarded.`, 'Dismiss', { duration: 5000 });
         this.refresh();
       },
       error: () => {
-        this.actioningId = null;
+        this.actioning.delete(message.id);
         this.snackBar.open(`Failed to reject the message from ${sender}.`, 'Dismiss', { duration: 6000 });
         this.refresh();
       },
@@ -258,7 +298,10 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
     return message.senderName || message.senderEmail || 'unknown sender';
   }
 
+  /** Optimistically drops a just-actioned row and its cached state. Bumps the generation so a list
+   *  fetch already in flight can't re-add it from a pre-action snapshot. */
   private removeFromQueue(messageId: string): void {
+    this.loadGeneration++;
     this.pending = this.pending.filter(m => m.id !== messageId);
     this.bodies.delete(messageId);
     if (this.highlightedId === messageId) {
@@ -267,30 +310,38 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Silently re-syncs the queue with the server after an action so rows another moderator handled (or
-   * that auto-released) don't linger. Unlike load(), it leaves the spinner alone and never re-triggers
-   * the deep-link scroll.
+   * Re-syncs the queue from the server after every action so rows another moderator concurrently handled
+   * drop too. No spinner and never destructive on error (a failed re-sync keeps the optimistic state).
+   * The held queue is low-volume, so a fetch per action is a fair price for accurate state. Generation-
+   * guarded so an out-of-order response (or one predating an optimistic removal) can't apply stale data.
    */
   private refresh(): void {
+    const generation = ++this.loadGeneration;
     this.committeeService.getPendingHeldMessages().subscribe({
       next: messages => {
-        const next = messages ?? [];
-        // Drop cached body state and any highlight for rows that are gone, so they don't accumulate
-        // for the session or point at a row that no longer exists.
-        const liveIds = new Set(next.map(m => m.id));
-        for (const id of Array.from(this.bodies.keys())) {
-          if (!liveIds.has(id)) {
-            this.bodies.delete(id);
-          }
-        }
-        if (this.highlightedId && !liveIds.has(this.highlightedId)) {
-          this.highlightedId = null;
-        }
-        this.pending = next;
+        if (generation !== this.loadGeneration) return;
+        this.reconcilePending(messages ?? []);
       },
       error: () => {
         // Keep the current list; the next action or a manual reload reconciles.
       },
     });
+  }
+
+  /** Replaces the queue (clearing any stale error, pruning gone rows' state), then resolves a deep link. */
+  private reconcilePending(next: PendingHeldMessage[]): void {
+    this.error = ''; // a successful fetch clears a prior load-failure banner
+    const liveIds = new Set(next.map(m => m.id));
+    for (const id of Array.from(this.bodies.keys())) {
+      if (!liveIds.has(id)) {
+        this.bodies.delete(id);
+      }
+    }
+    if (this.highlightedId && !liveIds.has(this.highlightedId)) {
+      this.highlightedId = null;
+    }
+    this.pending = next;
+    // A waiting deep link resolves against whichever fetch brings its target in (or confirms it gone).
+    this.resolveDeepLink();
   }
 }
