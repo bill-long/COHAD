@@ -24,7 +24,7 @@ function makeNotification(type: AppNotification['type']): AppNotification {
   return {
     id: `n-${Math.random()}`,
     type,
-    targetType: 'HeldMessage',
+    targetType: type,
     targetId: 'x',
     title: 't',
     summary: 's',
@@ -117,10 +117,20 @@ describe('ManageComponent', () => {
   });
 
   describe('default landing', () => {
-    it('redirects /manage to the first tool the user can access', () => {
+    // Re-entry helper: simulates navigating (while the component stays mounted) by setting the URL and
+    // emitting the matching NavigationEnd. Initial-landing tests deliberately do NOT use this — in
+    // production the creating navigation's NavigationEnd fires before ngOnInit subscribes, so it is
+    // never delivered here; the component's startWith(null) is what must handle the initial landing.
+    function reEnter(url: string): void {
+      (routerSpy as any).url = url;
+      routerEvents.next(new NavigationEnd(1, url, url));
+    }
+
+    it('redirects an initial landing on /manage to the first accessible tool (no NavigationEnd delivered)', () => {
       setupTestBed(makeState(['Resident', 'WelcomeCommittee']), '/manage');
       component.ngOnInit();
-      // First visible group for a committee member is Communications → Email.
+      // No NavigationEnd is emitted — this models the real ordering where the creating navigation's
+      // event already fired. First visible group for a committee member is Communications → Email.
       expect(routerSpy.navigate).toHaveBeenCalledWith(['send-email'], jasmine.objectContaining({ replaceUrl: true }));
     });
 
@@ -144,8 +154,7 @@ describe('ManageComponent', () => {
 
       // User navigates back to bare /manage; the parent component is reused, so only a
       // NavigationEnd — not a fresh ngOnInit — signals the re-entry.
-      (routerSpy as any).url = '/manage';
-      routerEvents.next(new NavigationEnd(1, '/manage', '/manage'));
+      reEnter('/manage');
       expect(routerSpy.navigate).toHaveBeenCalledWith(['users'], jasmine.objectContaining({ replaceUrl: true }));
     });
 

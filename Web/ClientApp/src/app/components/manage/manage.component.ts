@@ -3,7 +3,7 @@ import { Component, DestroyRef, Inject, OnInit } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { Observable } from 'rxjs';
-import { filter, map, shareReplay, take } from 'rxjs/operators';
+import { filter, map, shareReplay, startWith, switchMap, take } from 'rxjs/operators';
 import { ApiUser } from 'src/app/models';
 import { NotificationsService } from 'src/app/services/notifications.service';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
@@ -121,35 +121,22 @@ export class ManageComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Landing on bare /manage with no tool selected would show a blank pane. Open the first tool the
-    // current user can access instead. This must run on every entry to /manage, not just the first:
-    // the router reuses this parent component, so re-entering /manage from a child route (e.g. the
-    // navbar 'Manage' link while on /manage/homes) never re-runs ngOnInit. React to NavigationEnd,
-    // and also check once now for the initial navigation whose NavigationEnd may already have fired.
+    // Open the first tool the user can access when they land on bare /manage (which would otherwise
+    // show a blank pane). Two arrival paths must both work:
+    //   - Initial landing: the navigation that creates this component emits its NavigationEnd *before*
+    //     ngOnInit runs (activation emits the event; ngOnInit runs on the next change-detection tick),
+    //     so that event is already gone — startWith(null) re-checks the current URL synchronously now.
+    //   - Re-entry from a child route: the router reuses this component (no new ngOnInit), so later
+    //     NavigationEnds drive the check (e.g. the navbar 'Manage' link while on /manage/homes).
+    // switchMap cancels a pending profile-wait when a newer navigation supersedes it, so duplicate
+    // waits never pile up; the subscribe re-checks the URL so a late profile load can't yank a user
+    // who has since moved to a child route. takeUntilDestroyed tears the whole thing down with the view.
     this.router.events
       .pipe(
         filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe(() => this.redirectBareManageToFirstTool());
-    this.redirectBareManageToFirstTool();
-  }
-
-  /** True when the current URL is /manage with no child tool selected. */
-  private isBareManageUrl(): boolean {
-    const path = this.router.url.split('?')[0].split('#')[0].replace(/\/+$/, '');
-    return path === '/manage';
-  }
-
-  /** If sitting on bare /manage, navigate to the first tool the user can access (once the profile loads). */
-  private redirectBareManageToFirstTool(): void {
-    if (!this.isBareManageUrl()) return;
-    this.visibleGroups$
-      .pipe(
-        filter(groups => groups.length > 0),
-        take(1),
-        // The profile may resolve after the user has left /manage; tear down with the component so a
-        // never-firing take(1) can't leak, and re-check the URL below so a late load can't yank them.
+        startWith(null),
+        filter(() => this.isBareManageUrl()),
+        switchMap(() => this.visibleGroups$.pipe(filter(groups => groups.length > 0), take(1))),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(groups => {
@@ -157,6 +144,12 @@ export class ManageComponent implements OnInit {
         const first = groups[0].items[0];
         this.router.navigate([first.route], { relativeTo: this.route, replaceUrl: true });
       });
+  }
+
+  /** True when the current URL is /manage with no child tool selected. */
+  private isBareManageUrl(): boolean {
+    const path = this.router.url.split('?')[0].split('#')[0].replace(/\/+$/, '');
+    return path === '/manage';
   }
 
   /** Reproduces the previous per-tab visibility logic: role match, plus the Resident requirement. */
