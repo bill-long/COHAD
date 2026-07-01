@@ -110,6 +110,7 @@ public sealed class CommitteeMailPollerTests
     private static bool IsApprovalsDeepLinkWithGuid(string deepLink)
     {
         const string prefix = "/manage/approvals?message=";
-        return deepLink.StartsWith(prefix) && Guid.TryParse(deepLink.Substring(prefix.Length), out _);
+        return deepLink.StartsWith(prefix, StringComparison.Ordinal)
+            && Guid.TryParse(deepLink.Substring(prefix.Length), out _);
     }
 }
