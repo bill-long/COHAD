@@ -188,6 +188,12 @@ mat-expansion-panel.residentPanel .mat-expansion-panel-body {
   border: 1px solid color-mix(in srgb, var(--success) 28%, transparent);
 }
 
+.cohad-inline-alert--info {
+  color: var(--info-purple);
+  background: var(--info-purple-bg);
+  border: 1px solid color-mix(in srgb, var(--info-purple) 28%, transparent);
+}
+
 /* Global card hover transition */
 .mat-mdc-card {
   transition:

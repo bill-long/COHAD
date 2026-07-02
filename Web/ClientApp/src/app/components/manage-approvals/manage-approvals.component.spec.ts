@@ -1,4 +1,5 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, convertToParamMap, ParamMap } from '@angular/router';
 import { DomSanitizer } from '@angular/platform-browser';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -278,5 +279,91 @@ describe('ManageApprovalsComponent', () => {
 
     expect(component.highlightedId).toBeNull();
     expect(component.pending.map(m => m.id)).toEqual(['still-here']);
+  });
+
+  it('shows the stale-deep-link info notice when the target was already handled (other rows still pending)', () => {
+    const component = setup([makePending({ id: 'still-here' })], { message: 'gone' });
+    component.ngOnInit();
+
+    expect(component.staleDeepLinkNotice).toBeTrue();
+    expect(component.pending.map(m => m.id)).toEqual(['still-here']);
+  });
+
+  it('shows the stale-deep-link info notice even when nothing else is pending', () => {
+    const component = setup([], { message: 'gone' });
+    component.ngOnInit();
+
+    expect(component.staleDeepLinkNotice).toBeTrue();
+    expect(component.pending).toEqual([]);
+  });
+
+  it('does not show the stale-deep-link notice when the target is found', fakeAsync(() => {
+    const component = setup([makePending({ id: 'target', committeeId: 'c-9' })], { message: 'target' });
+    serviceSpy.getHeldMessageBody.and.returnValue(
+      of({ available: true, isHtml: false, body: 'hi', senderEmail: null, senderName: null, subject: null, receivedUtc: '' }),
+    );
+    component.ngOnInit();
+    tick();
+
+    expect(component.staleDeepLinkNotice).toBeFalse();
+    expect(component.highlightedId).toBe('target');
+  }));
+
+  it('dismisses the stale-deep-link notice', () => {
+    const component = setup([], { message: 'gone' });
+    component.ngOnInit();
+    expect(component.staleDeepLinkNotice).toBeTrue();
+
+    component.dismissStaleDeepLinkNotice();
+
+    expect(component.staleDeepLinkNotice).toBeFalse();
+  });
+
+  it('raises the stale notice when a re-targeted ?message= is no longer pending', fakeAsync(() => {
+    const component = setup([makePending({ id: 'a' })]); // no deep link initially
+    component.ngOnInit();
+    tick();
+    expect(component.staleDeepLinkNotice).toBeFalse();
+
+    // Click a notification for a message that isn't pending; the re-sync confirms it gone.
+    serviceSpy.getPendingHeldMessages.and.returnValue(of([makePending({ id: 'a' })]));
+    queryParams$.next(convertToParamMap({ message: 'gone' }));
+    tick();
+
+    expect(component.staleDeepLinkNotice).toBeTrue();
+  }));
+
+  it('surfaces the backend error message in the snackbar when approve fails', () => {
+    const component = setup([makePending({ id: 'a' })]);
+    component.ngOnInit();
+    serviceSpy.approveHeldMessage.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 400, error: { error: 'Message is already Approved.' } })),
+    );
+
+    component.approve(makePending({ id: 'a', committeeId: 'c-1' }));
+
+    expect(snackSpy.open.calls.mostRecent().args[0]).toBe('Message is already Approved.');
+  });
+
+  it('surfaces the backend 409 message in the snackbar when reject fails', () => {
+    const component = setup([makePending({ id: 'a' })]);
+    component.ngOnInit();
+    serviceSpy.rejectHeldMessage.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 409, error: { error: 'Message was already actioned by another administrator.' } })),
+    );
+
+    component.reject(makePending({ id: 'a', committeeId: 'c-1' }));
+
+    expect(snackSpy.open.calls.mostRecent().args[0]).toBe('Message was already actioned by another administrator.');
+  });
+
+  it('falls back to the generic message when the failure has no structured body', () => {
+    const component = setup([makePending({ id: 'a', senderName: 'Stranger' })]);
+    component.ngOnInit();
+    serviceSpy.approveHeldMessage.and.returnValue(throwError(() => new Error('network down')));
+
+    component.approve(makePending({ id: 'a', committeeId: 'c-1', senderName: 'Stranger' }));
+
+    expect(snackSpy.open.calls.mostRecent().args[0]).toBe('Failed to approve the message from Stranger.');
   });
 });

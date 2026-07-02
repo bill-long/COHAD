@@ -29,6 +29,18 @@
   padding: 1rem 0;
 }
 
+.approvals-stale-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.approvals-stale-notice__dismiss {
+  flex-shrink: 0;
+  color: inherit;
+}
+
 .held-message-list {
   display: flex;
   flex-direction: column;
