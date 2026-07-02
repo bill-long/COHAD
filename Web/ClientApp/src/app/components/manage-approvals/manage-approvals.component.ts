@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -44,6 +45,11 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
   /** Id of the message a deep link pointed at, highlighted so the moderator spots it immediately. */
   highlightedId: string | null = null;
 
+  /** True when a ?message= deep link pointed at a message that isn't in the pending queue — it was
+   *  already approved/rejected (often by another moderator). Drives a dismissible info notice so the
+   *  moderator gets explicit feedback instead of silently landing on an inbox without "their" email. */
+  staleDeepLinkNotice = false;
+
   /** Lazily-loaded body preview state per held message id. */
   bodies = new Map<string, HeldBodyState>();
 
@@ -72,6 +78,7 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
       // do a (non-destructive) re-sync in case it just arrived.
       if (!this.loaded) return;
       this.highlightedId = null;
+      this.staleDeepLinkNotice = false; // start the new navigation clean; resolveDeepLink re-decides
       if (this.deepLinkMessageId && this.pending.some(m => m.id === this.deepLinkMessageId)) {
         this.resolveDeepLink();
       } else if (this.deepLinkMessageId) {
@@ -113,8 +120,8 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
   /**
    * If the deep-link target is in the current queue, highlight, open, and scroll to it (one-shot). Runs
    * after every successful list fetch (via reconcilePending) and on a same-page re-target. If the target
-   * isn't present — already handled, or not in this snapshot — it simply leaves the queue as-is; the
-   * moderator still lands on the inbox showing what's actually pending, which is the useful outcome.
+   * isn't present — already handled by this or another moderator — it raises a dismissible info notice so
+   * the moderator gets explicit feedback; they still land on the inbox showing what's actually pending.
    */
   private resolveDeepLink(): void {
     const id = this.deepLinkMessageId;
@@ -122,12 +129,21 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
     this.deepLinkMessageId = null; // one-shot, whether or not the target was found
 
     const target = this.pending.find(m => m.id === id);
-    if (!target) return;
+    if (!target) {
+      this.staleDeepLinkNotice = true;
+      return;
+    }
 
+    this.staleDeepLinkNotice = false;
     this.highlightedId = id;
     this.ensureBodyExpanded(target);
     // Defer until the row has rendered, then bring it into view.
     setTimeout(() => document.getElementById('approval-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  }
+
+  /** Dismisses the stale-deep-link info notice (user clicked its close button). */
+  dismissStaleDeepLinkNotice(): void {
+    this.staleDeepLinkNotice = false;
   }
 
   getBody(messageId: string): HeldBodyState | undefined {
@@ -268,9 +284,9 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
         this.snackBar.open(`Approved — message from ${sender} will be forwarded.`, 'Dismiss', { duration: 5000 });
         this.refresh();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.actioning.delete(message.id);
-        this.snackBar.open(`Failed to approve the message from ${sender}.`, 'Dismiss', { duration: 6000 });
+        this.snackBar.open(this.actionErrorMessage(err, `Failed to approve the message from ${sender}.`), 'Dismiss', { duration: 6000 });
         this.refresh();
       },
     });
@@ -286,9 +302,9 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
         this.snackBar.open(`Rejected — message from ${sender} was discarded.`, 'Dismiss', { duration: 5000 });
         this.refresh();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.actioning.delete(message.id);
-        this.snackBar.open(`Failed to reject the message from ${sender}.`, 'Dismiss', { duration: 6000 });
+        this.snackBar.open(this.actionErrorMessage(err, `Failed to reject the message from ${sender}.`), 'Dismiss', { duration: 6000 });
         this.refresh();
       },
     });
@@ -296,6 +312,21 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
 
   private senderLabel(message: PendingHeldMessage): string {
     return message.senderName || message.senderEmail || 'unknown sender';
+  }
+
+  /**
+   * Prefers the backend's specific reason (both approve/reject guards return `{ error: string }` — e.g.
+   * "Message is already Approved." on the 400 status guard, or "Message was already actioned by another
+   * administrator." on a 409 ETag race) so the moderator can tell "already handled" from a transient
+   * failure. Falls back to the generic message when there's no structured body (network error, etc.).
+   */
+  private actionErrorMessage(err: unknown, fallback: string): string {
+    const body = err instanceof HttpErrorResponse ? err.error : null;
+    if (body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string') {
+      const reason = (body as { error: string }).error.trim();
+      if (reason) return reason;
+    }
+    return fallback;
   }
 
   /** Optimistically drops a just-actioned row and its cached state. Bumps the generation so a list

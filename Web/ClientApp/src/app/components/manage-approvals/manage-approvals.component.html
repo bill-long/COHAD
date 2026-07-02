@@ -10,6 +10,23 @@
 
   <div class="cohad-inline-alert cohad-inline-alert--error" *ngIf="error" role="alert">{{ error }}</div>
 
+  <div
+    class="cohad-inline-alert cohad-inline-alert--info approvals-stale-notice"
+    *ngIf="staleDeepLinkNotice"
+    role="status"
+  >
+    <span>That email has already been handled by another moderator.</span>
+    <button
+      type="button"
+      mat-icon-button
+      class="approvals-stale-notice__dismiss"
+      aria-label="Dismiss notice"
+      (click)="dismissStaleDeepLinkNotice()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
   <div class="approvals-empty" *ngIf="!loading && !error && pending.length === 0">
     No emails waiting for approval.
   </div>
