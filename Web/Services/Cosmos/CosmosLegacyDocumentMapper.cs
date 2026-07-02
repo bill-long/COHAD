@@ -641,11 +641,16 @@ namespace Web.Services.Cosmos
                 Subject = doc.Value<string>("Subject"),
                 ReceivedUtc = doc["ReceivedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
                 HeldUtc = doc["HeldUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
+                NotifiedUtc = doc["NotifiedUtc"]?.ToObject<DateTime?>(),
                 Status = Enum.TryParse<HeldMessageStatus>(doc.Value<string>("Status"), out var s)
                     ? s
                     : HeldMessageStatus.Held,
                 ReviewedByUserId = doc.Value<string>("ReviewedByUserId"),
                 ReviewedUtc = doc["ReviewedUtc"]?.ToObject<DateTime?>(),
+                // Populate ETag on every read path (per the repository convention) so query results can
+                // be written back under optimistic concurrency; point reads overwrite this from the
+                // response header with the same value.
+                ETag = doc.Value<string>("_etag"),
             };
         }
 
@@ -662,6 +667,9 @@ namespace Web.Services.Cosmos
                 ["Subject"] = msg.Subject,
                 ["ReceivedUtc"] = JToken.FromObject(msg.ReceivedUtc),
                 ["HeldUtc"] = JToken.FromObject(msg.HeldUtc),
+                ["NotifiedUtc"] = msg.NotifiedUtc != null
+                    ? JToken.FromObject(msg.NotifiedUtc)
+                    : JValue.CreateNull(),
                 ["Status"] = msg.Status.ToString(),
                 ["ReviewedByUserId"] = msg.ReviewedByUserId,
                 ["ReviewedUtc"] = msg.ReviewedUtc != null

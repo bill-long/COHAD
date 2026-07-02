@@ -28,6 +28,7 @@ namespace Web.Services
         private readonly IGraphMailReader _graphMailReader;
         private readonly ILogger<CommitteeMailPoller> _logger;
         private readonly TimeSpan _pollInterval;
+        private readonly TimeSpan _antispamHold;
         private readonly bool _enabled;
 
         private const string ProcessedFolderName = "COHAD Processed";
@@ -49,6 +50,12 @@ namespace Web.Services
             _enabled = config.GetValue("CommitteeForwarding:Enabled", false);
             var intervalMinutes = config.GetValue("CommitteeForwarding:PollIntervalMinutes", 10);
             _pollInterval = TimeSpan.FromMinutes(Math.Max(1, intervalMinutes));
+
+            // Non-directory (held) messages sit in an antispam quarantine for this long before their
+            // moderators are notified, giving automatic antispam a chance to act on them first. 0 disables
+            // the delay (a held message becomes eligible on the next poll's quarantine sweep).
+            var antispamHoldMinutes = config.GetValue("CommitteeForwarding:AntispamHoldMinutes", 60);
+            _antispamHold = TimeSpan.FromMinutes(Math.Max(0, antispamHoldMinutes));
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -93,11 +100,23 @@ namespace Web.Services
             var emailJobRepo = scope.ServiceProvider.GetRequiredService<IEmailJobRepository>();
             var heldMessageRepo = scope.ServiceProvider.GetRequiredService<IHeldMessageRepository>();
             var residentRepo = scope.ServiceProvider.GetRequiredService<IResidentRepository>();
-            var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
             var fileStore = scope.ServiceProvider.GetRequiredService<IDocumentFileStore>();
             var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
             var committees = await committeeRepo.GetAllAsync();
+
+            // Surface any held (non-directory) messages whose antispam quarantine window has elapsed.
+            // Uses the full committee list to resolve display names/audiences for the notifications.
+            // Isolated in its own try/catch so a sweep failure never aborts committee forwarding below.
+            try
+            {
+                await NotifyHeldMessagesPastAntispamHoldAsync(committees, heldMessageRepo, notificationService, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Antispam-hold notification sweep failed");
+            }
+
             var enabled = committees
                 .Where(c => c.ForwardingEnabled && !string.IsNullOrWhiteSpace(c.CommitteeEmail))
                 .ToList();
@@ -120,9 +139,7 @@ namespace Web.Services
                         emailJobRepo,
                         heldMessageRepo,
                         residentRepo,
-                        userRepo,
                         fileStore,
-                        notificationService,
                         ct
                     );
 
@@ -155,9 +172,7 @@ namespace Web.Services
             IEmailJobRepository emailJobRepo,
             IHeldMessageRepository heldMessageRepo,
             IResidentRepository residentRepo,
-            IUserRepository userRepo,
             IDocumentFileStore fileStore,
-            INotificationService notificationService,
             CancellationToken ct
         )
         {
@@ -223,9 +238,7 @@ namespace Web.Services
                         emailJobRepo,
                         heldMessageRepo,
                         residentRepo,
-                        userRepo,
                         fileStore,
-                        notificationService,
                         ct
                     );
                 }
@@ -253,9 +266,7 @@ namespace Web.Services
             IEmailJobRepository emailJobRepo,
             IHeldMessageRepository heldMessageRepo,
             IResidentRepository residentRepo,
-            IUserRepository userRepo,
             IDocumentFileStore fileStore,
-            INotificationService notificationService,
             CancellationToken ct
         )
         {
@@ -324,8 +335,6 @@ namespace Web.Services
                         message.ReceivedDateTime?.UtcDateTime ?? DateTime.UtcNow,
                         processedFolderId,
                         heldMessageRepo,
-                        userRepo,
-                        notificationService,
                         ct
                     );
                     return;
@@ -502,8 +511,6 @@ namespace Web.Services
             DateTime receivedUtc,
             string processedFolderId,
             IHeldMessageRepository heldMessageRepo,
-            IUserRepository userRepo,
-            INotificationService notificationService,
             CancellationToken ct
         )
         {
@@ -519,6 +526,8 @@ namespace Web.Services
                 Subject = subject,
                 ReceivedUtc = receivedUtc,
                 HeldUtc = DateTime.UtcNow,
+                // NotifiedUtc stays null: the message enters the antispam quarantine window and its
+                // moderators are notified later by NotifyHeldMessagesPastAntispamHoldAsync, not now.
                 Status = HeldMessageStatus.Held,
             };
 
@@ -538,36 +547,118 @@ namespace Web.Services
             }
 
             _logger.LogInformation(
-                "Held message {InternetMessageId} in {Mailbox} — sender {Sender} not in directory",
+                "Held message {InternetMessageId} in {Mailbox} — sender {Sender} not in directory; "
+                    + "quarantined for antispam before notifying",
                 internetMessageId,
                 committee.CommitteeEmail,
                 senderEmail
             );
 
-            // Raise the unified in-app notification for the committee's moderators (durable, survives
-            // reconnects). Best-effort: a notification failure must not abort moving the message to
-            // Processed, which would otherwise re-hold it on the next poll.
-            try
-            {
-                var sender = !string.IsNullOrWhiteSpace(senderName) ? senderName : senderEmail;
-                await notificationService.RaiseAsync(
-                    NotificationType.HeldMessage,
-                    NotificationAudience.Committee(committee.Id),
-                    NotificationTargetType.HeldMessage,
-                    held.Id.ToString("D"),
-                    "Held committee email",
-                    $"{committee.DisplayName}: from {sender} — {subject}",
-                    $"/manage/approvals?message={held.Id:D}",
-                    ct
-                );
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(ex, "Failed to raise held-message notification for {Committee}", committee.DisplayName);
-            }
-
             // Move to processed folder using Graph API id (the held record in Cosmos tracks via InternetMessageId)
             await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
+        }
+
+        /// <summary>
+        /// Raises the deferred in-app notification for each held (non-directory) message whose antispam
+        /// quarantine window has elapsed, then stamps <see cref="HeldMessage.NotifiedUtc"/> so it is only
+        /// notified once. Best-effort per message: a failure on one is logged and the rest continue.
+        /// </summary>
+        internal async Task NotifyHeldMessagesPastAntispamHoldAsync(
+            IReadOnlyList<Committee> committees,
+            IHeldMessageRepository heldMessageRepo,
+            INotificationService notificationService,
+            CancellationToken ct
+        )
+        {
+            var cutoff = DateTime.UtcNow - _antispamHold;
+            var pending = await heldMessageRepo.GetAwaitingNotificationAsync(cutoff);
+            if (pending.Count == 0)
+                return;
+
+            var byCommitteeId = new Dictionary<string, Committee>();
+            foreach (var c in committees)
+                if (!string.IsNullOrEmpty(c.Id))
+                    byCommitteeId[c.Id] = c;
+
+            // The query already returns only Held, un-notified messages ordered oldest-first, each with a
+            // usable ETag (set by the mapper), so we act on the returned row directly rather than re-reading.
+            foreach (var held in pending)
+            {
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    // A held message should always carry a CommitteeId, but guard against a legacy/corrupt
+                    // record: an empty id would give an unresolvable "committee:" audience (reaching no one),
+                    // and a null id would throw on the Dictionary lookup. Fall back to Administrators — who
+                    // can manage every committee's held mail — so the message is still surfaced, not dropped.
+                    string audienceKey;
+                    string displayName;
+                    if (string.IsNullOrEmpty(held.CommitteeId))
+                    {
+                        audienceKey = NotificationAudience.Administrators;
+                        displayName = string.IsNullOrWhiteSpace(held.CommitteeEmail) ? "a committee" : held.CommitteeEmail;
+                    }
+                    else
+                    {
+                        audienceKey = NotificationAudience.Committee(held.CommitteeId);
+                        displayName = byCommitteeId.TryGetValue(held.CommitteeId, out var committee)
+                            ? committee.DisplayName
+                            : held.CommitteeEmail;
+                    }
+                    var sender = !string.IsNullOrWhiteSpace(held.SenderName) ? held.SenderName : held.SenderEmail;
+
+                    // Idempotent on target — a re-raise (e.g. after a failed stamp) maps to the same
+                    // notification rather than creating a duplicate.
+                    await notificationService.RaiseAsync(
+                        NotificationType.HeldMessage,
+                        audienceKey,
+                        NotificationTargetType.HeldMessage,
+                        held.Id.ToString("D"),
+                        "Held committee email",
+                        $"{displayName}: from {sender} — {held.Subject}",
+                        $"/manage/approvals?message={held.Id:D}",
+                        ct
+                    );
+
+                    // Stamp NotifiedUtc under optimistic concurrency. A success proves no writer touched the
+                    // message between the query and now, so any moderator who approves/rejects later will see
+                    // (and resolve) the notification we just raised.
+                    held.NotifiedUtc = DateTime.UtcNow;
+                    try
+                    {
+                        await heldMessageRepo.UpdateAsync(held);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // A concurrent write (typically a moderator approve/reject) beat our stamp. That
+                        // action's own ResolveAsync may have run before our RaiseAsync above and so found no
+                        // notification to clear — leaving ours orphaned. Re-read and, if the message is no
+                        // longer Held, resolve the notification we raised so it does not escalate as an alert
+                        // for an already-handled message. If it is still Held, a later sweep re-stamps it.
+                        var after = await heldMessageRepo.GetByIdAsync(held.Id);
+                        if (after == null || after.Status != HeldMessageStatus.Held)
+                        {
+                            await notificationService.ResolveAsync(
+                                NotificationTargetType.HeldMessage,
+                                held.Id.ToString("D"),
+                                "system:antispam-hold",
+                                ct
+                            );
+                        }
+                        else
+                        {
+                            _logger.LogDebug(
+                                "Held message {HeldId} changed concurrently while stamping NotifiedUtc — leaving for a later sweep",
+                                held.Id
+                            );
+                        }
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Failed to notify held message {HeldId} past antispam hold", held.Id);
+                }
+            }
         }
 
         /// <summary>
