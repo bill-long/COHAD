@@ -50,6 +50,20 @@ namespace Web.Models
 
         public HeldMessageStatus Status { get; set; }
 
+        /// <summary>
+        /// The LLM spam classifier's verdict for this message, computed once at hold time from the sender,
+        /// subject, and body. Retained as an audit trail: a message the antispam sweep auto-rejects as spam
+        /// keeps its verdict, confidence, and reason so a moderator can later review why it was filtered.
+        /// <see cref="SpamVerdict.Unknown"/> when classification is disabled or failed.
+        /// </summary>
+        public SpamVerdict SpamVerdict { get; set; }
+
+        /// <summary>The classifier's confidence in <see cref="SpamVerdict"/>. See <see cref="SpamConfidence"/>.</summary>
+        public SpamConfidence SpamConfidence { get; set; }
+
+        /// <summary>The classifier's one-line justification for its verdict, kept for auditing auto-rejections.</summary>
+        public string SpamReason { get; set; }
+
         public string ReviewedByUserId { get; set; }
 
         public DateTime? ReviewedUtc { get; set; }
