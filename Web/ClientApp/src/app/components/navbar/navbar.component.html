@@ -83,40 +83,47 @@
         matBadgeColor="warn">
         Notifications
       </button>
-      <mat-menu #notificationMenuMobile="matMenu" class="notification-menu">
-        <ng-template matMenuContent>
-          <ng-container *ngIf="(notifications$ | async) as notifications">
-            <ng-container *ngIf="notifications.length > 0; else noNotificationsMobile">
-              <ng-container *ngFor="let notification of notifications">
-                <button mat-menu-item (click)="openNotification(notification)">
-                  <div class="notification-row">
-                    <div class="notification-title">{{ notification.title }}</div>
-                    <div class="notification-note">{{ notification.summary }}</div>
-                  </div>
-                </button>
-                <button
-                  mat-menu-item
-                  class="notification-ack"
-                  *ngIf="notification.type === 'Registration'"
-                  (click)="acknowledge(notification)">
-                  Acknowledge
-                </button>
-              </ng-container>
-            </ng-container>
-            <ng-template #noNotificationsMobile>
-              <span class="menu-empty-state">No new notifications</span>
-            </ng-template>
-          </ng-container>
-        </ng-template>
-      </mat-menu>
       <ng-container *ngIf="!vm.authUser?.identityClaims?.emails">
         <button mat-menu-item *ngIf="!useMockAuth" (click)="login()" [disabled]="disabled">Sign In</button>
         <button mat-menu-item *ngIf="useMockAuth" [matMenuTriggerFor]="mockLoginMenuMobile" [disabled]="disabled">Sign In As...</button>
-        <mat-menu #mockLoginMenuMobile="matMenu">
-          <button mat-menu-item *ngFor="let u of mockUsers" (click)="loginAs(u.id)">{{u.label}}</button>
-        </mat-menu>
       </ng-container>
       <button mat-menu-item color="primary" *ngIf="vm.authUser?.identityClaims?.emails as emails" [matMenuTriggerFor]="userMenu">{{emails[0]}}</button>
+    </mat-menu>
+
+    <!-- Sub-menus opened from within #hamburgerMenu are declared as SIBLINGS of it, never nested inside
+         its content. MatMenu's `lazyContent` (and item) content queries use `descendants: true`, so a
+         <mat-menu> physically nested in another menu's content - especially one holding a
+         <ng-template matMenuContent> - is captured as the OUTER menu's own content and crashes the outer
+         menu on open with "Cannot read properties of null (reading 'insertBefore')". Referencing the
+         sub-menus by template variable keeps the trigger wiring intact without the fatal nesting. -->
+    <mat-menu #notificationMenuMobile="matMenu" class="notification-menu">
+      <ng-template matMenuContent>
+        <ng-container *ngIf="(notifications$ | async) as notifications">
+          <ng-container *ngIf="notifications.length > 0; else noNotificationsMobile">
+            <ng-container *ngFor="let notification of notifications">
+              <button mat-menu-item (click)="openNotification(notification)">
+                <div class="notification-row">
+                  <div class="notification-title">{{ notification.title }}</div>
+                  <div class="notification-note">{{ notification.summary }}</div>
+                </div>
+              </button>
+              <button
+                mat-menu-item
+                class="notification-ack"
+                *ngIf="notification.type === 'Registration'"
+                (click)="acknowledge(notification)">
+                Acknowledge
+              </button>
+            </ng-container>
+          </ng-container>
+          <ng-template #noNotificationsMobile>
+            <span class="menu-empty-state">No new notifications</span>
+          </ng-template>
+        </ng-container>
+      </ng-template>
+    </mat-menu>
+    <mat-menu #mockLoginMenuMobile="matMenu">
+      <button mat-menu-item *ngFor="let u of mockUsers" (click)="loginAs(u.id)">{{u.label}}</button>
     </mat-menu>
   </div>
   </ng-container>
