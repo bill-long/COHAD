@@ -451,6 +451,28 @@ namespace Web
             // must also be true for the poller to actually run.
             if (services.Any(sd => sd.ServiceType == typeof(IGraphMailReader)))
             {
+                // LLM spam classifier for held (non-directory) committee mail. A real classifier is wired
+                // only when an Anthropic API key is configured; otherwise a no-op is registered and the
+                // poller falls back to notifying moderators for every held message. Behavior is further
+                // gated by CommitteeForwarding:SpamClassification:Enabled, read inside the poller.
+                var anthropicApiKey = Configuration["Anthropic:ApiKey"];
+                if (!string.IsNullOrWhiteSpace(anthropicApiKey))
+                {
+                    var spamModel = Configuration.GetValue(
+                        "CommitteeForwarding:SpamClassification:Model",
+                        "claude-haiku-4-5"
+                    );
+                    services.AddSingleton<ISpamClassifier>(sp => new AnthropicSpamClassifier(
+                        anthropicApiKey,
+                        spamModel,
+                        sp.GetRequiredService<ILogger<AnthropicSpamClassifier>>()
+                    ));
+                }
+                else
+                {
+                    services.AddSingleton<ISpamClassifier, DisabledSpamClassifier>();
+                }
+
                 services.AddSingleton<CommitteeMailPoller>();
                 services.AddHostedService(sp => sp.GetRequiredService<CommitteeMailPoller>());
             }

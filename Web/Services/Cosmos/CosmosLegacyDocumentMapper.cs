@@ -645,6 +645,16 @@ namespace Web.Services.Cosmos
                 Status = Enum.TryParse<HeldMessageStatus>(doc.Value<string>("Status"), out var s)
                     ? s
                     : HeldMessageStatus.Held,
+                // TryParseDefined rejects out-of-range numerics (e.g. "999"): an undefined SpamConfidence
+                // would otherwise spuriously satisfy the sweep's >= threshold check. A corrupt/legacy
+                // stored value safely falls back to Unknown.
+                SpamVerdict = EnumParse.TryParseDefined<SpamVerdict>(doc.Value<string>("SpamVerdict"), out var sv)
+                    ? sv
+                    : SpamVerdict.Unknown,
+                SpamConfidence = EnumParse.TryParseDefined<SpamConfidence>(doc.Value<string>("SpamConfidence"), out var sc)
+                    ? sc
+                    : SpamConfidence.Unknown,
+                SpamReason = doc.Value<string>("SpamReason"),
                 ReviewedByUserId = doc.Value<string>("ReviewedByUserId"),
                 ReviewedUtc = doc["ReviewedUtc"]?.ToObject<DateTime?>(),
                 // Populate ETag on every read path (per the repository convention) so query results can
@@ -671,6 +681,9 @@ namespace Web.Services.Cosmos
                     ? JToken.FromObject(msg.NotifiedUtc)
                     : JValue.CreateNull(),
                 ["Status"] = msg.Status.ToString(),
+                ["SpamVerdict"] = msg.SpamVerdict.ToString(),
+                ["SpamConfidence"] = msg.SpamConfidence.ToString(),
+                ["SpamReason"] = msg.SpamReason,
                 ["ReviewedByUserId"] = msg.ReviewedByUserId,
                 ["ReviewedUtc"] = msg.ReviewedUtc != null
                     ? JToken.FromObject(msg.ReviewedUtc)

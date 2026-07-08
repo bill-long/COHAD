@@ -88,6 +88,7 @@ public sealed class CommitteeMailPollerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new EmailJobQueue(),
             graphReader.Object,
+            new DisabledSpamClassifier(),
             config,
             NullLogger<CommitteeMailPoller>.Instance
         );
@@ -164,6 +165,7 @@ public sealed class CommitteeMailPollerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new EmailJobQueue(),
             Mock.Of<IGraphMailReader>(),
+            new DisabledSpamClassifier(),
             config,
             NullLogger<CommitteeMailPoller>.Instance
         );
@@ -238,6 +240,7 @@ public sealed class CommitteeMailPollerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new EmailJobQueue(),
             Mock.Of<IGraphMailReader>(),
+            new DisabledSpamClassifier(),
             new ConfigurationBuilder().Build(),
             NullLogger<CommitteeMailPoller>.Instance
         );
@@ -313,6 +316,7 @@ public sealed class CommitteeMailPollerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new EmailJobQueue(),
             Mock.Of<IGraphMailReader>(),
+            new DisabledSpamClassifier(),
             new ConfigurationBuilder().Build(),
             NullLogger<CommitteeMailPoller>.Instance
         );
@@ -381,6 +385,7 @@ public sealed class CommitteeMailPollerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new EmailJobQueue(),
             Mock.Of<IGraphMailReader>(),
+            new DisabledSpamClassifier(),
             new ConfigurationBuilder().Build(),
             NullLogger<CommitteeMailPoller>.Instance
         );
@@ -437,6 +442,7 @@ public sealed class CommitteeMailPollerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new EmailJobQueue(),
             Mock.Of<IGraphMailReader>(),
+            new DisabledSpamClassifier(),
             new ConfigurationBuilder().Build(),
             NullLogger<CommitteeMailPoller>.Instance
         );
@@ -500,6 +506,7 @@ public sealed class CommitteeMailPollerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new EmailJobQueue(),
             Mock.Of<IGraphMailReader>(),
+            new DisabledSpamClassifier(),
             new ConfigurationBuilder().Build(),
             NullLogger<CommitteeMailPoller>.Instance
         );

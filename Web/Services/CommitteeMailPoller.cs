@@ -26,18 +26,24 @@ namespace Web.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly EmailJobQueue _emailJobQueue;
         private readonly IGraphMailReader _graphMailReader;
+        private readonly ISpamClassifier _spamClassifier;
         private readonly ILogger<CommitteeMailPoller> _logger;
         private readonly TimeSpan _pollInterval;
         private readonly TimeSpan _antispamHold;
         private readonly bool _enabled;
+        private readonly bool _spamClassificationEnabled;
+        private readonly SpamConfidence _spamRejectThreshold;
+        private readonly string? _invalidThresholdRaw;
 
         private const string ProcessedFolderName = "COHAD Processed";
         private const string ForwardCategory = "committee-forward";
+        private const string SpamClassifierReviewer = "system:spam-classifier";
 
         public CommitteeMailPoller(
             IServiceScopeFactory scopeFactory,
             EmailJobQueue emailJobQueue,
             IGraphMailReader graphMailReader,
+            ISpamClassifier spamClassifier,
             IConfiguration config,
             ILogger<CommitteeMailPoller> logger
         )
@@ -45,6 +51,7 @@ namespace Web.Services
             _scopeFactory = scopeFactory;
             _emailJobQueue = emailJobQueue;
             _graphMailReader = graphMailReader;
+            _spamClassifier = spamClassifier;
             _logger = logger;
 
             _enabled = config.GetValue("CommitteeForwarding:Enabled", false);
@@ -56,6 +63,25 @@ namespace Web.Services
             // the delay (a held message becomes eligible on the next poll's quarantine sweep).
             var antispamHoldMinutes = config.GetValue("CommitteeForwarding:AntispamHoldMinutes", 60);
             _antispamHold = TimeSpan.FromMinutes(Math.Max(0, antispamHoldMinutes));
+
+            // LLM spam classification of held messages. When enabled, held mail is classified at hold time
+            // and messages the classifier flags as spam with at least this confidence are auto-rejected by
+            // the antispam sweep instead of notifying moderators. Single kill-switch for both steps.
+            _spamClassificationEnabled = config.GetValue("CommitteeForwarding:SpamClassification:Enabled", false);
+            var thresholdRaw = config.GetValue("CommitteeForwarding:SpamClassification:ConfidenceThreshold", "High");
+            // TryParseDefined rejects out-of-range numerics ("4") and comma/flags forms that would
+            // otherwise yield a threshold no real confidence meets, silently disabling auto-rejection.
+            // On anything invalid, fall back to High and record the raw value to warn.
+            if (EnumParse.TryParseDefined<SpamConfidence>(thresholdRaw, out var t)
+                && t != SpamConfidence.Unknown)
+            {
+                _spamRejectThreshold = t;
+            }
+            else
+            {
+                _spamRejectThreshold = SpamConfidence.High;
+                _invalidThresholdRaw = thresholdRaw;
+            }
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -70,6 +96,27 @@ namespace Web.Services
                 "Committee mail poller started. Polling every {Interval} minutes",
                 _pollInterval.TotalMinutes
             );
+
+            if (_spamClassificationEnabled)
+            {
+                if (_invalidThresholdRaw != null)
+                    _logger.LogWarning(
+                        "Invalid CommitteeForwarding:SpamClassification:ConfidenceThreshold '{Raw}' - "
+                            + "expected Low, Medium, or High; falling back to High",
+                        _invalidThresholdRaw
+                    );
+
+                if (_spamClassifier.IsAvailable)
+                    _logger.LogInformation(
+                        "Held-message spam classification enabled (auto-reject at confidence >= {Threshold})",
+                        _spamRejectThreshold
+                    );
+                else
+                    _logger.LogWarning(
+                        "Held-message spam classification is enabled but no Anthropic API key is configured - "
+                            + "held messages will not be classified or auto-filtered"
+                    );
+            }
 
             // Short initial delay so the app finishes starting up
             await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
@@ -332,6 +379,7 @@ namespace Web.Services
                         senderEmail,
                         senderName,
                         message.Subject,
+                        message.Body?.Content,
                         message.ReceivedDateTime?.UtcDateTime ?? DateTime.UtcNow,
                         processedFolderId,
                         heldMessageRepo,
@@ -508,12 +556,35 @@ namespace Web.Services
             string? senderEmail,
             string? senderName,
             string? subject,
+            string? body,
             DateTime receivedUtc,
             string processedFolderId,
             IHeldMessageRepository heldMessageRepo,
             CancellationToken ct
         )
         {
+            // Classify at hold time, while the body is in hand. The verdict is stored on the held record;
+            // the antispam sweep acts on it later (after the quarantine window), so O365 still gets its
+            // chance first. The classifier is contractually fail-safe, but guard here too: a misbehaving
+            // implementation must not abort holding the message (which would leave it in the inbox to be
+            // reprocessed - and re-classified - every poll cycle). Any failure is treated as Unknown.
+            var spam = new SpamClassificationResult();
+            if (_spamClassificationEnabled)
+            {
+                try
+                {
+                    spam = await _spamClassifier.ClassifyAsync(senderEmail, senderName, subject, body, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Spam classifier threw while holding message {InternetMessageId} - treating as Unknown",
+                        internetMessageId
+                    );
+                }
+            }
+
             var held = new HeldMessage
             {
                 // Deterministic ID for write-time idempotency (same pattern as EmailJob)
@@ -529,6 +600,9 @@ namespace Web.Services
                 // NotifiedUtc stays null: the message enters the antispam quarantine window and its
                 // moderators are notified later by NotifyHeldMessagesPastAntispamHoldAsync, not now.
                 Status = HeldMessageStatus.Held,
+                SpamVerdict = spam.Verdict,
+                SpamConfidence = spam.Confidence,
+                SpamReason = spam.Reason,
             };
 
             try
@@ -585,6 +659,26 @@ namespace Web.Services
             foreach (var held in pending)
             {
                 ct.ThrowIfCancellationRequested();
+
+                // Auto-reject confident spam instead of notifying moderators. Gated by the same enable flag
+                // as hold-time classification, so turning the feature off immediately stops auto-rejecting
+                // (even already-classified records). No notification was ever raised for a quarantined
+                // message, so there is nothing to resolve here.
+                if (_spamClassificationEnabled
+                    && held.SpamVerdict == SpamVerdict.Spam
+                    && held.SpamConfidence >= _spamRejectThreshold)
+                {
+                    try
+                    {
+                        await AutoRejectAsSpamAsync(held, heldMessageRepo);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        _logger.LogWarning(ex, "Failed to auto-reject held message {HeldId} classified as spam", held.Id);
+                    }
+                    continue;
+                }
+
                 try
                 {
                     // A held message should always carry a CommitteeId, but guard against a legacy/corrupt
@@ -659,6 +753,44 @@ namespace Web.Services
                     _logger.LogWarning(ex, "Failed to notify held message {HeldId} past antispam hold", held.Id);
                 }
             }
+        }
+
+        /// <summary>
+        /// Marks a held message as rejected because the spam classifier flagged it with sufficient
+        /// confidence, without notifying moderators. The record (and its verdict/confidence/reason) is
+        /// retained as an audit trail, and the original email stays in the mailbox's Processed folder, so a
+        /// false positive is fully recoverable. Update is optimistic-concurrency guarded: a concurrent
+        /// write (e.g. a competing sweep or expiry) is tolerated and left for a later sweep to re-evaluate.
+        /// </summary>
+        private async Task AutoRejectAsSpamAsync(HeldMessage held, IHeldMessageRepository heldMessageRepo)
+        {
+            held.Status = HeldMessageStatus.Rejected;
+            held.ReviewedByUserId = SpamClassifierReviewer;
+            held.ReviewedUtc = DateTime.UtcNow;
+            // NotifiedUtc intentionally left null - moderators are never notified for auto-rejected spam.
+
+            try
+            {
+                await heldMessageRepo.UpdateAsync(held);
+            }
+            catch (InvalidOperationException)
+            {
+                _logger.LogDebug(
+                    "Held message {HeldId} changed concurrently while auto-rejecting as spam - leaving for a later sweep",
+                    held.Id
+                );
+                return;
+            }
+
+            _logger.LogInformation(
+                "Auto-rejected held message {HeldId} in {Mailbox} as spam ({Confidence}) from {Sender} - {Subject}. Reason: {Reason}",
+                held.Id,
+                held.CommitteeEmail,
+                held.SpamConfidence,
+                !string.IsNullOrWhiteSpace(held.SenderName) ? held.SenderName : held.SenderEmail,
+                held.Subject,
+                held.SpamReason
+            );
         }
 
         /// <summary>
