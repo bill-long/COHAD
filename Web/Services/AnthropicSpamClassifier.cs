@@ -25,6 +25,9 @@ namespace Web.Services
         // The body is only used for spam signal; cap it to bound token cost - spam intent is evident early.
         private const int MaxBodyChars = 6000;
 
+        // Clamp the model-supplied reason before it is logged/persisted (log-forging + Cosmos bloat guard).
+        private const int MaxReasonChars = 300;
+
         // Bound raw input before regex work so a pathologically large body can't dominate a poll cycle.
         private const int MaxRawBodyChars = 50_000;
 
@@ -115,9 +118,41 @@ namespace Web.Services
             {
                 Verdict = assessment.IsSpam ? SpamVerdict.Spam : SpamVerdict.NotSpam,
                 Confidence = ParseConfidence(assessment.Confidence),
-                Reason = string.IsNullOrWhiteSpace(assessment.Reason) ? null : assessment.Reason.Trim(),
+                Reason = NormalizeReason(assessment.Reason),
             };
         }
+
+        /// <summary>
+        /// Normalizes the model-supplied reason before it is logged and persisted: collapses whitespace to
+        /// a single line (a model could return newlines, which would enable log forging) and clamps the
+        /// length so an over-long reason can't bloat the Cosmos <c>HeldMessage</c> document. Internal for
+        /// unit testing.
+        /// </summary>
+        internal static string? NormalizeReason(string? reason)
+        {
+            if (string.IsNullOrWhiteSpace(reason))
+                return null;
+
+            // Replace control/format characters (newlines, tabs, ESC/ANSI, zero-width, bidi overrides) with
+            // a space so a model-influenced value can't inject terminal control sequences or spoofed
+            // formatting into logs, then collapse the result to a single trimmed line.
+            var singleLine = CollapseWhitespace(Regex.Replace(reason, "\\p{Cc}|\\p{Cf}", " "));
+            if (singleLine.Length == 0)
+                return null;
+
+            if (singleLine.Length > MaxReasonChars)
+            {
+                // Don't split a UTF-16 surrogate pair at the clamp boundary - a lone surrogate corrupts or
+                // breaks the Cosmos HeldMessage write.
+                var end = char.IsHighSurrogate(singleLine[MaxReasonChars - 1]) ? MaxReasonChars - 1 : MaxReasonChars;
+                singleLine = singleLine.Substring(0, end);
+            }
+
+            return singleLine;
+        }
+
+        /// <summary>Collapses all whitespace runs to a single space and trims.</summary>
+        private static string CollapseWhitespace(string value) => Regex.Replace(value, "\\s+", " ").Trim();
 
         internal static SpamConfidence ParseConfidence(string? confidence) =>
             confidence?.Trim().ToLowerInvariant() switch
@@ -167,7 +202,7 @@ namespace Web.Services
             );
             var noTags = Regex.Replace(noScripts, "<[^>]+>", " ");
             var decoded = System.Net.WebUtility.HtmlDecode(noTags);
-            return Regex.Replace(decoded, "\\s+", " ").Trim();
+            return CollapseWhitespace(decoded);
         }
 
         /// <summary>

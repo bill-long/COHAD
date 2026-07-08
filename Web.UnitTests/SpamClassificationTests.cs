@@ -68,6 +68,62 @@ public sealed class SpamClassificationTests
         Assert.Equal(expected, AnthropicSpamClassifier.ParseConfidence(raw));
     }
 
+    [Fact]
+    public void NormalizeReason_collapses_newlines_to_single_line()
+    {
+        Assert.Equal("line one line two", AnthropicSpamClassifier.NormalizeReason("line one\n\r  line two\t"));
+    }
+
+    [Fact]
+    public void NormalizeReason_clamps_length()
+    {
+        var reason = AnthropicSpamClassifier.NormalizeReason(new string('x', 5000));
+        Assert.NotNull(reason);
+        Assert.True(reason!.Length <= 300);
+        Assert.DoesNotContain("\n", reason);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void NormalizeReason_blank_is_null(string? reason)
+    {
+        Assert.Null(AnthropicSpamClassifier.NormalizeReason(reason));
+    }
+
+    [Fact]
+    public void NormalizeReason_strips_control_and_format_characters()
+    {
+        // ESC/ANSI and a zero-width space (built via casts so no invisible bytes live in the source)
+        // must be replaced, not survive into logs or storage. Asserted by exact ordinal equality because
+        // xUnit DoesNotContain is culture-sensitive and treats ignorable chars (e.g. ZWSP) as present.
+        var esc = ((char)0x1b).ToString();
+        var zwsp = ((char)0x200b).ToString();
+        var reason = AnthropicSpamClassifier.NormalizeReason("dan" + esc + "[31mger" + zwsp + "ous");
+
+        Assert.Equal("dan [31mger ous", reason);
+    }
+
+    [Fact]
+    public void NormalizeReason_preserves_emoji()
+    {
+        // Emoji are symbol characters, not control/format - they must pass through untouched.
+        Assert.Equal("spam \U0001F600", AnthropicSpamClassifier.NormalizeReason("spam \U0001F600"));
+    }
+
+    [Fact]
+    public void NormalizeReason_clamp_does_not_split_surrogate_pair()
+    {
+        // 299 'x' + a 2-code-unit emoji => length 301; the 300-char clamp boundary falls mid-pair and must
+        // back off rather than leave a lone (invalid) surrogate that could break the Cosmos write.
+        var reason = AnthropicSpamClassifier.NormalizeReason(new string('x', 299) + "\U0001F600");
+
+        Assert.NotNull(reason);
+        Assert.Equal(299, reason!.Length);
+        Assert.False(char.IsHighSurrogate(reason[^1]));
+    }
+
     // ── Poller: hold-time classification ────────────────────────────────────
 
     [Fact]
