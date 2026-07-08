@@ -42,6 +42,35 @@ public sealed class CosmosLegacyDocumentMapperTests
     }
 
     [Fact]
+    public void ToHeldMessage_reads_valid_spam_fields()
+    {
+        var doc = JObject.Parse(
+            @"{ ""id"": ""HeldMessage|9a0fc52c-86c4-4f27-b899-32b5ece24d5c"", ""SpamVerdict"": ""Spam"", ""SpamConfidence"": ""High"", ""SpamReason"": ""cold outreach"" }"
+        );
+
+        var msg = CosmosLegacyDocumentMapper.ToHeldMessage(doc);
+
+        Assert.Equal(SpamVerdict.Spam, msg.SpamVerdict);
+        Assert.Equal(SpamConfidence.High, msg.SpamConfidence);
+        Assert.Equal("cold outreach", msg.SpamReason);
+    }
+
+    [Fact]
+    public void ToHeldMessage_out_of_range_spam_enums_fall_back_to_unknown()
+    {
+        // A corrupt/legacy stored value ("999") must not become an undefined enum - an out-of-range
+        // SpamConfidence would otherwise spuriously satisfy the sweep's >= threshold check.
+        var doc = JObject.Parse(
+            @"{ ""id"": ""HeldMessage|9a0fc52c-86c4-4f27-b899-32b5ece24d5c"", ""SpamVerdict"": ""999"", ""SpamConfidence"": ""999"" }"
+        );
+
+        var msg = CosmosLegacyDocumentMapper.ToHeldMessage(doc);
+
+        Assert.Equal(SpamVerdict.Unknown, msg.SpamVerdict);
+        Assert.Equal(SpamConfidence.Unknown, msg.SpamConfidence);
+    }
+
+    [Fact]
     public void ToUser_reads_UniqueId_from_prefixed_id()
     {
         var doc = JObject.Parse(

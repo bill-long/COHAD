@@ -4,7 +4,7 @@ namespace Web.Models
 {
     /// <summary>
     /// The outcome of running a held (non-directory) message through the LLM spam classifier.
-    /// <see cref="Unknown"/> means the message was never classified or the classifier failed — it is the
+    /// <see cref="Unknown"/> means the message was never classified or the classifier failed - it is the
     /// fail-safe value that keeps a message on the normal moderator-notification path.
     /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]

@@ -17,12 +17,12 @@ namespace Web.Services
     /// <summary>
     /// Classifies held committee emails using the Anthropic API. Only non-directory senders reach this
     /// path, so the classifier is deciding whether an unsolicited message is obvious spam. It never throws
-    /// for a classification failure — any error yields an Unknown verdict so the message continues on the
+    /// for a classification failure - any error yields an Unknown verdict so the message continues on the
     /// normal moderator-notification path (fail-safe: a classifier outage must not drop or reject email).
     /// </summary>
     public sealed class AnthropicSpamClassifier : ISpamClassifier
     {
-        // The body is only used for spam signal; cap it to bound token cost — spam intent is evident early.
+        // The body is only used for spam signal; cap it to bound token cost - spam intent is evident early.
         private const int MaxBodyChars = 6000;
 
         // Bound raw input before regex work so a pathologically large body can't dominate a poll cycle.
@@ -89,7 +89,7 @@ namespace Web.Services
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                // Our per-call deadline fired (not a real shutdown, whose ct would be cancelled) — fail safe.
+                // Our per-call deadline fired (not a real shutdown, whose ct would be cancelled) - fail safe.
                 _logger.LogWarning(
                     "Spam classification timed out after {Timeout}s; treating as Unknown",
                     RequestTimeout.TotalSeconds
@@ -105,7 +105,7 @@ namespace Web.Services
             }
         }
 
-        /// <summary>Maps the model's raw structured assessment onto the internal result. Pure — unit-tested.</summary>
+        /// <summary>Maps the model's raw structured assessment onto the internal result. Pure - unit-tested.</summary>
         internal static SpamClassificationResult MapAssessment(SpamAssessment? assessment)
         {
             if (assessment == null)
@@ -130,7 +130,7 @@ namespace Web.Services
 
         private static string BuildPrompt(string? senderEmail, string? senderName, string? subject, string? body)
         {
-            // Reduce to visible text BEFORE truncating, so the budget isn't spent on markup — otherwise a
+            // Reduce to visible text BEFORE truncating, so the budget isn't spent on markup - otherwise a
             // bulk-HTML solicitation (exactly what this feature targets) can be cut before its sales copy.
             var text = ToPlainText(body ?? string.Empty);
             if (text.Length > MaxBodyChars)

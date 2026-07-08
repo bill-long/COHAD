@@ -103,6 +103,31 @@ public sealed class SpamClassificationTests
     }
 
     [Fact]
+    public async Task Held_message_survives_classifier_exception_as_unknown()
+    {
+        // A misbehaving classifier that throws (violating the fail-safe contract) must not abort holding
+        // the message - that would leave it in the inbox to be reprocessed every poll cycle.
+        var classifier = new Mock<ISpamClassifier>();
+        classifier.SetupGet(c => c.IsAvailable).Returns(true);
+        classifier
+            .Setup(c => c.ClassifyAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetByInternetMessageIdAsync("board", It.IsAny<string>())).ReturnsAsync((HeldMessage?)null);
+        heldRepo.Setup(r => r.AddAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage>());
+
+        var (poller, _) = BuildHoldScenario(classifier.Object, heldRepo, SpamConfig(enabled: true), bodyContent: "hi");
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        heldRepo.Verify(r => r.AddAsync(It.Is<HeldMessage>(m => m.SpamVerdict == SpamVerdict.Unknown)), Times.Once);
+    }
+
+    [Fact]
     public async Task Held_message_is_not_classified_when_disabled()
     {
         var classifier = new Mock<ISpamClassifier>(MockBehavior.Strict);
@@ -192,7 +217,7 @@ public sealed class SpamClassificationTests
     public async Task Sweep_notifies_when_verdict_unknown_failsafe()
     {
         // Classification enabled but the verdict is Unknown (classifier failed at hold time). The message
-        // must still reach a moderator — a classifier outage may never silently drop mail.
+        // must still reach a moderator - a classifier outage may never silently drop mail.
         var held = HeldSpam(SpamVerdict.Unknown, SpamConfidence.Unknown);
         var (heldRepo, notifications) = SweepMocks(held);
 
@@ -209,7 +234,7 @@ public sealed class SpamClassificationTests
     [Fact]
     public async Task Sweep_falls_back_to_high_threshold_on_out_of_range_config()
     {
-        // "4" parses via Enum.TryParse to an undefined SpamConfidence beyond High — before validation that
+        // "4" parses via Enum.TryParse to an undefined SpamConfidence beyond High - before validation that
         // produced a threshold no verdict could meet, silently disabling auto-rejection. It must fall back
         // to High so High-confidence spam is still rejected.
         var held = HeldSpam(SpamVerdict.Spam, SpamConfidence.High);
@@ -224,7 +249,7 @@ public sealed class SpamClassificationTests
     [Fact]
     public async Task Sweep_does_not_auto_reject_when_classification_disabled()
     {
-        // A stored Spam/High verdict must not auto-reject once the feature is turned off — the kill-switch
+        // A stored Spam/High verdict must not auto-reject once the feature is turned off - the kill-switch
         // stops auto-rejection even for already-classified records.
         var held = HeldSpam(SpamVerdict.Spam, SpamConfidence.High);
         var (heldRepo, notifications) = SweepMocks(held);

@@ -7,7 +7,7 @@ namespace Web.Services
 {
     /// <summary>
     /// The result of classifying a held (non-directory) committee email. A missing or failed
-    /// classification is represented by an <see cref="SpamVerdict.Unknown"/> verdict — never an exception —
+    /// classification is represented by an <see cref="SpamVerdict.Unknown"/> verdict - never an exception -
     /// so a classifier problem can never cause a legitimate message to be dropped or auto-rejected.
     /// </summary>
     public sealed class SpamClassificationResult
@@ -28,7 +28,7 @@ namespace Web.Services
     {
         /// <summary>
         /// True when a real, configured classifier is backing this instance. False for the no-op used when
-        /// no API key is configured — lets the poller warn if classification is enabled but unusable.
+        /// no API key is configured - lets the poller warn if classification is enabled but unusable.
         /// </summary>
         bool IsAvailable { get; }
 

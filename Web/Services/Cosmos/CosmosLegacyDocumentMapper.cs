@@ -645,10 +645,13 @@ namespace Web.Services.Cosmos
                 Status = Enum.TryParse<HeldMessageStatus>(doc.Value<string>("Status"), out var s)
                     ? s
                     : HeldMessageStatus.Held,
-                SpamVerdict = Enum.TryParse<SpamVerdict>(doc.Value<string>("SpamVerdict"), out var sv)
+                // TryParseDefined rejects out-of-range numerics (e.g. "999"): an undefined SpamConfidence
+                // would otherwise spuriously satisfy the sweep's >= threshold check. A corrupt/legacy
+                // stored value safely falls back to Unknown.
+                SpamVerdict = EnumParse.TryParseDefined<SpamVerdict>(doc.Value<string>("SpamVerdict"), out var sv)
                     ? sv
                     : SpamVerdict.Unknown,
-                SpamConfidence = Enum.TryParse<SpamConfidence>(doc.Value<string>("SpamConfidence"), out var sc)
+                SpamConfidence = EnumParse.TryParseDefined<SpamConfidence>(doc.Value<string>("SpamConfidence"), out var sc)
                     ? sc
                     : SpamConfidence.Unknown,
                 SpamReason = doc.Value<string>("SpamReason"),
