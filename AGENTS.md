@@ -80,3 +80,15 @@ Test expectations:
 - New service logic: test core behavior, edge cases, and error handling
 - Use the existing patterns in `Web.UnitTests/` (Moq mocks, `CreateController` helpers, xUnit `[Fact]`)
 - Run `dotnet test Web.UnitTests/Web.UnitTests.csproj` to verify all tests pass before committing
+
+### Review gate
+
+Non-trivial changes ship through a pull request, never a direct push to `master`. `master` is branch-protected: a PR is required and every review conversation must be resolved before merge. Protection is enforced for admins too, so an agent operating with admin credentials cannot bypass it.
+
+The review loop for a PR is mandatory. Run a local review (`/code-review` at high, or the review workflow), then request a Copilot review. The terminal condition is **"every review thread is resolved and required checks are green"** - it is NOT "the latest Copilot pass returned no new comments." A clean incremental Copilot pass does not mean the earlier, more thorough findings were all resolved; treat each finding as open until it is fixed or explicitly tracked.
+
+Every review finding - from a local review, the review workflow, or Copilot - must reach a terminal state before the task is considered done:
+- **Fixed** in the PR, or
+- **Deferred or accepted:** open a GitHub issue labeled `deferred-finding` that states the finding and the reason it is not being fixed now, link that issue in the review thread, then resolve the thread.
+
+Never silently drop a finding, and never resolve a review thread without either a fix or a linked tracking issue. When you **narrow-fix** - address one instance or one code path of a finding but not the broader case it describes - file a `deferred-finding` issue for the remainder rather than resolving the thread as if fully fixed. (This is the exact gap that let real issues merge before: a finding was fixed at its narrowest instance and the rest fell off the list.)
