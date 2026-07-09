@@ -673,9 +673,12 @@ namespace Web.Services
                 // Best-effort: the record is already held and the caller still moves the message to Processed,
                 // so a failed verdict write must not propagate (that would skip the move and log a benign
                 // transient as an error). A concurrency conflict, a transient Cosmos error, or a since-deleted
-                // record all land here; the computed verdict is simply not persisted this cycle and a later
-                // sweep re-evaluates. Do not assert the resulting stored state - a concurrent writer may have
-                // set it - only that our update did not land.
+                // record all land here; the computed verdict is simply not persisted. There is no
+                // re-classification retry - the antispam sweep acts only on the stored verdict, so the message
+                // keeps whatever is persisted (usually the default Unknown) and falls through to the normal
+                // moderator notification after the quarantine window. That under-filters, never wrongly
+                // rejects. Do not assert the resulting stored state here - a concurrent writer may have set it -
+                // only that our update did not land.
                 _logger.LogWarning(
                     ex,
                     "Could not store spam verdict for held message {HeldId} - leaving the record as last persisted",
