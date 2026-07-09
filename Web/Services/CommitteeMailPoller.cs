@@ -68,7 +68,12 @@ namespace Web.Services
             // and messages the classifier flags as spam with at least this confidence are auto-rejected by
             // the antispam sweep instead of notifying moderators. Single kill-switch for both steps.
             _spamClassificationEnabled = config.GetValue("CommitteeForwarding:SpamClassification:Enabled", false);
-            var thresholdRaw = config.GetValue("CommitteeForwarding:SpamClassification:ConfidenceThreshold", "High");
+            // Default tied to the enum member (not a bare "High" literal) so the code default can't drift
+            // from SpamConfidence; appsettings.json carries the same value as the overridable config.
+            var thresholdRaw = config.GetValue(
+                "CommitteeForwarding:SpamClassification:ConfidenceThreshold",
+                nameof(SpamConfidence.High)
+            );
             // TryParseDefined rejects out-of-range numerics ("4") and comma/flags forms that would
             // otherwise yield a threshold no real confidence meets, silently disabling auto-rejection.
             // On anything invalid, fall back to High and record the raw value to warn.
@@ -563,28 +568,6 @@ namespace Web.Services
             CancellationToken ct
         )
         {
-            // Classify at hold time, while the body is in hand. The verdict is stored on the held record;
-            // the antispam sweep acts on it later (after the quarantine window), so O365 still gets its
-            // chance first. The classifier is contractually fail-safe, but guard here too: a misbehaving
-            // implementation must not abort holding the message (which would leave it in the inbox to be
-            // reprocessed - and re-classified - every poll cycle). Any failure is treated as Unknown.
-            var spam = new SpamClassificationResult();
-            if (_spamClassificationEnabled)
-            {
-                try
-                {
-                    spam = await _spamClassifier.ClassifyAsync(senderEmail, senderName, subject, body, ct);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    _logger.LogWarning(
-                        ex,
-                        "Spam classifier threw while holding message {InternetMessageId} - treating as Unknown",
-                        internetMessageId
-                    );
-                }
-            }
-
             var held = new HeldMessage
             {
                 // Deterministic ID for write-time idempotency (same pattern as EmailJob)
@@ -600,9 +583,8 @@ namespace Web.Services
                 // NotifiedUtc stays null: the message enters the antispam quarantine window and its
                 // moderators are notified later by NotifyHeldMessagesPastAntispamHoldAsync, not now.
                 Status = HeldMessageStatus.Held,
-                SpamVerdict = spam.Verdict,
-                SpamConfidence = spam.Confidence,
-                SpamReason = spam.Reason,
+                // Spam verdict fields default to Unknown; they are filled in by ClassifyAndStoreVerdictAsync
+                // AFTER this record is durably persisted, so the paid classifier never runs pre-persist.
             };
 
             try
@@ -612,7 +594,7 @@ namespace Web.Services
             catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
                 _logger.LogDebug(
-                    "Held record already exists for message {InternetMessageId} in {Mailbox} — skipping",
+                    "Held record already exists for message {InternetMessageId} in {Mailbox} - skipping",
                     internetMessageId,
                     committee.CommitteeEmail
                 );
@@ -620,8 +602,20 @@ namespace Web.Services
                 return;
             }
 
+            // Classify only AFTER the held record is durably persisted, then store the verdict. The classifier
+            // is a paid API call; running it before the write (as this originally did) meant any transient
+            // non-409 AddAsync failure left the message in the inbox to be re-held - and re-classified,
+            // re-billed - every poll cycle. Post-persist, the pre-hold dedup check skips an already-held
+            // message on the next cycle, so the classifier runs at most once per message. Skip when no real
+            // classifier is configured (IsAvailable) so a disabled classifier does not incur a redundant
+            // second write of the same default verdict the record was already added with.
+            if (_spamClassificationEnabled && _spamClassifier.IsAvailable)
+            {
+                await ClassifyAndStoreVerdictAsync(held, body, heldMessageRepo, ct);
+            }
+
             _logger.LogInformation(
-                "Held message {InternetMessageId} in {Mailbox} — sender {Sender} not in directory; "
+                "Held message {InternetMessageId} in {Mailbox} - sender {Sender} not in directory; "
                     + "quarantined for antispam before notifying",
                 internetMessageId,
                 committee.CommitteeEmail,
@@ -630,6 +624,67 @@ namespace Web.Services
 
             // Move to processed folder using Graph API id (the held record in Cosmos tracks via InternetMessageId)
             await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
+        }
+
+        /// <summary>
+        /// Classifies an already-persisted held message and stores the verdict on it. Runs only after the
+        /// record is durable so the paid classifier is never invoked before persistence (a pre-persist call
+        /// is re-billed on every poll cycle if the Cosmos write fails). Reads sender/subject from
+        /// <paramref name="held"/> so classification always uses exactly what was persisted. Storing the
+        /// verdict is best-effort: any failure (concurrency conflict, transient Cosmos error, a since-deleted
+        /// record, or a classifier fault) is swallowed so it cannot disrupt the hold flow - the record is
+        /// already held and the caller still moves the message to Processed. An unstored verdict leaves the
+        /// message unclassified, which only under-filters and never drops or wrongly rejects mail.
+        /// </summary>
+        private async Task ClassifyAndStoreVerdictAsync(
+            HeldMessage held,
+            string? body,
+            IHeldMessageRepository heldMessageRepo,
+            CancellationToken ct
+        )
+        {
+            SpamClassificationResult spam;
+            try
+            {
+                spam = await _spamClassifier.ClassifyAsync(held.SenderEmail, held.SenderName, held.Subject, body, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The classifier is contractually fail-safe, but guard here too: a misbehaving implementation
+                // must not disturb the already-held message. Leave the persisted (Unknown) verdict.
+                _logger.LogWarning(
+                    ex,
+                    "Spam classifier threw while holding message {InternetMessageId} - leaving it unclassified",
+                    held.InternetMessageId
+                );
+                return;
+            }
+
+            held.SpamVerdict = spam.Verdict;
+            held.SpamConfidence = spam.Confidence;
+            held.SpamReason = spam.Reason;
+
+            try
+            {
+                await heldMessageRepo.UpdateAsync(held);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Best-effort: the record is already held and the caller still moves the message to Processed,
+                // so a failed verdict write must not propagate (that would skip the move and log a benign
+                // transient as an error). A concurrency conflict, a transient Cosmos error, or a since-deleted
+                // record all land here; the computed verdict is simply not persisted. There is no
+                // re-classification retry - the antispam sweep acts only on the stored verdict, so the message
+                // keeps whatever is persisted (usually the default Unknown) and falls through to the normal
+                // moderator notification after the quarantine window. That under-filters, never wrongly
+                // rejects. Do not assert the resulting stored state here - a concurrent writer may have set it -
+                // only that our update did not land.
+                _logger.LogWarning(
+                    ex,
+                    "Could not store spam verdict for held message {HeldId} - leaving the record as last persisted",
+                    held.Id
+                );
+            }
         }
 
         /// <summary>

@@ -62,7 +62,10 @@ namespace Web.Services.Repositories
         public async Task AddAsync(HeldMessage message)
         {
             var doc = CosmosLegacyDocumentMapper.ToHeldMessageDocument(message);
-            await _container.CreateItemAsync(doc, CosmosPartitionKey.None);
+            // Capture the create response's ETag (per the repository convention, and matching the Mock) so a
+            // caller can immediately UpdateAsync the just-added record under optimistic concurrency.
+            var response = await _container.CreateItemAsync(doc, CosmosPartitionKey.None);
+            message.ETag = response.Headers.ETag;
         }
 
         public async Task<HeldMessage?> GetByIdAsync(Guid id)

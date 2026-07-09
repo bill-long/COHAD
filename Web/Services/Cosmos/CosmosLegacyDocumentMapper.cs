@@ -642,7 +642,11 @@ namespace Web.Services.Cosmos
                 ReceivedUtc = doc["ReceivedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
                 HeldUtc = doc["HeldUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
                 NotifiedUtc = doc["NotifiedUtc"]?.ToObject<DateTime?>(),
-                Status = Enum.TryParse<HeldMessageStatus>(doc.Value<string>("Status"), out var s)
+                // TryParseDefined (not Enum.TryParse) rejects out-of-range numerics (e.g. "999"), which
+                // would otherwise round-trip back to storage as an undefined status and render as an
+                // unknown state in any status-keyed UI/switch. A corrupt/legacy value falls back to Held -
+                // consistent with the SpamVerdict/SpamConfidence parses on the same object.
+                Status = EnumParse.TryParseDefined<HeldMessageStatus>(doc.Value<string>("Status"), out var s)
                     ? s
                     : HeldMessageStatus.Held,
                 // TryParseDefined rejects out-of-range numerics (e.g. "999"): an undefined SpamConfidence

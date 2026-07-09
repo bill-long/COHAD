@@ -71,6 +71,32 @@ public sealed class CosmosLegacyDocumentMapperTests
     }
 
     [Fact]
+    public void ToHeldMessage_out_of_range_status_falls_back_to_held()
+    {
+        // Same guard as the spam enums: an out-of-range stored Status ("999") must not round-trip as an
+        // undefined HeldMessageStatus (which would render as an unknown state in any status-keyed UI).
+        var doc = JObject.Parse(
+            @"{ ""id"": ""HeldMessage|9a0fc52c-86c4-4f27-b899-32b5ece24d5c"", ""Status"": ""999"" }"
+        );
+
+        var msg = CosmosLegacyDocumentMapper.ToHeldMessage(doc);
+
+        Assert.Equal(HeldMessageStatus.Held, msg.Status);
+    }
+
+    [Fact]
+    public void ToHeldMessage_reads_valid_status()
+    {
+        var doc = JObject.Parse(
+            @"{ ""id"": ""HeldMessage|9a0fc52c-86c4-4f27-b899-32b5ece24d5c"", ""Status"": ""Rejected"" }"
+        );
+
+        var msg = CosmosLegacyDocumentMapper.ToHeldMessage(doc);
+
+        Assert.Equal(HeldMessageStatus.Rejected, msg.Status);
+    }
+
+    [Fact]
     public void ToUser_reads_UniqueId_from_prefixed_id()
     {
         var doc = JObject.Parse(

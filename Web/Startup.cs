@@ -460,7 +460,7 @@ namespace Web
                 {
                     var spamModel = Configuration.GetValue(
                         "CommitteeForwarding:SpamClassification:Model",
-                        "claude-haiku-4-5"
+                        AnthropicSpamClassifier.DefaultModel
                     );
                     services.AddSingleton<ISpamClassifier>(sp => new AnthropicSpamClassifier(
                         anthropicApiKey,
