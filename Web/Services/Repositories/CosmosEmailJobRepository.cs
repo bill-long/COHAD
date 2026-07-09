@@ -26,7 +26,8 @@ namespace Web.Services.Repositories
         public async Task AddAsync(EmailJob job)
         {
             var doc = CosmosLegacyDocumentMapper.ToEmailJobDocument(job);
-            await _emailJobContainer.CreateItemAsync(doc, CosmosPartitionKey.None);
+            var response = await _emailJobContainer.CreateItemAsync(doc, CosmosPartitionKey.None);
+            job.ETag = response.Headers.ETag;
         }
 
         public async Task<EmailJob?> GetByIdAsync(Guid jobId)
@@ -122,12 +123,7 @@ namespace Web.Services.Repositories
             while (iterator.HasMoreResults)
             {
                 var response = await iterator.ReadNextAsync();
-                foreach (var doc in response)
-                {
-                    var job = CosmosLegacyDocumentMapper.ToEmailJob(doc);
-                    job.ETag = doc.Value<string>("_etag");
-                    results.Add(job);
-                }
+                results.AddRange(response.Select(CosmosLegacyDocumentMapper.ToEmailJob));
             }
 
             return results;
@@ -198,12 +194,7 @@ namespace Web.Services.Repositories
             while (iterator.HasMoreResults)
             {
                 var response = await iterator.ReadNextAsync();
-                foreach (var doc in response)
-                {
-                    var job = CosmosLegacyDocumentMapper.ToEmailJob(doc);
-                    job.ETag = doc.Value<string>("_etag");
-                    results.Add(job);
-                }
+                results.AddRange(response.Select(CosmosLegacyDocumentMapper.ToEmailJob));
             }
 
             return results;
@@ -227,9 +218,7 @@ namespace Web.Services.Repositories
                 var first = response.FirstOrDefault();
                 if (first != null)
                 {
-                    var job = CosmosLegacyDocumentMapper.ToEmailJob(first);
-                    job.ETag = first.Value<string>("_etag");
-                    return job;
+                    return CosmosLegacyDocumentMapper.ToEmailJob(first);
                 }
             }
 

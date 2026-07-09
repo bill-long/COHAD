@@ -520,4 +520,22 @@ public sealed class CosmosLegacyDocumentMapperTests
         Assert.Null(r.Provider);
         Assert.False(job.GroupRecipients); // absent in legacy docs → false
     }
+
+    [Fact]
+    public void ToEmailJob_populates_ETag_from_underscore_etag()
+    {
+        // Query read paths (GetRecentJobsAsync, GetTerminalJobsOlderThanAsync, etc.) go through this
+        // mapper, so ETag must be set here for optimistic concurrency to survive a read-modify-write
+        // via a query path — matching ToHome/ToNotification and the Mock repo, which set ETag everywhere.
+        var doc = new JObject
+        {
+            ["id"] = "EmailJob|" + Guid.NewGuid().ToString("D"),
+            ["Status"] = "Queued",
+            ["_etag"] = "\"abc123\"",
+        };
+
+        var job = CosmosLegacyDocumentMapper.ToEmailJob(doc);
+
+        Assert.Equal("\"abc123\"", job.ETag);
+    }
 }
