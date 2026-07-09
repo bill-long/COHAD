@@ -30,6 +30,9 @@ public sealed class NotificationEscalationRunnerTests
         public readonly List<EmailJob> CapturedJobs = new();
         public string? UploadedHtml;
 
+        /// <summary>Every uploaded digest body, keyed by its blob path (one per recipient/job).</summary>
+        public readonly Dictionary<string, string> UploadedByPath = new();
+
         /// <summary>When set, digest items are rendered as deep links under this base URL.</summary>
         public string? AppBaseUrl;
 
@@ -52,10 +55,12 @@ public sealed class NotificationEscalationRunnerTests
             FileStore
                 .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
                 .Callback<string, Stream, string>(
-                    (_, stream, _) =>
+                    (path, stream, _) =>
                     {
                         using var sr = new StreamReader(stream, leaveOpen: true);
-                        UploadedHtml = sr.ReadToEnd();
+                        var html = sr.ReadToEnd();
+                        UploadedHtml = html;
+                        UploadedByPath[path] = html;
                     }
                 )
                 .Returns(Task.CompletedTask);
@@ -354,6 +359,46 @@ public sealed class NotificationEscalationRunnerTests
         Assert.Equal("COHAD: 1 item(s) need attention", h.CapturedJobs[1].Subject);
         foreach (var c in created)
             Assert.NotNull((await h.Notifications.GetByIdAsync(c.Id))!.EscalatedUtc);
+    }
+
+    [Fact]
+    public async Task Overflow_item_stamped_for_another_recipient_is_not_promised_as_a_follow_up()
+    {
+        // An admin's overflow item that a committee moderator emails (and thus stamps) this same sweep is
+        // now escalated and will never reach the admin again — so the admin's digest must NOT count it as
+        // a "more waiting; you'll receive them in a follow-up" item.
+        var h = new Harness();
+        h.Options.MaxItemsPerDigest = 2;
+        h.Committees
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(new List<Committee> { new Committee { Id = "welcome", DisplayName = "Welcome" } });
+        var committeeAudience = NotificationAudience.Committee("welcome");
+        // The admin belongs to both audiences; the moderator only to the committee.
+        h.RecipientsFor(NotificationAudience.Administrators, "admin@example.com");
+        h.RecipientsFor(committeeAudience, "admin@example.com", "mod@example.com");
+
+        // Two older admin items fill the admin's cap; the committee item is the admin's overflow but is
+        // within the moderator's cap.
+        await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-4));
+        await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-3));
+        var committeeItem = await AddNotificationAsync(
+            h.Notifications,
+            committeeAudience,
+            DateTime.UtcNow.AddHours(-2),
+            type: NotificationType.HeldMessage
+        );
+
+        await h.Build().RunOnceAsync(CancellationToken.None);
+
+        // The committee item was emailed (and stamped) via the moderator.
+        Assert.NotNull((await h.Notifications.GetByIdAsync(committeeItem.Id))!.EscalatedUtc);
+
+        // The admin's digest shows its two capped items and does NOT falsely promise a follow-up for the
+        // committee item that went to the moderator.
+        var adminJob = h.CapturedJobs.Single(j => j.Recipients.Any(r => r.Email == "admin@example.com"));
+        var adminHtml = h.UploadedByPath[adminJob.ContentBlobPath];
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(adminHtml, "<li>").Count);
+        Assert.DoesNotContain("more waiting", adminHtml);
     }
 
     [Fact]

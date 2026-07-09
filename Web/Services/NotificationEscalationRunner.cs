@@ -159,13 +159,12 @@ namespace Web.Services
             foreach (var bucket in due)
             {
                 bucket.JobId = Guid.NewGuid();
-                var distinct = bucket.Items
+                bucket.Distinct = bucket.Items
                     .GroupBy(n => n.Id)
                     .Select(g => g.First())
                     .OrderBy(n => n.CreatedUtc)
                     .ToList();
-                bucket.Shown = distinct.Take(cap).ToList();
-                bucket.OverflowCount = distinct.Count - bucket.Shown.Count;
+                bucket.Shown = bucket.Distinct.Take(cap).ToList();
             }
 
             // Stamp the union of shown items FIRST (before any job is persisted), so the "emailed at most
@@ -218,7 +217,12 @@ namespace Web.Services
                     if (items.Count == 0)
                         continue; // all of this recipient's shown items were resolved/stamped-away or failed to stamp.
 
-                    var (job, htmlBody) = BuildDigestJob(bucket.JobId, items, bucket.OverflowCount, new List<string> { bucket.Email }, now);
+                    // Overflow items (beyond the cap) that no digest stamped this sweep stay eligible for
+                    // this recipient's next sweep. Count only those, computed against the actual stamps, so
+                    // the follow-up note is truthful: an overflow item stamped for another due recipient is
+                    // now escalated and will not reach this recipient again, so it must not be counted.
+                    var deferredCount = bucket.Distinct.Skip(cap).Count(n => !stampedIds.Contains(n.Id));
+                    var (job, htmlBody) = BuildDigestJob(bucket.JobId, items, deferredCount, new List<string> { bucket.Email }, now);
                     await PersistAndEnqueueJobAsync(job, htmlBody, ct);
 
                     // Record the send LAST so a failure above never throttles a recipient for a digest that
@@ -249,24 +253,24 @@ namespace Web.Services
 
             public Guid JobId { get; set; }
 
-            /// <summary>The de-duplicated, oldest-first items actually emailed this sweep (capped at
+            /// <summary>All of this recipient's aged items, de-duplicated and oldest-first.</summary>
+            public List<Notification> Distinct { get; set; } = new();
+
+            /// <summary>The oldest-first prefix actually emailed this sweep (capped at
             /// <see cref="NotificationEscalationOptions.MaxItemsPerDigest"/>). Only these are stamped.</summary>
             public List<Notification> Shown { get; set; } = new();
-
-            /// <summary>Count of this recipient's aged items beyond the cap, deferred to a later sweep.</summary>
-            public int OverflowCount { get; set; }
         }
 
         /// <summary>
         /// Builds the digest <see cref="EmailJob"/> (using the already-assigned <paramref name="jobId"/>)
         /// and its HTML body in memory from the <paramref name="items"/> that were actually stamped for
-        /// this job. <paramref name="overflowCount"/> is the number of this recipient's aged items beyond
-        /// the per-digest cap, deferred to a later sweep. Does not persist or enqueue.
+        /// this job. <paramref name="deferredCount"/> is the number of this recipient's aged items left
+        /// un-stamped this sweep and thus still eligible for their next digest. Does not persist or enqueue.
         /// </summary>
         private (EmailJob Job, string HtmlBody) BuildDigestJob(
             Guid jobId,
             List<Notification> items,
-            int overflowCount,
+            int deferredCount,
             List<string> recipientEmails,
             DateTime now
         )
@@ -299,7 +303,7 @@ namespace Web.Services
                 ContentBlobPath = $"email-jobs/{jobId:D}.html",
             };
 
-            return (job, BuildDigestHtml(items, overflowCount));
+            return (job, BuildDigestHtml(items, deferredCount));
         }
 
         /// <summary>Uploads the digest body, persists the job as Queued, and enqueues it for the processor.</summary>
@@ -381,7 +385,7 @@ namespace Web.Services
             }
         }
 
-        private string BuildDigestHtml(List<Notification> shown, int overflowCount)
+        private string BuildDigestHtml(List<Notification> shown, int deferredCount)
         {
             var sb = new StringBuilder();
             sb.Append("<p>The following item(s) in COHAD have been waiting and may need your attention:</p>");
@@ -404,8 +408,8 @@ namespace Web.Services
             }
             sb.Append("</ul>");
 
-            if (overflowCount > 0)
-                sb.Append("<p>…and ").Append(overflowCount).Append(" more waiting; you'll receive them in a follow-up.</p>");
+            if (deferredCount > 0)
+                sb.Append("<p>…and ").Append(deferredCount).Append(" more waiting; you'll receive them in a follow-up.</p>");
 
             if (!string.IsNullOrEmpty(_appBaseUrl))
                 sb.Append("<p><a href=\"").Append(WebUtility.HtmlEncode(_appBaseUrl)).Append("\">Sign in to COHAD</a> to review them.</p>");
