@@ -388,6 +388,10 @@ namespace Web.Services.Cosmos
                 ReplyToDisplay = doc.Value<string>("ReplyToDisplay"),
                 Attachments = ToEmailJobAttachments(doc["Attachments"]),
                 Recipients = ToEmailJobRecipients(doc["Recipients"]),
+                // Populate ETag on every read path (per the repository convention) so query results can
+                // be written back under optimistic concurrency; point reads overwrite this from the
+                // response header with the same value.
+                ETag = doc.Value<string>("_etag"),
             };
         }
 
