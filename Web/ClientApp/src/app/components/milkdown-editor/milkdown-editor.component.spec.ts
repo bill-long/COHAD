@@ -112,7 +112,7 @@ describe('MilkdownEditorComponent image upload helpers', () => {
     expect(snackBar.open).toHaveBeenCalled();
   });
 
-  it('ignores non-image files in the payload', async () => {
+  it('inserts supported images, skips a non-image file, and warns about the skip', async () => {
     const nodes = await uploadImages(
       fileListOf(makeFile('a.png', 'image/png'), makeFile('notes.txt', 'text/plain')),
       fakeSchema,
@@ -121,6 +121,19 @@ describe('MilkdownEditorComponent image upload helpers', () => {
 
     expect(nodes.length).toBe(1);
     expect(nodes[0].attrs['src']).toBe('https://cdn.example/a.png');
+    expect(snackBar.open).toHaveBeenCalled();
+  });
+
+  it('rejects an image type the backend does not accept (by extension), even with an image MIME', async () => {
+    const nodes = await uploadImages(
+      fileListOf(makeFile('logo.svg', 'image/svg+xml')),
+      fakeSchema,
+      (f: File) => Promise.resolve(`https://cdn.example/${f.name}`),
+    );
+
+    // Not uploaded (would be rejected server-side); user is told which formats are supported.
+    expect(nodes).toEqual([]);
+    expect(snackBar.open).toHaveBeenCalled();
   });
 
   it('returns no nodes and shows a snackbar when an upload fails', async () => {

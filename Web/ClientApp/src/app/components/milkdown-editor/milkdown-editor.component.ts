@@ -179,9 +179,11 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
   }
 
   /**
-   * Uploads every image file in a paste/drop payload concurrently and returns the resulting image
-   * nodes for the plugin to insert at the placeholder position. Files that fail to upload are dropped
-   * and surfaced with a snackbar; non-image files are ignored.
+   * Uploads every supported image file in a paste/drop payload concurrently and returns the resulting
+   * image nodes for the plugin to insert at the placeholder position. Acceptance is keyed on the file
+   * extension against the same set the backend allows, so an unsupported file is skipped client-side
+   * rather than making a round-trip that always fails. Any skipped file, failed upload, or all-non-image
+   * drop is surfaced with a snackbar so nothing is dropped silently.
    */
   private async uploadImages(files: FileList, schema: Schema, uploadFn: MilkdownImageUploader): Promise<ProseNode[]> {
     const imageType = schema.nodes['image'];
@@ -189,30 +191,30 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
       return [];
     }
 
-    // Trust an image MIME type or an image extension: some drag sources report an image file with an
-    // empty or generic type (e.g. application/octet-stream), and the server validates the bytes anyway.
-    const images = Array.from(files).filter(f => f.type.startsWith('image/') || this.hasImageExtension(f.name));
-    if (images.length === 0) {
-      // The plugin shows an "Upload in progress" placeholder for any file drop; if the user dropped
-      // only non-image files, tell them why nothing was inserted rather than silently removing it.
+    // Accept by extension against the same set the backend allows (BlogController validates by
+    // extension), so an unsupported file is skipped client-side instead of making a round-trip that
+    // always fails.
+    const supported = Array.from(files).filter(f => this.hasImageExtension(f.name));
+
+    if (supported.length === 0) {
+      // The plugin shows an "Upload in progress" placeholder for any file drop; explain why nothing
+      // was inserted rather than silently removing it.
       if (files.length > 0) {
-        this.ngZone.run(() => {
-          this.snackBar.open('Only image files can be added to a post.', 'Dismiss', { duration: 4000 });
-        });
+        this.notify(MilkdownEditorComponent.UNSUPPORTED_MESSAGE);
       }
       return [];
     }
 
-    let anyFailed = false;
+    let uploadFailed = false;
     const results = await Promise.all(
-      images.map(async file => {
+      supported.map(async file => {
         try {
           return { src: await uploadFn(file), alt: this.altFromFileName(file.name) };
         } catch (error) {
           // Don't swallow silently: surface it to the console so App Insights / the console captures
           // a real upload outage, beyond the user-facing snackbar below.
           console.error('Blog image upload failed', error);
-          anyFailed = true;
+          uploadFailed = true;
           return null;
         }
       }),
@@ -227,20 +229,37 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
       if (node) {
         nodes.push(node);
       } else {
-        anyFailed = true;
+        uploadFailed = true;
       }
     }
 
-    if (anyFailed) {
-      this.ngZone.run(() => {
-        this.snackBar.open('Some images could not be added. Please try again.', 'Dismiss', { duration: 5000 });
-      });
+    // Surface every problem independently so nothing is dropped silently: a skipped-file notice must
+    // still show when an upload also fails, and its wording must not imply the images that DID insert
+    // were rejected.
+    const messages: string[] = [];
+    if (uploadFailed) {
+      messages.push('Some images could not be added. Please try again.');
+    }
+    if (supported.length < files.length) {
+      messages.push('Some files were skipped - only PNG, JPEG, GIF, or WebP images can be added.');
+    }
+    if (messages.length > 0) {
+      this.notify(messages.join(' '));
     }
 
     return nodes;
   }
 
-  private static readonly IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif)$/i;
+  private notify(message: string): void {
+    this.ngZone.run(() => {
+      this.snackBar.open(message, 'Dismiss', { duration: 5000 });
+    });
+  }
+
+  // Keep in sync with BlogController.AllowedImageExtensions - accepting an extension the backend
+  // rejects would only produce a failed upload and a generic error snackbar.
+  private static readonly IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|webp)$/i;
+  private static readonly UNSUPPORTED_MESSAGE = 'Only PNG, JPEG, GIF, or WebP images can be added to a post.';
 
   private hasImageExtension(fileName: string): boolean {
     return MilkdownEditorComponent.IMAGE_EXTENSIONS.test(fileName.trim());
