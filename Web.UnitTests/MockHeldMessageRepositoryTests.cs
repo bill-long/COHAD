@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos;
 using Web.MockData;
 using Web.Models;
 using Xunit;
@@ -21,6 +23,27 @@ public sealed class MockHeldMessageRepositoryTests
             ReceivedUtc = heldUtc,
             HeldUtc = heldUtc,
         };
+
+    [Fact]
+    public async Task AddAsync_throws_conflict_on_duplicate_id_and_keeps_original()
+    {
+        var repo = new MockHeldMessageRepository();
+        var baseTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var original = Msg("board", HeldMessageStatus.Held, baseTime);
+        await repo.AddAsync(original);
+
+        // A second add with the same id must 409 (matching Cosmos CreateItemAsync), not overwrite. The
+        // poller assigns deterministic ids and depends on this 409 to dedup concurrent holds.
+        var duplicate = Msg("board", HeldMessageStatus.Approved, baseTime);
+        duplicate.Id = original.Id;
+        var ex = await Assert.ThrowsAsync<CosmosException>(() => repo.AddAsync(duplicate));
+        Assert.Equal(HttpStatusCode.Conflict, ex.StatusCode);
+
+        // The original record is untouched (status not reset, no re-quarantine).
+        var stored = await repo.GetByIdAsync(original.Id);
+        Assert.NotNull(stored);
+        Assert.Equal(HeldMessageStatus.Held, stored!.Status);
+    }
 
     [Fact]
     public async Task GetByCommitteeIdAsync_status_filter_is_applied_before_the_limit()
