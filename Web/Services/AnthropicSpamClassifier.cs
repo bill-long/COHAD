@@ -22,6 +22,11 @@ namespace Web.Services
     /// </summary>
     public sealed class AnthropicSpamClassifier : ISpamClassifier
     {
+        // Canonical default Claude model, used when CommitteeForwarding:SpamClassification:Model is absent.
+        // Single source of truth for the code-side default so it can't drift across call sites;
+        // appsettings.json carries the same value as the deployed, overridable config.
+        internal const string DefaultModel = "claude-haiku-4-5";
+
         // The body is only used for spam signal; cap it to bound token cost - spam intent is evident early.
         private const int MaxBodyChars = 6000;
 

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -102,6 +104,147 @@ public sealed class CommitteeMailPollerTests
             It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_classifies_after_persisting_held_record_then_stores_verdict()
+    {
+        var order = new List<string>();
+        // Seed to a non-default so asserting Unknown is meaningful (proves Add ran and captured add-time state).
+        var verdictAtAddTime = SpamVerdict.Spam;
+
+        var (poller, heldRepo, classifier) = BuildSpamHoldScenario(held =>
+        {
+            held.Setup(r => r.AddAsync(It.IsAny<HeldMessage>()))
+                .Callback<HeldMessage>(m => { order.Add("add"); verdictAtAddTime = m.SpamVerdict; })
+                .Returns(Task.CompletedTask);
+            held.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>()))
+                .Callback(() => order.Add("update"))
+                .Returns(Task.CompletedTask);
+        });
+        classifier
+            .Setup(c => c.ClassifyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback(() => order.Add("classify"))
+            .ReturnsAsync(new SpamClassificationResult { Verdict = SpamVerdict.Spam, Confidence = SpamConfidence.High, Reason = "cold outreach" });
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        // The paid classifier runs only after the held record is durably persisted: the record is added
+        // with the default Unknown verdict, then classified, then updated with the resulting verdict.
+        Assert.Equal(new[] { "add", "classify", "update" }, order);
+        Assert.Equal(SpamVerdict.Unknown, verdictAtAddTime);
+        classifier.Verify(
+            c => c.ClassifyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        heldRepo.Verify(
+            r => r.UpdateAsync(It.Is<HeldMessage>(m =>
+                m.SpamVerdict == SpamVerdict.Spam && m.SpamConfidence == SpamConfidence.High && m.SpamReason == "cold outreach")),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_does_not_run_classifier_when_held_record_persist_fails()
+    {
+        var (poller, heldRepo, classifier) = BuildSpamHoldScenario(held =>
+        {
+            // Transient, non-409 Cosmos write failure: the message is left in the inbox to be reprocessed.
+            held.Setup(r => r.AddAsync(It.IsAny<HeldMessage>()))
+                .ThrowsAsync(new CosmosException("service unavailable", HttpStatusCode.ServiceUnavailable, 0, "activity", 0));
+        });
+        classifier
+            .Setup(c => c.ClassifyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SpamClassificationResult());
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        // The paid classifier must not run before the record is durably persisted; otherwise a transient
+        // write failure would re-bill classification on every poll cycle until the write eventually succeeds.
+        classifier.Verify(
+            c => c.ClassifyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        heldRepo.Verify(r => r.UpdateAsync(It.IsAny<HeldMessage>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Builds a poll scenario with one unknown-sender message to a forwarding committee and spam
+    /// classification enabled, returning the poller plus the held-message and classifier mocks so a test
+    /// can configure persistence behavior and assert on classification. Mirrors the standard hold setup.
+    /// </summary>
+    private static (CommitteeMailPoller poller, Mock<IHeldMessageRepository> heldRepo, Mock<ISpamClassifier> classifier)
+        BuildSpamHoldScenario(Action<Mock<IHeldMessageRepository>> configureHeld)
+    {
+        var committee = new Committee
+        {
+            Id = "board",
+            DisplayName = "Board",
+            CommitteeEmail = "board@cohad.org",
+            ForwardingEnabled = true,
+            ForwardingSenderFilter = ForwardingSenderFilter.DirectoryOnly,
+            Members = new List<CommitteeMember>
+            {
+                new CommitteeMember { ResidentId = Guid.NewGuid(), ReceivesForwardedEmail = true },
+            },
+        };
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
+        committeeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        committeeRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
+
+        var emailJobRepo = new Mock<IEmailJobRepository>();
+        emailJobRepo.Setup(r => r.GetByInternetMessageIdAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((EmailJob?)null);
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetByInternetMessageIdAsync("board", It.IsAny<string>())).ReturnsAsync((HeldMessage?)null);
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage>());
+        configureHeld(heldRepo);
+
+        var residentRepo = new Mock<IResidentRepository>();
+        residentRepo.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>())).ReturnsAsync(new List<Resident>());
+        residentRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync(new List<Resident>()); // unknown sender → hold
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => emailJobRepo.Object);
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => residentRepo.Object);
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => Mock.Of<INotificationService>());
+        var provider = services.BuildServiceProvider();
+
+        var message = new Message
+        {
+            Id = "graph-1",
+            InternetMessageId = "<msg-1@example.com>",
+            Subject = "Buy now",
+            ReceivedDateTime = DateTimeOffset.UtcNow,
+            From = new Recipient { EmailAddress = new Microsoft.Graph.Models.EmailAddress { Address = "stranger@example.com", Name = "Stranger" } },
+        };
+
+        var graphReader = new Mock<IGraphMailReader>();
+        graphReader.Setup(g => g.GetInboxMessagesAsync("board@cohad.org", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Message> { message });
+        graphReader.Setup(g => g.GetOrCreateFolderAsync("board@cohad.org", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("processed-folder");
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["CommitteeForwarding:SpamClassification:Enabled"] = "true" })
+            .Build();
+
+        var classifier = new Mock<ISpamClassifier>();
+
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            graphReader.Object,
+            classifier.Object,
+            config,
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        return (poller, heldRepo, classifier);
     }
 
     [Fact]
