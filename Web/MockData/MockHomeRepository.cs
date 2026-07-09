@@ -142,7 +142,12 @@ namespace Web.MockData
 
                 _homes[home.Id] = CloneHome(home);
                 _versions[home.Id] = (_versions.TryGetValue(home.Id, out var v) ? v : 0) + 1;
-                return Task.FromResult(CloneWithETag(_homes[home.Id]));
+
+                // Match CosmosHomeRepository.UpsertAsync: mutate the caller's instance ETag in place and
+                // return that same instance, so a caller reusing a Home across sequential upserts sees the
+                // fresh ETag without recapturing the return value (the stored copy above is a defensive clone).
+                home.ETag = _versions[home.Id].ToString();
+                return Task.FromResult(home);
             }
         }
 
