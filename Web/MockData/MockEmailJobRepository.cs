@@ -3,9 +3,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
@@ -28,6 +30,13 @@ namespace Web.MockData
         {
             lock (_jobs)
             {
+                if (_jobs.ContainsKey(job.Id))
+                {
+                    // Mirror Cosmos CreateItemAsync, which fails with 409 on a duplicate id. The mail
+                    // poller assigns deterministic ids and relies on this to dedup concurrent adds.
+                    throw new CosmosException("Email job already exists.", HttpStatusCode.Conflict, 0, string.Empty, 0);
+                }
+
                 var clone = CloneJob(job);
                 clone.ETag = Interlocked.Increment(ref _versionCounter).ToString();
                 _jobs[job.Id] = clone;

@@ -2,7 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos;
 using Web.Models;
 using Web.Services.Repositories;
 
@@ -19,6 +21,13 @@ namespace Web.MockData
         {
             lock (_messages)
             {
+                if (_messages.ContainsKey(message.Id))
+                {
+                    // Mirror Cosmos CreateItemAsync, which fails with 409 on a duplicate id. The mail
+                    // poller assigns deterministic ids and relies on this to dedup concurrent holds.
+                    throw new CosmosException("HeldMessage already exists.", HttpStatusCode.Conflict, 0, string.Empty, 0);
+                }
+
                 message.ETag = Guid.NewGuid().ToString();
                 _messages[message.Id] = Clone(message);
             }
