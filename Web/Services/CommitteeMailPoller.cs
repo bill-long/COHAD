@@ -606,10 +606,12 @@ namespace Web.Services
             // is a paid API call; running it before the write (as this originally did) meant any transient
             // non-409 AddAsync failure left the message in the inbox to be re-held - and re-classified,
             // re-billed - every poll cycle. Post-persist, the pre-hold dedup check skips an already-held
-            // message on the next cycle, so the classifier runs at most once per message.
-            if (_spamClassificationEnabled)
+            // message on the next cycle, so the classifier runs at most once per message. Skip when no real
+            // classifier is configured (IsAvailable) so a disabled classifier does not incur a redundant
+            // second write of the same default verdict the record was already added with.
+            if (_spamClassificationEnabled && _spamClassifier.IsAvailable)
             {
-                await ClassifyAndStoreVerdictAsync(held, senderEmail, senderName, subject, body, heldMessageRepo, ct);
+                await ClassifyAndStoreVerdictAsync(held, body, heldMessageRepo, ct);
             }
 
             _logger.LogInformation(
@@ -625,17 +627,17 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// Classifies an already-persisted held message and stores the verdict on it via an
-        /// optimistic-concurrency update. Runs only after the record is durable so the paid classifier is
-        /// never invoked before persistence (a pre-persist call is re-billed on every poll cycle if the
-        /// Cosmos write fails). Fail-safe: a classifier error or a concurrent modification leaves the
-        /// record's default Unknown verdict, which only under-filters and never drops or wrongly rejects mail.
+        /// Classifies an already-persisted held message and stores the verdict on it. Runs only after the
+        /// record is durable so the paid classifier is never invoked before persistence (a pre-persist call
+        /// is re-billed on every poll cycle if the Cosmos write fails). Reads sender/subject from
+        /// <paramref name="held"/> so classification always uses exactly what was persisted. Storing the
+        /// verdict is best-effort: any failure (concurrency conflict, transient Cosmos error, a since-deleted
+        /// record, or a classifier fault) is swallowed so it cannot disrupt the hold flow - the record is
+        /// already held and the caller still moves the message to Processed. An unstored verdict leaves the
+        /// message unclassified, which only under-filters and never drops or wrongly rejects mail.
         /// </summary>
         private async Task ClassifyAndStoreVerdictAsync(
             HeldMessage held,
-            string? senderEmail,
-            string? senderName,
-            string? subject,
             string? body,
             IHeldMessageRepository heldMessageRepo,
             CancellationToken ct
@@ -644,15 +646,15 @@ namespace Web.Services
             SpamClassificationResult spam;
             try
             {
-                spam = await _spamClassifier.ClassifyAsync(senderEmail, senderName, subject, body, ct);
+                spam = await _spamClassifier.ClassifyAsync(held.SenderEmail, held.SenderName, held.Subject, body, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // The classifier is contractually fail-safe, but guard here too: a misbehaving implementation
-                // must not disturb the already-held message. Leave the default Unknown verdict.
+                // must not disturb the already-held message. Leave the persisted (Unknown) verdict.
                 _logger.LogWarning(
                     ex,
-                    "Spam classifier threw while holding message {InternetMessageId} - leaving verdict Unknown",
+                    "Spam classifier threw while holding message {InternetMessageId} - leaving it unclassified",
                     held.InternetMessageId
                 );
                 return;
@@ -666,13 +668,17 @@ namespace Web.Services
             {
                 await heldMessageRepo.UpdateAsync(held);
             }
-            catch (InvalidOperationException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // The record changed or vanished between the add and this verdict update (e.g. a competing
-                // sweep). The verdict is a best-effort audit/auto-reject input; leaving it Unknown only
-                // under-filters, so a later sweep re-evaluates without it rather than us retrying here.
-                _logger.LogDebug(
-                    "Held message {HeldId} changed concurrently while storing spam verdict - leaving verdict Unknown",
+                // Best-effort: the record is already held and the caller still moves the message to Processed,
+                // so a failed verdict write must not propagate (that would skip the move and log a benign
+                // transient as an error). A concurrency conflict, a transient Cosmos error, or a since-deleted
+                // record all land here; the computed verdict is simply not persisted this cycle and a later
+                // sweep re-evaluates. Do not assert the resulting stored state - a concurrent writer may have
+                // set it - only that our update did not land.
+                _logger.LogWarning(
+                    ex,
+                    "Could not store spam verdict for held message {HeldId} - leaving the record as last persisted",
                     held.Id
                 );
             }

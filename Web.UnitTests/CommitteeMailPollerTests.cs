@@ -113,7 +113,7 @@ public sealed class CommitteeMailPollerTests
         // Seed to a non-default so asserting Unknown is meaningful (proves Add ran and captured add-time state).
         var verdictAtAddTime = SpamVerdict.Spam;
 
-        var (poller, heldRepo, classifier) = BuildSpamHoldScenario(held =>
+        var (poller, heldRepo, classifier, _) = BuildSpamHoldScenario(held =>
         {
             held.Setup(r => r.AddAsync(It.IsAny<HeldMessage>()))
                 .Callback<HeldMessage>(m => { order.Add("add"); verdictAtAddTime = m.SpamVerdict; })
@@ -145,7 +145,7 @@ public sealed class CommitteeMailPollerTests
     [Fact]
     public async Task PollAllCommittees_does_not_run_classifier_when_held_record_persist_fails()
     {
-        var (poller, heldRepo, classifier) = BuildSpamHoldScenario(held =>
+        var (poller, heldRepo, classifier, _) = BuildSpamHoldScenario(held =>
         {
             // Transient, non-409 Cosmos write failure: the message is left in the inbox to be reprocessed.
             held.Setup(r => r.AddAsync(It.IsAny<HeldMessage>()))
@@ -165,12 +165,57 @@ public sealed class CommitteeMailPollerTests
         heldRepo.Verify(r => r.UpdateAsync(It.IsAny<HeldMessage>()), Times.Never);
     }
 
+    [Fact]
+    public async Task PollAllCommittees_does_not_second_write_when_classifier_unavailable()
+    {
+        // SpamClassification enabled but no real classifier (DisabledSpamClassifier: IsAvailable == false).
+        var (poller, heldRepo, classifier, _) = BuildSpamHoldScenario(held =>
+        {
+            held.Setup(r => r.AddAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
+        });
+        classifier.Setup(c => c.IsAvailable).Returns(false);
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        // The record is added once; with no usable classifier there is no verdict to store, so the redundant
+        // second Cosmos write (and the no-op classify call) must be skipped entirely.
+        heldRepo.Verify(r => r.AddAsync(It.IsAny<HeldMessage>()), Times.Once);
+        heldRepo.Verify(r => r.UpdateAsync(It.IsAny<HeldMessage>()), Times.Never);
+        classifier.Verify(
+            c => c.ClassifyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_still_processes_message_when_verdict_store_fails_transiently()
+    {
+        // AddAsync succeeds (record is held) but the follow-up verdict UpdateAsync hits a transient Cosmos
+        // error that is NOT a 412 concurrency conflict.
+        var (poller, heldRepo, classifier, graph) = BuildSpamHoldScenario(held =>
+        {
+            held.Setup(r => r.AddAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
+            held.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>()))
+                .ThrowsAsync(new CosmosException("throttled", HttpStatusCode.TooManyRequests, 0, "activity", 0));
+        });
+        classifier
+            .Setup(c => c.ClassifyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SpamClassificationResult { Verdict = SpamVerdict.Spam, Confidence = SpamConfidence.High });
+
+        // Must not throw: storing the verdict is best-effort and must not disrupt the hold flow.
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        // The record was held and the verdict update attempted; despite the transient failure the message is
+        // still moved to the Processed folder (the invariant the single-write hold path always upheld).
+        heldRepo.Verify(r => r.UpdateAsync(It.IsAny<HeldMessage>()), Times.Once);
+        graph.Verify(g => g.MoveMessageAsync("board@cohad.org", "graph-1", "processed-folder", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     /// <summary>
     /// Builds a poll scenario with one unknown-sender message to a forwarding committee and spam
     /// classification enabled, returning the poller plus the held-message and classifier mocks so a test
     /// can configure persistence behavior and assert on classification. Mirrors the standard hold setup.
     /// </summary>
-    private static (CommitteeMailPoller poller, Mock<IHeldMessageRepository> heldRepo, Mock<ISpamClassifier> classifier)
+    private static (CommitteeMailPoller poller, Mock<IHeldMessageRepository> heldRepo, Mock<ISpamClassifier> classifier, Mock<IGraphMailReader> graph)
         BuildSpamHoldScenario(Action<Mock<IHeldMessageRepository>> configureHeld)
     {
         var committee = new Committee
@@ -234,6 +279,7 @@ public sealed class CommitteeMailPollerTests
             .Build();
 
         var classifier = new Mock<ISpamClassifier>();
+        classifier.Setup(c => c.IsAvailable).Returns(true); // a real classifier is configured by default
 
         var poller = new CommitteeMailPoller(
             provider.GetRequiredService<IServiceScopeFactory>(),
@@ -244,7 +290,7 @@ public sealed class CommitteeMailPollerTests
             NullLogger<CommitteeMailPoller>.Instance
         );
 
-        return (poller, heldRepo, classifier);
+        return (poller, heldRepo, classifier, graphReader);
     }
 
     [Fact]
