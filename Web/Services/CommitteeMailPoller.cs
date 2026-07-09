@@ -715,11 +715,17 @@ namespace Web.Services
             {
                 ct.ThrowIfCancellationRequested();
 
-                // Auto-reject confident spam instead of notifying moderators. Gated by the same enable flag
-                // as hold-time classification, so turning the feature off immediately stops auto-rejecting
-                // (even already-classified records). No notification was ever raised for a quarantined
-                // message, so there is nothing to resolve here.
+                // Auto-reject confident spam instead of notifying moderators. Gated by the same
+                // enable-flag AND live-classifier check as hold-time classification, so it acts only
+                // while a real classifier is configured. Requiring IsAvailable preserves the
+                // fail-safe invariant that a classifier outage can only under-filter, never wrongly
+                // reject: if the Anthropic key is removed (outage or intentional teardown) the sweep
+                // stops acting on already-stored Spam verdicts rather than rejecting mail with no live
+                // classifier backing it. Turning the feature off also immediately stops auto-rejecting.
+                // No notification was ever raised for a quarantined message, so there is nothing to
+                // resolve here.
                 if (_spamClassificationEnabled
+                    && _spamClassifier.IsAvailable
                     && held.SpamVerdict == SpamVerdict.Spam
                     && held.SpamConfidence >= _spamRejectThreshold)
                 {

@@ -320,6 +320,27 @@ public sealed class SpamClassificationTests
             Times.Once);
     }
 
+    [Fact]
+    public async Task Sweep_does_not_auto_reject_when_classifier_unavailable()
+    {
+        // The feature is still enabled but the classifier is no longer configured (e.g. the Anthropic key
+        // was removed after this message was classified Spam/High). Acting on the stale stored verdict with
+        // no live classifier would violate the fail-safe invariant that a classifier outage can only
+        // under-filter. The sweep must fall through to the normal moderator notification instead.
+        var held = HeldSpam(SpamVerdict.Spam, SpamConfidence.High);
+        var (heldRepo, notifications) = SweepMocks(held);
+
+        var poller = BuildSweepPoller(
+            heldRepo, notifications, SpamConfig(enabled: true, threshold: "High"), new DisabledSpamClassifier());
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        heldRepo.Verify(r => r.UpdateAsync(It.Is<HeldMessage>(m => m.Status == HeldMessageStatus.Rejected)), Times.Never);
+        notifications.Verify(s => s.RaiseAsync(
+            NotificationType.HeldMessage, It.IsAny<string>(), It.IsAny<string>(),
+            held.Id.ToString("D"), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private static IConfiguration SpamConfig(bool enabled, string threshold = "High") =>
@@ -368,9 +389,14 @@ public sealed class SpamClassificationTests
     private static CommitteeMailPoller BuildSweepPoller(
         Mock<IHeldMessageRepository> heldRepo,
         Mock<INotificationService> notifications,
-        IConfiguration config
+        IConfiguration config,
+        ISpamClassifier? classifier = null
     )
     {
+        // Default to a real (available) classifier so the auto-reject tests represent a configured
+        // classifier acting on its own stored verdict. Pass a DisabledSpamClassifier explicitly to
+        // exercise the "classifier removed after classifying" case.
+        classifier ??= Mock.Of<ISpamClassifier>(c => c.IsAvailable == true);
         // Forwarding disabled: only the antispam quarantine sweep runs this cycle.
         var committee = new Committee { Id = "board", DisplayName = "Board", CommitteeEmail = "board@cohad.org", ForwardingEnabled = false };
         var committeeRepo = new Mock<ICommitteeRepository>();
@@ -390,7 +416,7 @@ public sealed class SpamClassificationTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new EmailJobQueue(),
             Mock.Of<IGraphMailReader>(),
-            new DisabledSpamClassifier(),
+            classifier,
             config,
             NullLogger<CommitteeMailPoller>.Instance
         );
