@@ -182,12 +182,15 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
    * Uploads every supported image file in a paste/drop payload concurrently and returns the resulting
    * image nodes for the plugin to insert at the placeholder position. Acceptance is keyed on the file
    * extension against the same set the backend allows, so an unsupported file is skipped client-side
-   * rather than making a round-trip that always fails. Any skipped file, failed upload, or all-non-image
-   * drop is surfaced with a snackbar so nothing is dropped silently.
+   * rather than making a round-trip that always fails. Every user-facing outcome - a skipped file, a
+   * failed upload, or an all-non-image drop - is surfaced with a snackbar so nothing is dropped
+   * silently. (The `image` node is always present in this editor's schema; its absence would be an
+   * internal misconfiguration, logged rather than shown to the user.)
    */
   private async uploadImages(files: FileList, schema: Schema, uploadFn: MilkdownImageUploader): Promise<ProseNode[]> {
     const imageType = schema.nodes['image'];
     if (!imageType) {
+      console.error('Milkdown editor schema is missing the "image" node; cannot insert uploaded images.');
       return [];
     }
 
