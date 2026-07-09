@@ -80,7 +80,7 @@ describe('NavbarComponent (mobile hamburger menu)', () => {
     expect(panel!.textContent).toContain('Home');
   });
 
-  it('does not capture any nested sub-menu content as the hamburger menu own lazy content', () => {
+  it("does not capture any nested sub-menu content as the hamburger menu's own lazy content", () => {
     const trigger = hamburgerTrigger();
 
     // `lazyContent` is only populated when a matMenuContent template is projected directly into THIS
