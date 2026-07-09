@@ -77,7 +77,7 @@ namespace Web.MockData
         {
             lock (_homes)
             {
-                return Task.FromResult(_homes.Values.Select(CloneHome).ToList());
+                return Task.FromResult(_homes.Values.Select(CloneWithETag).ToList());
             }
         }
 
@@ -88,9 +88,7 @@ namespace Web.MockData
                 if (!_homes.TryGetValue(id, out var h))
                     return Task.FromResult<Home>(null);
 
-                var clone = CloneHome(h);
-                clone.ETag = _versions.TryGetValue(id, out var v) ? v.ToString() : null;
-                return Task.FromResult(clone);
+                return Task.FromResult(CloneWithETag(h));
             }
         }
 
@@ -103,7 +101,7 @@ namespace Web.MockData
                 {
                     if (_homes.TryGetValue(id, out var h))
                     {
-                        list.Add(CloneHome(h));
+                        list.Add(CloneWithETag(h));
                     }
                 }
 
@@ -120,7 +118,7 @@ namespace Web.MockData
                         .Values.Where(h =>
                             string.Equals(h.EmailAddress?.Address?.Trim(), email, StringComparison.OrdinalIgnoreCase)
                         )
-                        .Select(CloneHome)
+                        .Select(CloneWithETag)
                         .ToList()
                 );
             }
@@ -144,10 +142,24 @@ namespace Web.MockData
 
                 _homes[home.Id] = CloneHome(home);
                 _versions[home.Id] = (_versions.TryGetValue(home.Id, out var v) ? v : 0) + 1;
-                var clone = CloneHome(_homes[home.Id]);
-                clone.ETag = _versions[home.Id].ToString();
-                return Task.FromResult(clone);
+
+                // Match CosmosHomeRepository.UpsertAsync: mutate the caller's instance ETag in place and
+                // return that same instance, so a caller reusing a Home across sequential upserts sees the
+                // fresh ETag without recapturing the return value (the stored copy above is a defensive clone).
+                home.ETag = _versions[home.Id].ToString();
+                return Task.FromResult(home);
             }
+        }
+
+        // Clone a stored home and stamp its ETag from the version map, so every read path carries
+        // ETag - matching CosmosHomeRepository/ToHome and keeping optimistic-concurrency behavior
+        // identical between Mock and Cosmos. Callers must hold the _homes lock (which also guards
+        // _versions).
+        private Home CloneWithETag(Home h)
+        {
+            var clone = CloneHome(h);
+            clone.ETag = _versions.TryGetValue(h.Id, out var v) ? v.ToString() : null;
+            return clone;
         }
 
         private static Home CloneHome(Home h)
