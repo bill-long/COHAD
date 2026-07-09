@@ -75,6 +75,15 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
     this.ready = false;
   }
 
+  private async recreateEditor(newValue: string): Promise<void> {
+    if (this.crepe) {
+      await this.crepe.destroy().catch(() => {});
+    }
+    this.ready = false;
+    await this.createEditor(newValue);
+    this.suppressNextEmit = false;
+  }
+
   private getUploadFn(): MilkdownImageUploader | undefined {
     if (this.imageUploader === false) {
       return undefined;
@@ -111,15 +120,6 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
         },
       },
     };
-  }
-
-  private async recreateEditor(newValue: string): Promise<void> {
-    if (this.crepe) {
-      await this.crepe.destroy().catch(() => {});
-    }
-    this.ready = false;
-    await this.createEditor(newValue);
-    this.suppressNextEmit = false;
   }
 
   private async createEditor(value: string): Promise<void> {
