@@ -19,8 +19,10 @@ namespace Web.Services
     /// <summary>
     /// Performs a single escalation sweep: for each audience, finds unresolved notifications that have
     /// aged past the grace period without being escalated, batches them into one digest email per due
-    /// recipient (throttled by <see cref="NotificationEscalationOptions.MinDigestIntervalHours"/>), and
-    /// stamps the notifications as escalated so they are emailed at most once.
+    /// recipient (throttled by <see cref="NotificationEscalationOptions.MinDigestIntervalHours"/>, capped
+    /// at <see cref="NotificationEscalationOptions.MaxItemsPerDigest"/> items), and stamps as escalated
+    /// only the items actually emailed, so each is emailed at most once and any beyond the cap roll to a
+    /// later sweep rather than being dropped from the email channel.
     /// </summary>
     /// <remarks>
     /// Split out of <see cref="NotificationEscalationService"/> as a scoped service so the sweep logic
@@ -149,22 +151,35 @@ namespace Web.Services
             if (due.Count == 0)
                 return;
 
-            // Stamp the union of items going to at least one due recipient FIRST (before any job is
-            // persisted), so the "emailed at most once" guarantee holds under a crash: a persisted Queued
-            // job is sendable via EmailJobProcessor.ResumeIncompleteJobsAsync, so the escalation stamp must
-            // be durable before any job exists. Each item is stamped once, with a representative job id
-            // (the first due recipient that carries it); an item that fails to stamp (resolved or escalated
-            // concurrently, or a transient error) is simply left for a later sweep. A crash after stamping
-            // but before a job is persisted drops that one digest — acceptable, the in-app channel is
-            // durable.
-            var itemToRepJob = new Dictionary<Guid, (Notification Item, Guid JobId)>();
+            // Each due recipient emails at most MaxItemsPerDigest items this sweep (oldest first); the
+            // rest are deferred. Compute that "shown" set per recipient now, because only items that are
+            // actually rendered and sent get stamped — an item left un-stamped stays eligible for a later
+            // sweep instead of being stamped-and-dropped from the email channel.
+            var cap = Math.Max(1, _options.MaxItemsPerDigest);
             foreach (var bucket in due)
             {
                 bucket.JobId = Guid.NewGuid();
-                foreach (var item in bucket.Items)
+                var distinct = bucket.Items
+                    .GroupBy(n => n.Id)
+                    .Select(g => g.First())
+                    .OrderBy(n => n.CreatedUtc)
+                    .ToList();
+                bucket.Shown = distinct.Take(cap).ToList();
+                bucket.OverflowCount = distinct.Count - bucket.Shown.Count;
+            }
+
+            // Stamp the union of shown items FIRST (before any job is persisted), so the "emailed at most
+            // once" guarantee holds under a crash: a persisted Queued job is sendable via
+            // EmailJobProcessor.ResumeIncompleteJobsAsync, so the escalation stamp must be durable before
+            // any job exists. Each item is stamped once, with a representative job id (the first due
+            // recipient that shows it); an item that fails to stamp (resolved or escalated concurrently, or
+            // a transient error) is simply left for a later sweep. A crash after stamping but before a job
+            // is persisted drops that one digest — acceptable, the in-app channel is durable.
+            var itemToRepJob = new Dictionary<Guid, (Notification Item, Guid JobId)>();
+            foreach (var bucket in due)
+                foreach (var item in bucket.Shown)
                     if (!itemToRepJob.ContainsKey(item.Id))
                         itemToRepJob[item.Id] = (item, bucket.JobId);
-            }
 
             // Bound the concurrent stamping: a large backlog across many committees could otherwise fan
             // out into thousands of simultaneous Cosmos point-read + conditional-upsert pairs, spiking RU
@@ -196,16 +211,14 @@ namespace Web.Services
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    var items = bucket.Items
+                    // bucket.Shown is already de-duplicated and oldest-first; keep only what actually stamped.
+                    var items = bucket.Shown
                         .Where(n => stampedIds.Contains(n.Id))
-                        .GroupBy(n => n.Id)
-                        .Select(g => g.First())
-                        .OrderBy(n => n.CreatedUtc)
                         .ToList();
                     if (items.Count == 0)
-                        continue; // all of this recipient's items were resolved/stamped-away or failed to stamp.
+                        continue; // all of this recipient's shown items were resolved/stamped-away or failed to stamp.
 
-                    var (job, htmlBody) = BuildDigestJob(bucket.JobId, items, new List<string> { bucket.Email }, now);
+                    var (job, htmlBody) = BuildDigestJob(bucket.JobId, items, bucket.OverflowCount, new List<string> { bucket.Email }, now);
                     await PersistAndEnqueueJobAsync(job, htmlBody, ct);
 
                     // Record the send LAST so a failure above never throttles a recipient for a digest that
@@ -235,16 +248,25 @@ namespace Web.Services
             public List<Notification> Items { get; } = new();
 
             public Guid JobId { get; set; }
+
+            /// <summary>The de-duplicated, oldest-first items actually emailed this sweep (capped at
+            /// <see cref="NotificationEscalationOptions.MaxItemsPerDigest"/>). Only these are stamped.</summary>
+            public List<Notification> Shown { get; set; } = new();
+
+            /// <summary>Count of this recipient's aged items beyond the cap, deferred to a later sweep.</summary>
+            public int OverflowCount { get; set; }
         }
 
         /// <summary>
         /// Builds the digest <see cref="EmailJob"/> (using the already-assigned <paramref name="jobId"/>)
         /// and its HTML body in memory from the <paramref name="items"/> that were actually stamped for
-        /// this job. Does not persist or enqueue.
+        /// this job. <paramref name="overflowCount"/> is the number of this recipient's aged items beyond
+        /// the per-digest cap, deferred to a later sweep. Does not persist or enqueue.
         /// </summary>
         private (EmailJob Job, string HtmlBody) BuildDigestJob(
             Guid jobId,
             List<Notification> items,
+            int overflowCount,
             List<string> recipientEmails,
             DateTime now
         )
@@ -277,7 +299,7 @@ namespace Web.Services
                 ContentBlobPath = $"email-jobs/{jobId:D}.html",
             };
 
-            return (job, BuildDigestHtml(items));
+            return (job, BuildDigestHtml(items, overflowCount));
         }
 
         /// <summary>Uploads the digest body, persists the job as Queued, and enqueues it for the processor.</summary>
@@ -359,12 +381,8 @@ namespace Web.Services
             }
         }
 
-        private string BuildDigestHtml(List<Notification> aged)
+        private string BuildDigestHtml(List<Notification> shown, int overflowCount)
         {
-            var cap = Math.Max(1, _options.MaxItemsPerDigest);
-            var shown = aged.Take(cap).ToList();
-            var overflow = aged.Count - shown.Count;
-
             var sb = new StringBuilder();
             sb.Append("<p>The following item(s) in COHAD have been waiting and may need your attention:</p>");
             sb.Append("<ul>");
@@ -386,8 +404,8 @@ namespace Web.Services
             }
             sb.Append("</ul>");
 
-            if (overflow > 0)
-                sb.Append("<p>…and ").Append(overflow).Append(" more.</p>");
+            if (overflowCount > 0)
+                sb.Append("<p>…and ").Append(overflowCount).Append(" more waiting; you'll receive them in a follow-up.</p>");
 
             if (!string.IsNullOrEmpty(_appBaseUrl))
                 sb.Append("<p><a href=\"").Append(WebUtility.HtmlEncode(_appBaseUrl)).Append("\">Sign in to COHAD</a> to review them.</p>");

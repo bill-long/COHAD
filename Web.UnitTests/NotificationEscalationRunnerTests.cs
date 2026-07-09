@@ -301,13 +301,16 @@ public sealed class NotificationEscalationRunnerTests
     }
 
     [Fact]
-    public async Task Digest_caps_items_and_notes_overflow()
+    public async Task Digest_caps_items_stamps_only_shown_and_defers_overflow()
     {
         var h = new Harness();
         h.Options.MaxItemsPerDigest = 2;
         h.RecipientsFor(NotificationAudience.Administrators, "admin@example.com");
+        // created[0] is newest (-2h), created[2] is oldest (-4h). Oldest-first, the cap shows the two
+        // oldest and defers the newest.
+        var created = new List<Notification>();
         for (var i = 0; i < 3; i++)
-            await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-2 - i));
+            created.Add(await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-2 - i)));
 
         await h.Build().RunOnceAsync(CancellationToken.None);
 
@@ -315,6 +318,42 @@ public sealed class NotificationEscalationRunnerTests
         Assert.NotNull(h.UploadedHtml);
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(h.UploadedHtml!, "<li>").Count);
         Assert.Contains("and 1 more", h.UploadedHtml!);
+
+        // Only the two shown (oldest) items are stamped escalated; the overflow item is left
+        // un-escalated so a later sweep emails it rather than dropping it from the email channel.
+        var states = new List<Notification>();
+        foreach (var c in created)
+            states.Add((await h.Notifications.GetByIdAsync(c.Id))!);
+        Assert.Equal(2, states.Count(n => n.EscalatedUtc != null));
+        var deferred = Assert.Single(states, n => n.EscalatedUtc == null);
+        Assert.Equal(created[0].Id, deferred.Id); // the newest item is the one beyond the cap
+    }
+
+    [Fact]
+    public async Task Overflow_item_is_emailed_on_a_later_sweep()
+    {
+        var h = new Harness();
+        h.Options.MaxItemsPerDigest = 2;
+        h.RecipientsFor(NotificationAudience.Administrators, "admin@example.com");
+        var created = new List<Notification>();
+        for (var i = 0; i < 3; i++)
+            created.Add(await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-2 - i)));
+
+        await h.Build().RunOnceAsync(CancellationToken.None);
+        Assert.Single(h.CapturedJobs);
+
+        // Simulate the throttle interval elapsing so the recipient is due again.
+        await h.DigestState.UpsertAsync(
+            new NotificationDigestState { RecipientEmail = "admin@example.com", LastDigestUtc = DateTime.UtcNow.AddHours(-7) }
+        );
+
+        await h.Build().RunOnceAsync(CancellationToken.None);
+
+        // A second digest carries the previously-deferred overflow item; all three end up escalated.
+        Assert.Equal(2, h.CapturedJobs.Count);
+        Assert.Equal("COHAD: 1 item(s) need attention", h.CapturedJobs[1].Subject);
+        foreach (var c in created)
+            Assert.NotNull((await h.Notifications.GetByIdAsync(c.Id))!.EscalatedUtc);
     }
 
     [Fact]
