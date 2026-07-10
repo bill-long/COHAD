@@ -140,15 +140,17 @@ export class BlogDetailComponent implements OnInit, OnDestroy {
 
     this.blogService.getBySlug(slug).subscribe({
       next: post => {
+        // The component's subscriptions are not torn down, so a response can arrive after the user has
+        // navigated away. Bail out entirely rather than mutate the now-shared tab title/URL/state of
+        // the new page.
+        if (this.destroyed) {
+          return;
+        }
         this.post = post;
         // Set the browser tab title to the post title - the route TitleStrategy only sets the generic
         // "COHAD | News". This drives the tab label and the display name Edge uses when the link is
         // copied. (Link-preview crawlers are served separately, server-side, by BlogDeepLinkOpenGraph.)
-        // Guard against a late response arriving after the user navigated away, which would otherwise
-        // clobber the new page's title - the component's subscriptions are not torn down.
-        if (!this.destroyed) {
-          this.titleService.setTitle(post.title ? `COHAD | ${post.title}` : 'COHAD | News');
-        }
+        this.titleService.setTitle(post.title ? `COHAD | ${post.title}` : 'COHAD | News');
         this.renderedHtml = this.renderMarkdown(post.content ?? '');
         this.loading = false;
         this.postLoaded = true;
@@ -171,13 +173,14 @@ export class BlogDetailComponent implements OnInit, OnDestroy {
         this.loadComments(this.currentSlug);
       },
       error: () => {
+        if (this.destroyed) {
+          return;
+        }
         this.post = null;
         this.renderedHtml = '';
         this.loading = false;
         this.error = 'Failed to load post.';
-        if (!this.destroyed) {
-          this.titleService.setTitle('COHAD | News');
-        }
+        this.titleService.setTitle('COHAD | News');
       },
     });
   }
