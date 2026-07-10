@@ -190,17 +190,27 @@ export class BlogDetailComponent implements OnInit, OnDestroy {
   }
 
   private loadComments(slug: string): void {
+    // Correlate with the owning post load so a slow earlier comments response can't overwrite a newer
+    // post's comments. loadComments only runs after a post load, so loadRequestId is still that load's.
+    const requestId = this.loadRequestId;
     this.commentsLoading = true;
+    this.comments = []; // drop the previous post's comments so the spinner never shows stale ones
     this.commentHtmlCache.clear();
 
     this.blogService.getComments(slug).subscribe({
       next: comments => {
+        if (this.destroyed || requestId !== this.loadRequestId) {
+          return;
+        }
         this.comments = comments;
         this.commentsLoading = false;
         this.commentsLoaded = true;
         this.scrollToCommentsIfNeeded();
       },
       error: () => {
+        if (this.destroyed || requestId !== this.loadRequestId) {
+          return;
+        }
         this.comments = [];
         this.commentsLoading = false;
         this.commentsLoaded = true;
