@@ -1,7 +1,7 @@
-import { Component, ElementRef, Inject, OnInit, SecurityContext, ViewChild } from '@angular/core';
+import { Component, ElementRef, Inject, OnDestroy, OnInit, SecurityContext, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Location } from '@angular/common';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml, Title } from '@angular/platform-browser';
 import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { marked, Renderer } from 'marked';
@@ -16,7 +16,7 @@ import { renderMarkdownToHtml } from 'src/app/utils/markdown';
   styleUrls: ['./blog-detail.component.css'],
   standalone: false,
 })
-export class BlogDetailComponent implements OnInit {
+export class BlogDetailComponent implements OnInit, OnDestroy {
   post: BlogPostDetail | null = null;
   renderedHtml: SafeHtml = '';
   loading = false;
@@ -34,12 +34,16 @@ export class BlogDetailComponent implements OnInit {
   private postLoaded = false;
   private commentsLoaded = false;
   private commentHtmlCache = new Map<string, SafeHtml>();
+  private destroyed = false;
+  /** Incremented per loadPost so a slower earlier request can't clobber a newer one (slug changes). */
+  private loadRequestId = 0;
 
   constructor(
     private readonly route: ActivatedRoute,
     private readonly location: Location,
     private readonly blogService: BlogService,
     private readonly sanitizer: DomSanitizer,
+    private readonly titleService: Title,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>,
   ) {}
@@ -62,6 +66,13 @@ export class BlogDetailComponent implements OnInit {
       this.currentSlug = slug;
       this.loadPost(slug);
     });
+  }
+
+  ngOnDestroy(): void {
+    // The component's subscriptions are not torn down; this flag lets the getBySlug callbacks bail
+    // out if they resolve after the user navigated away, so they don't mutate the new page's shared
+    // state (browser tab title, URL via replaceState, comments, etc.).
+    this.destroyed = true;
   }
 
   logIn(): void {
@@ -125,6 +136,15 @@ export class BlogDetailComponent implements OnInit {
   }
 
   private loadPost(slug: string): void {
+    // The route.paramMap subscription is not torn down either; a late emission must not kick off new
+    // work (flag flips / HTTP) after the component is gone.
+    if (this.destroyed) {
+      return;
+    }
+    // This component is reused across /news/:slug param changes, so several loadPost requests can be
+    // in flight. Tag each and only let the latest one mutate state, so a slower earlier response can't
+    // clobber the newer post/title (and destroyed callbacks are dropped entirely).
+    const requestId = ++this.loadRequestId;
     this.loading = true;
     this.error = '';
     this.postLoaded = false;
@@ -132,7 +152,15 @@ export class BlogDetailComponent implements OnInit {
 
     this.blogService.getBySlug(slug).subscribe({
       next: post => {
+        if (this.destroyed || requestId !== this.loadRequestId) {
+          return;
+        }
         this.post = post;
+        // Set the browser tab title to the post title - the route TitleStrategy only sets the generic
+        // "COHAD | News". This drives the tab label and the display name Edge uses when the link is
+        // copied. (Link-preview crawlers are served separately, server-side, by BlogDeepLinkOpenGraph.)
+        const trimmedTitle = post.title?.trim();
+        this.titleService.setTitle(trimmedTitle ? `COHAD | ${trimmedTitle}` : 'COHAD | News');
         this.renderedHtml = this.renderMarkdown(post.content ?? '');
         this.loading = false;
         this.postLoaded = true;
@@ -155,26 +183,40 @@ export class BlogDetailComponent implements OnInit {
         this.loadComments(this.currentSlug);
       },
       error: () => {
+        if (this.destroyed || requestId !== this.loadRequestId) {
+          return;
+        }
         this.post = null;
         this.renderedHtml = '';
         this.loading = false;
         this.error = 'Failed to load post.';
+        this.titleService.setTitle('COHAD | News');
       },
     });
   }
 
   private loadComments(slug: string): void {
+    // Correlate with the owning post load so a slow earlier comments response can't overwrite a newer
+    // post's comments. loadComments only runs after a post load, so loadRequestId is still that load's.
+    const requestId = this.loadRequestId;
     this.commentsLoading = true;
+    this.comments = []; // drop the previous post's comments so the spinner never shows stale ones
     this.commentHtmlCache.clear();
 
     this.blogService.getComments(slug).subscribe({
       next: comments => {
+        if (this.destroyed || requestId !== this.loadRequestId) {
+          return;
+        }
         this.comments = comments;
         this.commentsLoading = false;
         this.commentsLoaded = true;
         this.scrollToCommentsIfNeeded();
       },
       error: () => {
+        if (this.destroyed || requestId !== this.loadRequestId) {
+          return;
+        }
         this.comments = [];
         this.commentsLoading = false;
         this.commentsLoaded = true;

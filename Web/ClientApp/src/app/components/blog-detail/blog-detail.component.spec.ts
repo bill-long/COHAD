@@ -1,0 +1,89 @@
+import { of, Subject } from 'rxjs';
+import { Title } from '@angular/platform-browser';
+import { BlogDetailComponent } from './blog-detail.component';
+import { BlogPostDetail } from 'src/app/services/blog.service';
+
+// Focused on the browser-tab title behavior added to loadPost. The component is constructed by hand
+// (not mounted) so these stay deterministic; loadPost is driven directly with a controllable source.
+describe('BlogDetailComponent tab title', () => {
+  let title: jasmine.SpyObj<Title>;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function makeWith(getBySlugFn: (slug: string) => any): BlogDetailComponent {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const blogService: any = { getBySlug: getBySlugFn, getComments: () => of([]) };
+    title = jasmine.createSpyObj<Title>('Title', ['setTitle']);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sanitizer: any = { sanitize: (_ctx: unknown, v: string) => v, bypassSecurityTrustHtml: (v: string) => v };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const route: any = { snapshot: { queryParamMap: { keys: [], getAll: () => [] }, fragment: null } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const location: any = { replaceState: () => undefined };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const comp = new BlogDetailComponent(route, location, blogService, sanitizer, title, of({} as any), { next: () => undefined } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (comp as any).currentSlug = 'slug';
+    return comp;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const make = (getBySlug: any): BlogDetailComponent => makeWith(() => getBySlug);
+  const post = (title: string, slug = 'slug'): BlogPostDetail =>
+    ({ title, content: '', publicSlug: slug } as BlogPostDetail);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const load = (comp: BlogDetailComponent, slug = 'slug') => (comp as any).loadPost(slug);
+
+  it('sets the tab title to the post title on load', () => {
+    const comp = make(of(post('Spring Garden Tips')));
+    load(comp);
+    expect(title.setTitle).toHaveBeenCalledWith('COHAD | Spring Garden Tips');
+  });
+
+  it('falls back to "COHAD | News" when the post has no title', () => {
+    const comp = make(of(post('')));
+    load(comp);
+    expect(title.setTitle).toHaveBeenCalledWith('COHAD | News');
+  });
+
+  it('falls back for a whitespace-only title and trims a padded one', () => {
+    const blank = make(of(post('   ')));
+    load(blank);
+    expect(title.setTitle).toHaveBeenCalledWith('COHAD | News');
+
+    const padded = make(of(post('  Spring Garden Tips  ')));
+    load(padded);
+    expect(title.setTitle).toHaveBeenCalledWith('COHAD | Spring Garden Tips');
+  });
+
+  it('sets "COHAD | News" when the post fails to load', () => {
+    const source = new Subject<BlogPostDetail>();
+    const comp = make(source);
+    load(comp);
+    source.error(new Error('boom'));
+    expect(title.setTitle).toHaveBeenCalledWith('COHAD | News');
+  });
+
+  it('does not touch the title if the response arrives after the component is destroyed', () => {
+    const source = new Subject<BlogPostDetail>();
+    const comp = make(source);
+    load(comp);
+    comp.ngOnDestroy();
+    source.next(post('Late Post')); // late callback must not clobber the new page's title
+    expect(title.setTitle).not.toHaveBeenCalled();
+  });
+
+  it('ignores a slower earlier request when a newer slug has already been loaded', () => {
+    const first = new Subject<BlogPostDetail>();
+    const second = new Subject<BlogPostDetail>();
+    const sources = [first, second];
+    const comp = makeWith(() => sources.shift()!);
+
+    load(comp, 'first-slug'); // request 1 (slow)
+    load(comp, 'second-slug'); // request 2 (newer)
+    second.next(post('Second Post', 'second-slug'));
+    first.next(post('First Post', 'first-slug')); // stale: arrives last, must be ignored
+
+    expect(title.setTitle).toHaveBeenCalledWith('COHAD | Second Post');
+    expect(title.setTitle).not.toHaveBeenCalledWith('COHAD | First Post');
+  });
+});
