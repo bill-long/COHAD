@@ -13,10 +13,23 @@ import {
 } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Crepe } from '@milkdown/crepe';
+import { editorViewCtx } from '@milkdown/kit/core';
 import { upload, uploadConfig } from '@milkdown/kit/plugin/upload';
+import { Slice } from '@milkdown/kit/prose/model';
 import type { Node as ProseNode, Schema } from '@milkdown/kit/prose/model';
+import type { EditorView } from '@milkdown/kit/prose/view';
 import { BlogService } from 'src/app/services/blog.service';
 import { firstValueFrom } from 'rxjs';
+
+/**
+ * ProseMirror plugin props we reach for when routing a file drop to plugin-upload's handler. Crepe's
+ * drop-indicator plugin is ordered ahead of plugin-upload and consumes file drops (its handleDrop
+ * returns true), so plugin-upload never runs on its own - we invoke its handler directly.
+ */
+interface DropHandlerProps {
+  handleDrop?: (view: EditorView, event: DragEvent, slice: Slice, moved: boolean) => boolean;
+  handlePaste?: unknown;
+}
 
 export type MilkdownImageUploader = (file: File) => Promise<string>;
 
@@ -40,6 +53,8 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
   private ready = false;
   /** Prevents feedback loop when we programmatically set content. */
   private suppressNextEmit = false;
+  /** Capture-phase drop listener that routes file drops to plugin-upload ahead of Crepe's handlers. */
+  private dropInterceptor: ((event: DragEvent) => void) | null = null;
 
   constructor(
     private readonly ngZone: NgZone,
@@ -68,6 +83,10 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
   }
 
   ngOnDestroy(): void {
+    if (this.dropInterceptor) {
+      this.container.nativeElement.removeEventListener('drop', this.dropInterceptor, true);
+      this.dropInterceptor = null;
+    }
     if (this.crepe) {
       this.crepe.destroy().catch(() => {});
       this.crepe = null;
@@ -145,22 +164,81 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
 
     await this.crepe.create();
     this.ready = true;
+
+    // Installed once for the component's lifetime; the listener resolves the current view dynamically,
+    // so it keeps working across editor rebuilds and re-checks whether uploads are enabled per drop.
+    if (!this.dropInterceptor) {
+      this.installDropInterceptor();
+    }
   }
 
   /**
-   * Wires the official `@milkdown/plugin-upload` so an image file dropped into the body uploads to blob
-   * storage (via {@link BlogService}) and is inserted as its stored URL, instead of having no handler
-   * at all. The plugin renders an "Upload in progress" placeholder and maps the insert position through
-   * any edits made while the upload is in flight. No-op when uploads are disabled
-   * (`imageUploader === false`).
+   * Routes a file drop to plugin-upload's own drop handler before ProseMirror sees the event.
    *
-   * Scope: this reliably fixes drag-and-drop. It does NOT fix pasting an image from an app that puts
-   * `text/html` on the clipboard (e.g. Outlook), because Milkdown's own clipboard plugin - registered
-   * by Crepe ahead of this one - handles the paste first and embeds the source `<img>` (an
-   * origin-scoped `blob:` URL that is dead elsewhere). No ProseMirror plugin added after Crepe's can win
-   * that race; making paste upload too needs an interception point ahead of the clipboard plugin,
-   * tracked as a follow-up. `enableHtmlFileUploader` is set so this plugin uploads rather than defers
-   * on the paths it does see.
+   * Why this is needed: Crepe's cursor feature adds a block-reorder drop-indicator plugin, ordered
+   * ahead of anything we add. ProseMirror's handleDrop is first-match-wins, and that plugin's handler
+   * consumes a file drop as a no-op - for an external file ProseMirror hands it an empty slice, it
+   * inserts nothing, but still returns true (and calls preventDefault). So plugin-upload's handleDrop,
+   * ordered after it, never runs and the drop silently does nothing. Crepe does not expose the plugin
+   * order, so we catch the drop in the capture phase (ahead of ProseMirror), stop it when it carries
+   * files, and hand it to plugin-upload's handler (which then uploads images and reports unsupported
+   * files via {@link uploadImages}).
+   */
+  private installDropInterceptor(): void {
+    const listener = (event: DragEvent): void => {
+      const files = event.dataTransfer?.files;
+      if (!files || files.length === 0 || this.imageUploader === false) {
+        return;
+      }
+      const view = this.getCurrentView();
+      const handleDrop = view ? this.findUploadHandleDrop(view) : undefined;
+      if (!view || !handleDrop) {
+        return;
+      }
+      // Take over the drop before Crepe's drop-indicator consumes it.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      handleDrop(view, event, Slice.empty, false);
+    };
+    this.container.nativeElement.addEventListener('drop', listener, true);
+    this.dropInterceptor = listener;
+  }
+
+  private getCurrentView(): EditorView | null {
+    if (!this.ready || !this.crepe) {
+      return null;
+    }
+    try {
+      const view = this.crepe.editor.ctx.get(editorViewCtx);
+      return view && !view.isDestroyed ? view : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** plugin-upload's drop handler, identified as the only plugin exposing both handleDrop and handlePaste. */
+  private findUploadHandleDrop(view: EditorView): DropHandlerProps['handleDrop'] | undefined {
+    const plugin = view.state.plugins.find(p => {
+      const props = p.props as DropHandlerProps | undefined;
+      return !!props?.handleDrop && !!props?.handlePaste;
+    });
+    return (plugin?.props as DropHandlerProps | undefined)?.handleDrop;
+  }
+
+  /**
+   * Wires the official `@milkdown/plugin-upload`: it uploads a dropped image to blob storage (via our
+   * uploader, {@link uploadImages}), renders an "Upload in progress" placeholder, and inserts the
+   * stored URL at the drop point. No-op when uploads are disabled (`imageUploader === false`).
+   *
+   * The plugin's own `handleDrop` never fires, though: Crepe registers a drop-indicator plugin ahead of
+   * anything we add, and it consumes file drops (its `handleDrop` returns true). {@link
+   * installDropInterceptor} works around that by catching the drop in the capture phase and invoking
+   * this plugin's handler directly. `enableHtmlFileUploader` is set so the handler uploads rather than
+   * defers when the payload also carries `text/html`.
+   *
+   * Paste is a separate, still-open case (tracked follow-up): Milkdown's clipboard plugin handles a
+   * `text/html` paste first and embeds the source `<img>` (an origin-scoped `blob:` URL, dead
+   * elsewhere).
    */
   private registerImageUploadPlugin(crepe: Crepe, uploadFn: MilkdownImageUploader | undefined): void {
     if (!uploadFn) {
