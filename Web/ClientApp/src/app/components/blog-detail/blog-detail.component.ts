@@ -1,7 +1,7 @@
 import { Component, ElementRef, Inject, OnInit, SecurityContext, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Location } from '@angular/common';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml, Title } from '@angular/platform-browser';
 import { Observable, Observer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { marked, Renderer } from 'marked';
@@ -40,6 +40,7 @@ export class BlogDetailComponent implements OnInit {
     private readonly location: Location,
     private readonly blogService: BlogService,
     private readonly sanitizer: DomSanitizer,
+    private readonly titleService: Title,
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Observer<Action>,
   ) {}
@@ -129,10 +130,14 @@ export class BlogDetailComponent implements OnInit {
     this.error = '';
     this.postLoaded = false;
     this.commentsLoaded = false;
+    // Reset to the generic News title until the post loads (the route TitleStrategy also sets this);
+    // gives link previews the post title instead of a bare "COHAD | News".
+    this.titleService.setTitle('COHAD | News');
 
     this.blogService.getBySlug(slug).subscribe({
       next: post => {
         this.post = post;
+        this.titleService.setTitle(post.title ? `COHAD | ${post.title}` : 'COHAD | News');
         this.renderedHtml = this.renderMarkdown(post.content ?? '');
         this.loading = false;
         this.postLoaded = true;
@@ -159,6 +164,7 @@ export class BlogDetailComponent implements OnInit {
         this.renderedHtml = '';
         this.loading = false;
         this.error = 'Failed to load post.';
+        this.titleService.setTitle('COHAD | News');
       },
     });
   }
