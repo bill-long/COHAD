@@ -1004,7 +1004,7 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
-    public async Task GetNextUpcoming_returns_NotFound_when_no_events_in_window()
+    public async Task GetNextUpcoming_returns_NoContent_when_no_events_in_window()
     {
         var mockEvents = new Mock<ICommunityEventRepository>();
         mockEvents
@@ -1019,7 +1019,8 @@ public sealed class EventsControllerTests
         );
         var result = await c.GetNextUpcoming();
 
-        Assert.IsType<NotFoundResult>(result);
+        // No upcoming event is a normal empty state (204), not a missing resource (404).
+        Assert.IsType<NoContentResult>(result);
     }
 
     [Fact]
