@@ -136,6 +136,11 @@ export class BlogDetailComponent implements OnInit, OnDestroy {
   }
 
   private loadPost(slug: string): void {
+    // The route.paramMap subscription is not torn down either; a late emission must not kick off new
+    // work (flag flips / HTTP) after the component is gone.
+    if (this.destroyed) {
+      return;
+    }
     // This component is reused across /news/:slug param changes, so several loadPost requests can be
     // in flight. Tag each and only let the latest one mutate state, so a slower earlier response can't
     // clobber the newer post/title (and destroyed callbacks are dropped entirely).
@@ -154,7 +159,8 @@ export class BlogDetailComponent implements OnInit, OnDestroy {
         // Set the browser tab title to the post title - the route TitleStrategy only sets the generic
         // "COHAD | News". This drives the tab label and the display name Edge uses when the link is
         // copied. (Link-preview crawlers are served separately, server-side, by BlogDeepLinkOpenGraph.)
-        this.titleService.setTitle(post.title ? `COHAD | ${post.title}` : 'COHAD | News');
+        const trimmedTitle = post.title?.trim();
+        this.titleService.setTitle(trimmedTitle ? `COHAD | ${trimmedTitle}` : 'COHAD | News');
         this.renderedHtml = this.renderMarkdown(post.content ?? '');
         this.loading = false;
         this.postLoaded = true;

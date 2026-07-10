@@ -45,6 +45,16 @@ describe('BlogDetailComponent tab title', () => {
     expect(title.setTitle).toHaveBeenCalledWith('COHAD | News');
   });
 
+  it('falls back for a whitespace-only title and trims a padded one', () => {
+    const blank = make(of(post('   ')));
+    load(blank);
+    expect(title.setTitle).toHaveBeenCalledWith('COHAD | News');
+
+    const padded = make(of(post('  Spring Garden Tips  ')));
+    load(padded);
+    expect(title.setTitle).toHaveBeenCalledWith('COHAD | Spring Garden Tips');
+  });
+
   it('sets "COHAD | News" when the post fails to load', () => {
     const source = new Subject<BlogPostDetail>();
     const comp = make(source);
