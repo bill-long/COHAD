@@ -28,12 +28,12 @@ describe('Milkdown image drop integration', () => {
   afterEach(() => root.remove());
 
   // Poll for a condition instead of sleeping a fixed duration, so the test is neither flaky on slow
-  // runs nor artificially slow on fast ones.
-  async function waitUntil(condition: () => boolean, timeoutMs = 1000): Promise<void> {
+  // runs nor artificially slow on fast ones. Throws on timeout so a genuine failure is diagnosable.
+  async function waitUntil(condition: () => boolean, timeoutMs = 2000): Promise<void> {
     const start = Date.now();
     while (!condition()) {
       if (Date.now() - start > timeoutMs) {
-        return;
+        throw new Error(`waitUntil: condition not met within ${timeoutMs}ms`);
       }
       await new Promise(r => setTimeout(r, 5));
     }

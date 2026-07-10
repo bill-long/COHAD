@@ -195,10 +195,12 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
       if (!view || !handleDrop) {
         return;
       }
-      // Take over the drop before Crepe's drop-indicator consumes it.
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      handleDrop(view, event, Slice.empty, false);
+      // Only take the drop over (ahead of Crepe's drop-indicator) if plugin-upload actually handles
+      // it; if it declines, leave the event alone so normal drop behavior can still run.
+      if (handleDrop(view, event, Slice.empty, false)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
     };
     this.container.nativeElement.addEventListener('drop', listener, true);
     this.dropInterceptor = listener;
