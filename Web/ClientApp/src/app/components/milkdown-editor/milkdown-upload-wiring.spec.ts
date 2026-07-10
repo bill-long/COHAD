@@ -27,6 +27,18 @@ describe('Milkdown image drop integration', () => {
 
   afterEach(() => root.remove());
 
+  // Poll for a condition instead of sleeping a fixed duration, so the test is neither flaky on slow
+  // runs nor artificially slow on fast ones.
+  async function waitUntil(condition: () => boolean, timeoutMs = 1000): Promise<void> {
+    const start = Date.now();
+    while (!condition()) {
+      if (Date.now() - start > timeoutMs) {
+        return;
+      }
+      await new Promise(r => setTimeout(r, 5));
+    }
+  }
+
   it('installs plugin-upload and configures our uploader + enableHtmlFileUploader', async () => {
     const crepe = new Crepe({ root, defaultValue: '' });
     const uploadFn = () => Promise.resolve('https://cdn.example/uploaded.png');
@@ -41,11 +53,15 @@ describe('Milkdown image drop integration', () => {
     expect(cfg.enableHtmlFileUploader).withContext('enableHtmlFileUploader set').toBe(true);
     expect(typeof cfg.uploader).toBe('function');
 
-    // The editor view must have a plugin whose props expose handleDrop (plugin-upload) - i.e. it is
-    // actually installed in the ProseMirror state.
+    // plugin-upload must be installed in the ProseMirror state. Identify it specifically - as the only
+    // plugin exposing BOTH handleDrop and handlePaste - so this does not pass on Crepe's drop-indicator
+    // (handleDrop only) if the wiring regresses.
     const view = crepe.editor.ctx.get(editorViewCtx);
-    const hasDropHandler = view.state.plugins.some(p => !!(p.props && (p.props as { handleDrop?: unknown }).handleDrop));
-    expect(hasDropHandler).withContext('a plugin provides handleDrop').toBe(true);
+    const hasUploadPlugin = view.state.plugins.some(p => {
+      const props = p.props as { handleDrop?: unknown; handlePaste?: unknown } | undefined;
+      return !!props?.handleDrop && !!props?.handlePaste;
+    });
+    expect(hasUploadPlugin).withContext('plugin-upload (handleDrop + handlePaste) installed').toBe(true);
 
     await crepe.destroy();
   });
@@ -72,7 +88,7 @@ describe('Milkdown image drop integration', () => {
     // Dispatch on the container the capture-phase listener is bound to (a capture listener fires for
     // its own target as well as descendants).
     root.dispatchEvent(dropEvent);
-    await new Promise(r => setTimeout(r, 50));
+    await waitUntil(() => uploadFn.calls.count() > 0);
 
     expect(uploadFn).withContext('uploader reached via the capture-phase interceptor').toHaveBeenCalled();
     expect(dropEvent.defaultPrevented).withContext('drop taken over before Crepe').toBe(true);
