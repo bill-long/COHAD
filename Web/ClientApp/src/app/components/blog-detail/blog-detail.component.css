@@ -83,11 +83,13 @@
     margin: 0 0 1rem;
 }
 
-.blog-content img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-}
+/* NOTE: The blog body is injected via [innerHTML] (rendered markdown), so the injected elements carry
+   no Angular scoping attribute. That means every `.blog-content <descendant>` rule in this scoped file
+   (the p / ul / ol / blockquote / etc. rules below) is effectively inert against the post content - it
+   only appears to work where a browser default already produces the same result. Styles that must
+   actually affect the rendered post live in global styles.css. The `.blog-content img` rule moved
+   there because, unlike margins/padding, there is no browser default that caps image width, so its
+   absence was visible (images overflowed the column). */
 
 .blog-content ul,
 .blog-content ol {
