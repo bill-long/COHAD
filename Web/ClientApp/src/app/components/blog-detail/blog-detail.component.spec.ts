@@ -9,9 +9,9 @@ describe('BlogDetailComponent tab title', () => {
   let title: jasmine.SpyObj<Title>;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function make(getBySlug: any): BlogDetailComponent {
+  function makeWith(getBySlugFn: (slug: string) => any): BlogDetailComponent {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const blogService: any = { getBySlug: () => getBySlug, getComments: () => of([]) };
+    const blogService: any = { getBySlug: getBySlugFn, getComments: () => of([]) };
     title = jasmine.createSpyObj<Title>('Title', ['setTitle']);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sanitizer: any = { sanitize: (_ctx: unknown, v: string) => v, bypassSecurityTrustHtml: (v: string) => v };
@@ -26,9 +26,12 @@ describe('BlogDetailComponent tab title', () => {
     return comp;
   }
 
-  const post = (title: string): BlogPostDetail => ({ title, content: '', publicSlug: 'slug' } as BlogPostDetail);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const load = (comp: BlogDetailComponent) => (comp as any).loadPost('slug');
+  const make = (getBySlug: any): BlogDetailComponent => makeWith(() => getBySlug);
+  const post = (title: string, slug = 'slug'): BlogPostDetail =>
+    ({ title, content: '', publicSlug: slug } as BlogPostDetail);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const load = (comp: BlogDetailComponent, slug = 'slug') => (comp as any).loadPost(slug);
 
   it('sets the tab title to the post title on load', () => {
     const comp = make(of(post('Spring Garden Tips')));
@@ -57,5 +60,20 @@ describe('BlogDetailComponent tab title', () => {
     comp.ngOnDestroy();
     source.next(post('Late Post')); // late callback must not clobber the new page's title
     expect(title.setTitle).not.toHaveBeenCalled();
+  });
+
+  it('ignores a slower earlier request when a newer slug has already been loaded', () => {
+    const first = new Subject<BlogPostDetail>();
+    const second = new Subject<BlogPostDetail>();
+    const sources = [first, second];
+    const comp = makeWith(() => sources.shift()!);
+
+    load(comp, 'first-slug'); // request 1 (slow)
+    load(comp, 'second-slug'); // request 2 (newer)
+    second.next(post('Second Post', 'second-slug'));
+    first.next(post('First Post', 'first-slug')); // stale: arrives last, must be ignored
+
+    expect(title.setTitle).toHaveBeenCalledWith('COHAD | Second Post');
+    expect(title.setTitle).not.toHaveBeenCalledWith('COHAD | First Post');
   });
 });

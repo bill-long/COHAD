@@ -35,6 +35,8 @@ export class BlogDetailComponent implements OnInit, OnDestroy {
   private commentsLoaded = false;
   private commentHtmlCache = new Map<string, SafeHtml>();
   private destroyed = false;
+  /** Incremented per loadPost so a slower earlier request can't clobber a newer one (slug changes). */
+  private loadRequestId = 0;
 
   constructor(
     private readonly route: ActivatedRoute,
@@ -134,6 +136,10 @@ export class BlogDetailComponent implements OnInit, OnDestroy {
   }
 
   private loadPost(slug: string): void {
+    // This component is reused across /news/:slug param changes, so several loadPost requests can be
+    // in flight. Tag each and only let the latest one mutate state, so a slower earlier response can't
+    // clobber the newer post/title (and destroyed callbacks are dropped entirely).
+    const requestId = ++this.loadRequestId;
     this.loading = true;
     this.error = '';
     this.postLoaded = false;
@@ -141,10 +147,7 @@ export class BlogDetailComponent implements OnInit, OnDestroy {
 
     this.blogService.getBySlug(slug).subscribe({
       next: post => {
-        // The component's subscriptions are not torn down, so a response can arrive after the user has
-        // navigated away. Bail out entirely rather than mutate the now-shared tab title/URL/state of
-        // the new page.
-        if (this.destroyed) {
+        if (this.destroyed || requestId !== this.loadRequestId) {
           return;
         }
         this.post = post;
@@ -174,7 +177,7 @@ export class BlogDetailComponent implements OnInit, OnDestroy {
         this.loadComments(this.currentSlug);
       },
       error: () => {
-        if (this.destroyed) {
+        if (this.destroyed || requestId !== this.loadRequestId) {
           return;
         }
         this.post = null;
