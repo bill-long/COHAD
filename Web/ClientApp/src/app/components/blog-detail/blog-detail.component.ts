@@ -1,4 +1,4 @@
-import { Component, ElementRef, Inject, OnInit, SecurityContext, ViewChild } from '@angular/core';
+import { Component, ElementRef, Inject, OnDestroy, OnInit, SecurityContext, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Location } from '@angular/common';
 import { DomSanitizer, SafeHtml, Title } from '@angular/platform-browser';
@@ -16,7 +16,7 @@ import { renderMarkdownToHtml } from 'src/app/utils/markdown';
   styleUrls: ['./blog-detail.component.css'],
   standalone: false,
 })
-export class BlogDetailComponent implements OnInit {
+export class BlogDetailComponent implements OnInit, OnDestroy {
   post: BlogPostDetail | null = null;
   renderedHtml: SafeHtml = '';
   loading = false;
@@ -34,6 +34,7 @@ export class BlogDetailComponent implements OnInit {
   private postLoaded = false;
   private commentsLoaded = false;
   private commentHtmlCache = new Map<string, SafeHtml>();
+  private destroyed = false;
 
   constructor(
     private readonly route: ActivatedRoute,
@@ -63,6 +64,12 @@ export class BlogDetailComponent implements OnInit {
       this.currentSlug = slug;
       this.loadPost(slug);
     });
+  }
+
+  ngOnDestroy(): void {
+    // The component's subscriptions are not torn down; this flag lets late callbacks skip mutating
+    // the now-shared browser tab title after the user has navigated away.
+    this.destroyed = true;
   }
 
   logIn(): void {
@@ -130,14 +137,18 @@ export class BlogDetailComponent implements OnInit {
     this.error = '';
     this.postLoaded = false;
     this.commentsLoaded = false;
-    // Reset to the generic News title until the post loads (the route TitleStrategy also sets this);
-    // gives link previews the post title instead of a bare "COHAD | News".
-    this.titleService.setTitle('COHAD | News');
 
     this.blogService.getBySlug(slug).subscribe({
       next: post => {
         this.post = post;
-        this.titleService.setTitle(post.title ? `COHAD | ${post.title}` : 'COHAD | News');
+        // Set the browser tab title to the post title - the route TitleStrategy only sets the generic
+        // "COHAD | News". This drives the tab label and the display name Edge uses when the link is
+        // copied. (Link-preview crawlers are served separately, server-side, by BlogDeepLinkOpenGraph.)
+        // Guard against a late response arriving after the user navigated away, which would otherwise
+        // clobber the new page's title - the component's subscriptions are not torn down.
+        if (!this.destroyed) {
+          this.titleService.setTitle(post.title ? `COHAD | ${post.title}` : 'COHAD | News');
+        }
         this.renderedHtml = this.renderMarkdown(post.content ?? '');
         this.loading = false;
         this.postLoaded = true;
@@ -164,7 +175,9 @@ export class BlogDetailComponent implements OnInit {
         this.renderedHtml = '';
         this.loading = false;
         this.error = 'Failed to load post.';
-        this.titleService.setTitle('COHAD | News');
+        if (!this.destroyed) {
+          this.titleService.setTitle('COHAD | News');
+        }
       },
     });
   }
