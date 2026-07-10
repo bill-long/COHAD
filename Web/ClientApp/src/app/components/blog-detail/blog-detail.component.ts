@@ -67,8 +67,9 @@ export class BlogDetailComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // The component's subscriptions are not torn down; this flag lets late callbacks skip mutating
-    // the now-shared browser tab title after the user has navigated away.
+    // The component's subscriptions are not torn down; this flag lets the getBySlug callbacks bail
+    // out if they resolve after the user navigated away, so they don't mutate the new page's shared
+    // state (browser tab title, URL via replaceState, comments, etc.).
     this.destroyed = true;
   }
 
