@@ -304,6 +304,18 @@ body.dark-theme .ql-editor.ql-blank::before {
   font-size: 1.1rem;
 }
 
+/* Blog body images are injected via [innerHTML] (rendered markdown), so their styles must live here
+   (global) - the component's scoped .blog-content img rule cannot reach innerHTML content. Without
+   this, uploaded images render at their full natural pixel size (e.g. 1448px) and overflow the
+   ~700px content column. Constrain to the column width, preserve aspect ratio, and center. */
+.blog-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1rem auto;
+  border-radius: 8px;
+}
+
 /* Blog drop cap — injected <span class="drop-cap"> lets us use shape-outside so text
    flows around the visual ink rather than the rectangular bounding box of the letter.
    The paragraph receives class="drop-cap-para" from injectDropCapSpan, so the selector

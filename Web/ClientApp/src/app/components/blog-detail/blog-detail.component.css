@@ -83,11 +83,8 @@
     margin: 0 0 1rem;
 }
 
-.blog-content img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-}
+/* Blog body images are injected via [innerHTML], which component-scoped styles cannot target, so
+   their rules live in global styles.css (.blog-content img) instead. */
 
 .blog-content ul,
 .blog-content ol {
