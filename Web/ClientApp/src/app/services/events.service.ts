@@ -73,8 +73,9 @@ export class EventsService {
     return this.httpClient.get<EventCard[]>('api/events');
   }
 
-  getNextUpcoming(): Observable<EventCard> {
-    return this.httpClient.get<EventCard>('api/events/next');
+  /** The next upcoming event, or null when there is none (the API returns 204 for that empty state). */
+  getNextUpcoming(): Observable<EventCard | null> {
+    return this.httpClient.get<EventCard | null>('api/events/next');
   }
 
   /** Loads an event by public slug (year-name) or legacy GUID string. */

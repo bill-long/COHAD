@@ -104,7 +104,10 @@ namespace Web.Controllers
 
             if (next == null)
             {
-                return NotFound();
+                // No upcoming event is a normal empty state, not a missing resource. The home page
+                // polls this on every load, so 204 (rather than 404) keeps the empty case out of
+                // browser consoles and request telemetry.
+                return NoContent();
             }
 
             return OkWithETag(CommunityEventCard.FromStorageModel(next));
