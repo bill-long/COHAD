@@ -48,6 +48,10 @@ namespace Web.Services
         /// <summary>Max concurrent escalation stamps (point read + conditional upsert) per sweep.</summary>
         private const int MaxStampConcurrency = 16;
 
+        /// <summary>Max item ids enumerated in a single warning log line (the full count is logged too),
+        /// so a broad-failure sweep can't emit an oversized message to Application Insights.</summary>
+        private const int MaxLoggedIds = 20;
+
         public NotificationEscalationRunner(
             INotificationRepository notificationRepository,
             INotificationRecipientResolver recipientResolver,
@@ -141,11 +145,14 @@ namespace Web.Services
             var buckets = byRecipient.Values.ToList();
             var states = await Task.WhenAll(buckets.Select(b => _digestStateRepository.GetAsync(b.Email)));
             var due = new List<RecipientDigest>();
+            var throttled = new List<RecipientDigest>();
             for (var i = 0; i < buckets.Count; i++)
             {
                 var state = states[i];
                 if (state == null || now - state.LastDigestUtc >= minDigestInterval)
                     due.Add(buckets[i]);
+                else
+                    throttled.Add(buckets[i]);
             }
 
             if (due.Count == 0)
@@ -204,6 +211,12 @@ namespace Web.Services
                 if (stamped)
                     stampedIds.Add(id);
 
+            // Track which stamped items actually got queued for email (job durably persisted). Both
+            // observability warnings below key off this set, computed after the send loop, so they stay
+            // disjoint and truthful: an item emailed to a due recipient but owed to a throttled one is a
+            // throttle drop; an item emailed to no one is an orphan.
+            var emailedIds = new HashSet<Guid>();
+
             // Send each due recipient one combined digest of their stamped items, then record the send.
             foreach (var bucket in due)
             {
@@ -223,7 +236,17 @@ namespace Web.Services
                     // now escalated and will not reach this recipient again, so it must not be counted.
                     var deferredCount = bucket.Distinct.Skip(cap).Count(n => !stampedIds.Contains(n.Id));
                     var (job, htmlBody) = BuildDigestJob(bucket.JobId, items, deferredCount, new List<string> { bucket.Email }, now);
-                    await PersistAndEnqueueJobAsync(job, htmlBody, ct);
+                    await PersistJobAsync(job, htmlBody);
+
+                    // The job is a persisted Queued row now, so it is recoverable via
+                    // EmailJobProcessor.ResumeIncompleteJobsAsync even if the enqueue or throttle-state write
+                    // below fails - record these items as emailed at this durability boundary so a later
+                    // failure never makes them look orphaned.
+                    foreach (var n in items)
+                        emailedIds.Add(n.Id);
+
+                    // Enqueue after persisting; a failure here leaves the job Queued for recovery.
+                    await _emailJobQueue.EnqueueAsync(job.Id, ct);
 
                     // Record the send LAST so a failure above never throttles a recipient for a digest that
                     // was not actually queued.
@@ -241,6 +264,42 @@ namespace Web.Services
                     _logger.LogError(ex, "Failed to send escalation digest to {Recipient}", bucket.Email);
                 }
             }
+
+            // Observability for the residual cross-recipient throttle drop: escalation is stamped once
+            // globally per item, so an item emailed this sweep to a due recipient but also owed to a
+            // throttled recipient will never reach the throttled recipient by email (an escalated item is
+            // not resurfaced in a later sweep). Benign - the in-app channel is durable and any co-recipient
+            // can act - but log it so a report of a missed email is diagnosable. Keyed on emailedIds (not
+            // stampedIds) so it only fires for items that truly reached another recipient, keeping it
+            // disjoint from the orphan warning below. Fully removing the drop needs per-recipient escalation
+            // state (tracked in issue #248).
+            foreach (var bucket in throttled)
+            {
+                var droppedIds = bucket.Items
+                    .Select(n => n.Id)
+                    .Distinct()
+                    .Where(emailedIds.Contains)
+                    .ToList();
+                if (droppedIds.Count > 0)
+                    _logger.LogWarning(
+                        "Throttled recipient {Recipient} was owed {Count} item(s) escalated to other recipients this sweep; they will not be emailed to this recipient (in-app only): {ItemIds}",
+                        bucket.Email,
+                        droppedIds.Count,
+                        FormatIdsForLog(droppedIds)
+                    );
+            }
+
+            // Any item stamped escalated but queued for no recipient this sweep (a transient send failure
+            // after the at-most-once stamp) is dropped from the email channel - it stays escalated, so it
+            // won't resurface. Benign (durable in-app), but log it so the drop is observable rather than
+            // silent. See the stamp-before-persist tradeoff above and issue #248.
+            var orphanedIds = stampedIds.Where(id => !emailedIds.Contains(id)).ToList();
+            if (orphanedIds.Count > 0)
+                _logger.LogWarning(
+                    "{Count} notification(s) were stamped escalated but not queued to any recipient this sweep (send failure after stamping); they will not be emailed: {ItemIds}",
+                    orphanedIds.Count,
+                    FormatIdsForLog(orphanedIds)
+                );
         }
 
         private sealed class RecipientDigest
@@ -306,8 +365,13 @@ namespace Web.Services
             return (job, BuildDigestHtml(items, deferredCount));
         }
 
-        /// <summary>Uploads the digest body, persists the job as Queued, and enqueues it for the processor.</summary>
-        private async Task PersistAndEnqueueJobAsync(EmailJob job, string htmlBody, CancellationToken ct)
+        /// <summary>
+        /// Uploads the digest body and persists the job as Queued (deleting the blob on a persist failure).
+        /// The caller enqueues separately, so the durable persistence boundary is explicit at the call site:
+        /// once this returns, the job is a recoverable Queued row (via
+        /// <c>EmailJobProcessor.ResumeIncompleteJobsAsync</c>) even if a later enqueue fails.
+        /// </summary>
+        private async Task PersistJobAsync(EmailJob job, string htmlBody)
         {
             var jobPersisted = false;
             try
@@ -335,10 +399,6 @@ namespace Web.Services
 
                 throw;
             }
-
-            // Enqueue last. A failure here (e.g. shutdown) leaves the job Queued for recovery by
-            // EmailJobProcessor.ResumeIncompleteJobsAsync rather than losing it.
-            await _emailJobQueue.EnqueueAsync(job.Id, ct);
         }
 
         /// <summary>
@@ -429,6 +489,18 @@ namespace Web.Services
             if (string.IsNullOrEmpty(_appBaseUrl) || string.IsNullOrWhiteSpace(relative))
                 return null;
             return _appBaseUrl + (relative.StartsWith('/') ? relative : "/" + relative);
+        }
+
+        /// <summary>
+        /// Joins ids for a log line, capping the enumeration at <see cref="MaxLoggedIds"/> and appending a
+        /// "(+N more)" marker, so a broad-failure sweep with many ids can't emit an oversized log message.
+        /// The full count is logged separately, so truncation loses no actionable signal.
+        /// </summary>
+        private static string FormatIdsForLog(IReadOnlyList<Guid> ids)
+        {
+            if (ids.Count <= MaxLoggedIds)
+                return string.Join(", ", ids);
+            return string.Join(", ", ids.Take(MaxLoggedIds)) + $", ... (+{ids.Count - MaxLoggedIds} more)";
         }
     }
 }
