@@ -207,30 +207,10 @@ namespace Web.Services
                 if (stamped)
                     stampedIds.Add(id);
 
-            // Observability for the residual cross-recipient throttle drop: escalation is stamped once
-            // globally per item, so an item owed to a throttled recipient but stamped this sweep on behalf
-            // of a due recipient will never reach the throttled recipient by email (an escalated item is
-            // not resurfaced in a later sweep). Benign - the in-app channel is durable and any co-recipient
-            // can act - but log it so a report of a missed email is diagnosable. Fully removing the drop
-            // needs per-recipient escalation state (tracked in issue #248).
-            foreach (var bucket in throttled)
-            {
-                var droppedIds = bucket.Items
-                    .Select(n => n.Id)
-                    .Distinct()
-                    .Where(stampedIds.Contains)
-                    .ToList();
-                if (droppedIds.Count > 0)
-                    _logger.LogWarning(
-                        "Throttled recipient {Recipient} was owed {Count} item(s) escalated to other recipients this sweep; they will not be emailed to this recipient (in-app only): {ItemIds}",
-                        bucket.Email,
-                        droppedIds.Count,
-                        string.Join(", ", droppedIds)
-                    );
-            }
-
-            // Track which stamped items actually got queued for email, so any stamped item emailed to no
-            // one (a transient send failure after the at-most-once stamp) is observable below.
+            // Track which stamped items actually got queued for email (job durably persisted). Both
+            // observability warnings below key off this set, computed after the send loop, so they stay
+            // disjoint and truthful: an item emailed to a due recipient but owed to a throttled one is a
+            // throttle drop; an item emailed to no one is an orphan.
             var emailedIds = new HashSet<Guid>();
 
             // Send each due recipient one combined digest of their stamped items, then record the send.
@@ -252,20 +232,17 @@ namespace Web.Services
                     // now escalated and will not reach this recipient again, so it must not be counted.
                     var deferredCount = bucket.Distinct.Skip(cap).Count(n => !stampedIds.Contains(n.Id));
                     var (job, htmlBody) = BuildDigestJob(bucket.JobId, items, deferredCount, new List<string> { bucket.Email }, now);
-                    // Record these items as emailed at the durability boundary (job persisted), not after
-                    // the whole call: once the job is a persisted Queued row it is recoverable via
-                    // ResumeIncompleteJobsAsync, so a later enqueue/throttle-state failure must not make them
-                    // look orphaned. The callback fires only after AddAsync succeeds.
-                    await PersistAndEnqueueJobAsync(
-                        job,
-                        htmlBody,
-                        ct,
-                        onPersisted: () =>
-                        {
-                            foreach (var n in items)
-                                emailedIds.Add(n.Id);
-                        }
-                    );
+                    await PersistJobAsync(job, htmlBody);
+
+                    // The job is a persisted Queued row now, so it is recoverable via
+                    // EmailJobProcessor.ResumeIncompleteJobsAsync even if the enqueue or throttle-state write
+                    // below fails - record these items as emailed at this durability boundary so a later
+                    // failure never makes them look orphaned.
+                    foreach (var n in items)
+                        emailedIds.Add(n.Id);
+
+                    // Enqueue after persisting; a failure here leaves the job Queued for recovery.
+                    await _emailJobQueue.EnqueueAsync(job.Id, ct);
 
                     // Record the send LAST so a failure above never throttles a recipient for a digest that
                     // was not actually queued.
@@ -282,6 +259,30 @@ namespace Web.Services
                 {
                     _logger.LogError(ex, "Failed to send escalation digest to {Recipient}", bucket.Email);
                 }
+            }
+
+            // Observability for the residual cross-recipient throttle drop: escalation is stamped once
+            // globally per item, so an item emailed this sweep to a due recipient but also owed to a
+            // throttled recipient will never reach the throttled recipient by email (an escalated item is
+            // not resurfaced in a later sweep). Benign - the in-app channel is durable and any co-recipient
+            // can act - but log it so a report of a missed email is diagnosable. Keyed on emailedIds (not
+            // stampedIds) so it only fires for items that truly reached another recipient, keeping it
+            // disjoint from the orphan warning below. Fully removing the drop needs per-recipient escalation
+            // state (tracked in issue #248).
+            foreach (var bucket in throttled)
+            {
+                var droppedIds = bucket.Items
+                    .Select(n => n.Id)
+                    .Distinct()
+                    .Where(emailedIds.Contains)
+                    .ToList();
+                if (droppedIds.Count > 0)
+                    _logger.LogWarning(
+                        "Throttled recipient {Recipient} was owed {Count} item(s) escalated to other recipients this sweep; they will not be emailed to this recipient (in-app only): {ItemIds}",
+                        bucket.Email,
+                        droppedIds.Count,
+                        string.Join(", ", droppedIds)
+                    );
             }
 
             // Any item stamped escalated but queued for no recipient this sweep (a transient send failure
@@ -361,13 +362,12 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// Uploads the digest body, persists the job as Queued, and enqueues it for the processor.
-        /// <paramref name="onPersisted"/> (if supplied) is invoked once the job is durably persisted but
-        /// before the enqueue, so a caller can treat the items as delivered at the true durability boundary:
-        /// a persisted Queued job is recovered by <c>EmailJobProcessor.ResumeIncompleteJobsAsync</c> even if
-        /// the enqueue below fails, so an enqueue failure must not make the items look undelivered.
+        /// Uploads the digest body and persists the job as Queued (deleting the blob on a persist failure).
+        /// The caller enqueues separately, so the durable persistence boundary is explicit at the call site:
+        /// once this returns, the job is a recoverable Queued row (via
+        /// <c>EmailJobProcessor.ResumeIncompleteJobsAsync</c>) even if a later enqueue fails.
         /// </summary>
-        private async Task PersistAndEnqueueJobAsync(EmailJob job, string htmlBody, CancellationToken ct, Action? onPersisted = null)
+        private async Task PersistJobAsync(EmailJob job, string htmlBody)
         {
             var jobPersisted = false;
             try
@@ -395,12 +395,6 @@ namespace Web.Services
 
                 throw;
             }
-
-            onPersisted?.Invoke();
-
-            // Enqueue last. A failure here (e.g. shutdown) leaves the job Queued for recovery by
-            // EmailJobProcessor.ResumeIncompleteJobsAsync rather than losing it.
-            await _emailJobQueue.EnqueueAsync(job.Id, ct);
         }
 
         /// <summary>

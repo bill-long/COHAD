@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -23,16 +22,10 @@ public sealed class NotificationEscalationRunnerTests
     /// <summary>Captures emitted log entries so tests can assert observability warnings fire.</summary>
     private sealed class ListLogger<T> : ILogger<T>
     {
-        private sealed class NoopScope : IDisposable
-        {
-            public static readonly NoopScope Instance = new();
-
-            public void Dispose() { }
-        }
-
         public readonly List<(LogLevel Level, string Message)> Entries = new();
 
-        IDisposable? ILogger.BeginScope<TState>(TState state) => NoopScope.Instance;
+        // Reuse the BCL's no-op scope rather than hand-rolling one; nothing under test uses scopes.
+        IDisposable? ILogger.BeginScope<TState>(TState state) => NullLogger.Instance.BeginScope(state);
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
@@ -302,7 +295,7 @@ public sealed class NotificationEscalationRunnerTests
         // item stays escalated but reaches no one by email. That drop must be observable.
         var h = new Harness();
         h.RecipientsFor(NotificationAudience.Administrators, "admin@example.com");
-        // Fail the digest upload so PersistAndEnqueueJobAsync throws after the item is already stamped.
+        // Fail the digest upload so PersistJobAsync throws after the item is already stamped.
         h.FileStore
             .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
             .ThrowsAsync(new IOException("blob store unavailable"));
@@ -330,8 +323,8 @@ public sealed class NotificationEscalationRunnerTests
         // boundary: emailedIds is recorded when the job persists, before the enqueue that fails here.
         var h = new Harness();
         h.RecipientsFor(NotificationAudience.Administrators, "admin@example.com");
-        // Complete the channel so EnqueueAsync throws ChannelClosedException after AddAsync persists the job.
-        CompleteQueueChannel(h.Queue);
+        // Complete the queue so EnqueueAsync throws ChannelClosedException after PersistJobAsync persists it.
+        h.Queue.CompleteWriter();
         var n = await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-2));
 
         await h.Build().RunOnceAsync(CancellationToken.None);
@@ -339,22 +332,13 @@ public sealed class NotificationEscalationRunnerTests
         // The job was persisted (captured) and the item stamped, but the enqueue threw.
         Assert.Single(h.CapturedJobs);
         Assert.NotNull((await h.Notifications.GetByIdAsync(n.Id))!.EscalatedUtc);
+        // Confirm the enqueue actually failed (otherwise this test would not be exercising the path).
+        Assert.Contains(
+            h.Logger.Entries,
+            e => e.Level == LogLevel.Error && e.Message.Contains("Failed to send escalation digest")
+        );
         // Crucially: no orphan warning, because the persisted job is recoverable.
         Assert.DoesNotContain(h.Logger.Entries, e => e.Message.Contains("not queued to any recipient"));
-    }
-
-    /// <summary>
-    /// Completes the queue's internal channel so the next <c>EnqueueAsync</c> throws
-    /// <see cref="System.Threading.Channels.ChannelClosedException"/>, modeling a shutdown-time enqueue
-    /// failure. Uses reflection because <see cref="EmailJobQueue"/> exposes no completion seam.
-    /// </summary>
-    private static void CompleteQueueChannel(EmailJobQueue queue)
-    {
-        var channel = typeof(EmailJobQueue)
-            .GetField("_channel", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .GetValue(queue)!;
-        var writer = channel.GetType().GetProperty("Writer")!.GetValue(channel)!;
-        writer.GetType().GetMethod("Complete")!.Invoke(writer, new object?[] { null });
     }
 
     [Fact]

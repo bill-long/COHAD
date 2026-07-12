@@ -24,5 +24,12 @@ namespace Web.Services
         {
             return _channel.Reader.ReadAsync(ct);
         }
+
+        /// <summary>
+        /// Completes the writer so subsequent <see cref="EnqueueAsync"/> calls fault with
+        /// <see cref="System.Threading.Channels.ChannelClosedException"/>. Test-only seam for modeling a
+        /// shutdown-time enqueue failure; production never completes the queue.
+        /// </summary>
+        internal void CompleteWriter() => _channel.Writer.Complete();
     }
 }
