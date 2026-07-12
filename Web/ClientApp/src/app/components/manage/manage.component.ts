@@ -45,7 +45,13 @@ interface ManageNavGroup {
 export class ManageComponent implements OnInit {
   private readonly apiUser$: Observable<ApiUser | null>;
 
-  /** Live count of held committee emails awaiting a decision — the Approvals inbox feed. */
+  /**
+   * Live count of held committee emails that have passed the antispam quarantine window and been
+   * notified; that is, those actively demanding a moderator decision. Sourced from the notification
+   * feed, not the Approvals inbox feed: the badge is a push signal, and the quarantine window exists
+   * precisely to avoid pulling moderators in before automatic antispam has acted, so a freshly-held
+   * message appears in the Approvals inbox (which reads held status directly) before it counts here.
+   */
   readonly approvalsCount$: Observable<number>;
 
   /** True below the desktop breakpoint, where the rail becomes an over-mode drawer. */
