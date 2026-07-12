@@ -141,11 +141,14 @@ namespace Web.Services
             var buckets = byRecipient.Values.ToList();
             var states = await Task.WhenAll(buckets.Select(b => _digestStateRepository.GetAsync(b.Email)));
             var due = new List<RecipientDigest>();
+            var throttled = new List<RecipientDigest>();
             for (var i = 0; i < buckets.Count; i++)
             {
                 var state = states[i];
                 if (state == null || now - state.LastDigestUtc >= minDigestInterval)
                     due.Add(buckets[i]);
+                else
+                    throttled.Add(buckets[i]);
             }
 
             if (due.Count == 0)
@@ -204,6 +207,32 @@ namespace Web.Services
                 if (stamped)
                     stampedIds.Add(id);
 
+            // Observability for the residual cross-recipient throttle drop: escalation is stamped once
+            // globally per item, so an item owed to a throttled recipient but stamped this sweep on behalf
+            // of a due recipient will never reach the throttled recipient by email (an escalated item is
+            // not resurfaced in a later sweep). Benign - the in-app channel is durable and any co-recipient
+            // can act - but log it so a report of a missed email is diagnosable. Fully removing the drop
+            // needs per-recipient escalation state (tracked in issue #248).
+            foreach (var bucket in throttled)
+            {
+                var droppedIds = bucket.Items
+                    .Select(n => n.Id)
+                    .Distinct()
+                    .Where(stampedIds.Contains)
+                    .ToList();
+                if (droppedIds.Count > 0)
+                    _logger.LogWarning(
+                        "Throttled recipient {Recipient} was owed {Count} item(s) escalated to other recipients this sweep; they will not be emailed to this recipient (in-app only): {ItemIds}",
+                        bucket.Email,
+                        droppedIds.Count,
+                        string.Join(", ", droppedIds)
+                    );
+            }
+
+            // Track which stamped items actually got queued for email, so any stamped item emailed to no
+            // one (a transient send failure after the at-most-once stamp) is observable below.
+            var emailedIds = new HashSet<Guid>();
+
             // Send each due recipient one combined digest of their stamped items, then record the send.
             foreach (var bucket in due)
             {
@@ -225,6 +254,11 @@ namespace Web.Services
                     var (job, htmlBody) = BuildDigestJob(bucket.JobId, items, deferredCount, new List<string> { bucket.Email }, now);
                     await PersistAndEnqueueJobAsync(job, htmlBody, ct);
 
+                    // The job is durably Queued now (recoverable via ResumeIncompleteJobsAsync), so these
+                    // items are effectively emailed even if the throttle-state upsert below fails.
+                    foreach (var n in items)
+                        emailedIds.Add(n.Id);
+
                     // Record the send LAST so a failure above never throttles a recipient for a digest that
                     // was not actually queued.
                     await _digestStateRepository.UpsertAsync(new NotificationDigestState { RecipientEmail = bucket.Email, LastDigestUtc = now });
@@ -241,6 +275,18 @@ namespace Web.Services
                     _logger.LogError(ex, "Failed to send escalation digest to {Recipient}", bucket.Email);
                 }
             }
+
+            // Any item stamped escalated but queued for no recipient this sweep (a transient send failure
+            // after the at-most-once stamp) is dropped from the email channel - it stays escalated, so it
+            // won't resurface. Benign (durable in-app), but log it so the drop is observable rather than
+            // silent. See the stamp-before-persist tradeoff above and issue #248.
+            var orphanedIds = stampedIds.Where(id => !emailedIds.Contains(id)).ToList();
+            if (orphanedIds.Count > 0)
+                _logger.LogWarning(
+                    "{Count} notification(s) were stamped escalated but not queued to any recipient this sweep (send failure after stamping); they will not be emailed: {ItemIds}",
+                    orphanedIds.Count,
+                    string.Join(", ", orphanedIds)
+                );
         }
 
         private sealed class RecipientDigest

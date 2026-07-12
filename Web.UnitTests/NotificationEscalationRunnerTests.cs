@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -18,6 +19,24 @@ namespace Web.UnitTests;
 
 public sealed class NotificationEscalationRunnerTests
 {
+    /// <summary>Captures emitted log entries so tests can assert observability warnings fire.</summary>
+    private sealed class ListLogger<T> : ILogger<T>
+    {
+        public readonly List<(LogLevel Level, string Message)> Entries = new();
+
+        IDisposable? ILogger.BeginScope<TState>(TState state) => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        ) => Entries.Add((logLevel, formatter(state, exception)));
+    }
+
     private sealed class Harness
     {
         public readonly MockNotificationRepository Notifications = new();
@@ -35,6 +54,8 @@ public sealed class NotificationEscalationRunnerTests
 
         /// <summary>When set, digest items are rendered as deep links under this base URL.</summary>
         public string? AppBaseUrl;
+
+        public readonly ListLogger<NotificationEscalationRunner> Logger = new();
 
         public readonly NotificationEscalationOptions Options = new()
         {
@@ -88,7 +109,7 @@ public sealed class NotificationEscalationRunnerTests
                 Queue,
                 Microsoft.Extensions.Options.Options.Create(Options),
                 BuildConfig(AppBaseUrl),
-                NullLogger<NotificationEscalationRunner>.Instance
+                Logger
             );
     }
 
@@ -237,6 +258,59 @@ public sealed class NotificationEscalationRunnerTests
         Assert.NotNull(stamped!.EscalatedUtc);
 
         Assert.NotNull(await h.DigestState.GetAsync("due@example.com"));
+    }
+
+    [Fact]
+    public async Task Throttled_recipient_owed_an_escalated_item_logs_a_warning()
+    {
+        // A throttled recipient sharing an item with a due recipient never gets it by email (escalation is
+        // stamped once globally). Benign, but it must be observable so a "missed email" report is
+        // diagnosable - assert the warning names the recipient and the dropped item.
+        var h = new Harness();
+        h.RecipientsFor(NotificationAudience.Administrators, "due@example.com", "throttled@example.com");
+        await h.DigestState.UpsertAsync(
+            new NotificationDigestState { RecipientEmail = "throttled@example.com", LastDigestUtc = DateTime.UtcNow.AddHours(-1) }
+        );
+        var n = await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-2));
+
+        await h.Build().RunOnceAsync(CancellationToken.None);
+
+        // The item was emailed to the due recipient (so it is not an orphan), but dropped from the
+        // throttled recipient's email.
+        var warning = Assert.Single(
+            h.Logger.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("throttled@example.com")
+        );
+        Assert.Contains(n.Id.ToString(), warning.Message);
+        Assert.Contains("in-app only", warning.Message);
+        // It is not misreported as an orphan (it was emailed to the due recipient).
+        Assert.DoesNotContain(h.Logger.Entries, e => e.Message.Contains("not queued to any recipient"));
+    }
+
+    [Fact]
+    public async Task Item_stamped_but_never_emailed_after_a_send_failure_logs_a_warning()
+    {
+        // The at-most-once stamp happens before the digest is persisted; if the send fails transiently the
+        // item stays escalated but reaches no one by email. That drop must be observable.
+        var h = new Harness();
+        h.RecipientsFor(NotificationAudience.Administrators, "admin@example.com");
+        // Fail the digest upload so PersistAndEnqueueJobAsync throws after the item is already stamped.
+        h.FileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .ThrowsAsync(new IOException("blob store unavailable"));
+        var n = await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-2));
+
+        await h.Build().RunOnceAsync(CancellationToken.None);
+
+        // No job was queued, but the item was stamped escalated (so it won't resurface) - the drop is real.
+        Assert.Empty(h.CapturedJobs);
+        Assert.NotNull((await h.Notifications.GetByIdAsync(n.Id))!.EscalatedUtc);
+
+        var warning = Assert.Single(
+            h.Logger.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("not queued to any recipient")
+        );
+        Assert.Contains(n.Id.ToString(), warning.Message);
     }
 
     [Fact]
