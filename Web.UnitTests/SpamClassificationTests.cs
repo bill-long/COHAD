@@ -125,38 +125,12 @@ public sealed class SpamClassificationTests
     }
 
     // ── Poller: hold-time classification ────────────────────────────────────
-
-    [Fact]
-    public async Task Held_message_stores_spam_verdict_when_classification_enabled()
-    {
-        var classifier = new Mock<ISpamClassifier>();
-        classifier.SetupGet(c => c.IsAvailable).Returns(true);
-        classifier
-            .Setup(c => c.ClassifyAsync(
-                "stranger@example.com", "Stranger", "Hello", "Buy now", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SpamClassificationResult
-            {
-                Verdict = SpamVerdict.Spam,
-                Confidence = SpamConfidence.High,
-                Reason = "Obvious spam",
-            });
-
-        var heldRepo = new Mock<IHeldMessageRepository>();
-        heldRepo.Setup(r => r.GetByInternetMessageIdAsync("board", It.IsAny<string>())).ReturnsAsync((HeldMessage?)null);
-        heldRepo.Setup(r => r.AddAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
-        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
-            .ReturnsAsync(new List<HeldMessage>());
-
-        var (poller, _) = BuildHoldScenario(classifier.Object, heldRepo, SpamConfig(enabled: true), bodyContent: "Buy now");
-
-        await poller.PollAllCommitteesAsync(CancellationToken.None);
-
-        heldRepo.Verify(r => r.AddAsync(It.Is<HeldMessage>(m =>
-            m.SpamVerdict == SpamVerdict.Spam
-            && m.SpamConfidence == SpamConfidence.High
-            && m.SpamReason == "Obvious spam"
-            && m.NotifiedUtc == null)), Times.Once);
-    }
+    //
+    // The happy path (add with default Unknown verdict, classify, then UpdateAsync stores Spam/High/reason,
+    // in that order) is locked by the ordering-aware
+    // CommitteeMailPollerTests.PollAllCommittees_classifies_after_persisting_held_record_then_stores_verdict.
+    // Keeping a second copy here would just be a duplicate that drifts, so the spam-focused tests below cover
+    // only the behaviors that test doesn't: the fail-safe (classifier throws -> Unknown) and the kill switch.
 
     [Fact]
     public async Task Held_message_survives_classifier_exception_as_unknown()
