@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -22,9 +23,16 @@ public sealed class NotificationEscalationRunnerTests
     /// <summary>Captures emitted log entries so tests can assert observability warnings fire.</summary>
     private sealed class ListLogger<T> : ILogger<T>
     {
+        private sealed class NoopScope : IDisposable
+        {
+            public static readonly NoopScope Instance = new();
+
+            public void Dispose() { }
+        }
+
         public readonly List<(LogLevel Level, string Message)> Entries = new();
 
-        IDisposable? ILogger.BeginScope<TState>(TState state) => null;
+        IDisposable? ILogger.BeginScope<TState>(TState state) => NoopScope.Instance;
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
@@ -311,6 +319,42 @@ public sealed class NotificationEscalationRunnerTests
             e => e.Level == LogLevel.Warning && e.Message.Contains("not queued to any recipient")
         );
         Assert.Contains(n.Id.ToString(), warning.Message);
+    }
+
+    [Fact]
+    public async Task Item_persisted_but_enqueue_fails_is_not_reported_as_orphan()
+    {
+        // A persisted Queued job is recoverable via EmailJobProcessor.ResumeIncompleteJobsAsync, so an
+        // enqueue failure *after* the job is persisted (e.g. the queue's channel is completed during
+        // shutdown) does not orphan the item - it must not be warned about. This locks the durability
+        // boundary: emailedIds is recorded when the job persists, before the enqueue that fails here.
+        var h = new Harness();
+        h.RecipientsFor(NotificationAudience.Administrators, "admin@example.com");
+        // Complete the channel so EnqueueAsync throws ChannelClosedException after AddAsync persists the job.
+        CompleteQueueChannel(h.Queue);
+        var n = await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-2));
+
+        await h.Build().RunOnceAsync(CancellationToken.None);
+
+        // The job was persisted (captured) and the item stamped, but the enqueue threw.
+        Assert.Single(h.CapturedJobs);
+        Assert.NotNull((await h.Notifications.GetByIdAsync(n.Id))!.EscalatedUtc);
+        // Crucially: no orphan warning, because the persisted job is recoverable.
+        Assert.DoesNotContain(h.Logger.Entries, e => e.Message.Contains("not queued to any recipient"));
+    }
+
+    /// <summary>
+    /// Completes the queue's internal channel so the next <c>EnqueueAsync</c> throws
+    /// <see cref="System.Threading.Channels.ChannelClosedException"/>, modeling a shutdown-time enqueue
+    /// failure. Uses reflection because <see cref="EmailJobQueue"/> exposes no completion seam.
+    /// </summary>
+    private static void CompleteQueueChannel(EmailJobQueue queue)
+    {
+        var channel = typeof(EmailJobQueue)
+            .GetField("_channel", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(queue)!;
+        var writer = channel.GetType().GetProperty("Writer")!.GetValue(channel)!;
+        writer.GetType().GetMethod("Complete")!.Invoke(writer, new object?[] { null });
     }
 
     [Fact]

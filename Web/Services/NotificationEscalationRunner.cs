@@ -252,12 +252,20 @@ namespace Web.Services
                     // now escalated and will not reach this recipient again, so it must not be counted.
                     var deferredCount = bucket.Distinct.Skip(cap).Count(n => !stampedIds.Contains(n.Id));
                     var (job, htmlBody) = BuildDigestJob(bucket.JobId, items, deferredCount, new List<string> { bucket.Email }, now);
-                    await PersistAndEnqueueJobAsync(job, htmlBody, ct);
-
-                    // The job is durably Queued now (recoverable via ResumeIncompleteJobsAsync), so these
-                    // items are effectively emailed even if the throttle-state upsert below fails.
-                    foreach (var n in items)
-                        emailedIds.Add(n.Id);
+                    // Record these items as emailed at the durability boundary (job persisted), not after
+                    // the whole call: once the job is a persisted Queued row it is recoverable via
+                    // ResumeIncompleteJobsAsync, so a later enqueue/throttle-state failure must not make them
+                    // look orphaned. The callback fires only after AddAsync succeeds.
+                    await PersistAndEnqueueJobAsync(
+                        job,
+                        htmlBody,
+                        ct,
+                        onPersisted: () =>
+                        {
+                            foreach (var n in items)
+                                emailedIds.Add(n.Id);
+                        }
+                    );
 
                     // Record the send LAST so a failure above never throttles a recipient for a digest that
                     // was not actually queued.
@@ -352,8 +360,14 @@ namespace Web.Services
             return (job, BuildDigestHtml(items, deferredCount));
         }
 
-        /// <summary>Uploads the digest body, persists the job as Queued, and enqueues it for the processor.</summary>
-        private async Task PersistAndEnqueueJobAsync(EmailJob job, string htmlBody, CancellationToken ct)
+        /// <summary>
+        /// Uploads the digest body, persists the job as Queued, and enqueues it for the processor.
+        /// <paramref name="onPersisted"/> (if supplied) is invoked once the job is durably persisted but
+        /// before the enqueue, so a caller can treat the items as delivered at the true durability boundary:
+        /// a persisted Queued job is recovered by <c>EmailJobProcessor.ResumeIncompleteJobsAsync</c> even if
+        /// the enqueue below fails, so an enqueue failure must not make the items look undelivered.
+        /// </summary>
+        private async Task PersistAndEnqueueJobAsync(EmailJob job, string htmlBody, CancellationToken ct, Action? onPersisted = null)
         {
             var jobPersisted = false;
             try
@@ -381,6 +395,8 @@ namespace Web.Services
 
                 throw;
             }
+
+            onPersisted?.Invoke();
 
             // Enqueue last. A failure here (e.g. shutdown) leaves the job Queued for recovery by
             // EmailJobProcessor.ResumeIncompleteJobsAsync rather than losing it.
