@@ -48,6 +48,10 @@ namespace Web.Services
         /// <summary>Max concurrent escalation stamps (point read + conditional upsert) per sweep.</summary>
         private const int MaxStampConcurrency = 16;
 
+        /// <summary>Max item ids enumerated in a single warning log line (the full count is logged too),
+        /// so a broad-failure sweep can't emit an oversized message to Application Insights.</summary>
+        private const int MaxLoggedIds = 20;
+
         public NotificationEscalationRunner(
             INotificationRepository notificationRepository,
             INotificationRecipientResolver recipientResolver,
@@ -281,7 +285,7 @@ namespace Web.Services
                         "Throttled recipient {Recipient} was owed {Count} item(s) escalated to other recipients this sweep; they will not be emailed to this recipient (in-app only): {ItemIds}",
                         bucket.Email,
                         droppedIds.Count,
-                        string.Join(", ", droppedIds)
+                        FormatIdsForLog(droppedIds)
                     );
             }
 
@@ -294,7 +298,7 @@ namespace Web.Services
                 _logger.LogWarning(
                     "{Count} notification(s) were stamped escalated but not queued to any recipient this sweep (send failure after stamping); they will not be emailed: {ItemIds}",
                     orphanedIds.Count,
-                    string.Join(", ", orphanedIds)
+                    FormatIdsForLog(orphanedIds)
                 );
         }
 
@@ -485,6 +489,18 @@ namespace Web.Services
             if (string.IsNullOrEmpty(_appBaseUrl) || string.IsNullOrWhiteSpace(relative))
                 return null;
             return _appBaseUrl + (relative.StartsWith('/') ? relative : "/" + relative);
+        }
+
+        /// <summary>
+        /// Joins ids for a log line, capping the enumeration at <see cref="MaxLoggedIds"/> and appending a
+        /// "(+N more)" marker, so a broad-failure sweep with many ids can't emit an oversized log message.
+        /// The full count is logged separately, so truncation loses no actionable signal.
+        /// </summary>
+        private static string FormatIdsForLog(IReadOnlyList<Guid> ids)
+        {
+            if (ids.Count <= MaxLoggedIds)
+                return string.Join(", ", ids);
+            return string.Join(", ", ids.Take(MaxLoggedIds)) + $", ... (+{ids.Count - MaxLoggedIds} more)";
         }
     }
 }

@@ -315,6 +315,33 @@ public sealed class NotificationEscalationRunnerTests
     }
 
     [Fact]
+    public async Task Orphan_warning_truncates_a_large_id_list()
+    {
+        // On a broad send failure the orphan warning must not enumerate an unbounded number of ids (which
+        // would emit an oversized log message); it caps the enumeration at MaxLoggedIds (20) with a
+        // "(+N more)" marker while still reporting the full count.
+        var h = new Harness();
+        h.Options.MaxItemsPerDigest = 100; // let all items into one digest so all get stamped
+        h.RecipientsFor(NotificationAudience.Administrators, "admin@example.com");
+        // Fail the upload so every stamped item becomes an orphan.
+        h.FileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .ThrowsAsync(new IOException("blob store unavailable"));
+        for (var i = 0; i < 25; i++)
+            await AddNotificationAsync(h.Notifications, NotificationAudience.Administrators, DateTime.UtcNow.AddHours(-2).AddMinutes(-i));
+
+        await h.Build().RunOnceAsync(CancellationToken.None);
+
+        var warning = Assert.Single(
+            h.Logger.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("not queued to any recipient")
+        );
+        // Full count still reported (25), but the id list is capped at 20 with a truncation marker.
+        Assert.Contains("25 notification(s)", warning.Message);
+        Assert.Contains("(+5 more)", warning.Message);
+    }
+
+    [Fact]
     public async Task Item_persisted_but_enqueue_fails_is_not_reported_as_orphan()
     {
         // A persisted Queued job is recoverable via EmailJobProcessor.ResumeIncompleteJobsAsync, so an
