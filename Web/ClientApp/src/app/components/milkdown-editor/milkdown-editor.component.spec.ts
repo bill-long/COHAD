@@ -292,6 +292,23 @@ describe('MilkdownEditorComponent lifecycle reconcile', () => {
     expect(priv().ready).toBeFalse();
   });
 
+  it('disposes a still-live editor when the loop exits after teardown without a rebuild', async () => {
+    priv().pendingValue = 'a';
+    await priv().reconcile(); // builds 'a'; this.crepe is live
+    const live = priv().crepe;
+    expect(live).not.toBeNull();
+
+    // ngOnDestroy deferred teardown to the loop (reconciling was true); the loop is then re-entered
+    // while destroyed, so the while-condition short-circuits and no rebuild runs - the finally must
+    // still dispose the published, still-live instance.
+    priv().destroyed = true;
+    await priv().reconcile();
+
+    expect(live.destroy).toHaveBeenCalledTimes(1);
+    expect(priv().crepe).toBeNull();
+    expect(priv().ready).toBeFalse();
+  });
+
   it('retries a transient build failure and succeeds on the next attempt', async () => {
     spyOn(console, 'warn'); // the first-attempt retry warning is expected
     failuresRemaining = 1; // first build attempt rejects, second succeeds

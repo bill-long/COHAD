@@ -120,13 +120,26 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
       this.pasteInterceptor = null;
     }
     // If a build is in flight, let the reconcile loop dispose the instance it created (it observes
-    // `destroyed` after its awaits) rather than racing it here - that keeps teardown single-destroy.
-    // Otherwise there is no loop to defer to and we own the live instance.
-    if (!this.reconciling && this.crepe) {
-      this.crepe.destroy().catch(() => {});
-      this.crepe = null;
+    // `destroyed` after its awaits, and its finally disposes any still-live instance) rather than
+    // racing it here - that keeps teardown single-destroy. Otherwise we own the live instance.
+    if (this.reconciling) {
+      this.ready = false;
+    } else {
+      this.disposeCrepe();
     }
+  }
+
+  /**
+   * Disposes the live editor instance, if any - the single teardown idiom shared by {@link ngOnDestroy},
+   * {@link rebuild}'s mid-build cleanup, and {@link reconcile}'s finally. Clears `crepe`/`ready` before
+   * destroying so a concurrent path (or a stale debounced event) sees no current instance; the destroy
+   * is fire-and-forget with errors swallowed.
+   */
+  private disposeCrepe(): void {
+    const crepe = this.crepe;
+    this.crepe = null;
     this.ready = false;
+    crepe?.destroy().catch(() => {});
   }
 
   /**
@@ -162,6 +175,14 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
       }
     } finally {
       this.reconciling = false;
+      // ngOnDestroy defers disposal to this loop while it owns the reconcile (reconciling === true),
+      // but the loop only disposes an instance inside a rebuild. If we exit while destroyed without a
+      // rebuild having done so (e.g. the loop skipped the rebuild, or was torn down between builds),
+      // the published editor would leak - and its debounced markdownUpdated could still pass the
+      // source === this.crepe guard. Dispose it here so teardown is always complete.
+      if (this.destroyed) {
+        this.disposeCrepe();
+      }
     }
   }
 
@@ -225,13 +246,11 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
     if (this.destroyed) {
       return;
     }
-    const built = await this.createEditor(next);
+    await this.createEditor(next);
     if (this.destroyed) {
-      // Torn down while this build was in flight: dispose the instance we just created. ngOnDestroy
-      // saw this.crepe null during that window, so this is the only destroy of `built`.
-      this.crepe = null;
-      this.ready = false;
-      await built.destroy().catch(() => {});
+      // Torn down while this build was in flight: dispose the instance we just created (it is now
+      // this.crepe). ngOnDestroy saw this.crepe null during that window, so this is its only destroy.
+      this.disposeCrepe();
     }
   }
 
@@ -277,11 +296,12 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
    *  instance (also stored on {@link crepe}). Returning it lets {@link rebuild} reference the created
    *  instance without relying on `this.crepe` narrowing across the await. */
   private async createEditor(value: string): Promise<Crepe> {
-    // Arm the echo guard before any content event can fire. Nothing can be emitted before the build is
-    // ready (onMarkdownUpdated gates on `ready`), and lastAppliedValue is baselined below from the
-    // editor's own serialization - not the raw input - because Crepe may normalize the markdown on load
-    // (list markers, spacing, escapes); an echo compared against the raw input would be mistaken for a
-    // user edit.
+    // Arm the echo guard before any content event can fire. Nothing this instance emits can escape
+    // before it is published (onMarkdownUpdated gates on `source === this.crepe`, and this.crepe is
+    // assigned only after create() below), and lastAppliedValue is baselined below from the editor's
+    // own serialization - not the raw input - because Crepe may normalize the markdown on load (list
+    // markers, spacing, escapes); an echo compared against the raw input would be mistaken for a user
+    // edit.
     this.suppressLoadEcho = true;
 
     // Resolve the upload function once so the Crepe ImageBlock feature and the paste/drop upload plugin
