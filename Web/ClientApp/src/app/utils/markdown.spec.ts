@@ -37,6 +37,37 @@ describe('renderMarkdownToHtml', () => {
     expect(result).toContain('link');
   });
 
+  it('renders a captionless image with empty alt, dropping an image-block ratio alt', () => {
+    // The milkdown image-block feature serializes the aspect ratio into the markdown alt field.
+    const result = toHtmlString(renderMarkdownToHtml('![1.00](/api/blog/images/pic.jpeg)', sanitizer));
+    expect(result).toContain('<img');
+    expect(result).toContain('src="/api/blog/images/pic.jpeg"');
+    expect(result).toContain('alt=""');
+    expect(result).not.toContain('1.00');
+  });
+
+  it('renders a GUID-alt image with empty alt', () => {
+    const guid = 'e2629b7e-1d61-4a51-b802-6cc268912a48';
+    const result = toHtmlString(renderMarkdownToHtml(`![${guid}](/api/blog/images/${guid}.jpeg)`, sanitizer));
+    expect(result).toContain('alt=""');
+    // The GUID must survive in the src path but never as alt text a screen reader would read.
+    expect(result).not.toContain(`alt="${guid}"`);
+  });
+
+  it('uses the author caption (markdown title) as alt and keeps it as the title tooltip', () => {
+    // The image-block feature stores the ratio in alt and the real caption in the markdown title.
+    const result = toHtmlString(renderMarkdownToHtml('![1.00](/api/blog/images/pic.jpeg "Board at the picnic")', sanitizer));
+    expect(result).toContain('alt="Board at the picnic"');
+    expect(result).toContain('title="Board at the picnic"');
+    expect(result).not.toContain('1.00');
+  });
+
+  it('encodes an image src the way the default renderer would (matching link handling)', () => {
+    // Angle-bracket href form preserves the space through tokenization; cleanImageUrl must encode it.
+    const result = toHtmlString(renderMarkdownToHtml('![](</api/blog/images/a b.jpeg>)', sanitizer));
+    expect(result).toContain('src="/api/blog/images/a%20b.jpeg"');
+  });
+
   it('handles empty input', () => {
     const result = toHtmlString(renderMarkdownToHtml('', sanitizer));
     expect(result).toBe('');
