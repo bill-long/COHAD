@@ -293,8 +293,8 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
   }
 
   /** Builds a fresh Crepe editor loaded with `value`, wires its content listener, and returns the
-   *  instance (also stored on {@link crepe}). Returning it lets {@link rebuild} reference the created
-   *  instance without relying on `this.crepe` narrowing across the await. */
+   *  instance (also stored on {@link crepe}). The return value is used by the real-editor tests, which
+   *  drive createEditor directly; {@link rebuild} disposes via {@link crepe} rather than the return. */
   private async createEditor(value: string): Promise<Crepe> {
     // Arm the echo guard before any content event can fire. Nothing this instance emits can escape
     // before it is published (onMarkdownUpdated gates on `source === this.crepe`, and this.crepe is
@@ -371,9 +371,9 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
    * Ignores an event from a superseded `source` instance: plugin-listener debounces markdownUpdated by
    * 200ms and does not cancel the timer on destroy, so a just-destroyed editor can still fire after a
    * rebuild. Its stale content would otherwise be emitted as a phantom edit and corrupt the two-way
-   * binding. `this.crepe` is published atomically with `ready` (and cleared on every teardown path), so
-   * this identity check also covers the pre-ready window - an echo firing mid-`create()` carries the
-   * building instance while `this.crepe` is still null, and is rejected here.
+   * binding. `this.crepe` is assigned only after `create()` completes (and cleared on every teardown
+   * path), so this identity check also covers the pre-ready window - an echo firing mid-`create()`
+   * carries the building instance while `this.crepe` is still null, and is rejected here.
    */
   private onMarkdownUpdated(source: Crepe, markdown: string, prevMarkdown: string): void {
     if (source !== this.crepe || markdown === prevMarkdown) {
