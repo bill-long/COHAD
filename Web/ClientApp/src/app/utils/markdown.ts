@@ -7,6 +7,29 @@ export interface RenderMarkdownOptions {
   dropCap?: boolean;
 }
 
+/** Escape a value for safe interpolation into a double-quoted HTML attribute. Angular's sanitizer
+ *  runs afterward, but escaping here prevents a stray quote/angle-bracket from breaking out of the
+ *  attribute before sanitization sees it. */
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** Normalize an image URL the way marked's default renderer does (encodeURI, preserving any existing
+ *  percent-encoding), returning null for a malformed URL so the image is omitted. Mirrors marked's
+ *  internal cleanUrl - since we replace the default image renderer we must reapply it, matching the
+ *  default link renderer, which still cleans its href. */
+function cleanImageUrl(href: string): string | null {
+  try {
+    return encodeURI(href).replace(/%25/g, '%');
+  } catch {
+    return null;
+  }
+}
+
 /** Render a markdown string to sanitized HTML, stripping raw HTML tags. */
 export function renderMarkdownToHtml(
   markdown: string,
@@ -15,6 +38,26 @@ export function renderMarkdownToHtml(
 ): SafeHtml {
   const renderer = new Renderer();
   renderer.html = () => '';
+  // Derive image alt from the author's caption, never from the raw markdown alt. In blog and event
+  // content (both authored through the shared milkdown editor) the alt field is never a real
+  // description: drag/paste inserts derive it from the file name (often the blob-storage GUID), and
+  // the milkdown image-block feature serializes the image's aspect ratio into the alt field (e.g.
+  // `1.00`) while storing the real caption in the markdown title. Reading a GUID or ratio aloud is
+  // worse than nothing, so use the caption (title) as alt when present and treat the image as
+  // decorative (alt="") otherwise.
+  renderer.image = ({ href, title }) => {
+    const cleanedHref = cleanImageUrl(href ?? '');
+    if (cleanedHref === null) {
+      return '';
+    }
+    const src = escapeHtmlAttribute(cleanedHref);
+    const caption = (title ?? '').trim();
+    if (!caption) {
+      return `<img src="${src}" alt="">`;
+    }
+    const escapedCaption = escapeHtmlAttribute(caption);
+    return `<img src="${src}" alt="${escapedCaption}" title="${escapedCaption}">`;
+  };
   let rawHtml = marked.parse(markdown, { async: false, renderer }) as string;
   if (options?.dropCap) {
     rawHtml = injectDropCapSpan(rawHtml);

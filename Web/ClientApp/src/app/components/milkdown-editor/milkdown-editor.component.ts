@@ -358,7 +358,9 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
     const results = await Promise.all(
       supported.map(async file => {
         try {
-          return { src: await uploadFn(file), alt: this.altFromFileName(file.name) };
+          // Insert with empty alt: a drag/paste file name is not meaningful description (it is often
+          // the blob-storage GUID), and the public renderer forces alt="" for blog images anyway.
+          return { src: await uploadFn(file), alt: '' };
         } catch (error) {
           // Don't swallow silently: surface it to the console so App Insights / the console captures
           // a real upload outage, beyond the user-facing snackbar below.
@@ -412,16 +414,5 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
 
   private hasImageExtension(fileName: string): boolean {
     return MilkdownEditorComponent.IMAGE_EXTENSIONS.test(fileName.trim());
-  }
-
-  /**
-   * Default alt text derived from a file name: drop the trailing extension and strip characters that
-   * would corrupt the serialized `![alt](url)` markdown (brackets, newlines).
-   */
-  private altFromFileName(fileName: string): string {
-    // Strip a single trailing ".ext" (including a bare trailing dot) so an extension-only name reduces
-    // to an empty label rather than keeping the raw dotted string.
-    const withoutExtension = fileName.trim().replace(/\.[^.]*$/, '');
-    return withoutExtension.replace(/[[\]\r\n]/g, '');
   }
 }

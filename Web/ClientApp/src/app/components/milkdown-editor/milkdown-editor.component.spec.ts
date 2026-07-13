@@ -45,40 +45,13 @@ describe('MilkdownEditorComponent image upload helpers', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const priv = (): any => component as any;
 
-  const altFromFileName = (name: string): string => priv().altFromFileName(name);
-
   const uploadImages = (
     files: FileList,
     schema: import('@milkdown/kit/prose/model').Schema,
     uploadFn: (f: File) => Promise<string>,
   ): Promise<Array<{ attrs: Record<string, unknown> }>> => priv().uploadImages(files, schema, uploadFn);
 
-  it('strips a single trailing extension', () => {
-    expect(altFromFileName('spring-social.png')).toBe('spring-social');
-  });
-
-  it('reduces an extension-only name to an empty label', () => {
-    expect(altFromFileName('.png')).toBe('');
-  });
-
-  it('strips only the final extension from a multi-dot name', () => {
-    expect(altFromFileName('photo.final.png')).toBe('photo.final');
-  });
-
-  it('drops a bare trailing dot', () => {
-    expect(altFromFileName('file.')).toBe('file');
-  });
-
-  it('removes markdown-breaking characters from the alt label', () => {
-    expect(altFromFileName('photo]v2.png')).toBe('photov2');
-  });
-
-  it('returns an empty string for an empty/whitespace name', () => {
-    expect(altFromFileName('   ')).toBe('');
-    expect(altFromFileName('')).toBe('');
-  });
-
-  it('uploads each image file and maps the returned URL onto src (alt from file name)', async () => {
+  it('uploads each image file and maps the returned URL onto src with empty alt', async () => {
     const nodes = await uploadImages(
       fileListOf(makeFile('a.png', 'image/png'), makeFile('b.jpg', 'image/jpeg')),
       fakeSchema,
@@ -86,7 +59,9 @@ describe('MilkdownEditorComponent image upload helpers', () => {
     );
 
     expect(nodes.map(n => n.attrs['src'])).toEqual(['https://cdn.example/a.png', 'https://cdn.example/b.jpg']);
-    expect(nodes[0].attrs['alt']).toBe('a');
+    // Alt is intentionally empty: a file name (often the blob-storage GUID) is not meaningful
+    // description, and the public renderer forces alt="" for blog images.
+    expect(nodes.map(n => n.attrs['alt'])).toEqual(['', '']);
     expect(snackBar.open).not.toHaveBeenCalled();
   });
 
