@@ -53,8 +53,29 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
 
   private crepe: Crepe | null = null;
   private ready = false;
-  /** Prevents feedback loop when we programmatically set content. */
-  private suppressNextEmit = false;
+  /** Set once the component is torn down; the reconcile loop checks it after every await so a build
+   *  in flight during destroy neither continues nor leaks (and never double-destroys). */
+  private destroyed = false;
+  /**
+   * Latest bound `value` we still need to load, or null when the live editor is already in sync. The
+   * reconcile loop drains this; a change arriving mid-build is captured here rather than starting an
+   * overlapping rebuild.
+   */
+  private pendingValue: string | null = null;
+  /** True while {@link reconcile} is draining {@link pendingValue}; makes the loop single-flight. */
+  private reconciling = false;
+  /** The markdown most recently loaded into the editor (initial build or a rebuild). Used to
+   *  recognise the programmatic-load echo in {@link onMarkdownUpdated}. */
+  private lastAppliedValue = '';
+  /**
+   * Armed at the start of each build and cleared on the first `markdownUpdated` after it. Guards the
+   * one optional post-load normalization echo from being emitted as a user edit. Unlike a bare
+   * one-shot, it is paired with a content check against {@link lastAppliedValue}, so if a build
+   * produces no echo at all (the common case - `markdownUpdated` never fires for a build's initial
+   * content) and it lingers, it can only ever swallow an event identical to the loaded content, never
+   * a real edit.
+   */
+  private suppressLoadEcho = false;
   /** Capture-phase drop listener that routes file drops to plugin-upload ahead of Crepe's handlers. */
   private dropInterceptor: ((event: DragEvent) => void) | null = null;
   /** Capture-phase paste listener that routes image pastes to plugin-upload ahead of Crepe's handlers. */
@@ -67,26 +88,29 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
   ) {}
 
   ngAfterViewInit(): void {
+    // Seed the initial value and drive it through the same reconcile loop as later changes, so the
+    // first build and any rebuild share one single-flight code path (no initial build racing a
+    // reconcile). Crepe has no imperative set-content API, so loading a value means (re)building.
+    this.pendingValue = this.value || '';
     this.ngZone.runOutsideAngular(() => {
-      this.createEditor(this.value || '');
+      this.reconcile();
     });
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['value'] && !changes['value'].firstChange && this.ready && this.crepe) {
-      const newVal = changes['value'].currentValue ?? '';
-      const current = this.crepe.getMarkdown();
-      if (newVal !== current) {
-        this.suppressNextEmit = true;
-        // Destroy and recreate to load new markdown content
-        this.ngZone.runOutsideAngular(() => {
-          this.recreateEditor(newVal);
-        });
-      }
+    // Record the desired value and let the reconcile loop decide whether a rebuild is needed
+    // (comparing against the live content). Capturing it here - even mid-build, when `ready` is
+    // false - is what makes a change that arrives during a rebuild survive rather than be dropped.
+    if (changes['value'] && !changes['value'].firstChange) {
+      this.pendingValue = changes['value'].currentValue ?? '';
+      this.ngZone.runOutsideAngular(() => {
+        this.reconcile();
+      });
     }
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     if (this.dropInterceptor) {
       this.container.nativeElement.removeEventListener('drop', this.dropInterceptor, true);
       this.dropInterceptor = null;
@@ -95,20 +119,120 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
       this.container.nativeElement.removeEventListener('paste', this.pasteInterceptor, true);
       this.pasteInterceptor = null;
     }
-    if (this.crepe) {
+    // If a build is in flight, let the reconcile loop dispose the instance it created (it observes
+    // `destroyed` after its awaits) rather than racing it here - that keeps teardown single-destroy.
+    // Otherwise there is no loop to defer to and we own the live instance.
+    if (!this.reconciling && this.crepe) {
       this.crepe.destroy().catch(() => {});
       this.crepe = null;
     }
     this.ready = false;
   }
 
-  private async recreateEditor(newValue: string): Promise<void> {
-    if (this.crepe) {
-      await this.crepe.destroy().catch(() => {});
+  /**
+   * Single-flight loop that brings the live editor in sync with {@link pendingValue}. Only one runs at
+   * a time ({@link reconciling}); a concurrent caller just leaves its value in `pendingValue` for the
+   * running loop to drain, so rapid `value` changes collapse into sequential rebuilds rather than
+   * overlapping ones. A rebuild is skipped when the live editor already shows the requested content,
+   * and the loop stops as soon as the component is destroyed.
+   */
+  private async reconcile(): Promise<void> {
+    if (this.reconciling) {
+      return;
     }
+    this.reconciling = true;
+    try {
+      while (!this.destroyed && this.pendingValue !== null) {
+        const next = this.pendingValue;
+        this.pendingValue = null;
+        // Skip a rebuild only when the live editor already shows this exact content. A broken view
+        // (getMarkdown throwing) is treated as not-showing, so we rebuild rather than drop the value.
+        if (this.isEditorShowing(next)) {
+          continue;
+        }
+        try {
+          await this.buildWithRetry(next);
+        } catch (error) {
+          // A build failure that exhausts the retries must not become an unhandled rejection -
+          // reconcile() is invoked fire-and-forget from the lifecycle hooks. Log it; the editor stays
+          // empty (ready=false) until the component is recreated (e.g. the dialog is reopened), since
+          // Angular does not re-fire ngOnChanges for an unchanged bound value.
+          console.error('Milkdown editor build failed', error);
+        }
+      }
+    } finally {
+      this.reconciling = false;
+    }
+  }
+
+  /** Whether the live editor already shows `value`. A view caught mid-teardown can throw from
+   *  getMarkdown(); treat that as not-showing so the caller rebuilds rather than trusting a broken
+   *  view (and rather than letting the throw escape the fire-and-forget reconcile as a rejection). */
+  private isEditorShowing(value: string): boolean {
+    if (!this.ready || !this.crepe) {
+      return false;
+    }
+    try {
+      return this.crepe.getMarkdown() === value;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Number of times {@link buildWithRetry} attempts a build before giving up, so a transient
+   *  create() failure (which Angular would not re-trigger for an unchanged bound value) is retried
+   *  inline rather than leaving the editor permanently blank. */
+  private static readonly MAX_BUILD_ATTEMPTS = 2;
+
+  /**
+   * Builds via {@link rebuild}, retrying a failed attempt up to {@link MAX_BUILD_ATTEMPTS} times.
+   * Returns without error if the component is destroyed or a newer value has arrived mid-build - both
+   * are normal supersessions the loop resolves by building the newer value, not failures to report.
+   * Rethrows the last error only when every attempt genuinely fails, so the caller logs a real outage.
+   */
+  private async buildWithRetry(next: string): Promise<void> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await this.rebuild(next);
+        return;
+      } catch (error) {
+        if (this.destroyed || this.pendingValue !== null) {
+          // Superseded (or torn down): not a failure - let the loop build the newer value. Returning
+          // here avoids a false "build failed" error for a self-recovering supersede.
+          return;
+        }
+        if (attempt >= MilkdownEditorComponent.MAX_BUILD_ATTEMPTS) {
+          throw error;
+        }
+        console.warn(`Milkdown editor build attempt ${attempt} failed; retrying`, error);
+      }
+    }
+  }
+
+  /**
+   * Tears down the current editor (if any) and builds a fresh one loaded with `next`. Guards teardown
+   * mid-build: if the component is destroyed while destroy/create is awaiting, it stops without
+   * building, and disposes an instance it created after destruction so nothing leaks - `ngOnDestroy`
+   * only ever sees `this.crepe` as null in that window, so neither path double-destroys.
+   */
+  private async rebuild(next: string): Promise<void> {
     this.ready = false;
-    await this.createEditor(newValue);
-    this.suppressNextEmit = false;
+    const previous = this.crepe;
+    this.crepe = null;
+    if (previous) {
+      await previous.destroy().catch(() => {});
+    }
+    if (this.destroyed) {
+      return;
+    }
+    const built = await this.createEditor(next);
+    if (this.destroyed) {
+      // Torn down while this build was in flight: dispose the instance we just created. ngOnDestroy
+      // saw this.crepe null during that window, so this is the only destroy of `built`.
+      this.crepe = null;
+      this.ready = false;
+      await built.destroy().catch(() => {});
+    }
   }
 
   private getUploadFn(): MilkdownImageUploader | undefined {
@@ -149,29 +273,59 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
     };
   }
 
-  private async createEditor(value: string): Promise<void> {
+  /** Builds a fresh Crepe editor loaded with `value`, wires its content listener, and returns the
+   *  instance (also stored on {@link crepe}). Returning it lets {@link rebuild} reference the created
+   *  instance without relying on `this.crepe` narrowing across the await. */
+  private async createEditor(value: string): Promise<Crepe> {
+    // Arm the echo guard before any content event can fire. Nothing can be emitted before the build is
+    // ready (onMarkdownUpdated gates on `ready`), and lastAppliedValue is baselined below from the
+    // editor's own serialization - not the raw input - because Crepe may normalize the markdown on load
+    // (list markers, spacing, escapes); an echo compared against the raw input would be mistaken for a
+    // user edit.
+    this.suppressLoadEcho = true;
+
     // Resolve the upload function once so the Crepe ImageBlock feature and the paste/drop upload plugin
     // share a single instance rather than each allocating its own default closure.
     const uploadFn = this.getUploadFn();
-    this.crepe = new Crepe(this.buildCrepeConfig(value, uploadFn));
-    this.registerImageUploadPlugin(this.crepe, uploadFn);
+    const crepe = new Crepe(this.buildCrepeConfig(value, uploadFn));
+    this.registerImageUploadPlugin(crepe, uploadFn);
 
-    this.crepe.on(listener => {
+    crepe.on(listener => {
       listener.markdownUpdated((_ctx, markdown, prevMarkdown) => {
-        if (markdown !== prevMarkdown) {
-          if (this.suppressNextEmit) {
-            this.suppressNextEmit = false;
-            return;
-          }
-          this.ngZone.run(() => {
-            this.valueChange.emit(markdown);
-          });
-        }
+        this.onMarkdownUpdated(crepe, markdown, prevMarkdown);
       });
     });
 
-    await this.crepe.create();
+    try {
+      await crepe.create();
+    } catch (error) {
+      // create() can partially mount DOM/ProseMirror listeners into the container before rejecting.
+      // this.crepe was never assigned, so neither rebuild() nor ngOnDestroy can dispose it - do it here
+      // before the error propagates, or a retry would mount a second editor on top of the orphan.
+      await crepe.destroy().catch(() => {});
+      throw error;
+    }
+    // Publish the instance only after it is built, so during the create() await this.crepe stays null
+    // and a concurrent ngOnDestroy has nothing to destroy - rebuild() owns disposing this instance if
+    // the component was torn down mid-build, keeping teardown single-destroy.
+    this.crepe = crepe;
     this.ready = true;
+    // Baseline the echo guard on the editor's normalized serialization of the loaded content, so a
+    // post-load normalization echo (which carries the normalized form, not the raw input) is
+    // recognised and swallowed rather than emitted as a phantom user edit. Guard getMarkdown() as
+    // elsewhere: a throw here must not fail an already-mounted build - fall back to the raw input.
+    try {
+      this.lastAppliedValue = crepe.getMarkdown();
+    } catch {
+      this.lastAppliedValue = value;
+    }
+
+    // Skip when torn down mid-build: ngOnDestroy has already run and cleared the interceptor refs, so
+    // re-installing here would leak capture-phase listeners it will never remove. rebuild() disposes
+    // the instance we just created.
+    if (this.destroyed) {
+      return crepe;
+    }
 
     // Installed once for the component's lifetime; the listeners resolve the current view dynamically,
     // so they keep working across editor rebuilds and re-check whether uploads are enabled per event.
@@ -181,6 +335,40 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
     if (!this.pasteInterceptor) {
       this.installPasteInterceptor();
     }
+    return crepe;
+  }
+
+  /**
+   * Handles a `markdownUpdated` event, emitting it as a `valueChange` unless it is the programmatic
+   * load's echo. `markdownUpdated` never fires for a build's initial content (the listener records it
+   * silently), so the only echo to swallow is an optional post-load normalization. While
+   * `suppressLoadEcho` is armed, any event whose content equals the loaded serialization
+   * (`lastAppliedValue`) is treated as that echo and absorbed - however many passes Crepe emits - and
+   * the flag is only cleared by the first event that *differs*, i.e. a genuine user edit. That first
+   * differing event, and everything after it, is emitted; so even a build that produces no echo at all
+   * (the flag lingers) still forwards the user's first real edit.
+   *
+   * Ignores an event from a superseded `source` instance: plugin-listener debounces markdownUpdated by
+   * 200ms and does not cancel the timer on destroy, so a just-destroyed editor can still fire after a
+   * rebuild. Its stale content would otherwise be emitted as a phantom edit and corrupt the two-way
+   * binding. `this.crepe` is published atomically with `ready` (and cleared on every teardown path), so
+   * this identity check also covers the pre-ready window - an echo firing mid-`create()` carries the
+   * building instance while `this.crepe` is still null, and is rejected here.
+   */
+  private onMarkdownUpdated(source: Crepe, markdown: string, prevMarkdown: string): void {
+    if (source !== this.crepe || markdown === prevMarkdown) {
+      return;
+    }
+    if (this.suppressLoadEcho) {
+      if (markdown === this.lastAppliedValue) {
+        return;
+      }
+      // First content that differs from the loaded value is a real user edit; stop absorbing echoes.
+      this.suppressLoadEcho = false;
+    }
+    this.ngZone.run(() => {
+      this.valueChange.emit(markdown);
+    });
   }
 
   /**
