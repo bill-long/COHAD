@@ -1,4 +1,5 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
+import { A11yModule } from '@angular/cdk/a11y';
 import { By } from '@angular/platform-browser';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { RouterModule, provideRouter } from '@angular/router';
@@ -47,6 +48,7 @@ describe('NavbarComponent (mobile hamburger menu)', () => {
         MatBadgeModule,
         MatTooltipModule,
         MatSnackBarModule,
+        A11yModule,
       ],
       providers: [
         provideRouter([]),
@@ -105,6 +107,7 @@ describe('NavbarComponent (mobile hamburger menu)', () => {
  */
 describe('NavbarComponent (notification bell menu)', () => {
   let fixture: ComponentFixture<NavbarComponent>;
+  let notifications$: BehaviorSubject<AppNotification[]>;
   let notificationsService: jasmine.SpyObj<NotificationsService> & {
     notifications$: unknown;
     unreadCount$: unknown;
@@ -147,8 +150,9 @@ describe('NavbarComponent (notification bell menu)', () => {
     const spy = jasmine.createSpyObj<NotificationsService>('NotificationsService', ['acknowledge', 'unacknowledge']);
     spy.acknowledge.and.returnValue(of(void 0));
     spy.unacknowledge.and.returnValue(of(void 0));
+    notifications$ = new BehaviorSubject<AppNotification[]>(notifications);
     notificationsService = Object.assign(spy, {
-      notifications$: of(notifications),
+      notifications$: notifications$.asObservable(),
       unreadCount$: of(notifications.length),
     });
 
@@ -186,6 +190,7 @@ describe('NavbarComponent (notification bell menu)', () => {
         MatBadgeModule,
         MatTooltipModule,
         MatSnackBarModule,
+        A11yModule,
       ],
       providers: [
         provideRouter([]),
@@ -264,6 +269,58 @@ describe('NavbarComponent (notification bell menu)', () => {
     expect(notificationsService.unacknowledge).toHaveBeenCalledTimes(1);
     expect(notificationsService.unacknowledge.calls.mostRecent().args[0].id).toBe('n-1');
   });
+
+  it('accumulates rapid acknowledgements into one snackbar whose Undo restores all of them', fakeAsync(() => {
+    openBellMenu();
+    const dismiss = document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss');
+    dismiss[0].click();
+    fixture.detectChanges();
+    dismiss[1].click();
+    fixture.detectChanges();
+    tick(); // settle the replaced snackbar's detach without firing the 5s duration timer
+
+    // The replaced first snackbar may still be detaching; the live one is the last container.
+    const containers = document.querySelectorAll('.mat-mdc-snack-bar-container');
+    const snackBar = containers[containers.length - 1];
+    expect(snackBar.textContent).toContain('2 marked as handled');
+
+    snackBar.querySelector<HTMLButtonElement>('.mat-mdc-snack-bar-action')!.click();
+    fixture.detectChanges();
+    tick();
+
+    expect(notificationsService.unacknowledge).toHaveBeenCalledTimes(2);
+    const ids = notificationsService.unacknowledge.calls.allArgs().map(args => args[0].id);
+    expect(ids).toEqual(['n-1', 'n-2']);
+  }));
+
+  it('moves focus to the next remaining action after handling a notification', fakeAsync(() => {
+    openBellMenu();
+    const dismiss = document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss');
+    dismiss[0].focus();
+    dismiss[0].click();
+    // The service's optimistic removal re-renders the list without the handled row.
+    notifications$.next(notifications.slice(1));
+    fixture.detectChanges();
+    flush();
+
+    expect((document.activeElement as HTMLElement | null)?.classList.contains('notification-dismiss'))
+      .withContext('focus should land on the next remaining mark-as-handled button, not fall to <body>')
+      .toBeTrue();
+  }));
+
+  it('closes the menu when the last notification is handled', fakeAsync(() => {
+    notifications$.next([makeNotification({ id: 'only' })]);
+    const trigger = openBellMenu();
+
+    document.querySelector<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss')!.click();
+    notifications$.next([]);
+    fixture.detectChanges();
+    flush();
+
+    expect(trigger.menuOpen)
+      .withContext('an emptied menu should close and hand focus back to the bell')
+      .toBeFalse();
+  }));
 
   it('labels each mark-as-handled button with its notification title', () => {
     openBellMenu();

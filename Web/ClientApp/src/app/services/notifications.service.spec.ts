@@ -180,6 +180,28 @@ describe('NotificationsService', () => {
     expect(list.map(n => n.id)).toEqual(['newest', 'restore-me', 'oldest']);
   });
 
+  it('an unacknowledge response landing after teardown does not repopulate cleared state', () => {
+    const service = TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    const item = notification({ id: 'gone' });
+    httpMock.expectOne('api/notifications').flush([item]);
+
+    service.acknowledge('gone').subscribe();
+    httpMock.expectOne('api/notifications/gone/acknowledge').flush(null);
+
+    service.unacknowledge(item).subscribe();
+    // Rights are revoked while the undo POST is in flight — teardown clears the list.
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Resident']) });
+    httpMock.expectOne('api/notifications/gone/unacknowledge').flush(null);
+
+    let list: AppNotification[] = [];
+    let unread = -1;
+    service.notifications$.subscribe(n => (list = n));
+    service.unreadCount$.subscribe(c => (unread = c));
+    expect(list).toEqual([]);
+    expect(unread).toBe(0);
+  });
+
   it('unacknowledge does not duplicate a notification a refetch already restored', () => {
     const service = TestBed.inject(NotificationsService);
     state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });

@@ -2,12 +2,15 @@ import { Pipe, PipeTransform } from '@angular/core';
 
 /**
  * Coarse relative age for timestamps ("just now", "5m ago", "2h ago", "3d ago"), falling back to a
- * plain date beyond a month. Pure, so it re-evaluates when its input changes rather than ticking
- * live — fresh enough for the notification menu, whose content is lazily re-rendered on every open.
+ * plain date beyond a month. Impure: the input string never changes, so a pure pipe would freeze at
+ * the label computed on first render even though the notification menu can now stay open across many
+ * interactions. Re-evaluating on change detection keeps the label honest, and the cost is a few
+ * arithmetic operations over a handful of rows.
  */
 @Pipe({
   name: 'timeAgo',
   standalone: false,
+  pure: false,
 })
 export class TimeAgoPipe implements PipeTransform {
   transform(value: string | Date | null | undefined): string {

@@ -1,5 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { Component, Inject, OnInit, QueryList, ViewChildren } from '@angular/core';
+import { MatMenuTrigger } from '@angular/material/menu';
+import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { Observable, Observer, of } from 'rxjs';
 import { catchError, map, shareReplay } from 'rxjs/operators';
 import { EventsService } from 'src/app/services/events.service';
@@ -21,6 +22,12 @@ export class NavbarComponent implements OnInit {
   disabled = false;
   isNavbarCollapsed = true;
   isHidden = false;
+
+  @ViewChildren(MatMenuTrigger) private menuTriggers?: QueryList<MatMenuTrigger>;
+
+  /** Notifications acknowledged while the current undo snackbar is visible; "Undo" restores all of them. */
+  private pendingUndo: AppNotification[] = [];
+  private activeAckSnackBar: MatSnackBarRef<TextOnlySnackBar> | null = null;
   readonly useMockAuth = environment.useMockAuth;
   readonly mockUsers = [
     { id: 'user-1', label: 'Mock Resident (Admin)' },
@@ -177,15 +184,17 @@ export class NavbarComponent implements OnInit {
   /**
    * Acknowledges a notification that has no other resolving action (registrations). Acknowledging
    * resolves the item for the whole audience with no confirmation, so a brief undo is offered via
-   * snackbar instead of an up-front dialog (which would reintroduce per-item friction).
+   * snackbar instead of an up-front dialog (which would reintroduce per-item friction). Rapid
+   * acknowledgements accumulate into a single snackbar ("N marked as handled") whose Undo restores
+   * all of them — MatSnackBar shows one snackbar at a time, so a replacement must not orphan the
+   * earlier items' only undo entry point.
    */
-  acknowledge(notification: AppNotification): void {
+  acknowledge(notification: AppNotification, source?: EventTarget | null): void {
+    const panel = source instanceof HTMLElement ? source.closest<HTMLElement>('.mat-mdc-menu-panel') : null;
     this.notificationsService.acknowledge(notification.id).subscribe({
       next: () => {
-        this.snackBar
-          .open('Marked as handled', 'Undo', { duration: 5000 })
-          .onAction()
-          .subscribe(() => this.undoAcknowledge(notification));
+        this.offerUndo(notification);
+        this.restoreMenuFocus(panel);
       },
       error: () => {
         // Best-effort from the bell; the badge reconciles on the next refresh/signal.
@@ -193,11 +202,62 @@ export class NavbarComponent implements OnInit {
     });
   }
 
-  private undoAcknowledge(notification: AppNotification): void {
-    this.notificationsService.unacknowledge(notification).subscribe({
-      error: () => {
-        this.snackBar.open('Could not undo', undefined, { duration: 4000 });
-      },
+  private offerUndo(notification: AppNotification): void {
+    this.pendingUndo.push(notification);
+    const count = this.pendingUndo.length;
+    // Mark the previous snackbar superseded BEFORE open() dismisses it: its afterDismissed may fire
+    // synchronously during open(), and it must not clear the stack the replacement now owns.
+    this.activeAckSnackBar = null;
+    const ref = this.snackBar.open(count === 1 ? 'Marked as handled' : `${count} marked as handled`, 'Undo', {
+      duration: 5000,
+    });
+    this.activeAckSnackBar = ref;
+    ref.onAction().subscribe(() => this.undoAcknowledgements());
+    ref.afterDismissed().subscribe(() => {
+      // Only the snackbar that is still current clears the stack — a snackbar replaced by a newer
+      // one also fires afterDismissed, but its pending items were carried into the replacement.
+      if (this.activeAckSnackBar === ref) {
+        this.activeAckSnackBar = null;
+        this.pendingUndo = [];
+      }
+    });
+  }
+
+  private undoAcknowledgements(): void {
+    const toRestore = this.pendingUndo;
+    this.pendingUndo = [];
+    for (const notification of toRestore) {
+      this.notificationsService.unacknowledge(notification).subscribe({
+        error: () => {
+          this.snackBar.open('Could not undo', undefined, { duration: 4000 });
+        },
+      });
+    }
+  }
+
+  /**
+   * The acknowledged row is optimistically removed, destroying the button that held keyboard focus —
+   * without intervention focus falls to <body> behind the still-open menu. Once the list has
+   * re-rendered, move focus to the next remaining action; when the last notification was handled,
+   * close the menu instead (which returns focus to its trigger) rather than leaving an empty panel
+   * trapping the user.
+   */
+  private restoreMenuFocus(panel: HTMLElement | null): void {
+    if (!panel) {
+      return;
+    }
+    setTimeout(() => {
+      if (!panel.isConnected) {
+        return; // The menu already closed.
+      }
+      const next =
+        panel.querySelector<HTMLElement>('.notification-dismiss') ??
+        panel.querySelector<HTMLElement>('.mat-mdc-menu-item');
+      if (next) {
+        next.focus();
+        return;
+      }
+      this.menuTriggers?.filter(t => t.menuOpen).forEach(t => t.closeMenu());
     });
   }
 

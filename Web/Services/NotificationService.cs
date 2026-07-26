@@ -66,6 +66,9 @@ namespace Web.Services
 
     public sealed class NotificationService : INotificationService
     {
+        /// <summary>Attempts (initial + re-reads) for an ETag-conditional resolution write before giving up.</summary>
+        private const int MaxResolveAttempts = 3;
+
         private readonly INotificationRepository _repository;
         private readonly INotificationRealtimeNotifier _notifier;
         private readonly ILogger<NotificationService> _logger;
@@ -144,7 +147,7 @@ namespace Web.Services
             if (existing == null)
                 return null;
 
-            return await ResolveInternalAsync(existing, resolvedBy, ct);
+            return await SetResolvedInternalAsync(existing, resolvedBy, resolved: true, ct);
         }
 
         public async Task<Notification?> AcknowledgeAsync(Guid notificationId, string? acknowledgedBy, CancellationToken ct = default)
@@ -154,7 +157,7 @@ namespace Web.Services
             if (existing == null)
                 return null;
 
-            return await ResolveInternalAsync(existing, acknowledgedBy, ct);
+            return await SetResolvedInternalAsync(existing, acknowledgedBy, resolved: true, ct);
         }
 
         public async Task<Notification?> UnacknowledgeAsync(Guid notificationId, CancellationToken ct = default)
@@ -164,14 +167,7 @@ namespace Web.Services
             if (existing == null)
                 return null;
 
-            if (existing.ResolvedUtc == null)
-                return existing; // Already unresolved — idempotent no-op.
-
-            existing.ResolvedUtc = null;
-            existing.ResolvedBy = null;
-            await _repository.UpsertAsync(existing);
-            await SignalAsync(existing.AudienceKey, ct);
-            return existing;
+            return await SetResolvedInternalAsync(existing, resolvedBy: null, resolved: false, ct);
         }
 
         public async Task<IReadOnlyList<Notification>> GetUnresolvedForAudienceAsync(string audienceKey, int limit = 50, CancellationToken ct = default)
@@ -186,14 +182,39 @@ namespace Web.Services
             return await _repository.GetByIdAsync(notificationId);
         }
 
-        private async Task<Notification> ResolveInternalAsync(Notification notification, string? resolvedBy, CancellationToken ct)
+        /// <summary>
+        /// Sets or clears the resolution fields under optimistic concurrency: an ETag-conditional write
+        /// with re-read retries, mirroring the escalation sweep's stamp protocol. An unconditional
+        /// replace here would write back a whole stale snapshot and could erase an
+        /// <see cref="Notification.EscalatedUtc"/> stamp the sweep wrote concurrently — undoing the
+        /// "emailed at most once" bookkeeping and causing a duplicate digest after an un-acknowledge.
+        /// Idempotent: a notification already in the requested state is returned unchanged. Returns null
+        /// if the notification vanishes mid-retry; a write that keeps losing the race rethrows the
+        /// final 412 rather than falling back to a clobbering write.
+        /// </summary>
+        private async Task<Notification?> SetResolvedInternalAsync(Notification notification, string? resolvedBy, bool resolved, CancellationToken ct)
         {
-            if (notification.ResolvedUtc != null)
-                return notification; // Already resolved — idempotent no-op.
+            for (var attempt = 0; ; attempt++)
+            {
+                if ((notification.ResolvedUtc != null) == resolved)
+                    return notification; // Already in the requested state — idempotent no-op.
 
-            notification.ResolvedUtc = DateTime.UtcNow;
-            notification.ResolvedBy = resolvedBy;
-            await _repository.UpsertAsync(notification);
+                notification.ResolvedUtc = resolved ? DateTime.UtcNow : null;
+                notification.ResolvedBy = resolved ? resolvedBy : null;
+                try
+                {
+                    await _repository.UpsertWithEtagAsync(notification);
+                    break;
+                }
+                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed && attempt < MaxResolveAttempts - 1)
+                {
+                    var fresh = await _repository.GetByIdAsync(notification.Id);
+                    if (fresh == null)
+                        return null;
+                    notification = fresh;
+                }
+            }
+
             await SignalAsync(notification.AudienceKey, ct);
             return notification;
         }

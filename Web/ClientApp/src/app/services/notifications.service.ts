@@ -49,6 +49,9 @@ export class NotificationsService {
   private readonly hubSignal$ = new Subject<void>();
   private hubSignalSub: Subscription | null = null;
 
+  /** True between initialize() and teardown(); gates mutations from landing after teardown cleared state. */
+  private active = false;
+
   /** Debounce window for collapsing a burst of hub signals into one re-fetch. */
   private static readonly HubRefreshDebounceMs = 400;
 
@@ -121,6 +124,12 @@ export class NotificationsService {
   unacknowledge(notification: AppNotification): Observable<void> {
     return this.httpClient.post<void>(`api/notifications/${notification.id}/unacknowledge`, {}).pipe(
       tap(() => {
+        // A response landing after teardown (rights revoked / user switched mid-flight) must not
+        // repopulate cleared state: refetches are generation-guarded against that, and this is the
+        // only other code path that inserts into the subject, so it needs the same care.
+        if (!this.active) {
+          return;
+        }
         // Invalidate any refresh already in flight — its (pre-undo) response would drop the item
         // we're about to restore.
         this.refreshGeneration++;
@@ -132,6 +141,7 @@ export class NotificationsService {
   }
 
   private initialize(): void {
+    this.active = true;
     // Hub signals are debounced so a burst of changes collapses into one re-fetch.
     if (!this.hubSignalSub) {
       this.hubSignalSub = this.hubSignal$
@@ -295,6 +305,7 @@ export class NotificationsService {
   }
 
   private teardown(): void {
+    this.active = false;
     // Invalidate any in-flight refresh so a late response can't repopulate cleared state.
     this.refreshGeneration++;
     this.consecutiveAuthErrors = 0;

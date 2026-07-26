@@ -4,6 +4,7 @@ import { ErrorHandler, NgModule } from '@angular/core';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
+import { A11yModule } from '@angular/cdk/a11y';
 import { MatTableModule } from '@angular/material/table';
 import { MatSortModule } from '@angular/material/sort';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -169,6 +170,7 @@ import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tip
     MatToolbarModule,
     MatButtonModule,
     MatMenuModule,
+    A11yModule,
     MatTableModule,
     MatSortModule,
     MatFormFieldModule,
