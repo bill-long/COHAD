@@ -232,6 +232,22 @@ describe('NavbarComponent (notification bell menu)', () => {
     expect(dismiss.getAttribute('aria-label')).toBe('Mark as handled: New user registered');
   });
 
+  it('keeps the menu open on Tab so the mark-as-handled button is keyboard-reachable', () => {
+    const trigger = openBellMenu();
+
+    // MatMenu normally closes itself on Tab (keyManager.tabOut). The rows contain the keystroke so
+    // keyboard users can move from a notification into its inline mark-as-handled button.
+    const openButton = document.querySelector<HTMLButtonElement>(
+      '.mat-mdc-menu-panel .notification-item .mat-mdc-menu-item',
+    )!;
+    openButton.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+
+    expect(trigger.menuOpen)
+      .withContext('Tab within a notification row must not close the menu')
+      .toBeTrue();
+  });
+
   it('acknowledges the clicked notification and keeps the menu open', () => {
     const trigger = openBellMenu();
 
