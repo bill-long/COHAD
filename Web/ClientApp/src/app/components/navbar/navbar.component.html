@@ -26,7 +26,7 @@
         <ng-template matMenuContent>
           <ng-container *ngIf="(notifications$ | async) as notifications">
             <ng-container *ngIf="notifications.length > 0; else noNotifications">
-              <ng-container *ngFor="let notification of notifications">
+              <div class="notification-item" *ngFor="let notification of notifications">
                 <button mat-menu-item (click)="openNotification(notification)">
                   <div class="notification-row">
                     <div class="notification-title">{{ notification.title }}</div>
@@ -34,13 +34,15 @@
                   </div>
                 </button>
                 <button
-                  mat-menu-item
-                  class="notification-ack"
+                  mat-icon-button
+                  class="notification-dismiss"
                   *ngIf="notification.type === 'Registration'"
-                  (click)="acknowledge(notification)">
-                  Acknowledge
+                  matTooltip="Mark as handled"
+                  [attr.aria-label]="'Mark as handled: ' + notification.title"
+                  (click)="acknowledge(notification); $event.stopPropagation()">
+                  <mat-icon>check</mat-icon>
                 </button>
-              </ng-container>
+              </div>
             </ng-container>
             <ng-template #noNotifications>
               <span class="menu-empty-state">No new notifications</span>
@@ -100,7 +102,7 @@
       <ng-template matMenuContent>
         <ng-container *ngIf="(notifications$ | async) as notifications">
           <ng-container *ngIf="notifications.length > 0; else noNotificationsMobile">
-            <ng-container *ngFor="let notification of notifications">
+            <div class="notification-item" *ngFor="let notification of notifications">
               <button mat-menu-item (click)="openNotification(notification)">
                 <div class="notification-row">
                   <div class="notification-title">{{ notification.title }}</div>
@@ -108,13 +110,15 @@
                 </div>
               </button>
               <button
-                mat-menu-item
-                class="notification-ack"
+                mat-icon-button
+                class="notification-dismiss"
                 *ngIf="notification.type === 'Registration'"
-                (click)="acknowledge(notification)">
-                Acknowledge
+                matTooltip="Mark as handled"
+                [attr.aria-label]="'Mark as handled: ' + notification.title"
+                (click)="acknowledge(notification); $event.stopPropagation()">
+                <mat-icon>check</mat-icon>
               </button>
-            </ng-container>
+            </div>
           </ng-container>
           <ng-template #noNotificationsMobile>
             <span class="menu-empty-state">No new notifications</span>

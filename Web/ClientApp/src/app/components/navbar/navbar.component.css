@@ -89,6 +89,24 @@ a.mat-mdc-menu-item.active-link {
     font-weight: 500;
 }
 
+/* One notification = one row: the clickable open area fills the row, with the optional
+   mark-as-handled icon button pinned to the trailing edge (never a separate menu line). */
+.notification-item {
+    display: flex;
+    align-items: center;
+}
+
+.notification-item > button.mat-mdc-menu-item {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.notification-dismiss {
+    flex: 0 0 auto;
+    margin-right: 8px;
+    color: var(--text-secondary);
+}
+
 .notification-row {
     display: flex;
     flex-direction: column;

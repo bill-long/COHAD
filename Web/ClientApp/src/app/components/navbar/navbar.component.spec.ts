@@ -7,12 +7,13 @@ import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatBadgeModule } from '@angular/material/badge';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { BehaviorSubject, Subject, of } from 'rxjs';
 
 import { NavbarComponent } from './navbar.component';
 import { ApplicationState, applicationState, dispatcher, initialStateValue } from 'src/app/state';
 import { EventsService } from 'src/app/services/events.service';
-import { NotificationsService } from 'src/app/services/notifications.service';
+import { AppNotification, NotificationsService } from 'src/app/services/notifications.service';
 import { ThemeService } from 'src/app/services/theme.service';
 
 /**
@@ -42,6 +43,7 @@ describe('NavbarComponent (mobile hamburger menu)', () => {
         MatIconModule,
         MatButtonModule,
         MatBadgeModule,
+        MatTooltipModule,
       ],
       providers: [
         provideRouter([]),
@@ -88,5 +90,158 @@ describe('NavbarComponent (mobile hamburger menu)', () => {
     // Cast: lazyContent is a MatMenu implementation detail, not on the public MatMenuPanel interface.
     const menu = trigger.menu as { lazyContent?: unknown } | null;
     expect(menu?.lazyContent).toBeFalsy();
+  });
+});
+
+/**
+ * The notification bell menu renders each notification as a single row: the clickable open area plus,
+ * for acknowledgeable types (registrations), an inline mark-as-handled icon button on the trailing
+ * edge. Regression: the acknowledge action used to be a second full-width "Acknowledge" menu item
+ * under every registration, which stacked into a wall of identical lines with no visible connection
+ * to the notification each one resolved.
+ */
+describe('NavbarComponent (notification bell menu)', () => {
+  let fixture: ComponentFixture<NavbarComponent>;
+  let notificationsService: jasmine.SpyObj<NotificationsService> & {
+    notifications$: unknown;
+    unreadCount$: unknown;
+  };
+
+  function makeNotification(overrides: Partial<AppNotification>): AppNotification {
+    return {
+      id: 'n-1',
+      type: 'Registration',
+      targetType: 'User',
+      targetId: 'u-1',
+      title: 'New user registered',
+      summary: 'pat@example.com',
+      deepLink: null,
+      createdUtc: '2026-07-01T00:00:00Z',
+      ...overrides,
+    };
+  }
+
+  const notifications: AppNotification[] = [
+    makeNotification({ id: 'n-1', title: 'New user registered', summary: 'pat@example.com' }),
+    makeNotification({ id: 'n-2', title: 'Another user registered', summary: 'sam@example.com' }),
+    makeNotification({
+      id: 'n-3',
+      type: 'HeldMessage',
+      targetType: 'HeldMessage',
+      targetId: 'h-1',
+      title: 'Held message',
+      summary: 'From outside the directory',
+    }),
+  ];
+
+  beforeEach(async () => {
+    const spy = jasmine.createSpyObj<NotificationsService>('NotificationsService', ['acknowledge']);
+    spy.acknowledge.and.returnValue(of(void 0));
+    notificationsService = Object.assign(spy, {
+      notifications$: of(notifications),
+      unreadCount$: of(notifications.length),
+    });
+
+    // Bell visibility requires completed auth bootstrap + an apiUser holding a committee-manage role.
+    const adminState: ApplicationState = {
+      ...initialStateValue,
+      authBootstrapStatus: 'completed',
+      authSessionResolved: true,
+      apiUser: {
+        uniqueId: 'admin-1',
+        createdTime: '',
+        modifiedTime: '',
+        creatorId: '',
+        modifierId: '',
+        givenName: 'Admin',
+        surname: 'User',
+        displayName: 'Admin User',
+        identityProvider: 'idp',
+        email: 'admin@example.com',
+        streetAddress: '',
+        roles: ['Administrator', 'Resident'],
+        ownedHomes: [],
+      },
+    };
+
+    await TestBed.configureTestingModule({
+      declarations: [NavbarComponent],
+      imports: [
+        NoopAnimationsModule,
+        RouterModule,
+        MatToolbarModule,
+        MatMenuModule,
+        MatIconModule,
+        MatButtonModule,
+        MatBadgeModule,
+        MatTooltipModule,
+      ],
+      providers: [
+        provideRouter([]),
+        { provide: applicationState, useValue: new BehaviorSubject<ApplicationState>(adminState).asObservable() },
+        { provide: dispatcher, useValue: new Subject() },
+        { provide: EventsService, useValue: { getUpcoming: () => of([]) } },
+        { provide: NotificationsService, useValue: notificationsService },
+        { provide: ThemeService, useValue: { isDarkTheme$: of(false), toggleTheme: () => {} } },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(NavbarComponent);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    fixture.destroy();
+  });
+
+  function openBellMenu(): MatMenuTrigger {
+    const btn = fixture.debugElement.query(By.css('button[aria-label="Notifications"]'));
+    expect(btn).withContext('notification bell button should render for an Administrator').not.toBeNull();
+    const trigger = btn.injector.get(MatMenuTrigger);
+    trigger.openMenu();
+    fixture.detectChanges();
+    return trigger;
+  }
+
+  it('renders one row per notification with no separate Acknowledge menu item', () => {
+    openBellMenu();
+
+    const panel = document.querySelector('.mat-mdc-menu-panel')!;
+    expect(panel.querySelectorAll('.notification-item').length).toBe(3);
+    expect(panel.querySelectorAll('.mat-mdc-menu-item').length)
+      .withContext('the open action should be the only menu item per notification')
+      .toBe(3);
+    expect(panel.textContent).not.toContain('Acknowledge');
+  });
+
+  it('shows the inline mark-as-handled button only for Registration notifications', () => {
+    openBellMenu();
+
+    const rows = document.querySelectorAll('.mat-mdc-menu-panel .notification-item');
+    expect(rows[0].querySelector('.notification-dismiss')).not.toBeNull();
+    expect(rows[1].querySelector('.notification-dismiss')).not.toBeNull();
+    expect(rows[2].querySelector('.notification-dismiss'))
+      .withContext('held messages resolve via their moderation page, not acknowledge')
+      .toBeNull();
+  });
+
+  it('labels each mark-as-handled button with its notification title', () => {
+    openBellMenu();
+
+    const dismiss = document.querySelector('.mat-mdc-menu-panel .notification-dismiss')!;
+    expect(dismiss.getAttribute('aria-label')).toBe('Mark as handled: New user registered');
+  });
+
+  it('acknowledges the clicked notification and keeps the menu open', () => {
+    const trigger = openBellMenu();
+
+    const dismiss = document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss')[1];
+    dismiss.click();
+    fixture.detectChanges();
+
+    expect(notificationsService.acknowledge).toHaveBeenCalledOnceWith('n-2');
+    expect(trigger.menuOpen)
+      .withContext('handling one notification should not close the menu over the others')
+      .toBeTrue();
   });
 });
