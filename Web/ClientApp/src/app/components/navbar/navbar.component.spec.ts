@@ -8,9 +8,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { BehaviorSubject, Subject, of } from 'rxjs';
 
 import { NavbarComponent } from './navbar.component';
+import { TimeAgoPipe } from 'src/app/pipes/time-ago.pipe';
 import { ApplicationState, applicationState, dispatcher, initialStateValue } from 'src/app/state';
 import { EventsService } from 'src/app/services/events.service';
 import { AppNotification, NotificationsService } from 'src/app/services/notifications.service';
@@ -34,7 +36,7 @@ describe('NavbarComponent (mobile hamburger menu)', () => {
     appState$ = new BehaviorSubject<ApplicationState>(initialStateValue);
 
     await TestBed.configureTestingModule({
-      declarations: [NavbarComponent],
+      declarations: [NavbarComponent, TimeAgoPipe],
       imports: [
         NoopAnimationsModule,
         RouterModule,
@@ -44,6 +46,7 @@ describe('NavbarComponent (mobile hamburger menu)', () => {
         MatButtonModule,
         MatBadgeModule,
         MatTooltipModule,
+        MatSnackBarModule,
       ],
       providers: [
         provideRouter([]),
@@ -116,14 +119,20 @@ describe('NavbarComponent (notification bell menu)', () => {
       title: 'New user registered',
       summary: 'pat@example.com',
       deepLink: null,
-      createdUtc: '2026-07-01T00:00:00Z',
+      // Relative to now so timeAgo assertions don't rot as the calendar advances.
+      createdUtc: new Date(Date.now() - 5 * 60_000).toISOString(),
       ...overrides,
     };
   }
 
   const notifications: AppNotification[] = [
     makeNotification({ id: 'n-1', title: 'New user registered', summary: 'pat@example.com' }),
-    makeNotification({ id: 'n-2', title: 'Another user registered', summary: 'sam@example.com' }),
+    makeNotification({
+      id: 'n-2',
+      title: 'Another user registered',
+      summary: 'sam@example.com',
+      createdUtc: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+    }),
     makeNotification({
       id: 'n-3',
       type: 'HeldMessage',
@@ -135,8 +144,9 @@ describe('NavbarComponent (notification bell menu)', () => {
   ];
 
   beforeEach(async () => {
-    const spy = jasmine.createSpyObj<NotificationsService>('NotificationsService', ['acknowledge']);
+    const spy = jasmine.createSpyObj<NotificationsService>('NotificationsService', ['acknowledge', 'unacknowledge']);
     spy.acknowledge.and.returnValue(of(void 0));
+    spy.unacknowledge.and.returnValue(of(void 0));
     notificationsService = Object.assign(spy, {
       notifications$: of(notifications),
       unreadCount$: of(notifications.length),
@@ -165,7 +175,7 @@ describe('NavbarComponent (notification bell menu)', () => {
     };
 
     await TestBed.configureTestingModule({
-      declarations: [NavbarComponent],
+      declarations: [NavbarComponent, TimeAgoPipe],
       imports: [
         NoopAnimationsModule,
         RouterModule,
@@ -175,6 +185,7 @@ describe('NavbarComponent (notification bell menu)', () => {
         MatButtonModule,
         MatBadgeModule,
         MatTooltipModule,
+        MatSnackBarModule,
       ],
       providers: [
         provideRouter([]),
@@ -223,6 +234,35 @@ describe('NavbarComponent (notification bell menu)', () => {
     expect(rows[2].querySelector('.notification-dismiss'))
       .withContext('held messages resolve via their moderation page, not acknowledge')
       .toBeNull();
+  });
+
+  it('shows a relative timestamp on each notification row', () => {
+    openBellMenu();
+
+    const times = Array.from(
+      document.querySelectorAll('.mat-mdc-menu-panel .notification-time'),
+      el => el.textContent!.trim(),
+    );
+    expect(times.slice(0, 2)).toEqual(['5m ago', '2h ago']);
+  });
+
+  it('offers undo via snackbar after marking a notification handled', () => {
+    openBellMenu();
+
+    document.querySelector<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss')!.click();
+    fixture.detectChanges();
+
+    const snackBar = document.querySelector('.mat-mdc-snack-bar-container');
+    expect(snackBar).withContext('a snackbar should confirm the action').not.toBeNull();
+    expect(snackBar!.textContent).toContain('Marked as handled');
+
+    const undo = snackBar!.querySelector<HTMLButtonElement>('.mat-mdc-snack-bar-action');
+    expect(undo).withContext('the snackbar should carry an Undo action').not.toBeNull();
+    undo!.click();
+    fixture.detectChanges();
+
+    expect(notificationsService.unacknowledge).toHaveBeenCalledTimes(1);
+    expect(notificationsService.unacknowledge.calls.mostRecent().args[0].id).toBe('n-1');
   });
 
   it('labels each mark-as-handled button with its notification title', () => {

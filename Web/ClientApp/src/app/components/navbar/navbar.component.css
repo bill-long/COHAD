@@ -125,9 +125,23 @@ a.mat-mdc-menu-item.active-link {
     transform: translateX(-10px);
 }
 
+.notification-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+}
+
 .notification-title {
+    flex: 1 1 auto;
     font-weight: 500;
     line-height: 1.25;
+}
+
+.notification-time {
+    flex: 0 0 auto;
+    font-size: 0.75rem;
+    opacity: 0.7;
+    white-space: nowrap;
 }
 
 .notification-note {

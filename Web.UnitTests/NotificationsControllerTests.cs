@@ -184,6 +184,79 @@ public sealed class NotificationsControllerTests
     }
 
     [Fact]
+    public async Task Unacknowledge_ReopensAcknowledgedNotification()
+    {
+        var (controller, service) = CreateController(Admin());
+        var raised = await service.RaiseAsync(NotificationType.Registration, NotificationAudience.Administrators, NotificationTargetType.User, "user-1", "New user", "Jane");
+        await controller.Acknowledge(raised.Id);
+
+        var result = await controller.Unacknowledge(raised.Id);
+
+        Assert.IsType<OkObjectResult>(result);
+        var stored = await service.GetByIdAsync(raised.Id);
+        Assert.Null(stored!.ResolvedUtc);
+        Assert.Null(stored.ResolvedBy);
+    }
+
+    [Fact]
+    public async Task Unacknowledge_IsIdempotent_WhenNotResolved()
+    {
+        var (controller, service) = CreateController(Admin());
+        var raised = await service.RaiseAsync(NotificationType.Registration, NotificationAudience.Administrators, NotificationTargetType.User, "user-1", "New user", "Jane");
+
+        var result = await controller.Unacknowledge(raised.Id);
+
+        Assert.IsType<OkObjectResult>(result);
+        var stored = await service.GetByIdAsync(raised.Id);
+        Assert.Null(stored!.ResolvedUtc);
+    }
+
+    [Fact]
+    public async Task Unacknowledge_ReturnsBadRequest_ForTypeWithModerationAction()
+    {
+        var committee = new Committee { Id = "c1", ManagementRole = User.Role.GardenClub };
+        var (controller, service) = CreateController(Admin(), new[] { committee });
+        var raised = await service.RaiseAsync(NotificationType.HeldMessage, NotificationAudience.Committee("c1"), NotificationTargetType.HeldMessage, "held-1", "Held", "x");
+        // Resolve via the moderation path, then confirm the undo endpoint refuses to re-open it.
+        await service.ResolveAsync(NotificationTargetType.HeldMessage, "held-1", "moderator-1");
+
+        var result = await controller.Unacknowledge(raised.Id);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        var stored = await service.GetByIdAsync(raised.Id);
+        Assert.NotNull(stored!.ResolvedUtc); // still resolved
+    }
+
+    [Fact]
+    public async Task Unacknowledge_ReturnsNotFound_WhenMissing()
+    {
+        var (controller, _) = CreateController(Admin());
+
+        var result = await controller.Unacknowledge(Guid.NewGuid());
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task Unacknowledge_ReturnsForbid_WhenCallerNotInAudience()
+    {
+        var admin = CreateController(Admin());
+        var raised = await admin.service.RaiseAsync(NotificationType.Registration, NotificationAudience.Administrators, NotificationTargetType.User, "user-1", "New user", "Jane");
+        await admin.controller.Acknowledge(raised.Id);
+
+        var (outsider, _) = CreateController(
+            new User { UniqueId = "resident-1", Roles = new List<User.Role> { User.Role.Resident } },
+            service: admin.service
+        );
+
+        var result = await outsider.Unacknowledge(raised.Id);
+
+        Assert.IsType<ForbidResult>(result);
+        var stored = await admin.service.GetByIdAsync(raised.Id);
+        Assert.NotNull(stored!.ResolvedUtc); // untouched
+    }
+
+    [Fact]
     public async Task Acknowledge_ReturnsForbid_WhenCallerNotInAudience()
     {
         // Caller is not an Administrator and manages no committees, so they're in no audiences and

@@ -49,6 +49,15 @@ namespace Web.Services
         /// </summary>
         Task<Notification?> AcknowledgeAsync(Guid notificationId, string? acknowledgedBy, CancellationToken ct = default);
 
+        /// <summary>
+        /// Re-opens (un-resolves) a notification, clearing its resolution state — the undo for
+        /// <see cref="AcknowledgeAsync"/>. Returns the notification, or null if it does not exist.
+        /// Idempotent: an already-unresolved notification is returned unchanged. Escalation state
+        /// (<see cref="Notification.EscalatedUtc"/>) is left intact so a re-opened notification that
+        /// was already emailed about is not emailed about again.
+        /// </summary>
+        Task<Notification?> UnacknowledgeAsync(Guid notificationId, CancellationToken ct = default);
+
         Task<IReadOnlyList<Notification>> GetUnresolvedForAudienceAsync(string audienceKey, int limit = 50, CancellationToken ct = default);
 
         /// <summary>Returns the notification with the given id, or null if it does not exist.</summary>
@@ -146,6 +155,23 @@ namespace Web.Services
                 return null;
 
             return await ResolveInternalAsync(existing, acknowledgedBy, ct);
+        }
+
+        public async Task<Notification?> UnacknowledgeAsync(Guid notificationId, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            var existing = await _repository.GetByIdAsync(notificationId);
+            if (existing == null)
+                return null;
+
+            if (existing.ResolvedUtc == null)
+                return existing; // Already unresolved — idempotent no-op.
+
+            existing.ResolvedUtc = null;
+            existing.ResolvedBy = null;
+            await _repository.UpsertAsync(existing);
+            await SignalAsync(existing.AudienceKey, ct);
+            return existing;
         }
 
         public async Task<IReadOnlyList<Notification>> GetUnresolvedForAudienceAsync(string audienceKey, int limit = 50, CancellationToken ct = default)

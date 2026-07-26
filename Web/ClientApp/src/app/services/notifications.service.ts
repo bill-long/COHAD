@@ -113,6 +113,24 @@ export class NotificationsService {
     );
   }
 
+  /**
+   * Undoes an acknowledge — re-opens the notification server-side and optimistically re-inserts it
+   * locally so the undo feels immediate. The server raises the live signal, so a fresh refetch
+   * reconciles the list shortly after (same contract as {@link acknowledge}).
+   */
+  unacknowledge(notification: AppNotification): Observable<void> {
+    return this.httpClient.post<void>(`api/notifications/${notification.id}/unacknowledge`, {}).pipe(
+      tap(() => {
+        // Invalidate any refresh already in flight — its (pre-undo) response would drop the item
+        // we're about to restore.
+        this.refreshGeneration++;
+        if (!this.notificationsSubject.value.some(n => n.id === notification.id)) {
+          this.notificationsSubject.next(this.sortNotifications([...this.notificationsSubject.value, notification]));
+        }
+      }),
+    );
+  }
+
   private initialize(): void {
     // Hub signals are debounced so a burst of changes collapses into one re-fetch.
     if (!this.hubSignalSub) {

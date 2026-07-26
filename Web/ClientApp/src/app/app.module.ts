@@ -80,6 +80,7 @@ import { VendorEditorDialogComponent } from './components/vendor-editor-dialog/v
 import { YouthServiceEditorDialogComponent } from './components/youth-service-editor-dialog/youth-service-editor-dialog.component';
 import { FormatPhonePipe } from './pipes/format-phone.pipe';
 import { StripMarkdownPipe } from './pipes/strip-markdown.pipe';
+import { TimeAgoPipe } from './pipes/time-ago.pipe';
 import { BlogComponent } from './components/blog/blog.component';
 import { BlogDetailComponent } from './components/blog-detail/blog-detail.component';
 import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
@@ -136,6 +137,7 @@ import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tip
     YouthServiceEditorDialogComponent,
     FormatPhonePipe,
     StripMarkdownPipe,
+    TimeAgoPipe,
     BlogComponent,
     BlogDetailComponent,
     ManageBlogComponent,

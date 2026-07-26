@@ -1,4 +1,5 @@
 import { Component, Inject, OnInit } from '@angular/core';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { Observable, Observer, of } from 'rxjs';
 import { catchError, map, shareReplay } from 'rxjs/operators';
 import { EventsService } from 'src/app/services/events.service';
@@ -52,6 +53,7 @@ export class NavbarComponent implements OnInit {
     private themeService: ThemeService,
     private readonly eventsService: EventsService,
     private readonly notificationsService: NotificationsService,
+    private readonly snackBar: MatSnackBar,
   ) {
     this.showEventsNav$ = this.eventsService.getUpcoming().pipe(
       map(events => events.length > 0),
@@ -172,11 +174,29 @@ export class NavbarComponent implements OnInit {
     return notification.deepLink || NavbarComponent.fallbackRoute(notification.type);
   }
 
-  /** Acknowledges a notification that has no other resolving action (registrations). */
+  /**
+   * Acknowledges a notification that has no other resolving action (registrations). Acknowledging
+   * resolves the item for the whole audience with no confirmation, so a brief undo is offered via
+   * snackbar instead of an up-front dialog (which would reintroduce per-item friction).
+   */
   acknowledge(notification: AppNotification): void {
     this.notificationsService.acknowledge(notification.id).subscribe({
+      next: () => {
+        this.snackBar
+          .open('Marked as handled', 'Undo', { duration: 5000 })
+          .onAction()
+          .subscribe(() => this.undoAcknowledge(notification));
+      },
       error: () => {
         // Best-effort from the bell; the badge reconciles on the next refresh/signal.
+      },
+    });
+  }
+
+  private undoAcknowledge(notification: AppNotification): void {
+    this.notificationsService.unacknowledge(notification).subscribe({
+      error: () => {
+        this.snackBar.open('Could not undo', undefined, { duration: 4000 });
       },
     });
   }

@@ -96,6 +96,38 @@ namespace Web.Controllers
             return Ok(NotificationPresentation.FromStorageModel(acknowledged));
         }
 
+        /// <summary>
+        /// Undoes an acknowledgement, re-opening the notification for its whole audience. Exists so an
+        /// accidental click on the bell's "mark as handled" action is recoverable (the client offers a
+        /// brief undo). Restricted to the same types that can be acknowledged; notifications backed by
+        /// a moderation action are rejected with 400, mirroring <see cref="Acknowledge"/>.
+        /// </summary>
+        [HttpPost("{id:guid}/unacknowledge")]
+        [Authorize(Policy = "Administrator")]
+        public async Task<IActionResult> Unacknowledge(Guid id)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var existing = await _notificationService.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound();
+
+            var audiences = await ResolveAudiencesAsync(apiUser);
+            if (!audiences.Contains(existing.AudienceKey, StringComparer.Ordinal))
+                return Forbid();
+
+            if (!Notification.IsAcknowledgeable(existing.Type))
+                return BadRequest($"Notifications of type {existing.Type} are resolved by their moderation action and cannot be re-opened here.");
+
+            var reopened = await _notificationService.UnacknowledgeAsync(id);
+            if (reopened == null)
+                return NotFound();
+
+            return Ok(NotificationPresentation.FromStorageModel(reopened));
+        }
+
         private async Task<List<string>> ResolveAudiencesAsync(User user)
         {
             // Shared with NotificationsHub group membership (same resolver, same cached committee list)

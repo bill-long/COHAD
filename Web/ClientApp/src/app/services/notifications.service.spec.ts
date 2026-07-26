@@ -161,6 +161,39 @@ describe('NotificationsService', () => {
     expect(list.map(n => n.id)).toEqual(['keep']);
   });
 
+  it('unacknowledge posts and optimistically re-inserts the notification in sorted position', () => {
+    const service = TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    httpMock.expectOne('api/notifications').flush([
+      notification({ id: 'newest', createdUtc: '2025-03-01T00:00:00Z' }),
+      notification({ id: 'oldest', createdUtc: '2025-01-01T00:00:00Z' }),
+    ]);
+
+    const restored = notification({ id: 'restore-me', createdUtc: '2025-02-01T00:00:00Z' });
+    service.unacknowledge(restored).subscribe();
+    const req = httpMock.expectOne('api/notifications/restore-me/unacknowledge');
+    expect(req.request.method).toBe('POST');
+    req.flush(null);
+
+    let list: AppNotification[] = [];
+    service.notifications$.subscribe(n => (list = n));
+    expect(list.map(n => n.id)).toEqual(['newest', 'restore-me', 'oldest']);
+  });
+
+  it('unacknowledge does not duplicate a notification a refetch already restored', () => {
+    const service = TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    const restored = notification({ id: 'already-back' });
+    httpMock.expectOne('api/notifications').flush([restored]);
+
+    service.unacknowledge(restored).subscribe();
+    httpMock.expectOne('api/notifications/already-back/unacknowledge').flush(null);
+
+    let list: AppNotification[] = [];
+    service.notifications$.subscribe(n => (list = n));
+    expect(list.map(n => n.id)).toEqual(['already-back']);
+  });
+
   it('a refresh already in flight when acknowledge runs cannot resurrect the acknowledged item', fakeAsync(() => {
     const service = TestBed.inject(NotificationsService);
     state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
