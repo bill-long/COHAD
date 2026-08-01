@@ -293,33 +293,103 @@ describe('NavbarComponent (notification bell menu)', () => {
     expect(ids).toEqual(['n-1', 'n-2']);
   }));
 
-  it('moves focus to the action taking the handled row\'s place, not the top of the list', fakeAsync(() => {
+  /** Three Registrations so below/above/nearest preferences are distinguishable from "first in list". */
+  function threeRegistrations(): AppNotification[] {
+    return [
+      makeNotification({ id: 'r-1', title: 'First' }),
+      makeNotification({ id: 'r-2', title: 'Second' }),
+      makeNotification({ id: 'r-3', title: 'Third' }),
+    ];
+  }
+
+  function dismissButtonFor(id: string): HTMLButtonElement {
+    return document.querySelector<HTMLButtonElement>(
+      `.mat-mdc-menu-panel .notification-item[data-notification-id="${id}"] .notification-dismiss`,
+    )!;
+  }
+
+  function focusedLabel(): string | null | undefined {
+    return (document.activeElement as HTMLElement | null)?.getAttribute('aria-label');
+  }
+
+  it('moves focus to the neighbor below the handled row, not the top of the list', fakeAsync(() => {
+    notifications$.next(threeRegistrations());
     openBellMenu();
-    const dismiss = document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss');
-    dismiss[0].focus();
-    dismiss[0].click();
+    const middle = dismissButtonFor('r-2');
+    middle.focus();
+    middle.click();
     // The service's optimistic removal re-renders the list without the handled row.
-    notifications$.next(notifications.slice(1));
+    notifications$.next(threeRegistrations().filter(n => n.id !== 'r-2'));
     fixture.detectChanges();
     flush();
 
-    expect((document.activeElement as HTMLElement | null)?.getAttribute('aria-label'))
-      .withContext('focus should land on the action now occupying the handled row\'s position')
-      .toBe('Mark as handled: Another user registered');
+    expect(focusedLabel())
+      .withContext('focus should land on the row below the handled one, not jump to the first row')
+      .toBe('Mark as handled: Third');
   }));
 
-  it('clamps focus to the last remaining action when the final row is handled', fakeAsync(() => {
+  it('moves focus to the neighbor above when the last row is handled', fakeAsync(() => {
+    notifications$.next(threeRegistrations());
     openBellMenu();
-    const dismiss = document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss');
-    dismiss[1].focus();
-    dismiss[1].click();
-    notifications$.next([notifications[0], notifications[2]]);
+    const last = dismissButtonFor('r-3');
+    last.focus();
+    last.click();
+    notifications$.next(threeRegistrations().filter(n => n.id !== 'r-3'));
     fixture.detectChanges();
     flush();
 
-    expect((document.activeElement as HTMLElement | null)?.getAttribute('aria-label'))
-      .withContext('handling the last actionable row should move focus to the previous action, not the top')
-      .toBe('Mark as handled: New user registered');
+    expect(focusedLabel())
+      .withContext('handling the bottom row should move focus to the row above it')
+      .toBe('Mark as handled: Second');
+  }));
+
+  it('focus preference is by identity, so a notification arriving mid-flight does not steal it', fakeAsync(() => {
+    notifications$.next(threeRegistrations());
+    openBellMenu();
+    const middle = dismissButtonFor('r-2');
+    middle.focus();
+    middle.click();
+    // A new registration lands at the top (newest-first sort) before the removal re-renders.
+    const arrived = makeNotification({ id: 'r-0', title: 'Brand new' });
+    notifications$.next([arrived, ...threeRegistrations().filter(n => n.id !== 'r-2')]);
+    fixture.detectChanges();
+    flush();
+
+    expect(focusedLabel())
+      .withContext('focus should follow the surviving neighbor, not an unread arrival occupying its old index')
+      .toBe('Mark as handled: Third');
+  }));
+
+  it('falls back to a non-actionable neighboring row rather than warping to the top', fakeAsync(() => {
+    // [Registration, Registration, HeldMessage]: handling the middle Registration leaves the held
+    // message as the row taking its place; its open button should receive focus even though it has
+    // no mark-as-handled action.
+    openBellMenu();
+    const middle = dismissButtonFor('n-2');
+    middle.focus();
+    middle.click();
+    notifications$.next(notifications.filter(n => n.id !== 'n-2'));
+    fixture.detectChanges();
+    flush();
+
+    const active = document.activeElement as HTMLElement | null;
+    expect(active?.closest('.notification-item')?.getAttribute('data-notification-id'))
+      .withContext('the held-message row below should take focus, not the first row')
+      .toBe('n-3');
+  }));
+
+  it('rapid successive acknowledgements land focus on the nearest surviving neighbor', fakeAsync(() => {
+    notifications$.next(threeRegistrations());
+    openBellMenu();
+    dismissButtonFor('r-1').click();
+    dismissButtonFor('r-2').click();
+    notifications$.next(threeRegistrations().filter(n => n.id === 'r-3'));
+    fixture.detectChanges();
+    flush();
+
+    expect(focusedLabel())
+      .withContext('both restores should skip the concurrently-removed rows and settle on the survivor')
+      .toBe('Mark as handled: Third');
   }));
 
   it('closes the menu when the last notification is handled', fakeAsync(() => {

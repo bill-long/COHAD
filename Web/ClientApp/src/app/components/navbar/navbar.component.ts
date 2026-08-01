@@ -2,7 +2,7 @@ import { Component, Inject, OnInit, QueryList, ViewChildren } from '@angular/cor
 import { MatMenuTrigger } from '@angular/material/menu';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { Observable, Observer, of } from 'rxjs';
-import { catchError, map, shareReplay } from 'rxjs/operators';
+import { catchError, map, shareReplay, take } from 'rxjs/operators';
 import { EventsService } from 'src/app/services/events.service';
 import { AppNotification, NotificationsService, NotificationType } from 'src/app/services/notifications.service';
 import { Router, NavigationEnd, NavigationStart } from '@angular/router';
@@ -191,16 +191,15 @@ export class NavbarComponent implements OnInit {
    */
   acknowledge(notification: AppNotification, source?: EventTarget | null): void {
     const panel = source instanceof HTMLElement ? source.closest<HTMLElement>('.mat-mdc-menu-panel') : null;
-    // Remember which action the user activated so focus can land on the item that takes its place
-    // (not the top of the list) once the row is removed.
-    const index =
-      panel && source instanceof HTMLElement
-        ? Array.from(panel.querySelectorAll('.notification-dismiss')).indexOf(source)
-        : -1;
+    // Decide where focus should land once this row is removed — by notification identity, computed
+    // from the data snapshot at activation time. DOM ordinals would go stale across the two async
+    // hops (POST + re-render): the list re-sorts newest-first on live refetches, and rapid
+    // acknowledgements remove rows the ordinal was counted against.
+    const focusCandidateIds = this.focusCandidatesFor(notification);
     this.notificationsService.acknowledge(notification.id).subscribe({
       next: () => {
         this.offerUndo(notification);
-        this.restoreMenuFocus(panel, index);
+        this.restoreMenuFocus(panel, focusCandidateIds);
       },
       error: () => {
         // Best-effort from the bell; the badge reconciles on the next refresh/signal.
@@ -242,14 +241,31 @@ export class NavbarComponent implements OnInit {
   }
 
   /**
+   * The notifications neighboring the handled one, nearest-below first then nearest-above, as ids.
+   * Captured from the component's own data stream (not the DOM) so the preference survives list
+   * re-sorting, insertions, and concurrent removals between activation and re-render.
+   */
+  private focusCandidatesFor(handled: AppNotification): string[] {
+    let current: AppNotification[] = [];
+    this.notifications$.pipe(take(1)).subscribe(list => (current = list));
+    const i = current.findIndex(n => n.id === handled.id);
+    if (i < 0) {
+      return [];
+    }
+    const below = current.slice(i + 1);
+    const above = current.slice(0, i).reverse();
+    return [...below, ...above].map(n => n.id);
+  }
+
+  /**
    * The acknowledged row is optimistically removed, destroying the button that held keyboard focus —
    * without intervention focus falls to <body> behind the still-open menu. Once the list has
-   * re-rendered, move focus to the action now occupying the handled row's position (clamped to the
-   * last action when the final row was handled), so keyboard users continue from where they were
-   * instead of jumping to the top. When the last notification was handled, close the menu instead
-   * (which returns focus to its trigger) rather than leaving an empty panel trapping the user.
+   * re-rendered, move focus to the nearest surviving neighbor (its mark-as-handled button when it
+   * has one, its row otherwise), so keyboard users continue from where they were instead of jumping
+   * to the top. When nothing remains, close the menu instead (which returns focus to its trigger)
+   * rather than leaving an empty panel trapping the user.
    */
-  private restoreMenuFocus(panel: HTMLElement | null, index: number): void {
+  private restoreMenuFocus(panel: HTMLElement | null, candidateIds: string[]): void {
     if (!panel) {
       return;
     }
@@ -257,12 +273,21 @@ export class NavbarComponent implements OnInit {
       if (!panel.isConnected) {
         return; // The menu already closed.
       }
-      const remaining = Array.from(panel.querySelectorAll<HTMLElement>('.notification-dismiss'));
-      const next = remaining.length
-        ? remaining[Math.min(Math.max(index, 0), remaining.length - 1)]
-        : panel.querySelector<HTMLElement>('.mat-mdc-menu-item');
-      if (next) {
-        next.focus();
+      for (const id of candidateIds) {
+        const row = panel.querySelector<HTMLElement>(`.notification-item[data-notification-id="${id}"]`);
+        const target =
+          row?.querySelector<HTMLElement>('.notification-dismiss') ??
+          row?.querySelector<HTMLElement>('.mat-mdc-menu-item');
+        if (target) {
+          target.focus();
+          return;
+        }
+      }
+      // No candidate survived; a row that arrived after activation (not a candidate) still deserves
+      // focus over closing the menu out from under the user.
+      const fallback = panel.querySelector<HTMLElement>('.notification-item .mat-mdc-menu-item');
+      if (fallback) {
+        fallback.focus();
         return;
       }
       this.menuTriggers?.filter(t => t.menuOpen).forEach(t => t.closeMenu());

@@ -34,7 +34,7 @@
                 cdkTrapFocus
                 (keydown.tab)="$event.stopPropagation()"
                 (keydown.shift.tab)="$event.stopPropagation()">
-                <div class="notification-item" *ngFor="let notification of notifications">
+                <div class="notification-item" [attr.data-notification-id]="notification.id" *ngFor="let notification of notifications">
                   <button mat-menu-item (click)="openNotification(notification)">
                     <div class="notification-row">
                       <div class="notification-header">
@@ -119,7 +119,7 @@
               cdkTrapFocus
               (keydown.tab)="$event.stopPropagation()"
               (keydown.shift.tab)="$event.stopPropagation()">
-              <div class="notification-item" *ngFor="let notification of notifications">
+              <div class="notification-item" [attr.data-notification-id]="notification.id" *ngFor="let notification of notifications">
                 <button mat-menu-item (click)="openNotification(notification)">
                   <div class="notification-row">
                     <div class="notification-header">
