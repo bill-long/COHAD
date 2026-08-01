@@ -293,7 +293,7 @@ describe('NavbarComponent (notification bell menu)', () => {
     expect(ids).toEqual(['n-1', 'n-2']);
   }));
 
-  it('moves focus to the next remaining action after handling a notification', fakeAsync(() => {
+  it('moves focus to the action taking the handled row\'s place, not the top of the list', fakeAsync(() => {
     openBellMenu();
     const dismiss = document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss');
     dismiss[0].focus();
@@ -303,9 +303,23 @@ describe('NavbarComponent (notification bell menu)', () => {
     fixture.detectChanges();
     flush();
 
-    expect((document.activeElement as HTMLElement | null)?.classList.contains('notification-dismiss'))
-      .withContext('focus should land on the next remaining mark-as-handled button, not fall to <body>')
-      .toBeTrue();
+    expect((document.activeElement as HTMLElement | null)?.getAttribute('aria-label'))
+      .withContext('focus should land on the action now occupying the handled row\'s position')
+      .toBe('Mark as handled: Another user registered');
+  }));
+
+  it('clamps focus to the last remaining action when the final row is handled', fakeAsync(() => {
+    openBellMenu();
+    const dismiss = document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss');
+    dismiss[1].focus();
+    dismiss[1].click();
+    notifications$.next([notifications[0], notifications[2]]);
+    fixture.detectChanges();
+    flush();
+
+    expect((document.activeElement as HTMLElement | null)?.getAttribute('aria-label'))
+      .withContext('handling the last actionable row should move focus to the previous action, not the top')
+      .toBe('Mark as handled: New user registered');
   }));
 
   it('closes the menu when the last notification is handled', fakeAsync(() => {

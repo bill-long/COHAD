@@ -191,10 +191,16 @@ export class NavbarComponent implements OnInit {
    */
   acknowledge(notification: AppNotification, source?: EventTarget | null): void {
     const panel = source instanceof HTMLElement ? source.closest<HTMLElement>('.mat-mdc-menu-panel') : null;
+    // Remember which action the user activated so focus can land on the item that takes its place
+    // (not the top of the list) once the row is removed.
+    const index =
+      panel && source instanceof HTMLElement
+        ? Array.from(panel.querySelectorAll('.notification-dismiss')).indexOf(source)
+        : -1;
     this.notificationsService.acknowledge(notification.id).subscribe({
       next: () => {
         this.offerUndo(notification);
-        this.restoreMenuFocus(panel);
+        this.restoreMenuFocus(panel, index);
       },
       error: () => {
         // Best-effort from the bell; the badge reconciles on the next refresh/signal.
@@ -238,11 +244,12 @@ export class NavbarComponent implements OnInit {
   /**
    * The acknowledged row is optimistically removed, destroying the button that held keyboard focus —
    * without intervention focus falls to <body> behind the still-open menu. Once the list has
-   * re-rendered, move focus to the next remaining action; when the last notification was handled,
-   * close the menu instead (which returns focus to its trigger) rather than leaving an empty panel
-   * trapping the user.
+   * re-rendered, move focus to the action now occupying the handled row's position (clamped to the
+   * last action when the final row was handled), so keyboard users continue from where they were
+   * instead of jumping to the top. When the last notification was handled, close the menu instead
+   * (which returns focus to its trigger) rather than leaving an empty panel trapping the user.
    */
-  private restoreMenuFocus(panel: HTMLElement | null): void {
+  private restoreMenuFocus(panel: HTMLElement | null, index: number): void {
     if (!panel) {
       return;
     }
@@ -250,9 +257,10 @@ export class NavbarComponent implements OnInit {
       if (!panel.isConnected) {
         return; // The menu already closed.
       }
-      const next =
-        panel.querySelector<HTMLElement>('.notification-dismiss') ??
-        panel.querySelector<HTMLElement>('.mat-mdc-menu-item');
+      const remaining = Array.from(panel.querySelectorAll<HTMLElement>('.notification-dismiss'));
+      const next = remaining.length
+        ? remaining[Math.min(Math.max(index, 0), remaining.length - 1)]
+        : panel.querySelector<HTMLElement>('.mat-mdc-menu-item');
       if (next) {
         next.focus();
         return;
