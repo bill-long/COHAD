@@ -52,6 +52,16 @@ export class NotificationsService {
   /** True between initialize() and teardown(); gates mutations from landing after teardown cleared state. */
   private active = false;
 
+  /**
+   * Bumped on every teardown. Mutation responses (acknowledge/unacknowledge) capture it at request
+   * time and apply only while it is unchanged, so a response issued before a teardown can never
+   * touch state — even after a later initialize() reactivates the service (rights restored / user
+   * switched), which an `active` check alone cannot distinguish. Deliberately separate from
+   * refreshGeneration, which ordinary refetches also bump: keying mutations on that would make any
+   * refresh in flight suppress a legitimate same-session response.
+   */
+  private sessionEpoch = 0;
+
   /** Debounce window for collapsing a burst of hub signals into one re-fetch. */
   private static readonly HubRefreshDebounceMs = 400;
 
@@ -105,8 +115,15 @@ export class NotificationsService {
    * raises the live signal, which reconciles the list on the next refetch.
    */
   acknowledge(id: string): Observable<void> {
+    const epoch = this.sessionEpoch;
     return this.httpClient.post<void>(`api/notifications/${id}/acknowledge`, {}).pipe(
       tap(() => {
+        // A response from before a teardown must not touch state: besides mutating a list it no
+        // longer owns, bumping refreshGeneration here would silently cancel the new session's
+        // in-flight refetch (a superseded refresh response is dropped without scheduling a retry).
+        if (epoch !== this.sessionEpoch) {
+          return;
+        }
         // Invalidate any refresh already in flight: its (pre-acknowledge) response would otherwise
         // win the race and resurrect the item we're about to drop. The server raises a live signal on
         // acknowledge, so a fresh refetch reconciles the list shortly after.
@@ -124,12 +141,14 @@ export class NotificationsService {
    * {@link acknowledge}).
    */
   unacknowledge(notification: AppNotification): Observable<void> {
+    const epoch = this.sessionEpoch;
     return this.httpClient.post<void>(`api/notifications/${notification.id}/unacknowledge`, {}).pipe(
       tap(() => {
         // A response landing after teardown (rights revoked / user switched mid-flight) must not
-        // repopulate cleared state: refetches are generation-guarded against that, and this is the
-        // only other code path that inserts into the subject, so it needs the same care.
-        if (!this.active) {
+        // repopulate cleared state — and `active` alone can't tell, because a later initialize()
+        // sets it true again while this response still belongs to the old session. The epoch only
+        // moves on teardown, so it rejects exactly the stale responses.
+        if (!this.active || epoch !== this.sessionEpoch) {
           return;
         }
         // Invalidate any refresh already in flight — its (pre-undo) response would drop the item
@@ -308,8 +327,10 @@ export class NotificationsService {
 
   private teardown(): void {
     this.active = false;
-    // Invalidate any in-flight refresh so a late response can't repopulate cleared state.
+    // Invalidate any in-flight refresh so a late response can't repopulate cleared state, and any
+    // in-flight acknowledge/unacknowledge so its response stays dead even past a re-initialize.
     this.refreshGeneration++;
+    this.sessionEpoch++;
     this.consecutiveAuthErrors = 0;
     this.clearRefreshRetry();
     this.clearConnectRetry();
