@@ -151,4 +151,54 @@ describe('Milkdown image drop/paste integration', () => {
     expect(uploadFn).withContext('uploader not reached for a bytes-free paste').not.toHaveBeenCalled();
     expect(pasteEvent.defaultPrevented).withContext('bytes-free paste left to our interceptor untouched').toBe(false);
   });
+
+  // Exercises the REAL createEditor lifecycle (issue #263), which the stubbed unit tests in
+  // milkdown-editor.component.spec.ts cannot: loading content must not emit a phantom valueChange
+  // (even when Crepe normalizes the markdown on load), and the echo baseline must be the editor's own
+  // serialization.
+  it('loads content into a real editor without emitting a phantom valueChange', async () => {
+    // Reach the component's private createEditor/state to drive the real build lifecycle without
+    // mounting the component (Crepe needs a live DOM).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const priv = component as any;
+    priv.container = { nativeElement: root };
+    const emitted: string[] = [];
+    component.valueChange.subscribe((v: string) => emitted.push(v));
+
+    // `* one` markdown that remark re-serializes with `-` bullets on load - a normalization echo that
+    // would fire valueChange before the fix baselined the guard on the editor's own serialization.
+    const crepe: Crepe = await priv.createEditor('# Title\n\n* one\n* two\n');
+    activeCrepe = crepe;
+
+    expect(priv.lastAppliedValue)
+      .withContext('echo baseline is the editor serialization, not the raw input')
+      .toBe(crepe.getMarkdown());
+    expect(priv.ready).toBeTrue();
+
+    // Make a real edit and poll for its emit. The load transaction happens strictly before this edit,
+    // so a leaked load-normalization echo would be emitted as a separate event BEFORE the edit;
+    // asserting the FIRST emit carries the edit therefore catches a phantom deterministically, without
+    // a fixed settle sleep (waitUntil polls for the edit instead of sleeping for the absence).
+    const view = crepe.editor.ctx.get(editorViewCtx);
+    view.dispatch(view.state.tr.insertText('Z', 1));
+    await waitUntil(() => emitted.length > 0);
+    expect(emitted[0]).withContext('first emit is the user edit, not a phantom load echo').toContain('Z');
+  });
+
+  it('skips installing capture-phase interceptors when torn down mid-build', async () => {
+    // Reach the component's private createEditor/state to drive the real build lifecycle without
+    // mounting the component (Crepe needs a live DOM).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const priv = component as any;
+    priv.container = { nativeElement: root };
+    // Simulate ngOnDestroy having already run (which clears the interceptor refs) before the build
+    // finishes: createEditor must not re-install listeners that nothing will remove.
+    priv.destroyed = true;
+
+    const crepe: Crepe = await priv.createEditor('hi');
+    activeCrepe = crepe;
+
+    expect(priv.dropInterceptor).withContext('drop interceptor not installed after teardown').toBeNull();
+    expect(priv.pasteInterceptor).withContext('paste interceptor not installed after teardown').toBeNull();
+  });
 });
