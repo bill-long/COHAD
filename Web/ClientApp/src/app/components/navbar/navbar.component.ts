@@ -27,6 +27,8 @@ export class NavbarComponent implements OnInit {
 
   /** Notifications acknowledged while the current undo snackbar is visible; "Undo" restores all of them. */
   private pendingUndo: AppNotification[] = [];
+  /** Ids with an acknowledge POST in flight — repeat activations (double-clicks) are ignored until it settles. */
+  private inFlightAcks = new Set<string>();
   private activeAckSnackBar: MatSnackBarRef<TextOnlySnackBar> | null = null;
   readonly useMockAuth = environment.useMockAuth;
   readonly mockUsers = [
@@ -190,6 +192,10 @@ export class NavbarComponent implements OnInit {
    * earlier items' only undo entry point.
    */
   acknowledge(notification: AppNotification, source?: EventTarget | null): void {
+    if (this.inFlightAcks.has(notification.id)) {
+      return; // Double-click while the first POST is pending — one acknowledge is already underway.
+    }
+    this.inFlightAcks.add(notification.id);
     const panel = source instanceof HTMLElement ? source.closest<HTMLElement>('.mat-mdc-menu-panel') : null;
     // Decide where focus should land once this row is removed — by notification identity, computed
     // from the data snapshot at activation time. DOM ordinals would go stale across the two async
@@ -198,17 +204,23 @@ export class NavbarComponent implements OnInit {
     const focusCandidateIds = this.focusCandidatesFor(notification);
     this.notificationsService.acknowledge(notification.id).subscribe({
       next: () => {
+        this.inFlightAcks.delete(notification.id);
         this.offerUndo(notification);
         this.restoreMenuFocus(panel, focusCandidateIds);
       },
       error: () => {
         // Best-effort from the bell; the badge reconciles on the next refresh/signal.
+        this.inFlightAcks.delete(notification.id);
       },
     });
   }
 
   private offerUndo(notification: AppNotification): void {
-    this.pendingUndo.push(notification);
+    // The row stays clickable between POST success and the refetch that removes it, so a repeat
+    // acknowledge can complete for an id already awaiting undo — don't double-count it.
+    if (!this.pendingUndo.some(n => n.id === notification.id)) {
+      this.pendingUndo.push(notification);
+    }
     const count = this.pendingUndo.length;
     // Mark the previous snackbar superseded BEFORE open() dismisses it: its afterDismissed may fire
     // synchronously during open(), and it must not clear the stack the replacement now owns.

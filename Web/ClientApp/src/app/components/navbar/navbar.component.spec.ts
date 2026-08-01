@@ -296,6 +296,49 @@ describe('NavbarComponent (notification bell menu)', () => {
     flush();
   }));
 
+  it('ignores repeat clicks on the same notification while its acknowledge POST is in flight', fakeAsync(() => {
+    const pendingAck = new Subject<void>();
+    notificationsService.acknowledge.and.returnValue(pendingAck.asObservable());
+    openBellMenu();
+
+    const dismiss = document.querySelector<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss')!;
+    dismiss.click();
+    dismiss.click(); // double-click before the first POST returns
+    fixture.detectChanges();
+
+    expect(notificationsService.acknowledge).toHaveBeenCalledTimes(1);
+
+    pendingAck.next();
+    pendingAck.complete();
+    fixture.detectChanges();
+    flush();
+  }));
+
+  it('does not double-count a notification acknowledged again after its first POST completed', fakeAsync(() => {
+    // The row stays clickable until the refetch removes it, and the default acknowledge stub
+    // completes synchronously — so a second click is a *completed* repeat, not an in-flight one.
+    openBellMenu();
+
+    const dismiss = document.querySelector<HTMLButtonElement>('.mat-mdc-menu-panel .notification-dismiss')!;
+    dismiss.click();
+    fixture.detectChanges();
+    dismiss.click();
+    fixture.detectChanges();
+    tick();
+
+    const containers = document.querySelectorAll('.mat-mdc-snack-bar-container');
+    const snackBar = containers[containers.length - 1];
+    expect(snackBar.textContent).withContext('the same notification must not be counted twice').toContain('Marked as handled');
+    expect(snackBar.textContent).not.toContain('2 marked as handled');
+
+    snackBar.querySelector<HTMLButtonElement>('.mat-mdc-snack-bar-action')!.click();
+    fixture.detectChanges();
+    tick();
+
+    expect(notificationsService.unacknowledge).toHaveBeenCalledTimes(1);
+    flush();
+  }));
+
   /** Three Registrations so below/above/nearest preferences are distinguishable from "first in list". */
   function threeRegistrations(): AppNotification[] {
     return [

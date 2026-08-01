@@ -272,4 +272,56 @@ public sealed class NotificationsControllerTests
         var stored = await service.GetByIdAsync(raised.Id);
         Assert.Null(stored!.ResolvedUtc); // untouched
     }
+
+    /// <summary>
+    /// A service whose ETag retry budget is exhausted rethrows the final 412; the endpoint must
+    /// surface that as a retryable 409, not an unhandled 500.
+    /// </summary>
+    [Fact]
+    public async Task Acknowledge_Returns409_WhenConcurrencyRetriesExhausted()
+    {
+        var (controller, _) = CreateController(Admin(), service: ExhaustedConcurrencyService(acknowledge: true).Object);
+
+        var result = await controller.Acknowledge(Guid.NewGuid());
+
+        var status = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, status.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unacknowledge_Returns409_WhenConcurrencyRetriesExhausted()
+    {
+        var (controller, _) = CreateController(Admin(), service: ExhaustedConcurrencyService(acknowledge: false).Object);
+
+        var result = await controller.Unacknowledge(Guid.NewGuid());
+
+        var status = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, status.StatusCode);
+    }
+
+    /// <summary>
+    /// An INotificationService stub that returns an acknowledgeable Administrators-audience
+    /// notification from GetByIdAsync but throws the post-retry 412 from the requested write path.
+    /// </summary>
+    private static Mock<INotificationService> ExhaustedConcurrencyService(bool acknowledge)
+    {
+        var existing = new Notification
+        {
+            Id = Guid.NewGuid(),
+            Type = NotificationType.Registration,
+            AudienceKey = NotificationAudience.Administrators,
+        };
+        var contention = new Microsoft.Azure.Cosmos.CosmosException(
+            "ETag mismatch.", System.Net.HttpStatusCode.PreconditionFailed, 0, string.Empty, 0);
+
+        var service = new Mock<INotificationService>();
+        service.Setup(s => s.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(existing);
+        if (acknowledge)
+            service.Setup(s => s.AcknowledgeAsync(It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(contention);
+        else
+            service.Setup(s => s.UnacknowledgeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(contention);
+        return service;
+    }
 }

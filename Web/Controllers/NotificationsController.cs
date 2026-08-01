@@ -2,9 +2,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using CosmosException = Microsoft.Azure.Cosmos.CosmosException;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -89,7 +92,20 @@ namespace Web.Controllers
             if (!Notification.IsAcknowledgeable(existing.Type))
                 return BadRequest($"Notifications of type {existing.Type} are resolved by their moderation action, not by acknowledgement.");
 
-            var acknowledged = await _notificationService.AcknowledgeAsync(id, apiUser.UniqueId);
+            Notification? acknowledged;
+            try
+            {
+                acknowledged = await _notificationService.AcknowledgeAsync(id, apiUser.UniqueId);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+            {
+                // The service's ETag retry budget ran out (persistent write contention). Surface it as
+                // a retryable conflict, matching how other controllers translate 412.
+                return StatusCode(
+                    StatusCodes.Status409Conflict,
+                    "The notification was modified by another request. Please retry."
+                );
+            }
             if (acknowledged == null)
                 return NotFound();
 
@@ -121,7 +137,18 @@ namespace Web.Controllers
             if (!Notification.IsAcknowledgeable(existing.Type))
                 return BadRequest($"Notifications of type {existing.Type} are resolved by their moderation action and cannot be re-opened here.");
 
-            var reopened = await _notificationService.UnacknowledgeAsync(id);
+            Notification? reopened;
+            try
+            {
+                reopened = await _notificationService.UnacknowledgeAsync(id);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+            {
+                return StatusCode(
+                    StatusCodes.Status409Conflict,
+                    "The notification was modified by another request. Please retry."
+                );
+            }
             if (reopened == null)
                 return NotFound();
 
