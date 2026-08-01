@@ -291,6 +291,9 @@ describe('NavbarComponent (notification bell menu)', () => {
     expect(notificationsService.unacknowledge).toHaveBeenCalledTimes(2);
     const ids = notificationsService.unacknowledge.calls.allArgs().map(args => args[0].id);
     expect(ids).toEqual(['n-1', 'n-2']);
+
+    // Drain any snackbar duration timer MatSnackBar may still hold so the spec stays deterministic.
+    flush();
   }));
 
   /** Three Registrations so below/above/nearest preferences are distinguishable from "first in list". */

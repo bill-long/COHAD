@@ -117,9 +117,11 @@ export class NotificationsService {
   }
 
   /**
-   * Undoes an acknowledge — re-opens the notification server-side and optimistically re-inserts it
-   * locally so the undo feels immediate. The server raises the live signal, so a fresh refetch
-   * reconciles the list shortly after (same contract as {@link acknowledge}).
+   * Undoes an acknowledge — re-opens the notification server-side, then re-inserts it locally as
+   * soon as the POST confirms (rather than waiting for the next refetch, but deliberately not
+   * before confirmation: a pre-emptive insert would need rollback on failure). The server raises
+   * the live signal, so a fresh refetch reconciles the list shortly after (same contract as
+   * {@link acknowledge}).
    */
   unacknowledge(notification: AppNotification): Observable<void> {
     return this.httpClient.post<void>(`api/notifications/${notification.id}/unacknowledge`, {}).pipe(
