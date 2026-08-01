@@ -196,6 +196,10 @@ namespace Web.Services
         {
             for (var attempt = 0; ; attempt++)
             {
+                // Re-checked each attempt: persistent 412 contention must not keep issuing Cosmos
+                // reads/writes after the caller has cancelled.
+                ct.ThrowIfCancellationRequested();
+
                 if ((notification.ResolvedUtc != null) == resolved)
                     return notification; // Already in the requested state — idempotent no-op.
 

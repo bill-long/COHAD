@@ -312,6 +312,39 @@ public sealed class NotificationServiceTests
         notifier.Verify(n => n.NotifyAudienceChangedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    /// <summary>
+    /// The resolve/acknowledge retry loop must observe cancellation between attempts: under
+    /// persistent 412 contention it would otherwise keep issuing Cosmos reads and conditional
+    /// writes for a caller that has already given up.
+    /// </summary>
+    [Fact]
+    public async Task Acknowledge_ObservesCancellation_BetweenRetryAttempts()
+    {
+        var id = Guid.NewGuid();
+        using var cts = new CancellationTokenSource();
+        var repo = new Mock<INotificationRepository>();
+        // Every read returns a fresh unresolved snapshot, so without the per-attempt check the
+        // loop would spin through its whole retry budget.
+        repo.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(() => new Notification
+        {
+            Id = id,
+            Type = NotificationType.Registration,
+            AudienceKey = Audience,
+            ETag = Guid.NewGuid().ToString(),
+        });
+        repo.Setup(r => r.UpsertWithEtagAsync(It.IsAny<Notification>()))
+            .Callback(() => cts.Cancel()) // cancellation arrives while the write is losing the race
+            .ThrowsAsync(new CosmosException("ETag mismatch.", HttpStatusCode.PreconditionFailed, 0, string.Empty, 0));
+        var service = new NotificationService(
+            repo.Object, new Mock<INotificationRealtimeNotifier>().Object, NullLogger<NotificationService>.Instance);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => service.AcknowledgeAsync(id, "admin-1", cts.Token));
+
+        // One conditional write, then the next attempt noticed the cancellation instead of retrying.
+        repo.Verify(r => r.UpsertWithEtagAsync(It.IsAny<Notification>()), Times.Once);
+    }
+
     [Fact]
     public async Task RaiseAsync_DoesNotThrow_WhenSignalFails()
     {
