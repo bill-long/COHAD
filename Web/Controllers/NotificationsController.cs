@@ -2,9 +2,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using CosmosException = Microsoft.Azure.Cosmos.CosmosException;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -89,11 +92,67 @@ namespace Web.Controllers
             if (!Notification.IsAcknowledgeable(existing.Type))
                 return BadRequest($"Notifications of type {existing.Type} are resolved by their moderation action, not by acknowledgement.");
 
-            var acknowledged = await _notificationService.AcknowledgeAsync(id, apiUser.UniqueId);
+            Notification? acknowledged;
+            try
+            {
+                acknowledged = await _notificationService.AcknowledgeAsync(id, apiUser.UniqueId);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+            {
+                // The service's ETag retry budget ran out (persistent write contention). Surface it as
+                // a retryable conflict, matching how other controllers translate 412.
+                return StatusCode(
+                    StatusCodes.Status409Conflict,
+                    "The notification was modified by another request. Please retry."
+                );
+            }
             if (acknowledged == null)
                 return NotFound();
 
             return Ok(NotificationPresentation.FromStorageModel(acknowledged));
+        }
+
+        /// <summary>
+        /// Undoes an acknowledgement, re-opening the notification for its whole audience. Exists so an
+        /// accidental click on the bell's "mark as handled" action is recoverable (the client offers a
+        /// brief undo). Restricted to the same types that can be acknowledged; notifications backed by
+        /// a moderation action are rejected with 400, mirroring <see cref="Acknowledge"/>.
+        /// </summary>
+        [HttpPost("{id:guid}/unacknowledge")]
+        [Authorize(Policy = "Administrator")]
+        public async Task<IActionResult> Unacknowledge(Guid id)
+        {
+            var apiUser = await GetApiUserAsync();
+            if (apiUser == null)
+                return Forbid();
+
+            var existing = await _notificationService.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound();
+
+            var audiences = await ResolveAudiencesAsync(apiUser);
+            if (!audiences.Contains(existing.AudienceKey, StringComparer.Ordinal))
+                return Forbid();
+
+            if (!Notification.IsAcknowledgeable(existing.Type))
+                return BadRequest($"Notifications of type {existing.Type} are resolved by their moderation action and cannot be re-opened here.");
+
+            Notification? reopened;
+            try
+            {
+                reopened = await _notificationService.UnacknowledgeAsync(id);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+            {
+                return StatusCode(
+                    StatusCodes.Status409Conflict,
+                    "The notification was modified by another request. Please retry."
+                );
+            }
+            if (reopened == null)
+                return NotFound();
+
+            return Ok(NotificationPresentation.FromStorageModel(reopened));
         }
 
         private async Task<List<string>> ResolveAudiencesAsync(User user)

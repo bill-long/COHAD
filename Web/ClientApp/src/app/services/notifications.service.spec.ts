@@ -161,6 +161,105 @@ describe('NotificationsService', () => {
     expect(list.map(n => n.id)).toEqual(['keep']);
   });
 
+  it('unacknowledge posts and optimistically re-inserts the notification in sorted position', () => {
+    const service = TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    httpMock.expectOne('api/notifications').flush([
+      notification({ id: 'newest', createdUtc: '2025-03-01T00:00:00Z' }),
+      notification({ id: 'oldest', createdUtc: '2025-01-01T00:00:00Z' }),
+    ]);
+
+    const restored = notification({ id: 'restore-me', createdUtc: '2025-02-01T00:00:00Z' });
+    service.unacknowledge(restored).subscribe();
+    const req = httpMock.expectOne('api/notifications/restore-me/unacknowledge');
+    expect(req.request.method).toBe('POST');
+    req.flush(null);
+
+    let list: AppNotification[] = [];
+    service.notifications$.subscribe(n => (list = n));
+    expect(list.map(n => n.id)).toEqual(['newest', 'restore-me', 'oldest']);
+  });
+
+  it('an unacknowledge response landing after teardown does not repopulate cleared state', () => {
+    const service = TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    const item = notification({ id: 'gone' });
+    httpMock.expectOne('api/notifications').flush([item]);
+
+    service.acknowledge('gone').subscribe();
+    httpMock.expectOne('api/notifications/gone/acknowledge').flush(null);
+
+    service.unacknowledge(item).subscribe();
+    // Rights are revoked while the undo POST is in flight — teardown clears the list.
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Resident']) });
+    httpMock.expectOne('api/notifications/gone/unacknowledge').flush(null);
+
+    let list: AppNotification[] = [];
+    let unread = -1;
+    service.notifications$.subscribe(n => (list = n));
+    service.unreadCount$.subscribe(c => (unread = c));
+    expect(list).toEqual([]);
+    expect(unread).toBe(0);
+  });
+
+  it('an unacknowledge response from before a teardown does not insert stale state after re-initialize', () => {
+    const service = TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    const stale = notification({ id: 'stale' });
+    httpMock.expectOne('api/notifications').flush([stale]);
+
+    service.acknowledge('stale').subscribe();
+    httpMock.expectOne('api/notifications/stale/acknowledge').flush(null);
+
+    service.unacknowledge(stale).subscribe();
+    // Rights are revoked and then restored while the undo POST is in flight — the service tears
+    // down and re-initializes, so `active` is true again when the old session's response lands.
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Resident']) });
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    const fresh = notification({ id: 'fresh' });
+    httpMock.expectOne('api/notifications').flush([fresh]);
+    httpMock.expectOne('api/notifications/stale/unacknowledge').flush(null);
+
+    let list: AppNotification[] = [];
+    service.notifications$.subscribe(n => (list = n));
+    expect(list.map(n => n.id)).toEqual(['fresh']);
+  });
+
+  it(`an acknowledge response from before a teardown does not invalidate the new session's initial fetch`, () => {
+    const service = TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    httpMock.expectOne('api/notifications').flush([notification({ id: 'old-session' })]);
+
+    service.acknowledge('old-session').subscribe();
+    // Teardown + re-initialize while the acknowledge POST is in flight. The new session's initial
+    // fetch is still pending when the stale response arrives; a generation bump from that response
+    // would silently drop the fetch's payload with no retry scheduled.
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Resident']) });
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    const pendingFetch = httpMock.expectOne('api/notifications');
+    httpMock.expectOne('api/notifications/old-session/acknowledge').flush(null);
+    const fresh = notification({ id: 'fresh' });
+    pendingFetch.flush([fresh]);
+
+    let list: AppNotification[] = [];
+    service.notifications$.subscribe(n => (list = n));
+    expect(list.map(n => n.id)).toEqual(['fresh']);
+  });
+
+  it('unacknowledge does not duplicate a notification a refetch already restored', () => {
+    const service = TestBed.inject(NotificationsService);
+    state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });
+    const restored = notification({ id: 'already-back' });
+    httpMock.expectOne('api/notifications').flush([restored]);
+
+    service.unacknowledge(restored).subscribe();
+    httpMock.expectOne('api/notifications/already-back/unacknowledge').flush(null);
+
+    let list: AppNotification[] = [];
+    service.notifications$.subscribe(n => (list = n));
+    expect(list.map(n => n.id)).toEqual(['already-back']);
+  });
+
   it('a refresh already in flight when acknowledge runs cannot resurrect the acknowledged item', fakeAsync(() => {
     const service = TestBed.inject(NotificationsService);
     state$.next({ ...initialStateValue, apiUser: userWithRoles(['Administrator']) });

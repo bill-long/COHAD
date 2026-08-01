@@ -26,21 +26,35 @@
         <ng-template matMenuContent>
           <ng-container *ngIf="(notifications$ | async) as notifications">
             <ng-container *ngIf="notifications.length > 0; else noNotifications">
-              <ng-container *ngFor="let notification of notifications">
-                <button mat-menu-item (click)="openNotification(notification)">
-                  <div class="notification-row">
-                    <div class="notification-title">{{ notification.title }}</div>
-                    <div class="notification-note">{{ notification.summary }}</div>
-                  </div>
-                </button>
-                <button
-                  mat-menu-item
-                  class="notification-ack"
-                  *ngIf="notification.type === 'Registration'"
-                  (click)="acknowledge(notification)">
-                  Acknowledge
-                </button>
-              </ng-container>
+              <!-- Keyboard containment: MatMenu closes itself on Tab (keyManager.tabOut), which would
+                   make the inline mark-as-handled buttons unreachable, so Tab/Shift+Tab are stopped at
+                   this wrapper; cdkTrapFocus then wraps focus at the list edges so it can never land
+                   outside the still-open menu (where Escape would no longer reach the panel). -->
+              <div
+                cdkTrapFocus
+                (keydown.tab)="$event.stopPropagation()"
+                (keydown.shift.tab)="$event.stopPropagation()">
+                <div class="notification-item" [attr.data-notification-id]="notification.id" *ngFor="let notification of notifications">
+                  <button mat-menu-item (click)="openNotification(notification)">
+                    <div class="notification-row">
+                      <div class="notification-header">
+                        <span class="notification-title">{{ notification.title }}</span>
+                        <span class="notification-time">{{ notification.createdUtc | timeAgo }}</span>
+                      </div>
+                      <div class="notification-note">{{ notification.summary }}</div>
+                    </div>
+                  </button>
+                  <button
+                    mat-icon-button
+                    class="notification-dismiss"
+                    *ngIf="notification.type === 'Registration'"
+                    matTooltip="Mark as handled"
+                    [attr.aria-label]="'Mark as handled: ' + notification.title"
+                    (click)="acknowledge(notification, $event.currentTarget); $event.stopPropagation()">
+                    <mat-icon>check</mat-icon>
+                  </button>
+                </div>
+              </div>
             </ng-container>
             <ng-template #noNotifications>
               <span class="menu-empty-state">No new notifications</span>
@@ -100,21 +114,32 @@
       <ng-template matMenuContent>
         <ng-container *ngIf="(notifications$ | async) as notifications">
           <ng-container *ngIf="notifications.length > 0; else noNotificationsMobile">
-            <ng-container *ngFor="let notification of notifications">
-              <button mat-menu-item (click)="openNotification(notification)">
-                <div class="notification-row">
-                  <div class="notification-title">{{ notification.title }}</div>
-                  <div class="notification-note">{{ notification.summary }}</div>
-                </div>
-              </button>
-              <button
-                mat-menu-item
-                class="notification-ack"
-                *ngIf="notification.type === 'Registration'"
-                (click)="acknowledge(notification)">
-                Acknowledge
-              </button>
-            </ng-container>
+            <!-- Tab containment + focus trap — same rationale as the desktop menu. -->
+            <div
+              cdkTrapFocus
+              (keydown.tab)="$event.stopPropagation()"
+              (keydown.shift.tab)="$event.stopPropagation()">
+              <div class="notification-item" [attr.data-notification-id]="notification.id" *ngFor="let notification of notifications">
+                <button mat-menu-item (click)="openNotification(notification)">
+                  <div class="notification-row">
+                    <div class="notification-header">
+                      <span class="notification-title">{{ notification.title }}</span>
+                      <span class="notification-time">{{ notification.createdUtc | timeAgo }}</span>
+                    </div>
+                    <div class="notification-note">{{ notification.summary }}</div>
+                  </div>
+                </button>
+                <button
+                  mat-icon-button
+                  class="notification-dismiss"
+                  *ngIf="notification.type === 'Registration'"
+                  matTooltip="Mark as handled"
+                  [attr.aria-label]="'Mark as handled: ' + notification.title"
+                  (click)="acknowledge(notification, $event.currentTarget); $event.stopPropagation()">
+                  <mat-icon>check</mat-icon>
+                </button>
+              </div>
+            </div>
           </ng-container>
           <ng-template #noNotificationsMobile>
             <span class="menu-empty-state">No new notifications</span>

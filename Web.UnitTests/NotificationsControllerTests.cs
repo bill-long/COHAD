@@ -184,6 +184,79 @@ public sealed class NotificationsControllerTests
     }
 
     [Fact]
+    public async Task Unacknowledge_ReopensAcknowledgedNotification()
+    {
+        var (controller, service) = CreateController(Admin());
+        var raised = await service.RaiseAsync(NotificationType.Registration, NotificationAudience.Administrators, NotificationTargetType.User, "user-1", "New user", "Jane");
+        await controller.Acknowledge(raised.Id);
+
+        var result = await controller.Unacknowledge(raised.Id);
+
+        Assert.IsType<OkObjectResult>(result);
+        var stored = await service.GetByIdAsync(raised.Id);
+        Assert.Null(stored!.ResolvedUtc);
+        Assert.Null(stored.ResolvedBy);
+    }
+
+    [Fact]
+    public async Task Unacknowledge_IsIdempotent_WhenNotResolved()
+    {
+        var (controller, service) = CreateController(Admin());
+        var raised = await service.RaiseAsync(NotificationType.Registration, NotificationAudience.Administrators, NotificationTargetType.User, "user-1", "New user", "Jane");
+
+        var result = await controller.Unacknowledge(raised.Id);
+
+        Assert.IsType<OkObjectResult>(result);
+        var stored = await service.GetByIdAsync(raised.Id);
+        Assert.Null(stored!.ResolvedUtc);
+    }
+
+    [Fact]
+    public async Task Unacknowledge_ReturnsBadRequest_ForTypeWithModerationAction()
+    {
+        var committee = new Committee { Id = "c1", ManagementRole = User.Role.GardenClub };
+        var (controller, service) = CreateController(Admin(), new[] { committee });
+        var raised = await service.RaiseAsync(NotificationType.HeldMessage, NotificationAudience.Committee("c1"), NotificationTargetType.HeldMessage, "held-1", "Held", "x");
+        // Resolve via the moderation path, then confirm the undo endpoint refuses to re-open it.
+        await service.ResolveAsync(NotificationTargetType.HeldMessage, "held-1", "moderator-1");
+
+        var result = await controller.Unacknowledge(raised.Id);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        var stored = await service.GetByIdAsync(raised.Id);
+        Assert.NotNull(stored!.ResolvedUtc); // still resolved
+    }
+
+    [Fact]
+    public async Task Unacknowledge_ReturnsNotFound_WhenMissing()
+    {
+        var (controller, _) = CreateController(Admin());
+
+        var result = await controller.Unacknowledge(Guid.NewGuid());
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task Unacknowledge_ReturnsForbid_WhenCallerNotInAudience()
+    {
+        var admin = CreateController(Admin());
+        var raised = await admin.service.RaiseAsync(NotificationType.Registration, NotificationAudience.Administrators, NotificationTargetType.User, "user-1", "New user", "Jane");
+        await admin.controller.Acknowledge(raised.Id);
+
+        var (outsider, _) = CreateController(
+            new User { UniqueId = "resident-1", Roles = new List<User.Role> { User.Role.Resident } },
+            service: admin.service
+        );
+
+        var result = await outsider.Unacknowledge(raised.Id);
+
+        Assert.IsType<ForbidResult>(result);
+        var stored = await admin.service.GetByIdAsync(raised.Id);
+        Assert.NotNull(stored!.ResolvedUtc); // untouched
+    }
+
+    [Fact]
     public async Task Acknowledge_ReturnsForbid_WhenCallerNotInAudience()
     {
         // Caller is not an Administrator and manages no committees, so they're in no audiences and
@@ -198,5 +271,57 @@ public sealed class NotificationsControllerTests
         Assert.IsType<ForbidResult>(result);
         var stored = await service.GetByIdAsync(raised.Id);
         Assert.Null(stored!.ResolvedUtc); // untouched
+    }
+
+    /// <summary>
+    /// A service whose ETag retry budget is exhausted rethrows the final 412; the endpoint must
+    /// surface that as a retryable 409, not an unhandled 500.
+    /// </summary>
+    [Fact]
+    public async Task Acknowledge_Returns409_WhenConcurrencyRetriesExhausted()
+    {
+        var (controller, _) = CreateController(Admin(), service: ExhaustedConcurrencyService(acknowledge: true).Object);
+
+        var result = await controller.Acknowledge(Guid.NewGuid());
+
+        var status = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, status.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unacknowledge_Returns409_WhenConcurrencyRetriesExhausted()
+    {
+        var (controller, _) = CreateController(Admin(), service: ExhaustedConcurrencyService(acknowledge: false).Object);
+
+        var result = await controller.Unacknowledge(Guid.NewGuid());
+
+        var status = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, status.StatusCode);
+    }
+
+    /// <summary>
+    /// An INotificationService stub that returns an acknowledgeable Administrators-audience
+    /// notification from GetByIdAsync but throws the post-retry 412 from the requested write path.
+    /// </summary>
+    private static Mock<INotificationService> ExhaustedConcurrencyService(bool acknowledge)
+    {
+        var existing = new Notification
+        {
+            Id = Guid.NewGuid(),
+            Type = NotificationType.Registration,
+            AudienceKey = NotificationAudience.Administrators,
+        };
+        var contention = new Microsoft.Azure.Cosmos.CosmosException(
+            "ETag mismatch.", System.Net.HttpStatusCode.PreconditionFailed, 0, string.Empty, 0);
+
+        var service = new Mock<INotificationService>();
+        service.Setup(s => s.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(existing);
+        if (acknowledge)
+            service.Setup(s => s.AcknowledgeAsync(It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(contention);
+        else
+            service.Setup(s => s.UnacknowledgeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(contention);
+        return service;
     }
 }

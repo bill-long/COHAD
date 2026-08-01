@@ -4,6 +4,7 @@ import { ErrorHandler, NgModule } from '@angular/core';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
+import { A11yModule } from '@angular/cdk/a11y';
 import { MatTableModule } from '@angular/material/table';
 import { MatSortModule } from '@angular/material/sort';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -80,6 +81,7 @@ import { VendorEditorDialogComponent } from './components/vendor-editor-dialog/v
 import { YouthServiceEditorDialogComponent } from './components/youth-service-editor-dialog/youth-service-editor-dialog.component';
 import { FormatPhonePipe } from './pipes/format-phone.pipe';
 import { StripMarkdownPipe } from './pipes/strip-markdown.pipe';
+import { TimeAgoPipe } from './pipes/time-ago.pipe';
 import { BlogComponent } from './components/blog/blog.component';
 import { BlogDetailComponent } from './components/blog-detail/blog-detail.component';
 import { ManageBlogComponent } from './components/manage-blog/manage-blog.component';
@@ -136,6 +138,7 @@ import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tip
     YouthServiceEditorDialogComponent,
     FormatPhonePipe,
     StripMarkdownPipe,
+    TimeAgoPipe,
     BlogComponent,
     BlogDetailComponent,
     ManageBlogComponent,
@@ -167,6 +170,7 @@ import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tip
     MatToolbarModule,
     MatButtonModule,
     MatMenuModule,
+    A11yModule,
     MatTableModule,
     MatSortModule,
     MatFormFieldModule,
