@@ -1,7 +1,8 @@
 <div class="audit-log-page">
   <mat-form-field appearance="fill" class="audit-search-field">
     <mat-label>Search audit log</mat-label>
-    <input matInput [formControl]="searchControl" placeholder="User, subject, action" />
+    <input matInput [formControl]="searchControl" />
+    <mat-hint>Matches user, subject, or action</mat-hint>
   </mat-form-field>
 
   <div class="audit-status" *ngIf="isLoadingInitial">
@@ -13,37 +14,67 @@
     {{ errorMessage }}
   </div>
 
-  <div class="table-scroll-wrapper" *ngIf="!isLoadingInitial">
-    <table mat-table [dataSource]="entries" class="audit-log-table">
-      <ng-container matColumnDef="time">
-        <th mat-header-cell *matHeaderCellDef class="col-time">Time</th>
-        <td mat-cell *matCellDef="let auditEntry" class="col-time">{{ auditEntry.time | date: 'medium' }}</td>
-      </ng-container>
+  <ng-container *ngIf="!isLoadingInitial">
+    <!-- Compact (phone / small tablet): one stacked block per entry. Unlike the old narrow-table
+         treatment, this keeps the subject visible - an audit entry without its subject cannot be
+         audited. -->
+    <ol class="audit-entry-list" *ngIf="isCompact$ | async; else auditTable">
+      <!-- The stacked form loses the column headers, and a subject and an actor can both be a
+           person's name, so the distinction is restated for screen readers. -->
+      <li class="audit-entry" *ngFor="let auditEntry of entries">
+        <p class="audit-entry-action">{{ auditEntry.action }}</p>
+        <p class="audit-entry-subject" *ngIf="auditEntry.subjectName" [title]="auditEntry.subjectId">
+          <span class="visually-hidden">Subject: </span>{{ auditEntry.subjectName }}
+        </p>
+        <p class="audit-entry-meta">
+          <span class="visually-hidden">Changed by </span>
+          <span class="audit-entry-user">{{ auditEntry.userDisplayName }}</span>
+          <span class="audit-entry-dot" aria-hidden="true">&middot;</span>
+          <span class="visually-hidden">at </span>
+          <time [attr.datetime]="auditEntry.time">{{ auditEntry.time | date: timeFormat }}</time>
+        </p>
+        <!-- The title above is pointer-only: it is undiscoverable by keyboard and absent entirely on
+             touch, which is most of this layout's audience. The id is therefore also exposed as text,
+             placed last and self-labelled so it stays reachable without interrupting the
+             action -> subject -> who/when reading order. -->
+        <p class="visually-hidden" *ngIf="auditEntry.subjectId">Subject id: {{ auditEntry.subjectId }}</p>
+      </li>
+    </ol>
 
-      <ng-container matColumnDef="subjectId">
-        <th mat-header-cell *matHeaderCellDef class="col-subject-id">Subject Id</th>
-        <td mat-cell *matCellDef="let auditEntry" class="col-subject-id">{{ auditEntry.subjectId }}</td>
-      </ng-container>
+    <ng-template #auditTable>
+      <table mat-table [dataSource]="entries" class="audit-log-table">
+        <ng-container matColumnDef="time">
+          <th mat-header-cell *matHeaderCellDef class="col-time">Time</th>
+          <td mat-cell *matCellDef="let auditEntry" class="col-time">{{ auditEntry.time | date: timeFormat }}</td>
+        </ng-container>
 
-      <ng-container matColumnDef="subjectName">
-        <th mat-header-cell *matHeaderCellDef class="col-subject-name">Subject Name</th>
-        <td mat-cell *matCellDef="let auditEntry" class="col-subject-name">{{ auditEntry.subjectName }}</td>
-      </ng-container>
+        <ng-container matColumnDef="subjectId">
+          <th mat-header-cell *matHeaderCellDef class="col-subject-id">Subject Id</th>
+          <td mat-cell *matCellDef="let auditEntry" class="col-subject-id" [title]="auditEntry.subjectId">{{ auditEntry.subjectId }}</td>
+        </ng-container>
 
-      <ng-container matColumnDef="action">
-        <th mat-header-cell *matHeaderCellDef class="col-action">Action</th>
-        <td mat-cell *matCellDef="let auditEntry" class="col-action">{{ auditEntry.action }}</td>
-      </ng-container>
+        <ng-container matColumnDef="subjectName">
+          <th mat-header-cell *matHeaderCellDef class="col-subject-name">Subject Name</th>
+          <td mat-cell *matCellDef="let auditEntry" class="col-subject-name" [title]="auditEntry.subjectName">
+            {{ auditEntry.subjectName }}
+          </td>
+        </ng-container>
 
-      <ng-container matColumnDef="userDisplayName">
-        <th mat-header-cell *matHeaderCellDef class="col-user">User</th>
-        <td mat-cell *matCellDef="let auditEntry" class="col-user">{{ auditEntry.userDisplayName }}</td>
-      </ng-container>
+        <ng-container matColumnDef="action">
+          <th mat-header-cell *matHeaderCellDef class="col-action">Action</th>
+          <td mat-cell *matCellDef="let auditEntry" class="col-action">{{ auditEntry.action }}</td>
+        </ng-container>
 
-      <tr mat-header-row *matHeaderRowDef="columnsToDisplay; sticky: true"></tr>
-      <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
-    </table>
-  </div>
+        <ng-container matColumnDef="userDisplayName">
+          <th mat-header-cell *matHeaderCellDef class="col-user">User</th>
+          <td mat-cell *matCellDef="let auditEntry" class="col-user">{{ auditEntry.userDisplayName }}</td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columnsToDisplay"></tr>
+        <tr mat-row *matRowDef="let row; columns: columnsToDisplay"></tr>
+      </table>
+    </ng-template>
+  </ng-container>
 
   <div class="audit-status" *ngIf="isLoadingMore">
     <mat-spinner diameter="24"></mat-spinner>

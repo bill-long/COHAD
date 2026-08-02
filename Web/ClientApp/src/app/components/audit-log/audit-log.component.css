@@ -7,11 +7,6 @@
   margin-bottom: 0;
 }
 
-.audit-log-table {
-  width: 100%;
-  table-layout: fixed;
-}
-
 .audit-status {
   display: flex;
   align-items: center;
@@ -24,92 +19,103 @@
   color: var(--error);
 }
 
+/* --- Table (>= 960px) ------------------------------------------------------ */
+
+/* Scoped past `.mat-mdc-table { table-layout: auto }`: Material's rule has the same specificity and
+   loads later, so an unscoped `.audit-log-table` here is silently overridden. With `auto` the
+   nowrap subject-id column pins itself to the GUID's min-content width (~300px) and the Action
+   column absorbs the whole deficit, collapsing to one character per line. */
+.audit-log-page .audit-log-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+/* Percentages, not pixels: under fixed layout these act as ratios, so every column shrinks together
+   instead of one column paying for all the others. They must total 100%. */
+.audit-log-page .col-time {
+  width: 16%;
+}
+
+.audit-log-page .col-subject-id {
+  width: 16%;
+}
+
+.audit-log-page .col-subject-name {
+  width: 20%;
+}
+
+.audit-log-page .col-action {
+  width: 33%;
+}
+
+.audit-log-page .col-user {
+  width: 15%;
+}
+
 .audit-log-page .mat-mdc-header-cell,
 .audit-log-page .mat-mdc-cell {
   padding: 10px 12px !important;
   vertical-align: top;
-  overflow-wrap: anywhere;
+  /* break-word, not anywhere: only break a word that genuinely cannot fit, rather than mid-word by
+     default (which is what shredded "Administrator" across lines). */
+  overflow-wrap: break-word;
 }
 
 .audit-log-page .mat-mdc-header-cell {
   font-weight: 600;
 }
 
-.audit-log-page .col-time {
-  width: 190px;
-}
-
-.audit-log-page .col-subject-id {
-  width: 210px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+/* Both subject columns truncate to one line rather than wrapping, so row height stays uniform and is
+   driven only by the Action sentence; the full value is on each cell's title attribute. Safe only
+   because the fixed layout above stops nowrap from forcing a min-content column width. */
+.audit-log-page .col-subject-id,
 .audit-log-page .col-subject-name {
-  width: 260px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.audit-log-page .col-user {
-  width: 170px;
+/* --- Compact list (< 960px) ------------------------------------------------ */
+
+.audit-log-page .audit-entry-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.audit-log-page .col-action {
-  width: auto;
+.audit-log-page .audit-entry {
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--border-faint);
 }
 
-@media (max-width: 960px) {
-  .audit-log-page .col-time {
-    width: 170px;
-  }
-
-  .audit-log-page .col-subject-name {
-    width: 180px;
-  }
+.audit-log-page .audit-entry:last-child {
+  border-bottom: none;
 }
 
-.table-scroll-wrapper {
-  width: 100%;
+.audit-log-page .audit-entry p {
+  overflow-wrap: break-word;
 }
 
-@media (max-width: 600px) {
-  .audit-log-page {
-    padding: 8px 4px;
-  }
+/* The action is what the reader scans for, so it leads and is the only full-strength text. */
+.audit-log-page .audit-entry-action {
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 500;
+  line-height: 1.35;
+}
 
-  .audit-log-page .col-subject-id {
-    display: none;
-  }
+.audit-log-page .audit-entry-subject {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
 
-  .audit-log-page .col-subject-name {
-    display: none;
-  }
+.audit-log-page .audit-entry-meta {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
 
-  .table-scroll-wrapper {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .table-scroll-wrapper .mat-mdc-header-row,
-  .table-scroll-wrapper .mat-mdc-header-cell {
-    position: static !important;
-    top: auto !important;
-    inset-block-start: auto !important;
-  }
-
-  .audit-log-page .col-time {
-    width: 140px;
-  }
-
-  .audit-log-page .col-user {
-    width: 120px;
-  }
-
-  .audit-log-page .mat-mdc-header-cell,
-  .audit-log-page .mat-mdc-cell {
-    padding: 8px 6px !important;
-  }
+.audit-log-page .audit-entry-dot {
+  margin: 0 6px;
 }
