@@ -12,8 +12,12 @@ const auditLogCursorHeader = 'X-Audit-Log-Cursor';
  * Below this width the table is replaced by a stacked list. An audit entry is four short fields plus
  * one free-text sentence of unbounded length; below roughly this width there is no column split that
  * keeps the sentence legible, so the presentation changes rather than the column widths.
+ *
+ * 959.98px is the project's desktop breakpoint (see .github/instructions/mobile-css.instructions.md),
+ * and is the same threshold the navbar and the Manage rail use, so the audit log becomes a stacked
+ * list exactly when the surrounding chrome switches to its mobile form.
  */
-const compactLayoutQuery = '(max-width: 899.98px)';
+const compactLayoutQuery = '(max-width: 959.98px)';
 
 @Component({
   selector: 'app-audit-log',

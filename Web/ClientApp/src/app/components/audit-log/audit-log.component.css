@@ -19,7 +19,7 @@
   color: var(--error);
 }
 
-/* --- Table (>= 900px) ------------------------------------------------------ */
+/* --- Table (>= 960px) ------------------------------------------------------ */
 
 /* Scoped past `.mat-mdc-table { table-layout: auto }`: Material's rule has the same specificity and
    loads later, so an unscoped `.audit-log-table` here is silently overridden. With `auto` the
@@ -75,7 +75,7 @@
   text-overflow: ellipsis;
 }
 
-/* --- Compact list (< 900px) ------------------------------------------------ */
+/* --- Compact list (< 960px) ------------------------------------------------ */
 
 .audit-log-page .audit-entry-list {
   margin: 0;
