@@ -112,6 +112,24 @@ describe('AuditLogComponent', () => {
       expect(subject?.getAttribute('title')).toBe('abc-123');
     });
 
+    it('also exposes the subject id as text, since a title is pointer-only', () => {
+      setCompact(true);
+      loadWith([makeEntry({ subjectId: 'abc-123' })]);
+
+      const entry: HTMLElement = fixture.nativeElement.querySelector('.audit-entry');
+      const hiddenText = Array.from(entry.querySelectorAll('.visually-hidden')).map(e => e.textContent?.trim());
+      expect(hiddenText).toContain('Subject id: abc-123');
+    });
+
+    it('omits the subject id line when an entry has no subject id', () => {
+      setCompact(true);
+      loadWith([makeEntry({ subjectId: '' })]);
+
+      const entry: HTMLElement = fixture.nativeElement.querySelector('.audit-entry');
+      const hiddenText = Array.from(entry.querySelectorAll('.visually-hidden')).map(e => e.textContent?.trim() ?? '');
+      expect(hiddenText.some(t => t.startsWith('Subject id:'))).toBeFalse();
+    });
+
     it('shows the action, actor and time on every entry', () => {
       setCompact(true);
       loadWith([makeEntry()]);
