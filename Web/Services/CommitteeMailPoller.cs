@@ -36,7 +36,7 @@ namespace Web.Services
         private readonly string? _invalidThresholdRaw;
 
         private const string ProcessedFolderName = "COHAD Processed";
-        private const string ForwardCategory = "committee-forward";
+        private const string ForwardCategory = EmailJob.CommitteeForwardCategory;
         private const string SpamClassifierReviewer = "system:spam-classifier";
 
         public CommitteeMailPoller(
@@ -503,11 +503,11 @@ namespace Web.Services
                 TotalRecipients = recipients.Count,
                 GroupRecipients = true,
                 InternetMessageId = internetMessageId,
-                ReplyToEmail = string.IsNullOrWhiteSpace(senderEmail) ? null : senderEmail,
-                ReplyToDisplay = string.IsNullOrWhiteSpace(senderEmail) ? null : senderName,
                 Attachments = attachments,
                 Recipients = recipients,
             };
+
+            CommitteeForwardJob.ApplyOriginator(job, committee.DisplayName, senderEmail, senderName);
 
             // Store HTML body in blob storage (idempotent — ignore conflict if blob already exists from a prior attempt)
             job.ContentBlobPath = $"email-jobs/{job.Id:D}.html";

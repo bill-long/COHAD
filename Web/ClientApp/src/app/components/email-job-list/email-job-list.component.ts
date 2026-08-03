@@ -1,11 +1,14 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { DOCUMENT, Location } from '@angular/common';
 import { Component, Inject, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
 import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
 import { EmailJobSummary, EmailJobStatus } from 'src/app/models';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
+import { EmailJobParties, emailJobParties } from 'src/app/utils/email-job-parties';
+import { observeCompactLayout } from 'src/app/utils/compact-layout';
 import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
 
 @Component({
@@ -22,12 +25,16 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
   loading = true;
   errorText: string | null = null;
 
+  /** True on phone/small-tablet widths, where jobs render as stacked blocks instead of table rows. */
+  readonly isCompact$: Observable<boolean>;
+
   /** After a successful scroll-to-row, skip repeating when `loadJobs()` runs again (e.g. after sending mail) while `focusJob` stays in the URL. */
   private scrolledToTargetJobId: string | null = null;
 
   private subscriptions: Subscription[] = [];
   private targetRowScrollTimeouts: ReturnType<typeof setTimeout>[] = [];
   private destroyed = false;
+  private readonly partiesCache = new WeakMap<EmailJobSummary, EmailJobParties>();
 
   constructor(
     private emailJobService: EmailJobService,
@@ -35,7 +42,10 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
     private router: Router,
     private location: Location,
     @Inject(DOCUMENT) private document: Document,
-  ) {}
+    breakpointObserver: BreakpointObserver,
+  ) {
+    this.isCompact$ = observeCompactLayout(breakpointObserver);
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['scrollTargetJobId']) {
@@ -100,6 +110,22 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
 
   viewJob(job: EmailJobSummary): void {
     this.router.navigate(['/manage/email-jobs', job.id]);
+  }
+
+  /**
+   * Who the job was from and to. A forwarded committee message is sent as the committee mailbox,
+   * so `fromDisplay` alone would name the committee as the author; see `emailJobParties`.
+   *
+   * Memoized on the job object so repeated change-detection passes don't recompute. Job updates
+   * replace the object (see `updateJobInList`), which invalidates the entry.
+   */
+  partiesFor(job: EmailJobSummary): EmailJobParties {
+    let parties = this.partiesCache.get(job);
+    if (!parties) {
+      parties = emailJobParties(job);
+      this.partiesCache.set(job, parties);
+    }
+    return parties;
   }
 
   statusLabel(status: EmailJobStatus): string {

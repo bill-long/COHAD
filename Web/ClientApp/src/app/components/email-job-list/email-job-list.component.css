@@ -27,8 +27,19 @@
   scroll-margin-top: 80px;
 }
 
+/* The component renders beside the Manage rail, so the room available is well under the viewport
+   width the compact breakpoint keys off. Rather than let the columns squeeze Subject to nothing in
+   that band, the table keeps its natural width and scrolls inside this wrapper - the page itself
+   never scrolls horizontally. */
+.jobs-table-scroll {
+  overflow-x: auto;
+}
+
+/* 880px of declared column widths and their padding, plus ~220px so Subject stays readable rather
+   than collapsing to its header word. Below this the wrapper scrolls. */
 .jobs-table {
   width: 100%;
+  min-width: 1120px;
   border-collapse: collapse;
 }
 
@@ -58,11 +69,17 @@
   background-color: var(--surface-subtle);
 }
 
+/* Pixel widths sized to each column's nowrap content, with Subject taking whatever is left: a
+   percentage split would shrink the status badge and the date below what they need, and neither
+   clips. Their total plus a readable Subject is what .jobs-table's min-width encodes. */
 .col-status {
   width: 120px;
 }
 .col-from {
-  width: 180px;
+  width: 150px;
+}
+.col-to {
+  width: 190px;
 }
 .col-subject {
   width: auto;
@@ -71,7 +88,7 @@
   width: 150px;
 }
 .col-date {
-  width: 140px;
+  width: 150px;
 }
 
 .cell-truncate {
@@ -142,25 +159,69 @@
   color: var(--text-secondary);
 }
 
-@media (max-width: 600px) {
-  .col-from,
-  .col-date {
-    display: none;
-  }
+/* --- Compact list (< 960px) ------------------------------------------------
+   Replaces the table rather than hiding columns from it: every field a job is identified by stays
+   on screen, which a display:none treatment cannot promise. */
 
-  .jobs-table th,
-  .jobs-table td {
-    padding: 8px 6px;
-  }
+.job-entry-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-@media (max-width: 480px) {
-  .col-progress {
-    display: none;
-  }
+.job-entry {
+  border-bottom: 1px solid var(--border-faint);
+  scroll-margin-top: 80px;
+}
 
-  .jobs-table th,
-  .jobs-table td {
-    padding: 6px 4px;
-  }
+.job-entry:last-child {
+  border-bottom: none;
+}
+
+/* The tap target, kept inside the li so the list keeps its listitem semantics. Padding carries it
+   past the 44px minimum touch height on its own. */
+.job-entry-button {
+  padding: 12px 4px;
+  cursor: pointer;
+}
+
+.job-entry-button:hover {
+  background-color: var(--surface-subtle);
+}
+
+.job-entry p {
+  overflow-wrap: anywhere;
+}
+
+/* The subject is what the reader scans for, so it leads and is the only full-strength text. */
+.job-entry-subject {
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.job-entry-parties {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.job-entry-arrow {
+  margin: 0 6px;
+  color: var(--text-muted);
+}
+
+.job-entry-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.job-entry-dot {
+  color: var(--text-muted);
 }

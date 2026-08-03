@@ -16,11 +16,56 @@
                 No email jobs found.
             </div>
 
-            <table *ngIf="!loading && jobs.length > 0" class="jobs-table">
+            <ng-container *ngIf="!loading && jobs.length > 0">
+            <!-- Compact (phone / small tablet): one stacked block per job. The previous treatment hid
+                 the From, To and Date cells at narrow widths, which left jobs sharing a subject
+                 indistinguishable; stacking keeps every field a row is identified by. -->
+            <!-- role="list" is required: Safari drops list semantics from a list-style:none list, which
+                 would defeat the reason the clickable element sits inside the li. -->
+            <ol class="job-entry-list" role="list" *ngIf="isCompact$ | async; else jobsTable">
+                <!-- The clickable element is inside the li, not the li itself: role="button" on the
+                     li would replace its listitem role and leave the ol with no valid children, so a
+                     screen reader would announce neither the item count nor the position. -->
+                <li *ngFor="let job of jobs" class="job-entry" [id]="jobRowDomId(job)">
+                <div class="job-entry-button"
+                    (click)="viewJob(job)"
+                    role="button"
+                    tabindex="0"
+                    (keydown.enter)="viewJob(job)"
+                    (keydown.space)="$event.preventDefault(); $event.stopPropagation(); viewJob(job)">
+                    <p class="job-entry-subject">{{ job.subject }}</p>
+                    <!-- The stacked form loses the column headers, and both parties are names, so the
+                         From/To distinction is restated for screen readers. -->
+                    <p class="job-entry-parties">
+                        <span class="visually-hidden">From: </span>{{ partiesFor(job).fromShort }}
+                        <span class="job-entry-arrow" aria-hidden="true">&rarr;</span>
+                        <span class="visually-hidden">To: </span>{{ partiesFor(job).toShort }}
+                    </p>
+                    <p class="job-entry-meta">
+                        <span class="status-badge" [ngClass]="statusClass(job.status)">{{ statusLabel(job.status) }}</span>
+                        <span class="progress-text">
+                            <span class="sent-count">{{ job.sentCount }}</span>
+                            <span *ngIf="job.failedCount > 0" class="failed-count"> / {{ job.failedCount }} failed</span>
+                            <span class="total-count"> of {{ job.totalRecipients }}</span>
+                        </span>
+                        <span class="job-entry-dot" aria-hidden="true">&middot;</span>
+                        <time [attr.datetime]="job.createdUtc">{{ job.createdUtc | date:'short' }}</time>
+                    </p>
+                </div>
+                </li>
+            </ol>
+
+            <ng-template #jobsTable>
+            <!-- The table has a min-width, so when the Manage rail leaves less room than its columns
+                 need it scrolls inside this wrapper rather than crushing Subject or pushing the page
+                 into a horizontal scroll. -->
+            <div class="jobs-table-scroll">
+            <table class="jobs-table">
                 <thead>
                     <tr>
                         <th class="col-status">Status</th>
                         <th class="col-from">From</th>
+                        <th class="col-to">To</th>
                         <th class="col-subject">Subject</th>
                         <th class="col-progress">Progress</th>
                         <th class="col-date">Date</th>
@@ -34,24 +79,28 @@
                         tabindex="0"
                         (keydown.enter)="viewJob(job)"
                         (keydown.space)="$event.preventDefault(); $event.stopPropagation(); viewJob(job)">
-                        <td>
+                        <td class="col-status">
                             <span class="status-badge" [ngClass]="statusClass(job.status)">
                                 {{ statusLabel(job.status) }}
                             </span>
                         </td>
-                        <td class="cell-truncate">{{ job.fromDisplay }}</td>
-                        <td class="cell-truncate">{{ job.subject }}</td>
-                        <td>
+                        <td class="col-from cell-truncate" [title]="partiesFor(job).from">{{ partiesFor(job).fromShort }}</td>
+                        <td class="col-to cell-truncate" [title]="partiesFor(job).to">{{ partiesFor(job).toShort }}</td>
+                        <td class="col-subject cell-truncate" [title]="job.subject">{{ job.subject }}</td>
+                        <td class="col-progress">
                             <span class="progress-text">
                                 <span class="sent-count">{{ job.sentCount }}</span>
                                 <span *ngIf="job.failedCount > 0" class="failed-count"> / {{ job.failedCount }} failed</span>
                                 <span class="total-count"> of {{ job.totalRecipients }}</span>
                             </span>
                         </td>
-                        <td class="cell-date">{{ job.createdUtc | date:'short' }}</td>
+                        <td class="col-date cell-date">{{ job.createdUtc | date:'short' }}</td>
                     </tr>
                 </tbody>
             </table>
+            </div>
+            </ng-template>
+            </ng-container>
         </mat-card-content>
     </mat-card>
 </div>

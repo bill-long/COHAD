@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.Services.Repositories;
@@ -61,6 +62,10 @@ namespace Web.Authorization
 
             if (requirement.RequiredRoles.Any(r => storedUser.Roles.Contains(r)))
             {
+                // Hand the resolved user to the endpoint so it need not read the same document again
+                // (see AuthorizedUserCache). Only on success: nothing downstream should see a user
+                // whose policy evaluation failed.
+                AuthorizedUserCache.Set(context.Resource as HttpContext, storedUser);
                 context.Succeed(requirement);
             }
         }

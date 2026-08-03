@@ -959,7 +959,7 @@ namespace Web.Controllers
             {
                 Id = jobId,
                 Status = EmailJobStatus.Queued,
-                Category = "committee-forward",
+                Category = EmailJob.CommitteeForwardCategory,
                 FromEmail = committee.CommitteeEmail,
                 FromDisplay = committee.DisplayName,
                 Subject = fwdSubject,
@@ -970,11 +970,11 @@ namespace Web.Controllers
                 TotalRecipients = recipients.Count,
                 GroupRecipients = true,
                 InternetMessageId = held.InternetMessageId,
-                ReplyToEmail = string.IsNullOrWhiteSpace(held.SenderEmail) ? null : held.SenderEmail,
-                ReplyToDisplay = string.IsNullOrWhiteSpace(held.SenderEmail) ? null : held.SenderName,
                 Attachments = attachments,
                 Recipients = recipients,
             };
+
+            CommitteeForwardJob.ApplyOriginator(job, committee.DisplayName, held.SenderEmail, held.SenderName);
 
             // Create the forwarding job. If any step fails, revert the held message status.
             try

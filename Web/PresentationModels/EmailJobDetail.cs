@@ -6,55 +6,21 @@ using Web.Models;
 namespace Web.PresentationModels
 {
     /// <summary>
-    /// Full DTO for the single-job status endpoint — includes per-recipient details.
+    /// Full DTO for the single-job status endpoint - the list fields plus per-recipient details.
+    /// Extends <see cref="EmailJobSummary"/> so the two views cannot report a job differently.
     /// </summary>
-    public class EmailJobDetail
+    public class EmailJobDetail : EmailJobSummary
     {
-        public Guid Id { get; set; }
-
-        public EmailJobStatus Status { get; set; }
-
-        public string Category { get; set; }
-
-        public string FromDisplay { get; set; }
-
-        public string Subject { get; set; }
-
-        public DateTime CreatedUtc { get; set; }
-
-        public DateTime? StartedUtc { get; set; }
-
-        public DateTime? CompletedUtc { get; set; }
-
-        public string CreatedByDisplayName { get; set; }
-
-        public int TotalRecipients { get; set; }
-
-        public int SentCount { get; set; }
-
-        public int FailedCount { get; set; }
-
-        public string LastError { get; set; }
-
         public List<EmailJobRecipientDetail> Recipients { get; set; } = new();
 
-        public static EmailJobDetail FromJob(EmailJob job)
+        /// <summary>
+        /// Maps a job for the caller. See <see cref="EmailJobSummary.FromJob(EmailJob, bool)"/> for
+        /// what <paramref name="includeOriginalSender"/> controls.
+        /// </summary>
+        public static new EmailJobDetail FromJob(EmailJob job, bool includeOriginalSender = false)
         {
-            return new EmailJobDetail
+            var dto = new EmailJobDetail
             {
-                Id = job.Id,
-                Status = job.Status,
-                Category = job.Category,
-                FromDisplay = job.FromDisplay,
-                Subject = job.Subject,
-                CreatedUtc = job.CreatedUtc,
-                StartedUtc = job.StartedUtc,
-                CompletedUtc = job.CompletedUtc,
-                CreatedByDisplayName = job.CreatedByDisplayName,
-                TotalRecipients = job.TotalRecipients,
-                SentCount = job.SentCount,
-                FailedCount = job.FailedCount,
-                LastError = job.LastError,
                 Recipients =
                     job.Recipients?.Select(r => new EmailJobRecipientDetail
                         {
@@ -69,6 +35,9 @@ namespace Web.PresentationModels
                         .ToList()
                     ?? new(),
             };
+
+            Populate(dto, job, includeOriginalSender);
+            return dto;
         }
     }
 

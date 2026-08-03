@@ -351,6 +351,7 @@ namespace Web.Services
                 Category = EscalationCategory,
                 FromEmail = "webservice@cohad.org",
                 FromDisplay = "COHAD Web",
+                ToDisplay = EmailAudience.NotificationModerator,
                 Subject = $"COHAD: {items.Count} item(s) need attention",
                 CreatedUtc = now,
                 CreatedByUserId = "system:notification-escalation",

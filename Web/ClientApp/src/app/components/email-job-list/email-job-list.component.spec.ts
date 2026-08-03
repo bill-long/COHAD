@@ -1,7 +1,10 @@
-import { Location } from '@angular/common';
-import { TestBed } from '@angular/core/testing';
+import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
+import { CommonModule, Location } from '@angular/common';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MatCardModule } from '@angular/material/card';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Router } from '@angular/router';
-import { Subject, of, throwError } from 'rxjs';
+import { BehaviorSubject, Subject, of, throwError } from 'rxjs';
 import { EmailJobListComponent } from './email-job-list.component';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
@@ -12,7 +15,12 @@ const makeJob = (id: string, overrides: Partial<EmailJobSummary> = {}): EmailJob
   id,
   status: 'Completed',
   category: 'Board',
+  fromEmail: 'board@cohad.org',
   fromDisplay: 'COHAD Board',
+  toDisplay: 'Board opt-in residents',
+  originalSenderEmail: null,
+  originalSenderDisplay: null,
+  originalSenderWithheld: false,
   subject: 'Test subject',
   createdUtc: '2026-01-01T00:00:00Z',
   startedUtc: null,
@@ -35,10 +43,12 @@ describe('EmailJobListComponent', () => {
   let routerUrlMock: { value: string };
   let progressSubject: Subject<EmailJobProgress>;
   let completedSubject: Subject<EmailJobCompleted>;
+  let breakpointState: BehaviorSubject<BreakpointState>;
 
   beforeEach(() => {
     progressSubject = new Subject<EmailJobProgress>();
     completedSubject = new Subject<EmailJobCompleted>();
+    breakpointState = new BehaviorSubject<BreakpointState>({ matches: false, breakpoints: {} });
 
     emailJobServiceSpy = jasmine.createSpyObj('EmailJobService', ['getRecentJobs']);
     notificationsSpy = jasmine.createSpyObj('EmailJobNotificationsService', ['connect', 'disconnect']);
@@ -60,6 +70,7 @@ describe('EmailJobListComponent', () => {
         { provide: EmailJobNotificationsService, useValue: notificationsSpy },
         { provide: Router, useValue: routerSpy },
         { provide: Location, useValue: locationSpy },
+        { provide: BreakpointObserver, useValue: { observe: () => breakpointState.asObservable() } },
       ],
     });
 
@@ -135,6 +146,76 @@ describe('EmailJobListComponent', () => {
   it('navigates to job detail on viewJob()', () => {
     component.viewJob(makeJob('j1'));
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/manage/email-jobs', 'j1']);
+  });
+
+  it('renders the table on desktop and the stacked list when the viewport is narrow', () => {
+    // Rendered, not just observed: an *ngIf removed from the template would otherwise leave phones
+    // with the desktop table while a subscription-only assertion still passed.
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      declarations: [EmailJobListComponent],
+      imports: [CommonModule, MatCardModule, MatProgressSpinnerModule],
+      providers: [
+        { provide: EmailJobService, useValue: emailJobServiceSpy },
+        { provide: EmailJobNotificationsService, useValue: notificationsSpy },
+        { provide: Router, useValue: routerSpy },
+        { provide: Location, useValue: locationSpy },
+        { provide: BreakpointObserver, useValue: { observe: () => breakpointState.asObservable() } },
+      ],
+    });
+    emailJobServiceSpy.getRecentJobs.and.returnValue(of([makeJob('j1')]));
+
+    const fixture: ComponentFixture<EmailJobListComponent> = TestBed.createComponent(EmailJobListComponent);
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('.jobs-table')).not.toBeNull();
+    expect(el.querySelector('.job-entry-list')).toBeNull();
+
+    breakpointState.next({ matches: true, breakpoints: {} });
+    fixture.detectChanges();
+
+    expect(el.querySelector('.job-entry-list')).not.toBeNull();
+    expect(el.querySelector('.jobs-table')).toBeNull();
+    // Every field a row is identified by survives the switch, rather than being hidden.
+    const entry = el.querySelector('.job-entry') as HTMLElement;
+    expect(entry.textContent).toContain('Test subject');
+    expect(entry.textContent).toContain('COHAD Board');
+    expect(entry.textContent).toContain('Board opt-in residents');
+    // The li keeps its listitem role; the clickable element sits inside it.
+    expect(entry.getAttribute('role')).toBeNull();
+    expect(entry.querySelector('[role="button"]')).not.toBeNull();
+    expect(el.querySelector('.job-entry-list')!.getAttribute('role')).toBe('list');
+
+    fixture.destroy();
+  });
+
+  it('partiesFor() names the resident, not the committee, on a forwarded job', () => {
+    const job = makeJob('j1', {
+      category: 'committee-forward',
+      fromEmail: 'architectural@cohad.org',
+      fromDisplay: 'Architectural Committee',
+      toDisplay: 'Architectural Committee forwarding members',
+      originalSenderEmail: 'jane@example.com',
+      originalSenderDisplay: 'Jane Doe',
+    });
+
+    const parties = component.partiesFor(job);
+
+    expect(parties.fromShort).toBe('Jane Doe');
+    // The list's To column shows who the message was addressed to, the same as the detail page's To row.
+    expect(parties.toShort).toBe('Architectural Committee');
+  });
+
+  it('partiesFor() recomputes after a job is replaced by a progress update', () => {
+    const job = makeJob('j1', { toDisplay: null, totalRecipients: 10 });
+    emailJobServiceSpy.getRecentJobs.and.returnValue(of([job]));
+    component.ngOnInit();
+    expect(component.partiesFor(component.jobs[0]).to).toBe('10 recipients');
+
+    progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 1, failedCount: 0, totalRecipients: 12 });
+
+    expect(component.partiesFor(component.jobs[0]).to).toBe('12 recipients');
   });
 
   it('stripFocusNavigationFromUrl calls Location.replaceState when focusJob or hash present', () => {

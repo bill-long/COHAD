@@ -1783,6 +1783,65 @@ public sealed class CommitteeControllerTests
     }
 
     [Fact]
+    public async Task ApproveHeldMessage_forwarding_job_records_the_sender_as_the_author_not_the_committee()
+    {
+        var committee = SampleCommittee("board");
+
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "jane@example.com",
+            SenderName = "Jane Doe",
+            Subject = "Request to repaint front door",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Held,
+            ETag = "etag-1"
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+        mockHeldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
+
+        var mockFileStore = new Mock<IDocumentFileStore>();
+        mockFileStore.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        EmailJob? created = null;
+        var mockEmailJobRepo = new Mock<IEmailJobRepository>();
+        mockEmailJobRepo.Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => created = j)
+            .Returns(Task.CompletedTask);
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            fileStore: mockFileStore.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            emailJobRepo: mockEmailJobRepo.Object,
+            // No IGraphMailReader registered: the original body is unavailable, which the approve
+            // path tolerates and which keeps this test focused on the job's From/To fields.
+            serviceProvider: new ServiceCollection().BuildServiceProvider()
+        );
+        var result = await c.ApproveHeldMessage("board", heldId);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(created);
+        // The approve path must describe the message exactly as the poller does.
+        Assert.Equal("board@cohad.org", created!.FromEmail);
+        Assert.Equal("jane@example.com", created.OriginalSenderEmail);
+        Assert.Equal("Jane Doe", created.OriginalSenderDisplay);
+        Assert.Equal("jane@example.com", created.ReplyToEmail);
+        Assert.Equal("Board forwarding members", created.ToDisplay);
+    }
+
+    [Fact]
     public async Task GetHeldMessages_returns_held_messages_for_committee()
     {
         var committee = SampleCommittee("board");

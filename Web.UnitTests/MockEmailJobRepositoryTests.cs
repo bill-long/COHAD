@@ -45,4 +45,26 @@ public sealed class MockEmailJobRepositoryTests
         Assert.NotNull(stored);
         Assert.Equal("s", stored!.Subject);
     }
+
+    [Fact]
+    public async Task Reads_preserve_the_party_fields()
+    {
+        // The mock clones jobs on every read; a field missing from the clone would silently disappear
+        // here but survive in Cosmos, which is exactly the divergence the repository convention forbids.
+        var repo = new MockEmailJobRepository(new MockDocumentFileStore());
+        var id = Guid.NewGuid();
+        var job = Job(id);
+        job.Category = EmailJob.CommitteeForwardCategory;
+        job.ToDisplay = "Architectural Committee forwarding members";
+        job.OriginalSenderEmail = "jane@example.com";
+        job.OriginalSenderDisplay = "Jane Doe";
+        await repo.AddAsync(job);
+
+        var stored = await repo.GetByIdAsync(id);
+
+        Assert.NotNull(stored);
+        Assert.Equal("Architectural Committee forwarding members", stored!.ToDisplay);
+        Assert.Equal("jane@example.com", stored.OriginalSenderEmail);
+        Assert.Equal("Jane Doe", stored.OriginalSenderDisplay);
+    }
 }

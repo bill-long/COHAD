@@ -2,22 +2,13 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, NgZone, OnDestroy, OnInit, ViewEncapsulation } from '@angular/core';
 import { UntypedFormControl } from '@angular/forms';
-import { debounceTime, distinctUntilChanged, finalize, fromEvent, map, Observable, shareReplay, Subject, takeUntil, throttleTime } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize, fromEvent, map, Observable, Subject, takeUntil, throttleTime } from 'rxjs';
 import { AuditLogEntry, AuditLogPage } from 'src/app/models';
+import { observeCompactLayout } from 'src/app/utils/compact-layout';
 
 /** Must match AuditLogController; long continuation tokens stay out of the query string. */
 const auditLogCursorHeader = 'X-Audit-Log-Cursor';
 
-/**
- * Below this width the table is replaced by a stacked list. An audit entry is four short fields plus
- * one free-text sentence of unbounded length; below roughly this width there is no column split that
- * keeps the sentence legible, so the presentation changes rather than the column widths.
- *
- * 959.98px is the project's desktop breakpoint (see .github/instructions/mobile-css.instructions.md),
- * and is the same threshold the navbar and the Manage rail use, so the audit log becomes a stacked
- * list exactly when the surrounding chrome switches to its mobile form.
- */
-const compactLayoutQuery = '(max-width: 959.98px)';
 
 @Component({
   selector: 'app-audit-log',
@@ -53,10 +44,7 @@ export class AuditLogComponent implements OnInit, OnDestroy {
     private ngZone: NgZone,
     private breakpointObserver: BreakpointObserver,
   ) {
-    this.isCompact$ = this.breakpointObserver.observe(compactLayoutQuery).pipe(
-      map(result => result.matches),
-      shareReplay({ bufferSize: 1, refCount: true }),
-    );
+    this.isCompact$ = observeCompactLayout(this.breakpointObserver);
   }
 
   ngOnInit(): void {

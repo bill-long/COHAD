@@ -138,9 +138,9 @@ namespace Web.MockData
                 },
                 new Committee
                 {
-                    Id = "architectural",
-                    CommitteeEmail = "ac@cohad.org",
-                    DisplayName = "Architectural Committee",
+                    Id = MockDataConstants.ArchitecturalCommitteeId,
+                    CommitteeEmail = MockDataConstants.ArchitecturalCommitteeEmail,
+                    DisplayName = MockDataConstants.ArchitecturalCommitteeDisplayName,
                     Description =
                         "Reviews and approves plans for new structures and modifications to ensure compliance with community covenants.",
                     DisplayOrder = 6,
