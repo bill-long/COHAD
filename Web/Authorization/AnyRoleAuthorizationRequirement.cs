@@ -38,13 +38,28 @@ namespace Web.Authorization
             AnyRoleAuthorizationRequirement requirement
         )
         {
+            // Derived here purely so the warnings below can name the account and keep the failure
+            // modes apart - the accessor returns null for both a malformed token and an unknown user,
+            // and these logs are the only production signal for a denial.
+            string uniqueId;
+            try
+            {
+                uniqueId = User.GetUniqueIdFromClaims(context.User.Claims);
+            }
+            catch (System.InvalidOperationException)
+            {
+                _logger.LogWarning("AnyRole authorization failed: required claims are missing from the token.");
+                return;
+            }
+
             // Read through the request-scoped accessor: the endpoint that runs next asks for the same
             // user, and this way both get one point read rather than two.
             var storedUser = await _currentUser.GetAsync(context.User);
             if (storedUser?.Roles == null)
             {
                 _logger.LogWarning(
-                    "AnyRole authorization failed: no user for the token's claims, or the user has null roles."
+                    "AnyRole authorization failed: user {UniqueId} not found or has null roles.",
+                    uniqueId
                 );
                 return;
             }

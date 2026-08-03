@@ -52,18 +52,59 @@ public sealed class CurrentUserAccessorTests
     }
 
     [Fact]
-    public async Task Concurrent_callers_share_one_read()
+    public async Task Callers_that_ask_before_the_first_read_completes_share_it()
     {
-        // The task is cached rather than its result, so authorization and an endpoint that both ask
-        // before either completes do not race into two reads.
+        // The task is cached rather than its result. The repository is held open so the second call
+        // genuinely happens while the first is in flight, rather than after it has already resolved.
         var stored = new User { UniqueId = "google.comu1" };
-        var repo = RepoReturning(stored);
+        var release = new TaskCompletionSource<User>();
+        var repo = new Mock<IUserRepository>();
+        repo.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>())).Returns(release.Task);
         var accessor = new CurrentUserAccessor(repo.Object);
 
-        var results = await Task.WhenAll(accessor.GetAsync(Principal()), accessor.GetAsync(Principal()));
+        var first = accessor.GetAsync(Principal());
+        var second = accessor.GetAsync(Principal());
+        Assert.False(first.IsCompleted);
 
-        Assert.All(results, u => Assert.Same(stored, u));
+        release.SetResult(stored);
+
+        Assert.Same(stored, await first);
+        Assert.Same(stored, await second);
         repo.Verify(r => r.GetByUniqueIdAsync(It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_failed_read_is_not_remembered()
+    {
+        // Caching the faulted task would turn one transient Cosmos error into a guaranteed failure
+        // for every later caller in the request, where before each did its own read.
+        var stored = new User { UniqueId = "google.comu1" };
+        var repo = new Mock<IUserRepository>();
+        repo.SetupSequence(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ThrowsAsync(new System.InvalidOperationException("transient"))
+            .ReturnsAsync(stored);
+        var accessor = new CurrentUserAccessor(repo.Object);
+
+        await Assert.ThrowsAsync<System.InvalidOperationException>(() => accessor.GetAsync(Principal()));
+
+        Assert.Same(stored, await accessor.GetAsync(Principal()));
+        repo.Verify(r => r.GetByUniqueIdAsync(It.IsAny<string>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task A_miss_is_not_remembered_so_a_document_created_mid_request_is_seen()
+    {
+        // MeController creates the user document when there is none; anything asking afterwards in
+        // the same request should see it rather than the miss that preceded it.
+        var created = new User { UniqueId = "google.comu1" };
+        var repo = new Mock<IUserRepository>();
+        repo.SetupSequence(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ReturnsAsync((User)null)
+            .ReturnsAsync(created);
+        var accessor = new CurrentUserAccessor(repo.Object);
+
+        Assert.Null(await accessor.GetAsync(Principal()));
+        Assert.Same(created, await accessor.GetAsync(Principal()));
     }
 
     [Fact]

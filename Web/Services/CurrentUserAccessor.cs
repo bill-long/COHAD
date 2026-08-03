@@ -31,9 +31,11 @@ namespace Web.Services
 
         /// <summary>
         /// The in-flight or completed lookup, keyed by the identity it was made for. The task itself is
-        /// cached rather than its result, so two callers that ask concurrently share one read instead
-        /// of racing to start two.
+        /// cached rather than its result, so two callers that ask before the first read completes share
+        /// it instead of starting two. Guarded by <see cref="_gate"/>: a request can await two things
+        /// at once that both ask for the caller.
         /// </summary>
+        private readonly object _gate = new();
         private string? _cachedUniqueId;
         private Task<User?>? _cachedLookup;
 
@@ -48,14 +50,47 @@ namespace Web.Services
             if (uniqueId == null)
                 return Task.FromResult<User?>(null);
 
-            // Keyed rather than unconditional: a scope serves one caller in practice, but returning
-            // some other principal's user would be an authorization bug, not a stale cache.
-            if (_cachedLookup != null && _cachedUniqueId == uniqueId)
-                return _cachedLookup;
+            lock (_gate)
+            {
+                // Keyed rather than unconditional: a scope serves one caller in practice, but returning
+                // some other principal's user would be an authorization bug, not a stale cache.
+                if (_cachedLookup != null && _cachedUniqueId == uniqueId)
+                    return _cachedLookup;
 
-            _cachedUniqueId = uniqueId;
-            _cachedLookup = _userRepository.GetByUniqueIdAsync(uniqueId);
-            return _cachedLookup;
+                _cachedUniqueId = uniqueId;
+                _cachedLookup = LoadAsync(uniqueId);
+                return _cachedLookup;
+            }
+        }
+
+        /// <summary>
+        /// Reads the user, and forgets the attempt unless it produced one.
+        /// <para>
+        /// Keeping a faulted task would turn one transient Cosmos error into a guaranteed failure for
+        /// every later caller in the request, where before each did its own read and could succeed.
+        /// Keeping a null would outlast the miss: <c>MeController</c> creates the user document when
+        /// there is none, and anything asking afterwards should see it.
+        /// </para>
+        /// </summary>
+        private async Task<User?> LoadAsync(string uniqueId)
+        {
+            User? user = null;
+            try
+            {
+                user = await _userRepository.GetByUniqueIdAsync(uniqueId);
+                return user;
+            }
+            finally
+            {
+                if (user == null)
+                {
+                    lock (_gate)
+                    {
+                        _cachedUniqueId = null;
+                        _cachedLookup = null;
+                    }
+                }
+            }
         }
 
         /// <summary>

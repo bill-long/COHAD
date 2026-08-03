@@ -45,7 +45,6 @@ namespace Web.Controllers
         [HttpGet]
         public async Task<PresentationUser> Get()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
             var user = await _currentUser.GetAsync(User);
             if (user != null)
             {
@@ -53,6 +52,9 @@ namespace Web.Controllers
                 user.Surname = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Surname)?.Value;
                 user.Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value;
                 user.LastLoggedIn = DateTime.UtcNow;
+                // Mutates the instance the request-scoped accessor hands to any later caller. That is
+                // read-your-own-writes here, not staleness - these are the values being persisted on
+                // the next line - but nothing else in this request may mutate it while the upsert runs.
                 FireAndForget(() => _userRepository.UpsertAsync(user));
 
                 var ownedHomes = new List<Home>();
@@ -85,7 +87,9 @@ namespace Web.Controllers
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
                 Roles = new List<User.Role>(),
                 OwnedHomeIds = new List<System.Guid>(),
-                UniqueId = uniqueId,
+                // Parsed here rather than up front: this branch runs once per account, while the
+                // read above happens on every page load of the SPA.
+                UniqueId = Models.User.GetUniqueIdFromClaims(User.Claims),
                 LastLoggedIn = DateTime.UtcNow,
             };
 

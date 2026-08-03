@@ -62,11 +62,11 @@ export function emailJobParties(job: EmailJobSummary): EmailJobParties {
   // Jobs created before ToDisplay existed have no stored audience description.
   const audience =
     job.toDisplay?.trim() || `${job.totalRecipients} ${job.totalRecipients === 1 ? 'recipient' : 'recipients'}`;
-  // Classified by category, not by whether an author came back: the API withholds the author from
-  // non-administrators, and deriving the shape of the row from a redacted field would make the same
-  // column mean different things to different viewers of the same job. Case-insensitive to match the
-  // server's OrdinalIgnoreCase comparison, so a differently-cased category cannot classify one way
-  // on the server and the other way here.
+  // Classified by category, not by whether an author came back: a forward whose incoming message
+  // had no sender address is still a forward, and deriving the shape of the row from a field that
+  // can be absent would make the same column mean different things on different rows.
+  // Case-insensitive to match the server's OrdinalIgnoreCase comparison, so a differently-cased
+  // category cannot classify one way on the server and the other way here.
   const isForward = job.category?.trim().toLowerCase() === COMMITTEE_FORWARD_CATEGORY;
 
   if (!isForward) {

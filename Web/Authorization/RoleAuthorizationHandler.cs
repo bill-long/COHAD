@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
@@ -21,14 +22,32 @@ namespace Web.Authorization
             RoleAuthorizationRequirement requirement
         )
         {
+            // Derived here purely so the warnings below can name the account and keep "malformed
+            // token" distinct from "no such user" - the accessor returns null for both, and these
+            // logs are the only production signal for a denial.
+            string uniqueId;
+            try
+            {
+                uniqueId = Models.User.GetUniqueIdFromClaims(context.User.Claims);
+            }
+            catch (InvalidOperationException)
+            {
+                _logger.LogWarning(
+                    "Authorization failed for requirement {Role}: required claims are missing from the token.",
+                    requirement.RequiredRole
+                );
+                return;
+            }
+
             // Read through the request-scoped accessor: the endpoint that runs next asks for the same
             // user, and this way both get one point read rather than two.
             var storedUser = await _currentUser.GetAsync(context.User);
             if (storedUser == null)
             {
                 _logger.LogWarning(
-                    "Authorization failed for requirement {Role}: no user matches the token's claims.",
-                    requirement.RequiredRole
+                    "Authorization failed for requirement {Role}: user {UniqueId} not found in database.",
+                    requirement.RequiredRole,
+                    uniqueId
                 );
                 return;
             }
@@ -38,7 +57,7 @@ namespace Web.Authorization
                 _logger.LogWarning(
                     "Authorization failed for requirement {Role}: user {UniqueId} has null roles.",
                     requirement.RequiredRole,
-                    storedUser.UniqueId
+                    uniqueId
                 );
                 return;
             }
@@ -61,7 +80,7 @@ namespace Web.Authorization
 
             _logger.LogWarning(
                 "Authorization failed: user {UniqueId} does not have required role {Role}.",
-                storedUser.UniqueId,
+                uniqueId,
                 requirement.RequiredRole
             );
         }
