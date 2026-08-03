@@ -564,7 +564,7 @@ public sealed class VendorsControllerTests
             vendorRepository,
             reviewRepository,
             flagRepository,
-            userRepository,
+            new CurrentUserAccessor(userRepository),
             auditLogRepository,
             notificationService,
             NullLogger<VendorsController>.Instance

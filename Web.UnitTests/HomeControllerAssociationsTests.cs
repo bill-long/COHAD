@@ -36,6 +36,7 @@ public sealed class HomeControllerAssociationsTests
         }
         var c = new HomeController(
             users,
+            new CurrentUserAccessor(users),
             homes,
             residents,
             audit,

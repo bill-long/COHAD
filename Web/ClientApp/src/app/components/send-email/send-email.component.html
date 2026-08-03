@@ -1,5 +1,19 @@
 <div class="send-email-page">
-  <mat-card>
+  <!-- Managing email jobs and sending are separate permissions. Anyone who cannot send as a
+       committee - Architectural and Landscape, which have no mailbox, and an Administrator holding
+       no committee role - would get an empty From list and a Send button that only 403s, so they
+       get the job list below instead of a form that cannot work. Said out loud rather than left as
+       an empty page. -->
+  <mat-card *ngIf="(canSendFromAny | async) === false" class="no-sender-card">
+    <mat-card-content>
+      <p class="no-sender-note">
+        You can review email jobs here, but your roles are not able to send neighborhood email. Sending
+        is granted per committee mailbox.
+      </p>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card *ngIf="canSendFromAny | async">
     <mat-card-content>
       <h2 class="page-title">Send Neighborhood Email</h2>
 

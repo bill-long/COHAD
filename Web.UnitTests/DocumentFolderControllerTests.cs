@@ -41,7 +41,7 @@ public sealed class DocumentFolderControllerTests
             new MemoryCache(new MemoryCacheOptions()),
             WebJsonOptions
         );
-        var c = new DocumentFolderController(users, folders, documents, auditLog, cache);
+        var c = new DocumentFolderController(new CurrentUserAccessor(users), folders, documents, auditLog, cache);
         c.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

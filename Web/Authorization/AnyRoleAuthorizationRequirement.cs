@@ -1,14 +1,78 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Web.Models;
-using Web.Services.Repositories;
+using Web.Services;
 
 namespace Web.Authorization
 {
+    /// <summary>
+    /// Role sets that more than one place needs to agree on. Policies are declared in
+    /// <c>Startup</c>, but a test that claims to cover "every role this policy admits" has to read
+    /// the same list rather than restate it, or it silently stops covering a role that gets added.
+    /// </summary>
+    public static class AuthorizationRoleSets
+    {
+        /// <summary>
+        /// Roles admitted by the "EmailSender" policy - every committee role, plus Administrator.
+        /// <para>
+        /// The endpoints this guards are not scoped to a committee: a holder of any of these roles can
+        /// read every job, including the sender and recipients of another committee's forwarded mail,
+        /// and can retry or cancel any of them. Adding a role here grants all of that, not just sight
+        /// of its own committee's mail. Architectural and Landscape are here because the alternative
+        /// was worse - they could not see mail forwarded to their own committee while five unrelated
+        /// committees could - but the fix for the breadth is scoping the endpoints, not this list.
+        /// </para>
+        /// <para>
+        /// Currently identical to <see cref="CommitteeEditor"/> by coincidence, not by rule: that set
+        /// answers "may moderate a committee" and this one "may manage email jobs". A future send-only
+        /// or read-only role would land in one and not the other, so they stay separate.
+        /// </para>
+        /// <para>
+        /// Wrapped rather than merely typed as a read-only list: an <c>IReadOnlyList</c> over a bare
+        /// array casts straight back to the array, and the live policy is built from these values, so
+        /// a caller could silently change who may reach every endpoint that policy guards.
+        /// </para>
+        /// </summary>
+        public static IReadOnlyList<User.Role> EmailSender { get; } =
+            Array.AsReadOnly(
+                new[]
+                {
+                    User.Role.Administrator,
+                    User.Role.Board,
+                    User.Role.WelcomeCommittee,
+                    User.Role.GardenClub,
+                    User.Role.SocialCommittee,
+                    User.Role.SunshineCommittee,
+                    User.Role.ArchitecturalCommittee,
+                    User.Role.LandscapeCommittee,
+                }
+            );
+
+        /// <summary>
+        /// Roles admitted by the "CommitteeEditor" policy. Kept here for the same reason as
+        /// <see cref="EmailSender"/>, and because this one must also stay in step with the frontend's
+        /// <c>rolePermissions.manageCommitteesRoles</c> - a list that has no compiler to check it.
+        /// </summary>
+        public static IReadOnlyList<User.Role> CommitteeEditor { get; } =
+            Array.AsReadOnly(
+                new[]
+                {
+                    User.Role.Administrator,
+                    User.Role.Board,
+                    User.Role.WelcomeCommittee,
+                    User.Role.GardenClub,
+                    User.Role.SocialCommittee,
+                    User.Role.SunshineCommittee,
+                    User.Role.ArchitecturalCommittee,
+                    User.Role.LandscapeCommittee,
+                }
+            );
+    }
+
     /// <summary>
     /// Requires the user to have at least one of the specified roles.
     /// Used for endpoints that multiple committee roles can access (e.g. email job management).
@@ -19,18 +83,21 @@ namespace Web.Authorization
 
         public AnyRoleAuthorizationRequirement(params User.Role[] requiredRoles)
         {
-            RequiredRoles = requiredRoles;
+            // Copied and wrapped, not aliased: this instance outlives the call and decides access for
+            // the process's lifetime. The copy stops the caller writing through the array it passed;
+            // the wrapper stops anyone casting RequiredRoles back to User.Role[] and writing to that.
+            RequiredRoles = Array.AsReadOnly(requiredRoles?.ToArray() ?? Array.Empty<User.Role>());
         }
     }
 
     public class AnyRoleAuthorizationHandler : AuthorizationHandler<AnyRoleAuthorizationRequirement>
     {
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly ILogger<AnyRoleAuthorizationHandler> _logger;
 
-        public AnyRoleAuthorizationHandler(IUserRepository userRepository, ILogger<AnyRoleAuthorizationHandler> logger)
+        public AnyRoleAuthorizationHandler(ICurrentUserAccessor currentUser, ILogger<AnyRoleAuthorizationHandler> logger)
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
@@ -39,18 +106,19 @@ namespace Web.Authorization
             AnyRoleAuthorizationRequirement requirement
         )
         {
-            string uniqueId;
-            try
-            {
-                uniqueId = User.GetUniqueIdFromClaims(context.User.Claims);
-            }
-            catch (System.InvalidOperationException)
+            // Asked of the accessor rather than parsed here, so the id these warnings name is the one
+            // that was actually looked up, and the failure modes stay apart - the read returns null for
+            // both a malformed token and an unknown user.
+            var uniqueId = _currentUser.TryGetUniqueId(context.User);
+            if (uniqueId == null)
             {
                 _logger.LogWarning("AnyRole authorization failed: required claims are missing from the token.");
                 return;
             }
 
-            var storedUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
+            // Read through the request-scoped accessor: the endpoint that runs next asks for the same
+            // user, and this way both get one point read rather than two.
+            var storedUser = await _currentUser.GetAsync(context.User);
             if (storedUser?.Roles == null)
             {
                 _logger.LogWarning(
@@ -62,10 +130,6 @@ namespace Web.Authorization
 
             if (requirement.RequiredRoles.Any(r => storedUser.Roles.Contains(r)))
             {
-                // Hand the resolved user to the endpoint so it need not read the same document again
-                // (see AuthorizedUserCache). Only on success: nothing downstream should see a user
-                // whose policy evaluation failed.
-                AuthorizedUserCache.Set(context.Resource as HttpContext, storedUser);
                 context.Succeed(requirement);
             }
         }

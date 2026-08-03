@@ -17,21 +17,21 @@ namespace Web.Controllers
     [Authorize]
     public class DocumentFolderController : ControllerBase
     {
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IDocumentFolderRepository _folderRepository;
         private readonly IDocumentRepository _documentRepository;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly DocumentListCache _listCache;
 
         public DocumentFolderController(
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IDocumentFolderRepository folderRepository,
             IDocumentRepository documentRepository,
             IAuditLogRepository auditLogRepository,
             DocumentListCache listCache
         )
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _folderRepository = folderRepository;
             _documentRepository = documentRepository;
             _auditLogRepository = auditLogRepository;
@@ -259,8 +259,7 @@ namespace Web.Controllers
 
         private async Task<User> GetApiUserAsync()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
+            return await _currentUser.GetAsync(User);
         }
     }
 }

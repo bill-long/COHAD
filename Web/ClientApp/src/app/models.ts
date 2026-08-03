@@ -165,16 +165,12 @@ export interface EmailJobSummary {
    */
   toDisplay: string | null;
   /**
-   * The person who actually wrote the message; null when it originated in COHAD, and also null
-   * for callers who are not Administrators (the API withholds a third party's identity from them).
+   * The person who actually wrote the message. Null when it originated in COHAD, and also when a
+   * forward's incoming message carried no sender address (an auto-reply, a mailer daemon) - the UI
+   * falls back to the mailbox it was sent as.
    */
   originalSenderEmail: string | null;
   originalSenderDisplay: string | null;
-  /**
-   * True when this job has an author the API would not show this caller. Distinguishes a redaction
-   * from a forward that genuinely had no sender address (auto-replies, mailer daemons).
-   */
-  originalSenderWithheld: boolean;
   subject: string;
   createdUtc: string;
   startedUtc: string | null;

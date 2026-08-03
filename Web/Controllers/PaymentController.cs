@@ -17,20 +17,19 @@ namespace Web.Controllers
     [Authorize(Policy = "Resident")]
     public class PaymentController : Controller
     {
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IPaymentRepository _paymentRepository;
 
-        public PaymentController(IUserRepository userRepository, IPaymentRepository paymentRepository)
+        public PaymentController(ICurrentUserAccessor currentUser, IPaymentRepository paymentRepository)
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _paymentRepository = paymentRepository;
         }
 
         [HttpGet]
         public async Task<IActionResult> Get()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
+            var user = await _currentUser.GetAsync(User);
             if (user == null)
             {
                 return NotFound();
@@ -65,12 +64,15 @@ namespace Web.Controllers
 
             payment.Date ??= DateTime.UtcNow;
 
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
+            var user = await _currentUser.GetAsync(User);
             if (user == null)
             {
                 return NotFound();
             }
+
+            // The accessor looked the user up by this id, so it is the same value the claims would
+            // yield - without the parse that throws on a malformed token where this path returns 404.
+            var uniqueId = user.UniqueId;
 
             if (!string.IsNullOrWhiteSpace(payment.PayPalTransactionId))
             {

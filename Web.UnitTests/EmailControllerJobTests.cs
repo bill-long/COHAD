@@ -147,7 +147,7 @@ public sealed class EmailControllerJobTests
         processor ??= CreateProcessor();
 
         var controller = new EmailController(
-            _users.Object,
+            new CurrentUserAccessor(_users.Object),
             _homes.Object,
             _residents.Object,
             _audit.Object,
@@ -664,58 +664,17 @@ public sealed class EmailControllerJobTests
         Assert.Equal(2, summaries.Count());
     }
 
-    // ── Original-sender redaction ──
-    // A forwarded message's author wrote to one committee, but the job endpoints are open to every
-    // "EmailSender" role. These lock the boundary at the endpoint, where the decision is made.
+    // Whoever the "EmailSender" policy admits sees a forwarded message's author. The theories run
+    // every role in that policy, so they fail if caller-dependent filtering is reintroduced for any
+    // one of them - a plain fact with a single role would pass no matter what the endpoint checked.
+    public static TheoryData<User.Role> EmailSenderRoles =>
+        new(AuthorizationRoleSets.EmailSender);
 
-    [Fact]
-    public async Task GetRecentJobs_NonAdministrator_DoesNotSeeWhoWroteAForwardedMessage()
+    [Theory]
+    [MemberData(nameof(EmailSenderRoles))]
+    public async Task GetRecentJobs_ReportsWhoWroteAForwardedMessage_ToEveryEmailSenderRole(User.Role role)
     {
-        SetupMockUserWithRoles(User.Role.GardenClub);
-        _jobRepo
-            .Setup(r => r.GetRecentJobsAsync(It.IsAny<int>()))
-            .ReturnsAsync(new List<EmailJob> { ForwardedJob(Guid.NewGuid()) });
-
-        var controller = CreateController();
-        var ok = Assert.IsType<OkObjectResult>(await controller.GetRecentJobs());
-        var summary = Assert.IsAssignableFrom<IEnumerable<EmailJobSummary>>(ok.Value).Single();
-
-        Assert.Null(summary.OriginalSenderEmail);
-        Assert.Null(summary.OriginalSenderDisplay);
-        // The job itself is still fully visible; only the third party's identity is withheld.
-        Assert.Equal("architectural@cohad.org", summary.FromEmail);
-        Assert.Equal("Architectural Committee forwarding members", summary.ToDisplay);
-    }
-
-    [Fact]
-    public async Task GetRecentJobs_UsesTheUserTheAuthorizationHandlerAlreadyRead()
-    {
-        // In production the policy always populates this cache before the endpoint runs, so this is
-        // the branch that actually executes; without a test the redaction gate would be decided by
-        // untested code. A stale or wrong cached user would flip a committee role to Administrator.
-        SetupMockUserWithRoles(User.Role.GardenClub);
-        _jobRepo
-            .Setup(r => r.GetRecentJobsAsync(It.IsAny<int>()))
-            .ReturnsAsync(new List<EmailJob> { ForwardedJob(Guid.NewGuid()) });
-
-        var controller = CreateController();
-        AuthorizedUserCache.Set(
-            controller.ControllerContext.HttpContext,
-            new User { UniqueId = "google.comu1", Roles = new List<User.Role> { User.Role.Administrator } }
-        );
-
-        var ok = Assert.IsType<OkObjectResult>(await controller.GetRecentJobs());
-        var summary = Assert.IsAssignableFrom<IEnumerable<EmailJobSummary>>(ok.Value).Single();
-
-        // The cached user decided the gate: it says Administrator while the repository says Garden Club.
-        Assert.Equal("jane@example.com", summary.OriginalSenderEmail);
-        _users.Verify(r => r.GetByUniqueIdAsync(It.IsAny<string>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task GetRecentJobs_Administrator_SeesWhoWroteAForwardedMessage()
-    {
-        SetupMockUserWithRoles(User.Role.Administrator, User.Role.Resident);
+        SetupMockUserWithRoles(role);
         _jobRepo
             .Setup(r => r.GetRecentJobsAsync(It.IsAny<int>()))
             .ReturnsAsync(new List<EmailJob> { ForwardedJob(Guid.NewGuid()) });
@@ -726,28 +685,16 @@ public sealed class EmailControllerJobTests
 
         Assert.Equal("jane@example.com", summary.OriginalSenderEmail);
         Assert.Equal("Jane Doe", summary.OriginalSenderDisplay);
+        Assert.Equal("architectural@cohad.org", summary.FromEmail);
+        Assert.Equal("Architectural Committee forwarding members", summary.ToDisplay);
     }
 
-    [Fact]
-    public async Task GetJob_NonAdministrator_DoesNotSeeWhoWroteAForwardedMessage()
+    [Theory]
+    [MemberData(nameof(EmailSenderRoles))]
+    public async Task GetJob_ReportsWhoWroteAForwardedMessage_ToEveryEmailSenderRole(User.Role role)
     {
         var jobId = Guid.NewGuid();
-        SetupMockUserWithRoles(User.Role.WelcomeCommittee);
-        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(ForwardedJob(jobId));
-
-        var controller = CreateController();
-        var ok = Assert.IsType<OkObjectResult>(await controller.GetJob(jobId));
-        var detail = Assert.IsType<EmailJobDetail>(ok.Value);
-
-        Assert.Null(detail.OriginalSenderEmail);
-        Assert.Null(detail.OriginalSenderDisplay);
-    }
-
-    [Fact]
-    public async Task GetJob_Administrator_SeesWhoWroteAForwardedMessage()
-    {
-        var jobId = Guid.NewGuid();
-        SetupMockUserWithRoles(User.Role.Administrator);
+        SetupMockUserWithRoles(role);
         _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(ForwardedJob(jobId));
 
         var controller = CreateController();
@@ -756,47 +703,6 @@ public sealed class EmailControllerJobTests
 
         Assert.Equal("jane@example.com", detail.OriginalSenderEmail);
         Assert.Equal("Jane Doe", detail.OriginalSenderDisplay);
-    }
-
-    [Fact]
-    public async Task CancelJob_NonAdministrator_DoesNotSeeWhoWroteAForwardedMessage()
-    {
-        // The mutating endpoints return the same DTO, so they need the same boundary.
-        var jobId = Guid.NewGuid();
-        SetupMockUserWithRoles(User.Role.Board);
-        var job = ForwardedJob(jobId);
-        job.Status = EmailJobStatus.Queued;
-        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
-        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
-
-        var controller = CreateController();
-        var ok = Assert.IsType<OkObjectResult>(await controller.CancelJob(jobId));
-        var summary = Assert.IsType<EmailJobSummary>(ok.Value);
-
-        Assert.Null(summary.OriginalSenderEmail);
-        Assert.Equal(EmailJobStatus.Cancelled, summary.Status);
-    }
-
-    [Fact]
-    public async Task RetryJob_NonAdministrator_DoesNotSeeWhoWroteAForwardedMessage()
-    {
-        var jobId = Guid.NewGuid();
-        SetupMockUserWithRoles(User.Role.GardenClub);
-        var job = ForwardedJob(jobId);
-        job.Status = EmailJobStatus.Failed;
-        job.Recipients = new List<EmailJobRecipient>
-        {
-            new() { Email = "member@example.com", Status = EmailJobRecipientStatus.Failed },
-        };
-        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
-        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
-
-        var controller = CreateController();
-        var ok = Assert.IsType<OkObjectResult>(await controller.RetryJob(jobId));
-        var summary = Assert.IsType<EmailJobSummary>(ok.Value);
-
-        Assert.Null(summary.OriginalSenderEmail);
-        Assert.Null(summary.OriginalSenderDisplay);
     }
 
     [Fact]

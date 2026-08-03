@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Web.Models;
 using Web.PresentationModels;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 using Web.Utils;
@@ -19,16 +20,19 @@ namespace Web.Controllers
     {
         private readonly IYouthServiceListingRepository _youthServiceListingRepository;
         private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IAuditLogRepository _auditLogRepository;
 
         public YouthServicesController(
             IYouthServiceListingRepository youthServiceListingRepository,
             IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IAuditLogRepository auditLogRepository
         )
         {
             _youthServiceListingRepository = youthServiceListingRepository;
             _userRepository = userRepository;
+            _currentUser = currentUser;
             _auditLogRepository = auditLogRepository;
         }
 
@@ -266,11 +270,12 @@ namespace Web.Controllers
             return lastSpace >= 0 ? trimmed.Substring(lastSpace + 1) : trimmed;
         }
 
-        private async Task<User> GetApiUserAsync()
-        {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
-        }
+        // Scoped rather than file-wide: enabling nullable across this controller flags unrelated
+        // pre-existing code, and the point here is that this helper can return null.
+#nullable enable
+        /// <summary>The calling user, or null when no user matches the token.</summary>
+        private Task<User?> GetApiUserAsync() => _currentUser.GetAsync(User);
+#nullable restore
 
         private async Task WriteAudit(User apiUser, string subjectId, string subjectName, string action)
         {

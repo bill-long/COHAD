@@ -225,19 +225,14 @@ namespace Web
                     policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.LandscapeCommittee))
                 );
 
-                // Any role that can send committee emails — used for email job management endpoints and the SignalR hub.
+                // Every committee role plus Administrator - used for email job management endpoints and the
+                // SignalR hub. Not the same as being able to send: the from-* endpoints have their own
+                // per-committee policies, and two of these roles have no mailbox to send as.
                 options.AddPolicy(
                     "EmailSender",
                     policy =>
                         policy.Requirements.Add(
-                            new AnyRoleAuthorizationRequirement(
-                                User.Role.Administrator,
-                                User.Role.Board,
-                                User.Role.WelcomeCommittee,
-                                User.Role.GardenClub,
-                                User.Role.SocialCommittee,
-                                User.Role.SunshineCommittee
-                            )
+                            new AnyRoleAuthorizationRequirement(AuthorizationRoleSets.EmailSender.ToArray())
                         )
                 );
 
@@ -249,22 +244,17 @@ namespace Web
                     "CommitteeEditor",
                     policy =>
                         policy.Requirements.Add(
-                            new AnyRoleAuthorizationRequirement(
-                                User.Role.Administrator,
-                                User.Role.Board,
-                                User.Role.WelcomeCommittee,
-                                User.Role.GardenClub,
-                                User.Role.SocialCommittee,
-                                User.Role.SunshineCommittee,
-                                User.Role.ArchitecturalCommittee,
-                                User.Role.LandscapeCommittee
-                            )
+                            new AnyRoleAuthorizationRequirement(AuthorizationRoleSets.CommitteeEditor.ToArray())
                         )
                 );
             });
 
             services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();
             services.AddScoped<IAuthorizationHandler, AnyRoleAuthorizationHandler>();
+
+            // Scoped is the whole point: authorization and the endpoint that follows it share one
+            // read of the caller's user document per request.
+            services.AddScoped<ICurrentUserAccessor, CurrentUserAccessor>();
             services.AddSingleton<IOgThumbnailService, SkiaSharpOgThumbnailService>();
             services.AddSingleton<IImageConversionService, SkiaSharpImageConversionService>();
             services.AddSingleton<IImageUploadHelper, ImageUploadHelper>();

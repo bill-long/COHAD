@@ -42,6 +42,10 @@ namespace Web.Controllers
         [HttpGet]
         public async Task<PresentationUser> Get()
         {
+            // Read directly rather than through the accessor: this action mutates the user it gets and
+            // hands it to a background upsert, and the accessor's instance is shared with everything
+            // else in the request. Nothing else reads the caller on this path - no role policy guards
+            // it - so owning the instance costs no extra read.
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
             var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
             if (user != null)

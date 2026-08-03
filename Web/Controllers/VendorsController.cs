@@ -24,7 +24,7 @@ namespace Web.Controllers
         private readonly IVendorRepository _vendorRepository;
         private readonly IVendorReviewRepository _vendorReviewRepository;
         private readonly IVendorFlagRepository _vendorFlagRepository;
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly INotificationService _notificationService;
         private readonly ILogger<VendorsController> _logger;
@@ -33,7 +33,7 @@ namespace Web.Controllers
             IVendorRepository vendorRepository,
             IVendorReviewRepository vendorReviewRepository,
             IVendorFlagRepository vendorFlagRepository,
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IAuditLogRepository auditLogRepository,
             INotificationService notificationService,
             ILogger<VendorsController> logger
@@ -42,7 +42,7 @@ namespace Web.Controllers
             _vendorRepository = vendorRepository;
             _vendorReviewRepository = vendorReviewRepository;
             _vendorFlagRepository = vendorFlagRepository;
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _auditLogRepository = auditLogRepository;
             _notificationService = notificationService;
             _logger = logger;
@@ -552,11 +552,12 @@ namespace Web.Controllers
             return user.Roles?.Contains(Models.User.Role.Administrator) == true;
         }
 
-        private async Task<User> GetApiUserAsync()
-        {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
-        }
+        // Scoped rather than file-wide: enabling nullable across this controller flags unrelated
+        // pre-existing code, and the point here is that this helper can return null.
+#nullable enable
+        /// <summary>The calling user, or null when no user matches the token.</summary>
+        private Task<User?> GetApiUserAsync() => _currentUser.GetAsync(User);
+#nullable restore
 
         private async Task WriteAudit(User apiUser, string subjectId, string subjectName, string action)
         {

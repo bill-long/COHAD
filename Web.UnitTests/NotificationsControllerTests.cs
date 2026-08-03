@@ -40,14 +40,16 @@ public sealed class NotificationsControllerTests
         committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync((committees ?? Array.Empty<Committee>()).ToList());
         var committeeCache = new CommitteeListCache(committeeRepo.Object, new MemoryCache(new MemoryCacheOptions()));
 
-        var controller = new NotificationsController(service, userRepo.Object, committeeCache)
+        var controller = new NotificationsController(service, new CurrentUserAccessor(userRepo.Object), committeeCache)
         {
             ControllerContext = new ControllerContext
             {
                 HttpContext = new DefaultHttpContext
                 {
+                    // Authentication type supplied so Identity.IsAuthenticated is true, as it is for
+                    // any request that got past the bearer middleware.
                     User = new ClaimsPrincipal(
-                        new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, "u1") })
+                        new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, "u1") }, "Test")
                     ),
                 },
             },

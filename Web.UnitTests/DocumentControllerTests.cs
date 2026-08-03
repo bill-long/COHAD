@@ -42,7 +42,7 @@ public sealed class DocumentControllerTests
             WebJsonOptions
         );
         var c = new DocumentController(
-            users,
+            new CurrentUserAccessor(users),
             documents,
             folders,
             fileStore,

@@ -10,7 +10,6 @@ const makeJob = (overrides: Partial<EmailJobSummary> = {}): EmailJobSummary => (
   toDisplay: 'Board opt-in residents',
   originalSenderEmail: null,
   originalSenderDisplay: null,
-  originalSenderWithheld: false,
   subject: 'Test subject',
   createdUtc: '2026-01-01T00:00:00Z',
   startedUtc: null,
@@ -90,31 +89,15 @@ describe('emailJobParties', () => {
     expect(emailJobParties(forwardedJob({ toDisplay: null })).forwardedTo).toBe('10 recipients');
   });
 
-  it('classifies by category so redaction cannot change what a column means', () => {
-    // A non-administrator gets no original sender. The row must still be the same shape it is for
-    // an administrator, or two people reading the same list disagree under the same header.
-    const redacted = emailJobParties(
-      forwardedJob({ originalSenderEmail: null, originalSenderDisplay: null, originalSenderWithheld: true }),
-    );
+  it('classifies by category, not by whether an author came back', () => {
+    // A forward whose incoming message had no sender address (an auto-reply, a mailer daemon) is
+    // still a forward: it keeps the mailbox as To and still shows where it was relayed on to.
+    const parties = emailJobParties(forwardedJob({ originalSenderEmail: null, originalSenderDisplay: null }));
 
-    expect(redacted.to).toBe('Architectural Committee <architectural@cohad.org>');
-    expect(redacted.forwardedTo).toBe('Architectural Committee forwarding members');
-    // Naming the redaction, not repeating the mailbox: From === To would read as a message the
-    // committee sent to itself, which is the misreading this whole helper exists to prevent.
-    expect(redacted.from).toBe('Sender not shown');
-    expect(redacted.fromShort).toBe('Sender not shown');
-    expect(redacted.from).not.toBe(redacted.to);
-  });
-
-  it('shows the sending mailbox, not a redaction notice, when a forward had no sender at all', () => {
-    // Auto-replies and mailer daemons arrive with a blank sender, so nothing was withheld. Telling
-    // an administrator the sender is hidden would read as a permissions problem they cannot fix.
-    const parties = emailJobParties(
-      forwardedJob({ originalSenderEmail: null, originalSenderDisplay: null, originalSenderWithheld: false }),
-    );
-
-    expect(parties.from).toBe('Architectural Committee <architectural@cohad.org>');
+    expect(parties.to).toBe('Architectural Committee <architectural@cohad.org>');
     expect(parties.forwardedTo).toBe('Architectural Committee forwarding members');
+    // From falls back to the mailbox it was sent as, which is what its From header really said.
+    expect(parties.from).toBe('Architectural Committee <architectural@cohad.org>');
   });
 
   it('matches the forward category case-insensitively, as the server does', () => {

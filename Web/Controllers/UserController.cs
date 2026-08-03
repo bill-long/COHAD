@@ -19,6 +19,7 @@ namespace Web.Controllers
     public class UserController : ControllerBase
     {
         private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IHomeRepository _homeRepository;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly IEventSignupConversionService _signupConversion;
@@ -26,6 +27,7 @@ namespace Web.Controllers
 
         public UserController(
             IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IHomeRepository homeRepository,
             IAuditLogRepository auditLogRepository,
             IEventSignupConversionService signupConversion,
@@ -33,6 +35,7 @@ namespace Web.Controllers
         )
         {
             _userRepository = userRepository;
+            _currentUser = currentUser;
             _homeRepository = homeRepository;
             _auditLogRepository = auditLogRepository;
             _signupConversion = signupConversion;
@@ -55,7 +58,7 @@ namespace Web.Controllers
         [HttpPut]
         public async Task<IActionResult> UpdateUserProperties([FromBody] UpdatedUser updatedUser)
         {
-            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var apiUser = await _currentUser.GetAsync(User);
             if (apiUser == null)
             {
                 return NotFound();
@@ -99,7 +102,7 @@ namespace Web.Controllers
             [FromBody] UpdatedUserAssociations updatedAssociations
         )
         {
-            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var apiUser = await _currentUser.GetAsync(User);
             if (apiUser == null)
             {
                 return NotFound();
@@ -208,7 +211,7 @@ namespace Web.Controllers
         [HttpPost("admin/migrate-event-signups")]
         public async Task<IActionResult> MigrateEventSignups()
         {
-            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var apiUser = await _currentUser.GetAsync(User);
             if (apiUser == null)
             {
                 return NotFound();

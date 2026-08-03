@@ -30,7 +30,7 @@ namespace Web.Controllers
             ".txt",
         };
 
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IDocumentRepository _documentRepository;
         private readonly IDocumentFolderRepository _folderRepository;
         private readonly IDocumentFileStore _documentFileStore;
@@ -39,7 +39,7 @@ namespace Web.Controllers
         private readonly DocumentStorageOptions _storageOptions;
 
         public DocumentController(
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IDocumentRepository documentRepository,
             IDocumentFolderRepository folderRepository,
             IDocumentFileStore documentFileStore,
@@ -48,7 +48,7 @@ namespace Web.Controllers
             IOptions<DocumentStorageOptions> storageOptions
         )
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _documentRepository = documentRepository;
             _folderRepository = folderRepository;
             _documentFileStore = documentFileStore;
@@ -243,8 +243,7 @@ namespace Web.Controllers
 
         private async Task<User> GetApiUserAsync()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
+            return await _currentUser.GetAsync(User);
         }
 
         private static bool HasResidentReadAccess(User user)

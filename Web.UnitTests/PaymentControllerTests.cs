@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Web.Controllers;
 using Web.Models;
+using Web.Services;
 using Web.PresentationModels;
 using Web.Services.Repositories;
 using Xunit;
@@ -24,7 +25,7 @@ public sealed class PaymentControllerTests
         string idp = "google.com"
     )
     {
-        var c = new PaymentController(users, payments)
+        var c = new PaymentController(new CurrentUserAccessor(users), payments)
         {
             ControllerContext = new ControllerContext
             {

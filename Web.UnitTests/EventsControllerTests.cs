@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using Moq;
@@ -36,7 +37,7 @@ public sealed class EventsControllerTests
     )
     {
         var c = new EventsController(
-            users,
+            new CurrentUserAccessor(users),
             events,
             homes ?? Mock.Of<IHomeRepository>(),
             fileStore,
@@ -44,7 +45,8 @@ public sealed class EventsControllerTests
             new SkiaSharpOgThumbnailService(),
             imageUploadHelper ?? DefaultImageUploadHelper(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
-            Options.Create(new JsonOptions())
+            Options.Create(new JsonOptions()),
+            NullLogger<EventsController>.Instance
         );
 
         c.ControllerContext = new ControllerContext
@@ -1657,6 +1659,44 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
+    public async Task GetBySegment_renders_the_page_anonymously_when_the_user_read_fails()
+    {
+        // A public page must not 500 because the caller's user document could not be read. The
+        // degraded render hides the reader's own signup, so this is a trade rather than a free win -
+        // which is why the controller logs it, and why this test exists to keep the trade deliberate.
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents
+            .Setup(r => r.GetByRouteSegmentAsync("summer-bbq"))
+            .ReturnsAsync(
+                new CommunityEvent
+                {
+                    Id = Guid.NewGuid(),
+                    Title = "BBQ",
+                    StartUtc = DateTime.UtcNow.AddDays(1),
+                }
+            );
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ThrowsAsync(new Microsoft.Azure.Cosmos.CosmosException("throttled", System.Net.HttpStatusCode.TooManyRequests, 0, "activity", 0));
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockEvents.Object,
+            Mock.Of<IDocumentFileStore>(),
+            Mock.Of<IAuditLogRepository>()
+        );
+
+        // Does not throw: the page still renders.
+        var result = await c.GetBySegment("summer-bbq");
+
+        Assert.NotNull(result);
+        // Rendered as if nobody were signed in - the authenticated path sets private, no-store.
+        Assert.Equal("public, no-cache", c.Response.Headers["Cache-Control"].ToString());
+    }
+
+    [Fact]
     public async Task DownloadPromoMedia_sets_no_cache_with_etag()
     {
         var eventId = Guid.NewGuid();
@@ -1928,7 +1968,7 @@ public sealed class EventsControllerTests
 
         // No user identity → anonymous
         var c = new EventsController(
-            Mock.Of<IUserRepository>(),
+            new CurrentUserAccessor(Mock.Of<IUserRepository>()),
             mockEvents.Object,
             Mock.Of<IHomeRepository>(),
             Mock.Of<IDocumentFileStore>(),
@@ -1936,7 +1976,8 @@ public sealed class EventsControllerTests
             new SkiaSharpOgThumbnailService(),
             DefaultImageUploadHelper(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
-            Options.Create(new JsonOptions())
+            Options.Create(new JsonOptions()),
+            NullLogger<EventsController>.Instance
         );
         c.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
 

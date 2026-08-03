@@ -207,3 +207,8 @@
     gap: 2px;
   }
 }
+
+.no-sender-note {
+  margin: 0;
+  color: var(--text-secondary);
+}

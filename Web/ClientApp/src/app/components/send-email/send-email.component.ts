@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { HttpClient, HttpResponse } from '@angular/common/http';
 import { AfterViewInit, Component, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
-import { Observable, Subscription, zip } from 'rxjs';
+import { Observable, Subscription, combineLatest, zip } from 'rxjs';
 import { filter, map, take } from 'rxjs/operators';
 import { EmailJobSummary, EmailJobStatus, TestRecipientOption } from 'src/app/models';
 import { EmailJobListComponent } from 'src/app/components/email-job-list/email-job-list.component';
@@ -55,6 +55,21 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
   private jobSubscriptions: Subscription[] = [];
   private testJobSubscriptions: Subscription[] = [];
 
+  /**
+   * The five committees that can be sent as, in the order the default-selection logic prefers them.
+   * Declared once so the compose card's visibility and that default cannot disagree about who can
+   * send; the template's option list is the third reader of the same rule.
+   */
+  private get senderAvailability(): Observable<boolean>[] {
+    return [
+      this.canSendFromBoard,
+      this.canSendFromGardenClub,
+      this.canSendFromSocialCommittee,
+      this.canSendFromWelcomeCommittee,
+      this.canSendFromSunshineCommittee,
+    ];
+  }
+
   constructor(
     private httpClient: HttpClient,
     private route: ActivatedRoute,
@@ -65,13 +80,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(DOCUMENT) private document: Document,
   ) {
-    zip(
-      this.canSendFromBoard,
-      this.canSendFromGardenClub,
-      this.canSendFromSocialCommittee,
-      this.canSendFromWelcomeCommittee,
-      this.canSendFromSunshineCommittee,
-    )
+    zip(...this.senderAvailability)
       .pipe(take(1))
       .subscribe(([board, garden, social, welcome, sunshine]) => {
         if (board) {
@@ -153,6 +162,19 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     // Instant so we reliably beat any remaining scroll-to-top and avoid fighting smooth row scroll.
     el.scrollIntoView({ behavior: 'auto', block: 'start' });
   }
+
+  /**
+   * True when the caller can send as at least one committee.
+   * <para>
+   * This is not the same as being allowed on this page. Managing email jobs is one permission and
+   * sending is another: Architectural and Landscape have no mailbox to send as, and neither does an
+   * Administrator who holds no committee role - the per-committee policies admit only the committee's
+   * own role. All of them get the job list; none of them gets a compose form that could only fail.
+   * </para>
+   */
+  readonly canSendFromAny: Observable<boolean> = combineLatest(this.senderAvailability).pipe(
+    map(flags => flags.some(Boolean)),
+  );
 
   get canSendFromBoard(): Observable<boolean> {
     return this.appState.pipe(

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using Web.Configuration;
@@ -45,7 +46,7 @@ namespace Web.Controllers
 
         private const int MaxSignupChildrenPerHousehold = 50;
 
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly ICommunityEventRepository _communityEventRepository;
         private readonly IHomeRepository _homeRepository;
         private readonly IDocumentFileStore _documentFileStore;
@@ -54,9 +55,10 @@ namespace Web.Controllers
         private readonly IImageUploadHelper _imageUploadHelper;
         private readonly DocumentStorageOptions _storageOptions;
         private readonly JsonSerializerOptions _jsonSerializerOptions;
+        private readonly ILogger<EventsController> _logger;
 
         public EventsController(
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             ICommunityEventRepository communityEventRepository,
             IHomeRepository homeRepository,
             IDocumentFileStore documentFileStore,
@@ -64,10 +66,11 @@ namespace Web.Controllers
             IOgThumbnailService ogThumbnailService,
             IImageUploadHelper imageUploadHelper,
             IOptions<DocumentStorageOptions> storageOptions,
-            IOptions<JsonOptions> jsonOptions
+            IOptions<JsonOptions> jsonOptions,
+            ILogger<EventsController> logger
         )
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _communityEventRepository = communityEventRepository;
             _homeRepository = homeRepository;
             _documentFileStore = documentFileStore;
@@ -76,6 +79,7 @@ namespace Web.Controllers
             _imageUploadHelper = imageUploadHelper;
             _storageOptions = storageOptions.Value;
             _jsonSerializerOptions = jsonOptions.Value.JsonSerializerOptions;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -841,8 +845,7 @@ namespace Web.Controllers
 
         private async Task<Models.User> GetApiUserAsync()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
+            return await _currentUser.GetAsync(User);
         }
 
         private async Task<(bool IsAuthenticated, IReadOnlyList<Guid> HomeIds, string UserUniqueId)> TryGetCurrentUserContextAsync()
@@ -852,14 +855,29 @@ namespace Web.Controllers
                 return (false, null, null);
             }
 
+            // This catch used to absorb GetUniqueIdFromClaims throwing on a claim-less token, which
+            // the accessor now returns null for, so all it can still catch is a repository failure.
+            // Degrading is still right - the caller renders a public event page, and a transient
+            // fault should not 500 it - but the fault is logged rather than swallowed, because the
+            // degraded view hides the reader's own signup and will accept a duplicate.
             try
             {
-                var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-                var apiUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
+                var apiUser = await _currentUser.GetAsync(User);
                 return apiUser != null ? (true, apiUser.OwnedHomeIds, apiUser.UniqueId) : (false, null, null);
             }
-            catch (InvalidOperationException)
+            // Broad on purpose. This used to catch InvalidOperationException because that is what the
+            // claim parse threw; the accessor absorbs that, so the only failures left come from the
+            // repository and a narrow catch would be dead code. The method's contract is "try", its
+            // callers render a public page, and a transient fault should degrade it rather than 500
+            // it - but the fault is logged, because the degraded view hides the reader's own signup
+            // and will accept a duplicate. Cancellation is excluded per the repo checklist: a client
+            // that navigated away is not a fault.
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                _logger.LogWarning(
+                    ex,
+                    "Could not resolve the signed-in user for an event page; rendering it as anonymous."
+                );
                 return (false, null, null);
             }
         }
