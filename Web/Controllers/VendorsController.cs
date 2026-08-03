@@ -552,10 +552,12 @@ namespace Web.Controllers
             return user.Roles?.Contains(Models.User.Role.Administrator) == true;
         }
 
-        private async Task<User> GetApiUserAsync()
-        {
-            return await _currentUser.GetAsync(User);
-        }
+        // Scoped rather than file-wide: enabling nullable across this controller flags unrelated
+        // pre-existing code, and the point here is that this helper can return null.
+#nullable enable
+        /// <summary>The calling user, or null when no user matches the token.</summary>
+        private Task<User?> GetApiUserAsync() => _currentUser.GetAsync(User);
+#nullable restore
 
         private async Task WriteAudit(User apiUser, string subjectId, string subjectName, string action)
         {

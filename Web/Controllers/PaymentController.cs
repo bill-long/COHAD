@@ -64,12 +64,15 @@ namespace Web.Controllers
 
             payment.Date ??= DateTime.UtcNow;
 
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
             var user = await _currentUser.GetAsync(User);
             if (user == null)
             {
                 return NotFound();
             }
+
+            // The accessor looked the user up by this id, so it is the same value the claims would
+            // yield - without the parse that throws on a malformed token where this path returns 404.
+            var uniqueId = user.UniqueId;
 
             if (!string.IsNullOrWhiteSpace(payment.PayPalTransactionId))
             {

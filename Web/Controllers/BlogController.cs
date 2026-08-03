@@ -595,9 +595,16 @@ namespace Web.Controllers
             return Ok();
         }
 
-        // The accessor already returns null for an unauthenticated caller or missing claims, which is
-        // what the guard and catch here did; anonymous endpoints in this controller rely on that.
-        private Task<Models.User> GetApiUserAsync() => _currentUser.GetAsync(User);
+        // Scoped rather than file-wide: enabling nullable across this controller flags unrelated
+        // pre-existing code, and the point here is that this helper can return null.
+#nullable enable
+        /// <summary>
+        /// The calling user, or null when nobody is signed in or no user matches the token. The
+        /// accessor returns null for an unauthenticated caller or missing claims, which is what the
+        /// guard and catch here used to do; anonymous endpoints in this controller rely on that.
+        /// </summary>
+        private Task<Models.User?> GetApiUserAsync() => _currentUser.GetAsync(User);
+#nullable restore
 
         /// <summary>
         /// Blog management is available to any authenticated user who has the Resident role
