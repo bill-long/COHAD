@@ -33,7 +33,6 @@ const makeDetail = (overrides: Partial<EmailJobDetail> = {}): EmailJobDetail => 
   toDisplay: 'Board opt-in residents',
   originalSenderEmail: null,
   originalSenderDisplay: null,
-  originalSenderWithheld: false,
   subject: 'Test subject',
   createdUtc: '2026-01-01T00:00:00Z',
   startedUtc: null,

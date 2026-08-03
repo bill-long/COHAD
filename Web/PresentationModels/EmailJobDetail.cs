@@ -13,11 +13,7 @@ namespace Web.PresentationModels
     {
         public List<EmailJobRecipientDetail> Recipients { get; set; } = new();
 
-        /// <summary>
-        /// Maps a job for the caller. See <see cref="EmailJobSummary.FromJob(EmailJob, bool)"/> for
-        /// what <paramref name="includeOriginalSender"/> controls.
-        /// </summary>
-        public static new EmailJobDetail FromJob(EmailJob job, bool includeOriginalSender = false)
+        public static new EmailJobDetail FromJob(EmailJob job)
         {
             var dto = new EmailJobDetail
             {
@@ -36,7 +32,7 @@ namespace Web.PresentationModels
                     ?? new(),
             };
 
-            Populate(dto, job, includeOriginalSender);
+            Populate(dto, job);
             return dto;
         }
     }

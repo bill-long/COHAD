@@ -4,13 +4,6 @@ import { EmailJobSummary } from '../models';
 export const COMMITTEE_FORWARD_CATEGORY = 'committee-forward';
 
 /**
- * Shown as the From of a forward whose author the API withheld from this caller (anyone who is not
- * an Administrator). Naming the redaction beats repeating the committee mailbox, which would render
- * as a message the committee addressed to itself.
- */
-export const WITHHELD_SENDER = 'Sender not shown';
-
-/**
  * Who an email job was from and who it went to, in the terms an administrator thinks in.
  *
  * A job's `fromEmail` is the From header of the outgoing message, which is not the same thing
@@ -25,8 +18,8 @@ export const WITHHELD_SENDER = 'Sender not shown';
  */
 export interface EmailJobParties {
   /**
-   * The author: the original sender for a forward, otherwise the sending mailbox. On a forward whose
-   * author was withheld from this caller, `WITHHELD_SENDER`.
+   * The author: the original sender for a forward, otherwise the sending mailbox. A forward whose
+   * incoming message carried no sender address falls back to the mailbox it was sent as.
    */
   from: string;
   /** `from` without the address, for narrow table cells. */
@@ -83,16 +76,11 @@ export function emailJobParties(job: EmailJobSummary): EmailJobParties {
   const author = formatEmailAddress(job.originalSenderDisplay, job.originalSenderEmail);
   const authorShort = job.originalSenderDisplay?.trim() || job.originalSenderEmail?.trim() || '';
 
-  // Only a redaction gets the placeholder. A forward that genuinely had no sender address (an
-  // auto-reply, a mailer daemon) falls back to the mailbox it was sent as, which is what its From
-  // header really said - telling an administrator "sender not shown" there would read as a
-  // permissions problem they cannot resolve.
-  const missingAuthor = job.originalSenderWithheld ? WITHHELD_SENDER : mailbox;
-  const missingAuthorShort = job.originalSenderWithheld ? WITHHELD_SENDER : mailboxShort;
-
   return {
-    from: author || missingAuthor,
-    fromShort: authorShort || missingAuthorShort,
+    // A forward whose incoming message had no sender address (an auto-reply, a mailer daemon) falls
+    // back to the mailbox it was sent as, which is what its From header really said.
+    from: author || mailbox,
+    fromShort: authorShort || mailboxShort,
     // A forward is addressed to the committee mailbox, which is exactly what the job sends as.
     to: mailbox,
     toShort: mailboxShort,

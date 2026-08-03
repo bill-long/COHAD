@@ -147,28 +147,19 @@ namespace Web.Controllers
         [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> GetRecentJobs([FromQuery] int limit = 50)
         {
-            // Independent reads: the caller's roles do not affect which jobs are fetched.
-            var adminTask = CallerIsAdministrator();
-            var jobsTask = _emailJobRepository.GetRecentJobsAsync(Math.Clamp(limit, 1, 100));
-            await Task.WhenAll(adminTask, jobsTask);
-
-            var isAdmin = await adminTask;
-            return Ok((await jobsTask).Select(j => EmailJobSummary.FromJob(j, isAdmin)));
+            var jobs = await _emailJobRepository.GetRecentJobsAsync(Math.Clamp(limit, 1, 100));
+            return Ok(jobs.Select(EmailJobSummary.FromJob));
         }
 
         [HttpGet("jobs/{id:guid}")]
         [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> GetJob(Guid id)
         {
-            var adminTask = CallerIsAdministrator();
-            var jobTask = _emailJobRepository.GetByIdAsync(id);
-            await Task.WhenAll(adminTask, jobTask);
-
-            var job = await jobTask;
+            var job = await _emailJobRepository.GetByIdAsync(id);
             if (job == null)
                 return NotFound();
 
-            return Ok(EmailJobDetail.FromJob(job, await adminTask));
+            return Ok(EmailJobDetail.FromJob(job));
         }
 
         [HttpGet("jobs/{id:guid}/delivery-events")]
@@ -199,14 +190,7 @@ namespace Web.Controllers
                     new { error = "This job is currently being processed. Cancel it first if you want to retry." }
                 );
 
-            // Resolved before the job is mutated: once the write lands, the response must not be able
-            // to fail on an unrelated read and report an error for work that actually succeeded.
-            var adminTask = CallerIsAdministrator();
-            var jobTask = _emailJobRepository.GetByIdAsync(id);
-            await Task.WhenAll(adminTask, jobTask);
-
-            var isAdmin = await adminTask;
-            var job = await jobTask;
+            var job = await _emailJobRepository.GetByIdAsync(id);
             if (job == null)
                 return NotFound();
 
@@ -244,20 +228,14 @@ namespace Web.Controllers
                 );
             }
 
-            return Ok(EmailJobSummary.FromJob(job, isAdmin));
+            return Ok(EmailJobSummary.FromJob(job));
         }
 
         [HttpPost("jobs/{id:guid}/cancel")]
         [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> CancelJob(Guid id)
         {
-            // Resolved before the cancel is persisted, for the same reason as in RetryJob.
-            var adminTask = CallerIsAdministrator();
-            var jobTask = _emailJobRepository.GetByIdAsync(id);
-            await Task.WhenAll(adminTask, jobTask);
-
-            var isAdmin = await adminTask;
-            var job = await jobTask;
+            var job = await _emailJobRepository.GetByIdAsync(id);
             if (job == null)
                 return NotFound();
 
@@ -288,7 +266,7 @@ namespace Web.Controllers
                 }
             }
 
-            return Ok(EmailJobSummary.FromJob(current, isAdmin));
+            return Ok(EmailJobSummary.FromJob(current));
         }
 
         // ──────────────────────────────────────────────
@@ -296,7 +274,7 @@ namespace Web.Controllers
         // ──────────────────────────────────────────────
 
         // Scoped rather than file-wide: enabling nullable across this controller flags unrelated
-        // pre-existing code, and the point here is that these two helpers can return null.
+        // pre-existing code, and the point here is that this helper can return null.
 #nullable enable
         /// <summary>
         /// The calling user, or null when no user document matches the token. Reuses the document the
@@ -306,17 +284,6 @@ namespace Web.Controllers
         private async Task<Models.User?> GetCallerAsync() =>
             AuthorizedUserCache.Get(HttpContext)
             ?? await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
-
-        /// <summary>
-        /// True when the caller holds the Administrator role. The job endpoints are gated by the
-        /// committee-agnostic "EmailSender" policy, so this is what separates "may act on email jobs"
-        /// from "may see who wrote a message forwarded to some other committee".
-        /// </summary>
-        private async Task<bool> CallerIsAdministrator()
-        {
-            var apiUser = await GetCallerAsync();
-            return apiUser?.Roles?.Contains(Models.User.Role.Administrator) == true;
-        }
 #nullable restore
 
         /// <summary>
