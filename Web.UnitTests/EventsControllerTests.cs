@@ -1659,6 +1659,44 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
+    public async Task GetBySegment_renders_the_page_anonymously_when_the_user_read_fails()
+    {
+        // A public page must not 500 because the caller's user document could not be read. The
+        // degraded render hides the reader's own signup, so this is a trade rather than a free win -
+        // which is why the controller logs it, and why this test exists to keep the trade deliberate.
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents
+            .Setup(r => r.GetByRouteSegmentAsync("summer-bbq"))
+            .ReturnsAsync(
+                new CommunityEvent
+                {
+                    Id = Guid.NewGuid(),
+                    Title = "BBQ",
+                    StartUtc = DateTime.UtcNow.AddDays(1),
+                }
+            );
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ThrowsAsync(new Microsoft.Azure.Cosmos.CosmosException("throttled", System.Net.HttpStatusCode.TooManyRequests, 0, "activity", 0));
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockEvents.Object,
+            Mock.Of<IDocumentFileStore>(),
+            Mock.Of<IAuditLogRepository>()
+        );
+
+        // Does not throw: the page still renders.
+        var result = await c.GetBySegment("summer-bbq");
+
+        Assert.NotNull(result);
+        // Rendered as if nobody were signed in - the authenticated path sets private, no-store.
+        Assert.Equal("public, no-cache", c.Response.Headers["Cache-Control"].ToString());
+    }
+
+    [Fact]
     public async Task DownloadPromoMedia_sets_no_cache_with_etag()
     {
         var eventId = Guid.NewGuid();

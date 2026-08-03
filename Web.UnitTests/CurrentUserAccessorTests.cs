@@ -92,19 +92,54 @@ public sealed class CurrentUserAccessorTests
     }
 
     [Fact]
-    public async Task A_miss_is_not_remembered_so_a_document_created_mid_request_is_seen()
+    public async Task A_miss_is_remembered_like_any_other_answer()
     {
-        // A request that finds no user and then creates one (a first sign-in) should not keep
-        // answering null to everything that asks afterwards.
-        var created = new User { UniqueId = "google.comu1" };
+        // "No user matches this token" is an answer, not a failure, so repeating the read for it
+        // would break the once-per-request contract. Only a failed read is retried.
         var repo = new Mock<IUserRepository>();
-        repo.SetupSequence(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
-            .ReturnsAsync((User)null)
-            .ReturnsAsync(created);
+        repo.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>())).ReturnsAsync((User)null);
         var accessor = new CurrentUserAccessor(repo.Object);
 
         Assert.Null(await accessor.GetAsync(Principal()));
-        Assert.Same(created, await accessor.GetAsync(Principal()));
+        Assert.Null(await accessor.GetAsync(Principal()));
+
+        repo.Verify(r => r.GetByUniqueIdAsync(It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_failing_lookup_does_not_evict_a_later_successful_one()
+    {
+        // Forget compares task identity for this reason: principal A's read fails slowly, principal
+        // B's has already replaced it, and B's entry must survive A's failure.
+        var release = new TaskCompletionSource<User>();
+        var second = new User { UniqueId = "google.comu2" };
+        var repo = new Mock<IUserRepository>();
+        repo.Setup(r => r.GetByUniqueIdAsync("google.comu1")).Returns(release.Task);
+        repo.Setup(r => r.GetByUniqueIdAsync("google.comu2")).ReturnsAsync(second);
+        var accessor = new CurrentUserAccessor(repo.Object);
+
+        var failing = accessor.GetAsync(Principal("u1"));
+        Assert.Same(second, await accessor.GetAsync(Principal("u2")));
+
+        release.SetException(new System.InvalidOperationException("transient"));
+        await Assert.ThrowsAsync<System.InvalidOperationException>(() => failing);
+
+        // Still memoized: the late failure cleared its own entry, not the one that replaced it.
+        Assert.Same(second, await accessor.GetAsync(Principal("u2")));
+        repo.Verify(r => r.GetByUniqueIdAsync("google.comu2"), Times.Once);
+    }
+
+    [Fact]
+    public async Task Cancellation_is_reported_as_cancelled_rather_than_faulted()
+    {
+        // A caller that navigated away is not an application error; reporting it as one buries the
+        // real faults in the same log.
+        var repo = new Mock<IUserRepository>();
+        repo.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ThrowsAsync(new System.OperationCanceledException());
+        var accessor = new CurrentUserAccessor(repo.Object);
+
+        await Assert.ThrowsAnyAsync<System.OperationCanceledException>(() => accessor.GetAsync(Principal()));
     }
 
     [Fact]
@@ -128,7 +163,8 @@ public sealed class CurrentUserAccessorTests
     public async Task An_unauthenticated_principal_costs_no_read()
     {
         // Anonymous endpoints call this to find out whether anyone is signed in; that question must
-        // not turn into a Cosmos point read.
+        // not turn into a Cosmos point read. No IsAuthenticated precondition is needed for that - an
+        // anonymous principal carries no NameIdentifier, so the parse alone answers null.
         var repo = RepoReturning(new User());
         var accessor = new CurrentUserAccessor(repo.Object);
 

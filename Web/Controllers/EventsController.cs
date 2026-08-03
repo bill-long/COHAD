@@ -865,10 +865,14 @@ namespace Web.Controllers
                 var apiUser = await _currentUser.GetAsync(User);
                 return apiUser != null ? (true, apiUser.OwnedHomeIds, apiUser.UniqueId) : (false, null, null);
             }
-            // Deliberately still only InvalidOperationException, which is what this caught before the
-            // accessor existed. Widening it would swallow faults that used to reach the client -
-            // CosmosException among them - and degrading on those is not this method's call to make.
-            catch (InvalidOperationException ex)
+            // Broad on purpose. This used to catch InvalidOperationException because that is what the
+            // claim parse threw; the accessor absorbs that, so the only failures left come from the
+            // repository and a narrow catch would be dead code. The method's contract is "try", its
+            // callers render a public page, and a transient fault should degrade it rather than 500
+            // it - but the fault is logged, because the degraded view hides the reader's own signup
+            // and will accept a duplicate. Cancellation is excluded per the repo checklist: a client
+            // that navigated away is not a fault.
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(
                     ex,

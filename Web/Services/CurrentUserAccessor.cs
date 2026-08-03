@@ -19,7 +19,8 @@ namespace Web.Services
     {
         /// <summary>
         /// The caller's user document, or null when the token carries no usable identity claims or no
-        /// user matches them. Repeat calls within one request return the first result.
+        /// user matches them. Repeat calls within one request return the first result, including when
+        /// that result was "no such user"; only a failed read is retried.
         /// </summary>
         Task<User?> GetAsync(ClaimsPrincipal? principal);
 
@@ -80,24 +81,29 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// Reads the user into <paramref name="completion"/>, and forgets the attempt unless it
-        /// produced one.
+        /// Reads the user into <paramref name="completion"/>, and forgets the attempt if it failed.
         /// <para>
-        /// Keeping a faulted task would turn one transient Cosmos error into a guaranteed failure for
-        /// every later caller in the request, where before each did its own read and could succeed.
-        /// Keeping a null would outlast the miss: a request that finds no user and then creates one
-        /// (a first sign-in) should not keep answering null to everything that asks afterwards.
+        /// A miss is kept, because "no user matches this token" is an answer and repeating the read
+        /// for it would break the once-per-request contract. A failure is not an answer: keeping a
+        /// faulted task would turn one transient Cosmos error into a guaranteed failure for every
+        /// later caller in the request, where before each did its own read and could succeed.
+        /// </para>
+        /// <para>
+        /// Cancellation is completed as cancelled rather than faulted, per the repo's broad-catch
+        /// rule - a caller that navigated away is not an application error. The completion source is
+        /// always finished on every path: leaving it pending would hang everything sharing the memo.
         /// </para>
         /// </summary>
         private async Task LoadAsync(TaskCompletionSource<User?> completion, string uniqueId)
         {
             try
             {
-                var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
-                if (user == null)
-                    Forget(completion.Task);
-
-                completion.SetResult(user);
+                completion.SetResult(await _userRepository.GetByUniqueIdAsync(uniqueId));
+            }
+            catch (System.OperationCanceledException ex)
+            {
+                Forget(completion.Task);
+                completion.SetCanceled(ex.CancellationToken);
             }
             catch (System.Exception ex)
             {
@@ -127,10 +133,18 @@ namespace Web.Services
         /// The caller's unique id, or null when the required claims are absent.
         /// <see cref="User.GetUniqueIdFromClaims"/> throws in that case; an unauthenticated or
         /// partially-claimed request is a normal condition here, not an exceptional one.
+        /// <para>
+        /// Deliberately keyed on the claims alone, not on <c>Identity.IsAuthenticated</c>. An
+        /// anonymous principal carries no NameIdentifier, so the parse already answers null for it
+        /// without a read - while an IsAuthenticated precondition would look at the primary identity
+        /// only, and answer null for a correctly signed-in caller if anything ever attaches a second
+        /// one. That failure mode is a site-wide 403, so it is not worth guarding against a cost the
+        /// parse already avoids.
+        /// </para>
         /// </summary>
         public string? TryGetUniqueId(ClaimsPrincipal? principal)
         {
-            if (principal?.Identity?.IsAuthenticated != true)
+            if (principal == null)
                 return null;
 
             try
