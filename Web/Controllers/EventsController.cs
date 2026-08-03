@@ -851,15 +851,12 @@ namespace Web.Controllers
                 return (false, null, null);
             }
 
-            try
-            {
-                var apiUser = await _currentUser.GetAsync(User);
-                return apiUser != null ? (true, apiUser.OwnedHomeIds, apiUser.UniqueId) : (false, null, null);
-            }
-            catch (InvalidOperationException)
-            {
-                return (false, null, null);
-            }
+            // No catch here any more: this used to absorb GetUniqueIdFromClaims throwing on a
+            // claim-less token, which the accessor now returns null for. Anything still thrown comes
+            // from the repository, and swallowing that would quietly show a signed-in resident the
+            // anonymous view - hiding their household's signup and letting them submit a duplicate.
+            var apiUser = await _currentUser.GetAsync(User);
+            return apiUser != null ? (true, apiUser.OwnedHomeIds, apiUser.UniqueId) : (false, null, null);
         }
 
         private static bool HasEventManagementAccess(Models.User user)

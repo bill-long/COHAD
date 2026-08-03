@@ -668,15 +668,7 @@ public sealed class EmailControllerJobTests
     // every role in that policy, so they fail if caller-dependent filtering is reintroduced for any
     // one of them - a plain fact with a single role would pass no matter what the endpoint checked.
     public static TheoryData<User.Role> EmailSenderRoles =>
-        new()
-        {
-            User.Role.Administrator,
-            User.Role.Board,
-            User.Role.WelcomeCommittee,
-            User.Role.GardenClub,
-            User.Role.SocialCommittee,
-            User.Role.SunshineCommittee,
-        };
+        new(AuthorizationRoleSets.EmailSender);
 
     [Theory]
     [MemberData(nameof(EmailSenderRoles))]

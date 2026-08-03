@@ -19,7 +19,6 @@ namespace Web.Controllers
     public class MeController : ControllerBase
     {
         private readonly IUserRepository _userRepository;
-        private readonly ICurrentUserAccessor _currentUser;
         private readonly IHomeRepository _homeRepository;
         private readonly IResidentRepository _residentRepository;
         private readonly INotificationService _notificationService;
@@ -27,7 +26,6 @@ namespace Web.Controllers
 
         public MeController(
             IUserRepository userRepository,
-            ICurrentUserAccessor currentUser,
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
             INotificationService notificationService,
@@ -35,7 +33,6 @@ namespace Web.Controllers
         )
         {
             _userRepository = userRepository;
-            _currentUser = currentUser;
             _homeRepository = homeRepository;
             _residentRepository = residentRepository;
             _notificationService = notificationService;
@@ -45,16 +42,17 @@ namespace Web.Controllers
         [HttpGet]
         public async Task<PresentationUser> Get()
         {
-            var user = await _currentUser.GetAsync(User);
+            // Read directly rather than through the accessor: this action mutates the user it gets and
+            // hands it to a background upsert, and the accessor's instance is shared with everything
+            // else in the request. Nothing else reads the caller on this path - no role policy guards
+            // it - so owning the instance costs no extra read.
+            var user = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
             if (user != null)
             {
                 user.GivenName = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.GivenName)?.Value;
                 user.Surname = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Surname)?.Value;
                 user.Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value;
                 user.LastLoggedIn = DateTime.UtcNow;
-                // Mutates the instance the request-scoped accessor hands to any later caller. That is
-                // read-your-own-writes here, not staleness - these are the values being persisted on
-                // the next line - but nothing else in this request may mutate it while the upsert runs.
                 FireAndForget(() => _userRepository.UpsertAsync(user));
 
                 var ownedHomes = new List<Home>();
@@ -87,8 +85,6 @@ namespace Web.Controllers
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
                 Roles = new List<User.Role>(),
                 OwnedHomeIds = new List<System.Guid>(),
-                // Parsed here rather than up front: this branch runs once per account, while the
-                // read above happens on every page load of the SPA.
                 UniqueId = Models.User.GetUniqueIdFromClaims(User.Claims),
                 LastLoggedIn = DateTime.UtcNow,
             };

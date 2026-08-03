@@ -12,6 +12,25 @@ namespace Web.Authorization
     /// Requires the user to have at least one of the specified roles.
     /// Used for endpoints that multiple committee roles can access (e.g. email job management).
     /// </summary>
+    /// <summary>
+    /// Role sets that more than one place needs to agree on. Policies are declared in
+    /// <c>Startup</c>, but a test that claims to cover "every role this policy admits" has to read
+    /// the same list rather than restate it, or it silently stops covering a role that gets added.
+    /// </summary>
+    public static class AuthorizationRoleSets
+    {
+        /// <summary>Roles admitted by the "EmailSender" policy.</summary>
+        public static readonly User.Role[] EmailSender =
+        {
+            User.Role.Administrator,
+            User.Role.Board,
+            User.Role.WelcomeCommittee,
+            User.Role.GardenClub,
+            User.Role.SocialCommittee,
+            User.Role.SunshineCommittee,
+        };
+    }
+
     public class AnyRoleAuthorizationRequirement : IAuthorizationRequirement
     {
         public IReadOnlyList<User.Role> RequiredRoles { get; }

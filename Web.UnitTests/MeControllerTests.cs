@@ -50,7 +50,6 @@ public sealed class MeControllerTests
 
         var controller = new MeController(
             userRepository,
-            new CurrentUserAccessor(userRepository),
             homeRepository,
             residentRepository,
             notificationService,

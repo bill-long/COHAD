@@ -230,14 +230,7 @@ namespace Web
                     "EmailSender",
                     policy =>
                         policy.Requirements.Add(
-                            new AnyRoleAuthorizationRequirement(
-                                User.Role.Administrator,
-                                User.Role.Board,
-                                User.Role.WelcomeCommittee,
-                                User.Role.GardenClub,
-                                User.Role.SocialCommittee,
-                                User.Role.SunshineCommittee
-                            )
+                            new AnyRoleAuthorizationRequirement(AuthorizationRoleSets.EmailSender)
                         )
                 );
 
