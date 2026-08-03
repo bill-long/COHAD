@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using Web.Models;
 
@@ -23,9 +24,9 @@ namespace Web.Services
         /// </summary>
         public static void ApplyOriginator(
             EmailJob job,
-            string committeeDisplayName,
-            string senderEmail,
-            string senderName
+            string? committeeDisplayName,
+            string? senderEmail,
+            string? senderName
         )
         {
             ArgumentNullException.ThrowIfNull(job);

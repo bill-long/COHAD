@@ -18,7 +18,7 @@
     <!-- Compact (phone / small tablet): one stacked block per entry. Unlike the old narrow-table
          treatment, this keeps the subject visible - an audit entry without its subject cannot be
          audited. -->
-    <ol class="audit-entry-list" *ngIf="isCompact$ | async; else auditTable">
+    <ol class="audit-entry-list" role="list" *ngIf="isCompact$ | async; else auditTable">
       <!-- The stacked form loses the column headers, and a subject and an actor can both be a
            person's name, so the distinction is restated for screen readers. -->
       <li class="audit-entry" *ngFor="let auditEntry of entries">

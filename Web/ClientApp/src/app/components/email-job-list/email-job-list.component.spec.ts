@@ -1,6 +1,8 @@
 import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
-import { Location } from '@angular/common';
-import { TestBed } from '@angular/core/testing';
+import { CommonModule, Location } from '@angular/common';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MatCardModule } from '@angular/material/card';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Subject, of, throwError } from 'rxjs';
 import { EmailJobListComponent } from './email-job-list.component';
@@ -146,18 +148,46 @@ describe('EmailJobListComponent', () => {
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/manage/email-jobs', 'j1']);
   });
 
-  it('switches to the compact layout when the viewport is narrow', done => {
-    const seen: boolean[] = [];
-    component.isCompact$.subscribe(isCompact => {
-      seen.push(isCompact);
-      if (seen.length === 2) {
-        // Narrow widths stack each job instead of hiding its From/To/Date cells.
-        expect(seen).toEqual([false, true]);
-        done();
-      }
+  it('renders the table on desktop and the stacked list when the viewport is narrow', () => {
+    // Rendered, not just observed: an *ngIf removed from the template would otherwise leave phones
+    // with the desktop table while a subscription-only assertion still passed.
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      declarations: [EmailJobListComponent],
+      imports: [CommonModule, MatCardModule, MatProgressSpinnerModule],
+      providers: [
+        { provide: EmailJobService, useValue: emailJobServiceSpy },
+        { provide: EmailJobNotificationsService, useValue: notificationsSpy },
+        { provide: Router, useValue: routerSpy },
+        { provide: Location, useValue: locationSpy },
+        { provide: BreakpointObserver, useValue: { observe: () => breakpointState.asObservable() } },
+      ],
     });
+    emailJobServiceSpy.getRecentJobs.and.returnValue(of([makeJob('j1')]));
+
+    const fixture: ComponentFixture<EmailJobListComponent> = TestBed.createComponent(EmailJobListComponent);
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('.jobs-table')).not.toBeNull();
+    expect(el.querySelector('.job-entry-list')).toBeNull();
 
     breakpointState.next({ matches: true, breakpoints: {} });
+    fixture.detectChanges();
+
+    expect(el.querySelector('.job-entry-list')).not.toBeNull();
+    expect(el.querySelector('.jobs-table')).toBeNull();
+    // Every field a row is identified by survives the switch, rather than being hidden.
+    const entry = el.querySelector('.job-entry') as HTMLElement;
+    expect(entry.textContent).toContain('Test subject');
+    expect(entry.textContent).toContain('COHAD Board');
+    expect(entry.textContent).toContain('Board opt-in residents');
+    // The li keeps its listitem role; the clickable element sits inside it.
+    expect(entry.getAttribute('role')).toBeNull();
+    expect(entry.querySelector('[role="button"]')).not.toBeNull();
+    expect(el.querySelector('.job-entry-list')!.getAttribute('role')).toBe('list');
+
+    fixture.destroy();
   });
 
   it('partiesFor() names the resident, not the committee, on a forwarded job', () => {

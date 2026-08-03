@@ -1,3 +1,4 @@
+using System;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -202,9 +203,51 @@ public class EmailJobPartiesTests
         Assert.Null(summary.OriginalSenderDisplay);
         Assert.Null(detail.OriginalSenderEmail);
         Assert.Null(detail.OriginalSenderDisplay);
+        // Flagged as withheld, which is how the client knows to say the sender is not shown rather
+        // than falling back to the mailbox and reading as a message the committee sent to itself.
+        Assert.True(summary.OriginalSenderWithheld);
+        Assert.True(detail.OriginalSenderWithheld);
         // Everything that is not the third party's identity still comes through.
         Assert.Equal("architectural@cohad.org", summary.FromEmail);
         Assert.Equal("Architectural Committee forwarding members", summary.ToDisplay);
+    }
+
+    [Fact]
+    public void Nothing_is_marked_withheld_when_the_caller_may_see_the_author()
+    {
+        var summary = EmailJobSummary.FromJob(ForwardedJob(), includeOriginalSender: true);
+
+        Assert.False(summary.OriginalSenderWithheld);
+        Assert.Equal("jane@example.com", summary.OriginalSenderEmail);
+    }
+
+    [Fact]
+    public void Nothing_is_marked_withheld_when_the_job_has_no_author_to_withhold()
+    {
+        // A forward whose incoming message had no sender address (an auto-reply, a mailer daemon).
+        // Reporting it as withheld would tell an administrator the sender is hidden from them when
+        // there is simply no sender, which reads as a permissions problem they cannot resolve.
+        var job = ForwardedJob();
+        job.OriginalSenderEmail = null;
+        job.OriginalSenderDisplay = null;
+        job.ReplyToEmail = null;
+        job.ReplyToDisplay = null;
+
+        Assert.False(EmailJobSummary.FromJob(job).OriginalSenderWithheld);
+        Assert.False(EmailJobSummary.FromJob(job, includeOriginalSender: true).OriginalSenderWithheld);
+    }
+
+    [Fact]
+    public void An_ordinary_send_is_never_marked_withheld()
+    {
+        var job = new EmailJob
+        {
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            ReplyToEmail = "president@example.com",
+        };
+
+        Assert.False(EmailJobSummary.FromJob(job).OriginalSenderWithheld);
     }
 
     [Fact]
@@ -215,6 +258,8 @@ public class EmailJobPartiesTests
         job.CreatedByDisplayName = "Committee Mail Poller";
         job.TotalRecipients = 1;
         job.SentCount = 1;
+        job.StartedUtc = new DateTime(2026, 4, 1, 9, 0, 0, DateTimeKind.Utc);
+        job.CompletedUtc = new DateTime(2026, 4, 1, 9, 5, 0, DateTimeKind.Utc);
         job.Recipients.Add(new EmailJobRecipient { Email = "member@example.com" });
 
         var detail = EmailJobDetail.FromJob(job, includeOriginalSender: true);
@@ -230,8 +275,11 @@ public class EmailJobPartiesTests
         Assert.Equal(job.ToDisplay, detail.ToDisplay);
         Assert.Equal(job.OriginalSenderEmail, detail.OriginalSenderEmail);
         Assert.Equal(job.OriginalSenderDisplay, detail.OriginalSenderDisplay);
+        Assert.False(detail.OriginalSenderWithheld);
         Assert.Equal(job.Subject, detail.Subject);
         Assert.Equal(job.CreatedUtc, detail.CreatedUtc);
+        Assert.Equal(job.StartedUtc, detail.StartedUtc);
+        Assert.Equal(job.CompletedUtc, detail.CompletedUtc);
         Assert.Equal(job.CreatedByDisplayName, detail.CreatedByDisplayName);
         Assert.Equal(job.TotalRecipients, detail.TotalRecipients);
         Assert.Equal(job.SentCount, detail.SentCount);

@@ -295,12 +295,15 @@ namespace Web.Controllers
         // Private helpers
         // ──────────────────────────────────────────────
 
+        // Scoped rather than file-wide: enabling nullable across this controller flags unrelated
+        // pre-existing code, and the point here is that these two helpers can return null.
+#nullable enable
         /// <summary>
-        /// The calling user, reusing the document the policy already read for this request and falling
-        /// back to a read of its own if nothing was cached, so the admin pages do not double their
-        /// reads of the user container on every refresh.
+        /// The calling user, or null when no user document matches the token. Reuses the document the
+        /// policy already read for this request and falls back to a read of its own if nothing was
+        /// cached, so the admin pages do not double their reads of the user container on every refresh.
         /// </summary>
-        private async Task<Models.User> GetCallerAsync() =>
+        private async Task<Models.User?> GetCallerAsync() =>
             AuthorizedUserCache.Get(HttpContext)
             ?? await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
 
@@ -314,6 +317,7 @@ namespace Web.Controllers
             var apiUser = await GetCallerAsync();
             return apiUser?.Roles?.Contains(Models.User.Role.Administrator) == true;
         }
+#nullable restore
 
         /// <summary>
         /// Queues a job that sends <paramref name="emailInfo"/> as <paramref name="fromEmail"/> to every

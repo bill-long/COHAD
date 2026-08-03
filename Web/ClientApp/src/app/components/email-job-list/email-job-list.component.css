@@ -35,9 +35,11 @@
   overflow-x: auto;
 }
 
+/* 880px of declared column widths and their padding, plus ~220px so Subject stays readable rather
+   than collapsing to its header word. Below this the wrapper scrolls. */
 .jobs-table {
   width: 100%;
-  min-width: 820px;
+  min-width: 1120px;
   border-collapse: collapse;
 }
 

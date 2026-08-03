@@ -1,4 +1,5 @@
-using System;
+#nullable enable
+using Web.Models;
 
 namespace Web.Services
 {
@@ -16,7 +17,7 @@ namespace Web.Services
         /// still be lower - members without an email are skipped and shared addresses are deduped -
         /// so this names who was addressed, not how many messages went out.
         /// </summary>
-        public static string ForCommitteeForward(string committeeDisplayName) =>
+        public static string ForCommitteeForward(string? committeeDisplayName) =>
             string.IsNullOrWhiteSpace(committeeDisplayName)
                 ? "Committee forwarding members"
                 : $"{committeeDisplayName} forwarding members";
@@ -25,7 +26,7 @@ namespace Web.Services
         /// A committee-wide send, whose recipients are the addresses opted in to that committee's mail.
         /// <paramref name="committeeLabel"/> is the committee's human name ("Board", "Garden Club").
         /// </summary>
-        public static string ForCommitteeSend(string committeeLabel) =>
+        public static string ForCommitteeSend(string? committeeLabel) =>
             string.IsNullOrWhiteSpace(committeeLabel) ? "Opt-in residents" : $"{committeeLabel} opt-in residents";
 
         /// <summary>A test send, which goes only to the sender's own addresses.</summary>

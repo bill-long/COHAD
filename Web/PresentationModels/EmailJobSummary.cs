@@ -63,8 +63,8 @@ namespace Web.PresentationModels
         /// <paramref name="includeOriginalSender"/> must be true only for Administrators. A forwarded
         /// message's author is a third party who wrote to one committee, while the job endpoints are
         /// gated by the committee-agnostic "EmailSender" policy - so every committee role can read
-        /// every job. Withholding the author leaves those callers seeing exactly what they saw before
-        /// the field existed (the committee mailbox as From), rather than a new disclosure.
+        /// every job. Those callers get no part of the author's identity; the client tells them the
+        /// sender is not shown (see <see cref="OriginalSenderWithheld"/>) rather than naming anyone.
         /// </para>
         /// </summary>
         public static EmailJobSummary FromJob(EmailJob job, bool includeOriginalSender = false)

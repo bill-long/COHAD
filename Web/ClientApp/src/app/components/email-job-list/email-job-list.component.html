@@ -20,7 +20,9 @@
             <!-- Compact (phone / small tablet): one stacked block per job. The previous treatment hid
                  the From, To and Date cells at narrow widths, which left jobs sharing a subject
                  indistinguishable; stacking keeps every field a row is identified by. -->
-            <ol class="job-entry-list" *ngIf="isCompact$ | async; else jobsTable">
+            <!-- role="list" is required: Safari drops list semantics from a list-style:none list, which
+                 would defeat the reason the clickable element sits inside the li. -->
+            <ol class="job-entry-list" role="list" *ngIf="isCompact$ | async; else jobsTable">
                 <!-- The clickable element is inside the li, not the li itself: role="button" on the
                      li would replace its listitem role and leave the ol with no valid children, so a
                      screen reader would announce neither the item count nor the position. -->

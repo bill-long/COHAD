@@ -1,3 +1,4 @@
+#nullable enable
 using Microsoft.AspNetCore.Http;
 using Web.Models;
 
@@ -16,8 +17,12 @@ namespace Web.Authorization
     {
         private const string ItemKey = "Web.Authorization.AuthorizedUser";
 
-        /// <summary>Stores the user resolved while evaluating a policy for this request.</summary>
-        public static void Set(HttpContext httpContext, User user)
+        /// <summary>
+        /// Stores the user resolved while evaluating a policy for this request. Both arguments are
+        /// nullable because handlers pass <c>context.Resource as HttpContext</c>, which is null
+        /// whenever the policy guards something other than an HTTP endpoint (a SignalR hub, say).
+        /// </summary>
+        public static void Set(HttpContext? httpContext, User? user)
         {
             if (httpContext != null && user != null)
                 httpContext.Items[ItemKey] = user;
@@ -25,9 +30,10 @@ namespace Web.Authorization
 
         /// <summary>
         /// The user resolved during authorization of this request, or null if no handler stored one
-        /// (a different policy ran, or the endpoint is anonymous).
+        /// (a different policy ran, the endpoint is anonymous, or the resource was not an HttpContext).
+        /// Callers must handle the miss - it is never a guarantee that a user is present.
         /// </summary>
-        public static User Get(HttpContext httpContext) =>
+        public static User? Get(HttpContext? httpContext) =>
             httpContext?.Items.TryGetValue(ItemKey, out var cached) == true ? cached as User : null;
     }
 }
