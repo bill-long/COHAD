@@ -664,12 +664,25 @@ public sealed class EmailControllerJobTests
         Assert.Equal(2, summaries.Count());
     }
 
-    [Fact]
-    public async Task GetRecentJobs_ReportsWhoWroteAForwardedMessage()
+    // Whoever the "EmailSender" policy admits sees a forwarded message's author. The theories run
+    // every role in that policy, so they fail if caller-dependent filtering is reintroduced for any
+    // one of them - a plain fact with a single role would pass no matter what the endpoint checked.
+    public static TheoryData<User.Role> EmailSenderRoles =>
+        new()
+        {
+            User.Role.Administrator,
+            User.Role.Board,
+            User.Role.WelcomeCommittee,
+            User.Role.GardenClub,
+            User.Role.SocialCommittee,
+            User.Role.SunshineCommittee,
+        };
+
+    [Theory]
+    [MemberData(nameof(EmailSenderRoles))]
+    public async Task GetRecentJobs_ReportsWhoWroteAForwardedMessage_ToEveryEmailSenderRole(User.Role role)
     {
-        // Every EmailSender role sees the author: the job pages exist to say who a forwarded
-        // message came from, and the committee mailbox alone does not answer that.
-        SetupMockUserWithRoles(User.Role.GardenClub);
+        SetupMockUserWithRoles(role);
         _jobRepo
             .Setup(r => r.GetRecentJobsAsync(It.IsAny<int>()))
             .ReturnsAsync(new List<EmailJob> { ForwardedJob(Guid.NewGuid()) });
@@ -684,11 +697,12 @@ public sealed class EmailControllerJobTests
         Assert.Equal("Architectural Committee forwarding members", summary.ToDisplay);
     }
 
-    [Fact]
-    public async Task GetJob_ReportsWhoWroteAForwardedMessage()
+    [Theory]
+    [MemberData(nameof(EmailSenderRoles))]
+    public async Task GetJob_ReportsWhoWroteAForwardedMessage_ToEveryEmailSenderRole(User.Role role)
     {
         var jobId = Guid.NewGuid();
-        SetupMockUserWithRoles(User.Role.WelcomeCommittee);
+        SetupMockUserWithRoles(role);
         _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(ForwardedJob(jobId));
 
         var controller = CreateController();

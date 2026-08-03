@@ -22,6 +22,13 @@ namespace Web.Services
         /// user matches them. Repeat calls within one request return the first result.
         /// </summary>
         Task<User?> GetAsync(ClaimsPrincipal? principal);
+
+        /// <summary>
+        /// The unique id <see cref="GetAsync"/> would look up for <paramref name="principal"/>, or null
+        /// when the token carries no usable identity claims. Exposed so callers that report a failure
+        /// name the id that was actually read, rather than deriving their own copy that can drift.
+        /// </summary>
+        string? TryGetUniqueId(ClaimsPrincipal? principal);
     }
 
     /// <inheritdoc />
@@ -57,14 +64,21 @@ namespace Web.Services
                 if (_cachedLookup != null && _cachedUniqueId == uniqueId)
                     return _cachedLookup;
 
+                // Published before the read starts, so that a repository which completes synchronously
+                // (the in-memory one) cannot run the forget-on-failure path before there is anything to
+                // forget, which would leave a cached task paired with no id.
+                var completion = new TaskCompletionSource<User?>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _cachedUniqueId = uniqueId;
-                _cachedLookup = LoadAsync(uniqueId);
-                return _cachedLookup;
+                _cachedLookup = completion.Task;
+
+                _ = LoadAsync(completion, uniqueId);
+                return completion.Task;
             }
         }
 
         /// <summary>
-        /// Reads the user, and forgets the attempt unless it produced one.
+        /// Reads the user into <paramref name="completion"/>, and forgets the attempt unless it
+        /// produced one.
         /// <para>
         /// Keeping a faulted task would turn one transient Cosmos error into a guaranteed failure for
         /// every later caller in the request, where before each did its own read and could succeed.
@@ -72,23 +86,36 @@ namespace Web.Services
         /// there is none, and anything asking afterwards should see it.
         /// </para>
         /// </summary>
-        private async Task<User?> LoadAsync(string uniqueId)
+        private async Task LoadAsync(TaskCompletionSource<User?> completion, string uniqueId)
         {
-            User? user = null;
             try
             {
-                user = await _userRepository.GetByUniqueIdAsync(uniqueId);
-                return user;
-            }
-            finally
-            {
+                var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
                 if (user == null)
+                    Forget(completion.Task);
+
+                completion.SetResult(user);
+            }
+            catch (System.Exception ex)
+            {
+                Forget(completion.Task);
+                completion.SetException(ex);
+            }
+        }
+
+        /// <summary>
+        /// Drops <paramref name="lookup"/> from the memo if it is still the current one. The identity
+        /// check matters: a slow failing lookup for one principal must not evict a later, successful
+        /// lookup that replaced it.
+        /// </summary>
+        private void Forget(Task<User?> lookup)
+        {
+            lock (_gate)
+            {
+                if (ReferenceEquals(_cachedLookup, lookup))
                 {
-                    lock (_gate)
-                    {
-                        _cachedUniqueId = null;
-                        _cachedLookup = null;
-                    }
+                    _cachedUniqueId = null;
+                    _cachedLookup = null;
                 }
             }
         }
@@ -98,7 +125,7 @@ namespace Web.Services
         /// <see cref="User.GetUniqueIdFromClaims"/> throws in that case; an unauthenticated or
         /// partially-claimed request is a normal condition here, not an exceptional one.
         /// </summary>
-        private static string? TryGetUniqueId(ClaimsPrincipal? principal)
+        public string? TryGetUniqueId(ClaimsPrincipal? principal)
         {
             if (principal?.Identity?.IsAuthenticated != true)
                 return null;

@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
@@ -22,15 +21,11 @@ namespace Web.Authorization
             RoleAuthorizationRequirement requirement
         )
         {
-            // Derived here purely so the warnings below can name the account and keep "malformed
-            // token" distinct from "no such user" - the accessor returns null for both, and these
-            // logs are the only production signal for a denial.
-            string uniqueId;
-            try
-            {
-                uniqueId = Models.User.GetUniqueIdFromClaims(context.User.Claims);
-            }
-            catch (InvalidOperationException)
+            // Asked of the accessor rather than parsed here, so the id these warnings name is the one
+            // that was actually looked up. They keep "malformed token" distinct from "no such user" -
+            // the read returns null for both, and these logs are the only production signal.
+            var uniqueId = _currentUser.TryGetUniqueId(context.User);
+            if (uniqueId == null)
             {
                 _logger.LogWarning(
                     "Authorization failed for requirement {Role}: required claims are missing from the token.",

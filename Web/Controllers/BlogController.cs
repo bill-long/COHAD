@@ -597,7 +597,7 @@ namespace Web.Controllers
 
         // The accessor already returns null for an unauthenticated caller or missing claims, which is
         // what the guard and catch here did; anonymous endpoints in this controller rely on that.
-        private async Task<Models.User> GetApiUserAsync() => await _currentUser.GetAsync(User);
+        private Task<Models.User> GetApiUserAsync() => _currentUser.GetAsync(User);
 
         /// <summary>
         /// Blog management is available to any authenticated user who has the Resident role

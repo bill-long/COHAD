@@ -38,15 +38,11 @@ namespace Web.Authorization
             AnyRoleAuthorizationRequirement requirement
         )
         {
-            // Derived here purely so the warnings below can name the account and keep the failure
-            // modes apart - the accessor returns null for both a malformed token and an unknown user,
-            // and these logs are the only production signal for a denial.
-            string uniqueId;
-            try
-            {
-                uniqueId = User.GetUniqueIdFromClaims(context.User.Claims);
-            }
-            catch (System.InvalidOperationException)
+            // Asked of the accessor rather than parsed here, so the id these warnings name is the one
+            // that was actually looked up, and the failure modes stay apart - the read returns null for
+            // both a malformed token and an unknown user.
+            var uniqueId = _currentUser.TryGetUniqueId(context.User);
+            if (uniqueId == null)
             {
                 _logger.LogWarning("AnyRole authorization failed: required claims are missing from the token.");
                 return;
