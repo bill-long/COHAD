@@ -45,7 +45,7 @@ namespace Web.Controllers
 
         private const int MaxSignupChildrenPerHousehold = 50;
 
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly ICommunityEventRepository _communityEventRepository;
         private readonly IHomeRepository _homeRepository;
         private readonly IDocumentFileStore _documentFileStore;
@@ -56,7 +56,7 @@ namespace Web.Controllers
         private readonly JsonSerializerOptions _jsonSerializerOptions;
 
         public EventsController(
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             ICommunityEventRepository communityEventRepository,
             IHomeRepository homeRepository,
             IDocumentFileStore documentFileStore,
@@ -67,7 +67,7 @@ namespace Web.Controllers
             IOptions<JsonOptions> jsonOptions
         )
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _communityEventRepository = communityEventRepository;
             _homeRepository = homeRepository;
             _documentFileStore = documentFileStore;
@@ -841,8 +841,7 @@ namespace Web.Controllers
 
         private async Task<Models.User> GetApiUserAsync()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
+            return await _currentUser.GetAsync(User);
         }
 
         private async Task<(bool IsAuthenticated, IReadOnlyList<Guid> HomeIds, string UserUniqueId)> TryGetCurrentUserContextAsync()
@@ -854,8 +853,7 @@ namespace Web.Controllers
 
             try
             {
-                var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-                var apiUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
+                var apiUser = await _currentUser.GetAsync(User);
                 return apiUser != null ? (true, apiUser.OwnedHomeIds, apiUser.UniqueId) : (false, null, null);
             }
             catch (InvalidOperationException)

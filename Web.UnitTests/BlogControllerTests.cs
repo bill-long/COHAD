@@ -40,7 +40,7 @@ public sealed class BlogControllerTests
         storageOptions ??= new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 };
 
         var c = new BlogController(
-            users,
+            new CurrentUserAccessor(users),
             posts,
             comments,
             fileStore,
@@ -97,7 +97,7 @@ public sealed class BlogControllerTests
     )
     {
         return new BlogController(
-            Mock.Of<IUserRepository>(),
+            new CurrentUserAccessor(Mock.Of<IUserRepository>()),
             posts,
             comments ?? Mock.Of<IBlogCommentRepository>(),
             files ?? Mock.Of<IDocumentFileStore>(),

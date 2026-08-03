@@ -147,7 +147,7 @@ public sealed class EmailControllerJobTests
         processor ??= CreateProcessor();
 
         var controller = new EmailController(
-            _users.Object,
+            new CurrentUserAccessor(_users.Object),
             _homes.Object,
             _residents.Object,
             _audit.Object,

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Web.Models;
 using Web.PresentationModels;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 using Web.Utils;
@@ -19,16 +20,19 @@ namespace Web.Controllers
     {
         private readonly IYouthServiceListingRepository _youthServiceListingRepository;
         private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IAuditLogRepository _auditLogRepository;
 
         public YouthServicesController(
             IYouthServiceListingRepository youthServiceListingRepository,
             IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IAuditLogRepository auditLogRepository
         )
         {
             _youthServiceListingRepository = youthServiceListingRepository;
             _userRepository = userRepository;
+            _currentUser = currentUser;
             _auditLogRepository = auditLogRepository;
         }
 
@@ -268,8 +272,7 @@ namespace Web.Controllers
 
         private async Task<User> GetApiUserAsync()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
+            return await _currentUser.GetAsync(User);
         }
 
         private async Task WriteAudit(User apiUser, string subjectId, string subjectName, string action)

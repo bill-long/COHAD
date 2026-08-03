@@ -31,7 +31,7 @@ namespace Web.Controllers
             ".webp",
         };
 
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IBlogPostRepository _blogPostRepository;
         private readonly IBlogCommentRepository _blogCommentRepository;
         private readonly IDocumentFileStore _documentFileStore;
@@ -55,7 +55,7 @@ namespace Web.Controllers
         };
 
         public BlogController(
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IBlogPostRepository blogPostRepository,
             IBlogCommentRepository blogCommentRepository,
             IDocumentFileStore documentFileStore,
@@ -64,7 +64,7 @@ namespace Web.Controllers
             IOptions<DocumentStorageOptions> storageOptions
         )
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _blogPostRepository = blogPostRepository;
             _blogCommentRepository = blogCommentRepository;
             _documentFileStore = documentFileStore;
@@ -595,23 +595,9 @@ namespace Web.Controllers
             return Ok();
         }
 
-        private async Task<Models.User> GetApiUserAsync()
-        {
-            if (User?.Identity?.IsAuthenticated != true)
-            {
-                return null;
-            }
-
-            try
-            {
-                var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-                return await _userRepository.GetByUniqueIdAsync(uniqueId);
-            }
-            catch (InvalidOperationException)
-            {
-                return null;
-            }
-        }
+        // The accessor already returns null for an unauthenticated caller or missing claims, which is
+        // what the guard and catch here did; anonymous endpoints in this controller rely on that.
+        private async Task<Models.User> GetApiUserAsync() => await _currentUser.GetAsync(User);
 
         /// <summary>
         /// Blog management is available to any authenticated user who has the Resident role

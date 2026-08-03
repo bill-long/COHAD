@@ -21,17 +21,17 @@ namespace Web.Controllers
     public class NotificationsController : ControllerBase
     {
         private readonly INotificationService _notificationService;
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly CommitteeListCache _committeeListCache;
 
         public NotificationsController(
             INotificationService notificationService,
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             CommitteeListCache committeeListCache
         )
         {
             _notificationService = notificationService;
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _committeeListCache = committeeListCache;
         }
 
@@ -165,8 +165,7 @@ namespace Web.Controllers
 
         private async Task<User?> GetApiUserAsync()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
+            return await _currentUser.GetAsync(User);
         }
     }
 }

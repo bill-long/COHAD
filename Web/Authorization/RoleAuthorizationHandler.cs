@@ -1,20 +1,18 @@
-using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Web.Services.Repositories;
+using Web.Services;
 
 namespace Web.Authorization
 {
     public class RoleAuthorizationHandler : AuthorizationHandler<RoleAuthorizationRequirement>
     {
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly ILogger<RoleAuthorizationHandler> _logger;
 
-        public RoleAuthorizationHandler(IUserRepository userRepository, ILogger<RoleAuthorizationHandler> logger)
+        public RoleAuthorizationHandler(ICurrentUserAccessor currentUser, ILogger<RoleAuthorizationHandler> logger)
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
@@ -23,27 +21,14 @@ namespace Web.Authorization
             RoleAuthorizationRequirement requirement
         )
         {
-            string uniqueId;
-            try
-            {
-                uniqueId = Models.User.GetUniqueIdFromClaims(context.User.Claims);
-            }
-            catch (InvalidOperationException)
-            {
-                _logger.LogWarning(
-                    "Authorization failed for requirement {Role}: required claims are missing from the token.",
-                    requirement.RequiredRole
-                );
-                return;
-            }
-
-            var storedUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
+            // Read through the request-scoped accessor: the endpoint that runs next asks for the same
+            // user, and this way both get one point read rather than two.
+            var storedUser = await _currentUser.GetAsync(context.User);
             if (storedUser == null)
             {
                 _logger.LogWarning(
-                    "Authorization failed for requirement {Role}: user {UniqueId} not found in database.",
-                    requirement.RequiredRole,
-                    uniqueId
+                    "Authorization failed for requirement {Role}: no user matches the token's claims.",
+                    requirement.RequiredRole
                 );
                 return;
             }
@@ -53,17 +38,13 @@ namespace Web.Authorization
                 _logger.LogWarning(
                     "Authorization failed for requirement {Role}: user {UniqueId} has null roles.",
                     requirement.RequiredRole,
-                    uniqueId
+                    storedUser.UniqueId
                 );
                 return;
             }
 
             if (storedUser.Roles.Contains(requirement.RequiredRole))
             {
-                // Hand the resolved user to the endpoint so it need not read the same document again
-                // (see AuthorizedUserCache). Only on success: nothing downstream should see a user
-                // whose policy evaluation failed.
-                AuthorizedUserCache.Set(context.Resource as HttpContext, storedUser);
                 context.Succeed(requirement);
                 return;
             }
@@ -74,14 +55,13 @@ namespace Web.Authorization
                 && storedUser.Roles.Contains(Models.User.Role.Administrator)
             )
             {
-                AuthorizedUserCache.Set(context.Resource as HttpContext, storedUser);
                 context.Succeed(requirement);
                 return;
             }
 
             _logger.LogWarning(
                 "Authorization failed: user {UniqueId} does not have required role {Role}.",
-                uniqueId,
+                storedUser.UniqueId,
                 requirement.RequiredRole
             );
         }

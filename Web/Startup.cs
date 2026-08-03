@@ -265,6 +265,10 @@ namespace Web
 
             services.AddScoped<IAuthorizationHandler, RoleAuthorizationHandler>();
             services.AddScoped<IAuthorizationHandler, AnyRoleAuthorizationHandler>();
+
+            // Scoped is the whole point: authorization and the endpoint that follows it share one
+            // read of the caller's user document per request.
+            services.AddScoped<ICurrentUserAccessor, CurrentUserAccessor>();
             services.AddSingleton<IOgThumbnailService, SkiaSharpOgThumbnailService>();
             services.AddSingleton<IImageConversionService, SkiaSharpImageConversionService>();
             services.AddSingleton<IImageUploadHelper, ImageUploadHelper>();

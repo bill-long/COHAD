@@ -36,7 +36,7 @@ public sealed class EventsControllerTests
     )
     {
         var c = new EventsController(
-            users,
+            new CurrentUserAccessor(users),
             events,
             homes ?? Mock.Of<IHomeRepository>(),
             fileStore,
@@ -1928,7 +1928,7 @@ public sealed class EventsControllerTests
 
         // No user identity → anonymous
         var c = new EventsController(
-            Mock.Of<IUserRepository>(),
+            new CurrentUserAccessor(Mock.Of<IUserRepository>()),
             mockEvents.Object,
             Mock.Of<IHomeRepository>(),
             Mock.Of<IDocumentFileStore>(),

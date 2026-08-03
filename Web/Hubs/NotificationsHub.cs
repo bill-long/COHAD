@@ -28,17 +28,17 @@ namespace Web.Hubs
     [Authorize(Policy = "CommitteeEditor")]
     public class NotificationsHub : Hub
     {
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly CommitteeListCache _committeeListCache;
         private readonly ILogger<NotificationsHub> _logger;
 
         public NotificationsHub(
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             CommitteeListCache committeeListCache,
             ILogger<NotificationsHub> logger
         )
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _committeeListCache = committeeListCache;
             _logger = logger;
         }
@@ -47,12 +47,8 @@ namespace Web.Hubs
         {
             try
             {
-                // Fully qualified to disambiguate from Context.User (the ClaimsPrincipal).
-                var uniqueId = Web.Models.User.GetUniqueIdFromClaims(
-                    Context.User?.Claims ?? Enumerable.Empty<System.Security.Claims.Claim>());
-
-                // The user fetch and committee list are independent — issue both and await together.
-                var userTask = _userRepository.GetByUniqueIdAsync(uniqueId);
+                // The user fetch and committee list are independent - issue both and await together.
+                var userTask = _currentUser.GetAsync(Context.User);
                 var committeesTask = _committeeListCache.GetAllAsync();
                 await Task.WhenAll(userTask, committeesTask);
 

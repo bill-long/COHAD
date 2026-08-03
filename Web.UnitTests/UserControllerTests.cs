@@ -29,7 +29,7 @@ public sealed class UserControllerTests
         string idp = "google.com"
     )
     {
-        var c = new UserController(users, homes, audit, signupConversion ?? Mock.Of<IEventSignupConversionService>(), NullLogger<UserController>.Instance)
+        var c = new UserController(users, new CurrentUserAccessor(users), homes, audit, signupConversion ?? Mock.Of<IEventSignupConversionService>(), NullLogger<UserController>.Instance)
         {
             ControllerContext = new ControllerContext
             {

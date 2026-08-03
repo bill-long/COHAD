@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Web.Controllers;
 using Web.Models;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 
@@ -443,7 +444,7 @@ public sealed class VendorImportControllerTests
             vendorRepository,
             reviewRepository,
             youthServiceListingRepository,
-            userRepository,
+            new CurrentUserAccessor(userRepository),
             auditLogRepository
         )
         {

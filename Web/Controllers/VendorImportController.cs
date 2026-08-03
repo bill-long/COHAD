@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Web.Models;
+using Web.Services;
 using Web.Services.Repositories;
 using Web.UpdateModels;
 using Web.Utils;
@@ -19,21 +20,21 @@ namespace Web.Controllers
         private readonly IVendorRepository _vendorRepository;
         private readonly IVendorReviewRepository _vendorReviewRepository;
         private readonly IYouthServiceListingRepository _youthServiceListingRepository;
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IAuditLogRepository _auditLogRepository;
 
         public VendorImportController(
             IVendorRepository vendorRepository,
             IVendorReviewRepository vendorReviewRepository,
             IYouthServiceListingRepository youthServiceListingRepository,
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IAuditLogRepository auditLogRepository
         )
         {
             _vendorRepository = vendorRepository;
             _vendorReviewRepository = vendorReviewRepository;
             _youthServiceListingRepository = youthServiceListingRepository;
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _auditLogRepository = auditLogRepository;
         }
 
@@ -281,8 +282,7 @@ namespace Web.Controllers
 
         private async Task<User> GetApiUserAsync()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
+            return await _currentUser.GetAsync(User);
         }
     }
 }

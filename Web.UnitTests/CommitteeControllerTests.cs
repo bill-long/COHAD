@@ -120,7 +120,7 @@ public sealed class CommitteeControllerTests
         var c = new CommitteeController(
             committeeRepo,
             residentRepo,
-            userRepo,
+            new CurrentUserAccessor(userRepo),
             auditLogRepo,
             cache,
             fileStore,

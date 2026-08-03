@@ -27,7 +27,7 @@ public sealed class NotificationsHubTests
 
         var cache = CacheWith(new Committee { Id = "board", ManagementRole = User.Role.Board });
         var groups = new Mock<IGroupManager>();
-        var hub = new NotificationsHub(userRepo.Object, cache, NullLogger<NotificationsHub>.Instance)
+        var hub = new NotificationsHub(new CurrentUserAccessor(userRepo.Object), cache, NullLogger<NotificationsHub>.Instance)
         {
             Context = ContextFor("u1", "idp"),
             Groups = groups.Object,
@@ -52,7 +52,7 @@ public sealed class NotificationsHubTests
 
         var cache = CacheWith(new Committee { Id = "board", ManagementRole = User.Role.Board });
         var groups = new Mock<IGroupManager>();
-        var hub = new NotificationsHub(userRepo.Object, cache, NullLogger<NotificationsHub>.Instance)
+        var hub = new NotificationsHub(new CurrentUserAccessor(userRepo.Object), cache, NullLogger<NotificationsHub>.Instance)
         {
             Context = ContextFor("u1", "idp"),
             Groups = groups.Object,
@@ -75,7 +75,7 @@ public sealed class NotificationsHubTests
         var context = new Mock<HubCallerContext>();
         context.Setup(c => c.ConnectionId).Returns("conn-1");
         context.Setup(c => c.User).Returns(Principal("u1", "idp"));
-        var hub = new NotificationsHub(userRepo.Object, cache, NullLogger<NotificationsHub>.Instance)
+        var hub = new NotificationsHub(new CurrentUserAccessor(userRepo.Object), cache, NullLogger<NotificationsHub>.Instance)
         {
             Context = context.Object,
             Groups = Mock.Of<IGroupManager>(),

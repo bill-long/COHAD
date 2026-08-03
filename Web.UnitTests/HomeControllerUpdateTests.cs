@@ -30,6 +30,7 @@ public sealed class HomeControllerUpdateTests
     {
         var c = new HomeController(
             users,
+            new CurrentUserAccessor(users),
             homes,
             residents ?? Mock.Of<IResidentRepository>(),
             audit,

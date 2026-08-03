@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Web.Controllers;
 using Web.Models;
+using Web.Services;
 using Web.PresentationModels;
 using Web.Services.Repositories;
 using Web.UpdateModels;
@@ -375,7 +376,7 @@ public sealed class YouthServicesControllerTests
         IAuditLogRepository auditLogRepository
     )
     {
-        var controller = new YouthServicesController(youthServiceRepository, userRepository, auditLogRepository)
+        var controller = new YouthServicesController(youthServiceRepository, userRepository, new CurrentUserAccessor(userRepository), auditLogRepository)
         {
             ControllerContext = new ControllerContext
             {

@@ -189,7 +189,7 @@ public sealed class SlugAliasTests
     )
     {
         var c = new EventsController(
-            users,
+            new CurrentUserAccessor(users),
             events,
             Mock.Of<IHomeRepository>(),
             Mock.Of<IDocumentFileStore>(),
@@ -226,7 +226,7 @@ public sealed class SlugAliasTests
     )
     {
         var c = new BlogController(
-            users,
+            new CurrentUserAccessor(users),
             posts,
             Mock.Of<IBlogCommentRepository>(),
             Mock.Of<IDocumentFileStore>(),

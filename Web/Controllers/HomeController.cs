@@ -18,6 +18,7 @@ namespace Web.Controllers
     public class HomeController : ControllerBase
     {
         private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IHomeRepository _homeRepository;
         private readonly IResidentRepository _residentRepository;
         private readonly IAuditLogRepository _auditLogRepository;
@@ -26,6 +27,7 @@ namespace Web.Controllers
 
         public HomeController(
             IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
             IAuditLogRepository auditLogRepository,
@@ -34,6 +36,7 @@ namespace Web.Controllers
         )
         {
             _userRepository = userRepository;
+            _currentUser = currentUser;
             _homeRepository = homeRepository;
             _residentRepository = residentRepository;
             _auditLogRepository = auditLogRepository;
@@ -63,7 +66,7 @@ namespace Web.Controllers
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] UpdatedHome updatedHome)
         {
-            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var apiUser = await _currentUser.GetAsync(User);
 
             var ownsHome = apiUser.OwnedHomeIds != null && apiUser.OwnedHomeIds.Contains(updatedHome.Id);
             if (!ownsHome)
@@ -218,7 +221,7 @@ namespace Web.Controllers
         [HttpDelete("{homeId}/owners/{userUniqueId}")]
         public async Task<IActionResult> RemoveAssociatedUser(Guid homeId, string userUniqueId)
         {
-            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var apiUser = await _currentUser.GetAsync(User);
             if (apiUser == null)
             {
                 return NotFound();

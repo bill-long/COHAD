@@ -20,7 +20,7 @@ namespace Web.Controllers
     [ApiController]
     public class EmailController : ControllerBase
     {
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IHomeRepository _homeRepository;
         private readonly IResidentRepository _residentRepository;
         private readonly IAuditLogRepository _auditLogRepository;
@@ -33,7 +33,7 @@ namespace Web.Controllers
         private readonly ILogger<EmailController> _logger;
 
         public EmailController(
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
             IAuditLogRepository auditLogRepository,
@@ -46,7 +46,7 @@ namespace Web.Controllers
             ILogger<EmailController> logger
         )
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _homeRepository = homeRepository;
             _residentRepository = residentRepository;
             _auditLogRepository = auditLogRepository;
@@ -131,7 +131,7 @@ namespace Web.Controllers
         [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> GetTestRecipients()
         {
-            var apiUser = await GetCallerAsync();
+            var apiUser = await _currentUser.GetAsync(User);
             if (apiUser == null)
                 return Unauthorized(new { error = "User not found." });
 
@@ -273,19 +273,6 @@ namespace Web.Controllers
         // Private helpers
         // ──────────────────────────────────────────────
 
-        // Scoped rather than file-wide: enabling nullable across this controller flags unrelated
-        // pre-existing code, and the point here is that this helper can return null.
-#nullable enable
-        /// <summary>
-        /// The calling user, or null when no user document matches the token. Reuses the document the
-        /// policy already read for this request and falls back to a read of its own if nothing was
-        /// cached, so the admin pages do not double their reads of the user container on every refresh.
-        /// </summary>
-        private async Task<Models.User?> GetCallerAsync() =>
-            AuthorizedUserCache.Get(HttpContext)
-            ?? await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
-#nullable restore
-
         /// <summary>
         /// Queues a job that sends <paramref name="emailInfo"/> as <paramref name="fromEmail"/> to every
         /// address matching <paramref name="recipientFilter"/>. <paramref name="committeeLabel"/> is the
@@ -301,7 +288,7 @@ namespace Web.Controllers
             string committeeLabel
         )
         {
-            var apiUser = await GetCallerAsync();
+            var apiUser = await _currentUser.GetAsync(User);
             if (apiUser == null)
                 return Unauthorized(new { error = "User not found." });
 

@@ -19,6 +19,7 @@ namespace Web.Controllers
     public class MeController : ControllerBase
     {
         private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IHomeRepository _homeRepository;
         private readonly IResidentRepository _residentRepository;
         private readonly INotificationService _notificationService;
@@ -26,6 +27,7 @@ namespace Web.Controllers
 
         public MeController(
             IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
             INotificationService notificationService,
@@ -33,6 +35,7 @@ namespace Web.Controllers
         )
         {
             _userRepository = userRepository;
+            _currentUser = currentUser;
             _homeRepository = homeRepository;
             _residentRepository = residentRepository;
             _notificationService = notificationService;
@@ -43,7 +46,7 @@ namespace Web.Controllers
         public async Task<PresentationUser> Get()
         {
             var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
+            var user = await _currentUser.GetAsync(User);
             if (user != null)
             {
                 user.GivenName = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.GivenName)?.Value;

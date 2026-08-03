@@ -33,7 +33,7 @@ namespace Web.Controllers
 
         private readonly ICommitteeRepository _committeeRepository;
         private readonly IResidentRepository _residentRepository;
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly CommitteeListCache _listCache;
         private readonly IDocumentFileStore _documentFileStore;
@@ -48,7 +48,7 @@ namespace Web.Controllers
         public CommitteeController(
             ICommitteeRepository committeeRepository,
             IResidentRepository residentRepository,
-            IUserRepository userRepository,
+            ICurrentUserAccessor currentUser,
             IAuditLogRepository auditLogRepository,
             CommitteeListCache listCache,
             IDocumentFileStore documentFileStore,
@@ -63,7 +63,7 @@ namespace Web.Controllers
         {
             _committeeRepository = committeeRepository;
             _residentRepository = residentRepository;
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _auditLogRepository = auditLogRepository;
             _listCache = listCache;
             _documentFileStore = documentFileStore;
@@ -1146,8 +1146,7 @@ namespace Web.Controllers
         {
             try
             {
-                var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-                var apiUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
+                var apiUser = await _currentUser.GetAsync(User);
                 if (apiUser == null)
                     return;
 
@@ -1172,8 +1171,7 @@ namespace Web.Controllers
 
         private async Task<Models.User> GetApiUserAsync()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
-            return await _userRepository.GetByUniqueIdAsync(uniqueId);
+            return await _currentUser.GetAsync(User);
         }
 
         private static bool CanManageCommittee(Models.User user, Committee committee) =>

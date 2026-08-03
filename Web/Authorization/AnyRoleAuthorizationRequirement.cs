@@ -2,10 +2,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Web.Models;
-using Web.Services.Repositories;
+using Web.Services;
 
 namespace Web.Authorization
 {
@@ -25,12 +24,12 @@ namespace Web.Authorization
 
     public class AnyRoleAuthorizationHandler : AuthorizationHandler<AnyRoleAuthorizationRequirement>
     {
-        private readonly IUserRepository _userRepository;
+        private readonly ICurrentUserAccessor _currentUser;
         private readonly ILogger<AnyRoleAuthorizationHandler> _logger;
 
-        public AnyRoleAuthorizationHandler(IUserRepository userRepository, ILogger<AnyRoleAuthorizationHandler> logger)
+        public AnyRoleAuthorizationHandler(ICurrentUserAccessor currentUser, ILogger<AnyRoleAuthorizationHandler> logger)
         {
-            _userRepository = userRepository;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
@@ -39,33 +38,19 @@ namespace Web.Authorization
             AnyRoleAuthorizationRequirement requirement
         )
         {
-            string uniqueId;
-            try
-            {
-                uniqueId = User.GetUniqueIdFromClaims(context.User.Claims);
-            }
-            catch (System.InvalidOperationException)
-            {
-                _logger.LogWarning("AnyRole authorization failed: required claims are missing from the token.");
-                return;
-            }
-
-            var storedUser = await _userRepository.GetByUniqueIdAsync(uniqueId);
+            // Read through the request-scoped accessor: the endpoint that runs next asks for the same
+            // user, and this way both get one point read rather than two.
+            var storedUser = await _currentUser.GetAsync(context.User);
             if (storedUser?.Roles == null)
             {
                 _logger.LogWarning(
-                    "AnyRole authorization failed: user {UniqueId} not found or has null roles.",
-                    uniqueId
+                    "AnyRole authorization failed: no user for the token's claims, or the user has null roles."
                 );
                 return;
             }
 
             if (requirement.RequiredRoles.Any(r => storedUser.Roles.Contains(r)))
             {
-                // Hand the resolved user to the endpoint so it need not read the same document again
-                // (see AuthorizedUserCache). Only on success: nothing downstream should see a user
-                // whose policy evaluation failed.
-                AuthorizedUserCache.Set(context.Resource as HttpContext, storedUser);
                 context.Succeed(requirement);
             }
         }
