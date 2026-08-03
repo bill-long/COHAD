@@ -34,9 +34,39 @@ namespace Web.Models
         /// </summary>
         public string Category { get; set; }
 
+        /// <summary>
+        /// The From address of the outgoing message (an SMTP header value, not "who wrote this").
+        /// For a committee forward this is the committee mailbox, because that is what the
+        /// forwarded message is sent as - see <see cref="OriginalSenderEmail"/> for the author.
+        /// Also part of the forwarding idempotency key
+        /// (<c>IEmailJobRepository.GetByInternetMessageIdAsync</c>), so its meaning must not change.
+        /// </summary>
         public string FromEmail { get; set; }
 
+        /// <summary>
+        /// Display name paired with <see cref="FromEmail"/> on the outgoing message.
+        /// </summary>
         public string FromDisplay { get; set; }
+
+        /// <summary>
+        /// Human description of who this job was sent to. Always produced by <c>EmailAudience</c>,
+        /// which is where the wording and its ordering rule live. Null on jobs created before this
+        /// field existed.
+        /// </summary>
+        public string ToDisplay { get; set; }
+
+        /// <summary>
+        /// Address of the person who actually wrote the message, when it did not originate in COHAD.
+        /// Set only on committee-forwarding jobs; null means the message was composed in the app.
+        /// Read through <see cref="ResolveOriginalSender"/> rather than directly, so historical
+        /// jobs are handled consistently.
+        /// </summary>
+        public string OriginalSenderEmail { get; set; }
+
+        /// <summary>
+        /// Display name paired with <see cref="OriginalSenderEmail"/>.
+        /// </summary>
+        public string OriginalSenderDisplay { get; set; }
 
         public string Subject { get; set; }
 
@@ -116,6 +146,36 @@ namespace Web.Models
         /// </summary>
         [JsonIgnore]
         public string ETag { get; set; }
+
+        /// <summary>
+        /// <see cref="Category"/> value used by both committee-forwarding paths
+        /// (<c>CommitteeMailPoller</c> and admin approval of a held message).
+        /// </summary>
+        public const string CommitteeForwardCategory = "committee-forward";
+
+        /// <summary>
+        /// The person who actually wrote this message, or null when it originated in COHAD
+        /// (where <see cref="FromEmail"/> already identifies the sender).
+        /// <para>
+        /// Forwarding jobs created before <see cref="OriginalSenderEmail"/> existed recorded the
+        /// author only in <see cref="ReplyToEmail"/>, so those are resolved from Reply-To. The
+        /// fallback is scoped to forwarding jobs: on an ordinary send a Reply-To is a routing
+        /// preference, not an author, and must not be reported as one.
+        /// </para>
+        /// </summary>
+        public (string Email, string Display)? ResolveOriginalSender()
+        {
+            if (!string.IsNullOrWhiteSpace(OriginalSenderEmail))
+                return (OriginalSenderEmail, OriginalSenderDisplay);
+
+            if (
+                string.Equals(Category, CommitteeForwardCategory, StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(ReplyToEmail)
+            )
+                return (ReplyToEmail, ReplyToDisplay);
+
+            return null;
+        }
     }
 
     public class EmailJobAttachment

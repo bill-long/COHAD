@@ -481,6 +481,61 @@ public sealed class CosmosLegacyDocumentMapperTests
     }
 
     [Fact]
+    public void EmailJob_PartyFields_RoundTrip()
+    {
+        var job = new EmailJob
+        {
+            Id = Guid.NewGuid(),
+            Status = EmailJobStatus.Completed,
+            Category = EmailJob.CommitteeForwardCategory,
+            FromEmail = "architectural@cohad.local",
+            FromDisplay = "Architectural Committee",
+            ToDisplay = "Architectural Committee forwarding members",
+            OriginalSenderEmail = "jane@example.com",
+            OriginalSenderDisplay = "Jane Doe",
+            Subject = "Fwd: Repaint request",
+            ContentBlobPath = "email-jobs/test.html",
+            CreatedUtc = DateTime.UtcNow,
+            CreatedByUserId = "system:mail-poller",
+            CreatedByDisplayName = "Committee Mail Poller",
+            Recipients = new List<EmailJobRecipient>(),
+        };
+
+        var roundTripped = CosmosLegacyDocumentMapper.ToEmailJob(CosmosLegacyDocumentMapper.ToEmailJobDocument(job));
+
+        Assert.Equal("architectural@cohad.local", roundTripped.FromEmail);
+        Assert.Equal("Architectural Committee forwarding members", roundTripped.ToDisplay);
+        Assert.Equal("jane@example.com", roundTripped.OriginalSenderEmail);
+        Assert.Equal("Jane Doe", roundTripped.OriginalSenderDisplay);
+    }
+
+    [Fact]
+    public void EmailJob_MissingPartyFields_DefaultToNull()
+    {
+        // A document written before ToDisplay/OriginalSender* existed.
+        var doc = new JObject
+        {
+            ["id"] = "EmailJob|" + Guid.NewGuid().ToString("D"),
+            ["Status"] = "Completed",
+            ["Category"] = EmailJob.CommitteeForwardCategory,
+            ["FromEmail"] = "architectural@cohad.local",
+            ["FromDisplay"] = "Architectural Committee",
+            ["ReplyToEmail"] = "jane@example.com",
+            ["ReplyToDisplay"] = "Jane Doe",
+            ["Subject"] = "Fwd: Repaint request",
+            ["CreatedUtc"] = JToken.FromObject(DateTime.UtcNow),
+        };
+
+        var job = CosmosLegacyDocumentMapper.ToEmailJob(doc);
+
+        Assert.Null(job.ToDisplay);
+        Assert.Null(job.OriginalSenderEmail);
+        Assert.Null(job.OriginalSenderDisplay);
+        // The author is still recoverable from the Reply-To these jobs carried.
+        Assert.Equal("jane@example.com", job.ResolveOriginalSender()?.Email);
+    }
+
+    [Fact]
     public void EmailJobRecipient_MissingDeliveryFields_DefaultsGracefully()
     {
         // Simulates a legacy document without the new delivery fields

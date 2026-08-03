@@ -708,6 +708,104 @@ public sealed class CommitteeMailPollerTests
             Times.Never);
     }
 
+    [Fact]
+    public async Task PollAllCommittees_forwarded_job_records_the_resident_as_the_author_not_the_committee()
+    {
+        var memberResidentId = Guid.NewGuid();
+        var committee = new Committee
+        {
+            Id = "architectural",
+            DisplayName = "Architectural Committee",
+            CommitteeEmail = "architectural@cohad.org",
+            ForwardingEnabled = true,
+            ForwardingSenderFilter = ForwardingSenderFilter.DirectoryOnly,
+            Members = new List<CommitteeMember>
+            {
+                new CommitteeMember { ResidentId = memberResidentId, ReceivesForwardedEmail = true },
+            },
+        };
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
+        committeeRepo.Setup(r => r.GetByIdAsync("architectural")).ReturnsAsync(committee);
+        committeeRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
+
+        var emailJobRepo = new Mock<IEmailJobRepository>();
+        emailJobRepo.Setup(r => r.GetByInternetMessageIdAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((EmailJob?)null);
+        EmailJob? created = null;
+        emailJobRepo.Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => created = j)
+            .Returns(Task.CompletedTask);
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetByInternetMessageIdAsync("architectural", It.IsAny<string>())).ReturnsAsync((HeldMessage?)null);
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage>());
+
+        // The sender is in the directory, so the message forwards rather than being held.
+        var sender = new Resident
+        {
+            Id = Guid.NewGuid(),
+            HomeId = Guid.NewGuid(),
+            EmailAddresses = new List<Web.Models.EmailAddress> { new() { Address = "jane@example.com" } },
+        };
+        var member = new Resident
+        {
+            Id = memberResidentId,
+            HomeId = Guid.NewGuid(),
+            EmailAddresses = new List<Web.Models.EmailAddress> { new() { Address = "member@example.com" } },
+        };
+
+        var residentRepo = new Mock<IResidentRepository>();
+        residentRepo.Setup(r => r.GetByEmailAsync("jane@example.com")).ReturnsAsync(new List<Resident> { sender });
+        residentRepo.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>())).ReturnsAsync(new List<Resident> { member });
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => emailJobRepo.Object);
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => residentRepo.Object);
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => Mock.Of<INotificationService>());
+        var provider = services.BuildServiceProvider();
+
+        var message = new Message
+        {
+            Id = "graph-1",
+            InternetMessageId = "<msg-1@example.com>",
+            Subject = "Request to repaint front door",
+            ReceivedDateTime = DateTimeOffset.UtcNow,
+            From = new Recipient { EmailAddress = new Microsoft.Graph.Models.EmailAddress { Address = "jane@example.com", Name = "Jane Doe" } },
+        };
+
+        var graphReader = new Mock<IGraphMailReader>();
+        graphReader.Setup(g => g.GetInboxMessagesAsync("architectural@cohad.org", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Message> { message });
+        graphReader.Setup(g => g.GetOrCreateFolderAsync("architectural@cohad.org", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("processed-folder");
+
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            graphReader.Object,
+            new DisabledSpamClassifier(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        Assert.NotNull(created);
+        // Sent as the committee mailbox (also the forwarding idempotency key)...
+        Assert.Equal("architectural@cohad.org", created!.FromEmail);
+        // ...but written by the resident, and shown as such.
+        Assert.Equal("jane@example.com", created.OriginalSenderEmail);
+        Assert.Equal("Jane Doe", created.OriginalSenderDisplay);
+        Assert.Equal("jane@example.com", created.ReplyToEmail);
+        Assert.Equal("Architectural Committee forwarding members", created.ToDisplay);
+    }
+
     /// <summary>
     /// True when the deep link targets the Approvals inbox with a parseable GUID message id — a helper
     /// (rather than an inline lambda) because Moq's expression-tree matcher can't contain a discard.

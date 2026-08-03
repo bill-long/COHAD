@@ -24,7 +24,15 @@
           </div>
           <div class="meta-row">
             <span class="meta-label">From</span>
-            <span>{{ job.fromDisplay }}</span>
+            <span>{{ parties.from }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">To</span>
+            <span>{{ parties.to }}</span>
+          </div>
+          <div *ngIf="parties.forwardedTo" class="meta-row">
+            <span class="meta-label">Forwarded to</span>
+            <span>{{ parties.forwardedTo }}</span>
           </div>
           <div class="meta-row">
             <span class="meta-label">Subject</span>

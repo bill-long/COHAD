@@ -35,5 +35,24 @@ namespace Web.MockData
         public static readonly Guid SampleEmailJobSeed6 = Guid.Parse("33333333-3333-3333-3333-333333333306");
         public static readonly Guid SampleEmailJobSeed7 = Guid.Parse("33333333-3333-3333-3333-333333333307");
         public static readonly Guid SampleEmailJobSeed8 = Guid.Parse("33333333-3333-3333-3333-333333333308");
+
+        /// <summary>
+        /// A seeded committee-forwarding job - a resident's message forwarded to committee members.
+        /// Kept separate from the ordinary seeds so the From/To distinction on the job pages is
+        /// exercisable in mock mode.
+        /// </summary>
+        public static readonly Guid SampleForwardedEmailJobSeed = Guid.Parse("33333333-3333-3333-3333-3333333333f1");
+
+        /// <summary>
+        /// Identity of the seeded Architectural Committee. Shared by <c>MockCommitteeRepository</c> and
+        /// the seeded forwarding job so both describe the same mailbox.
+        /// </summary>
+        public const string ArchitecturalCommitteeId = "architectural";
+
+        /// <inheritdoc cref="ArchitecturalCommitteeId"/>
+        public const string ArchitecturalCommitteeEmail = "ac@cohad.org";
+
+        /// <inheritdoc cref="ArchitecturalCommitteeId"/>
+        public const string ArchitecturalCommitteeDisplayName = "Architectural Committee";
     }
 }

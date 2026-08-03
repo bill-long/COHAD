@@ -156,7 +156,25 @@ export interface EmailJobSummary {
   id: string;
   status: EmailJobStatus;
   category: string;
+  /** From address of the outgoing message. For a forwarded message this is the committee mailbox, not the author. */
+  fromEmail: string | null;
   fromDisplay: string;
+  /**
+   * Human description of the audience, e.g. "Architectural Committee forwarding members" or
+   * "Board opt-in residents". Null on jobs created before this existed.
+   */
+  toDisplay: string | null;
+  /**
+   * The person who actually wrote the message; null when it originated in COHAD, and also null
+   * for callers who are not Administrators (the API withholds a third party's identity from them).
+   */
+  originalSenderEmail: string | null;
+  originalSenderDisplay: string | null;
+  /**
+   * True when this job has an author the API would not show this caller. Distinguishes a redaction
+   * from a forward that genuinely had no sender address (auto-replies, mailer daemons).
+   */
+  originalSenderWithheld: boolean;
   subject: string;
   createdUtc: string;
   startedUtc: string | null;

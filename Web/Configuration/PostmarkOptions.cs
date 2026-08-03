@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Web.Models;
 
 namespace Web.Configuration
 {
@@ -37,7 +38,8 @@ namespace Web.Configuration
         /// Email job categories that should be sent via the transactional stream.
         /// All other categories use the broadcast stream.
         /// </summary>
-        public List<string> TransactionalCategories { get; set; } = new() { "registration", "committee-forward", "notification-escalation" };
+        public List<string> TransactionalCategories { get; set; } =
+            new() { "registration", EmailJob.CommitteeForwardCategory, "notification-escalation" };
 
         /// <summary>
         /// When true (default) and Postmark is <see cref="Enabled"/>, all emails are sent

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Web.Authorization;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -130,7 +131,7 @@ namespace Web.Controllers
         [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> GetTestRecipients()
         {
-            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var apiUser = await GetCallerAsync();
             if (apiUser == null)
                 return Unauthorized(new { error = "User not found." });
 
@@ -146,19 +147,28 @@ namespace Web.Controllers
         [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> GetRecentJobs([FromQuery] int limit = 50)
         {
-            var jobs = await _emailJobRepository.GetRecentJobsAsync(Math.Clamp(limit, 1, 100));
-            return Ok(jobs.Select(EmailJobSummary.FromJob));
+            // Independent reads: the caller's roles do not affect which jobs are fetched.
+            var adminTask = CallerIsAdministrator();
+            var jobsTask = _emailJobRepository.GetRecentJobsAsync(Math.Clamp(limit, 1, 100));
+            await Task.WhenAll(adminTask, jobsTask);
+
+            var isAdmin = await adminTask;
+            return Ok((await jobsTask).Select(j => EmailJobSummary.FromJob(j, isAdmin)));
         }
 
         [HttpGet("jobs/{id:guid}")]
         [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> GetJob(Guid id)
         {
-            var job = await _emailJobRepository.GetByIdAsync(id);
+            var adminTask = CallerIsAdministrator();
+            var jobTask = _emailJobRepository.GetByIdAsync(id);
+            await Task.WhenAll(adminTask, jobTask);
+
+            var job = await jobTask;
             if (job == null)
                 return NotFound();
 
-            return Ok(EmailJobDetail.FromJob(job));
+            return Ok(EmailJobDetail.FromJob(job, await adminTask));
         }
 
         [HttpGet("jobs/{id:guid}/delivery-events")]
@@ -189,7 +199,14 @@ namespace Web.Controllers
                     new { error = "This job is currently being processed. Cancel it first if you want to retry." }
                 );
 
-            var job = await _emailJobRepository.GetByIdAsync(id);
+            // Resolved before the job is mutated: once the write lands, the response must not be able
+            // to fail on an unrelated read and report an error for work that actually succeeded.
+            var adminTask = CallerIsAdministrator();
+            var jobTask = _emailJobRepository.GetByIdAsync(id);
+            await Task.WhenAll(adminTask, jobTask);
+
+            var isAdmin = await adminTask;
+            var job = await jobTask;
             if (job == null)
                 return NotFound();
 
@@ -227,14 +244,20 @@ namespace Web.Controllers
                 );
             }
 
-            return Ok(EmailJobSummary.FromJob(job));
+            return Ok(EmailJobSummary.FromJob(job, isAdmin));
         }
 
         [HttpPost("jobs/{id:guid}/cancel")]
         [Authorize(Policy = "EmailSender")]
         public async Task<IActionResult> CancelJob(Guid id)
         {
-            var job = await _emailJobRepository.GetByIdAsync(id);
+            // Resolved before the cancel is persisted, for the same reason as in RetryJob.
+            var adminTask = CallerIsAdministrator();
+            var jobTask = _emailJobRepository.GetByIdAsync(id);
+            await Task.WhenAll(adminTask, jobTask);
+
+            var isAdmin = await adminTask;
+            var job = await jobTask;
             if (job == null)
                 return NotFound();
 
@@ -265,23 +288,49 @@ namespace Web.Controllers
                 }
             }
 
-            return Ok(EmailJobSummary.FromJob(current));
+            return Ok(EmailJobSummary.FromJob(current, isAdmin));
         }
 
         // ──────────────────────────────────────────────
         // Private helpers
         // ──────────────────────────────────────────────
 
+        /// <summary>
+        /// The calling user, reusing the document the policy already read for this request and falling
+        /// back to a read of its own if nothing was cached, so the admin pages do not double their
+        /// reads of the user container on every refresh.
+        /// </summary>
+        private async Task<Models.User> GetCallerAsync() =>
+            AuthorizedUserCache.Get(HttpContext)
+            ?? await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+
+        /// <summary>
+        /// True when the caller holds the Administrator role. The job endpoints are gated by the
+        /// committee-agnostic "EmailSender" policy, so this is what separates "may act on email jobs"
+        /// from "may see who wrote a message forwarded to some other committee".
+        /// </summary>
+        private async Task<bool> CallerIsAdministrator()
+        {
+            var apiUser = await GetCallerAsync();
+            return apiUser?.Roles?.Contains(Models.User.Role.Administrator) == true;
+        }
+
+        /// <summary>
+        /// Queues a job that sends <paramref name="emailInfo"/> as <paramref name="fromEmail"/> to every
+        /// address matching <paramref name="recipientFilter"/>. <paramref name="committeeLabel"/> is the
+        /// committee's human name ("Board", "Garden Club"), used for the audit entry and to describe the
+        /// audience on the job.
+        /// </summary>
         private async Task<IActionResult> SendCommitteeEmail(
             string fromEmail,
             string fromDisplay,
             EmailInfo emailInfo,
             Func<EmailAddress, bool> recipientFilter,
             string category,
-            string auditFrom
+            string committeeLabel
         )
         {
-            var apiUser = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var apiUser = await GetCallerAsync();
             if (apiUser == null)
                 return Unauthorized(new { error = "User not found." });
 
@@ -298,6 +347,9 @@ namespace Web.Controllers
             }
 
             List<EmailJobRecipient> recipients;
+
+            // How this job's audience is described on the job list/detail pages.
+            string toDisplay;
 
             if (emailInfo.IsTestEmail)
             {
@@ -326,6 +378,7 @@ namespace Web.Controllers
                     );
 
                 recipients = distinctEmails.Select(e => allowedRecipients[e]).ToList();
+                toDisplay = EmailAudience.TestRecipients;
 
                 // Prefix subject for test emails; carry the normalized list forward
                 emailInfo = new EmailInfo
@@ -342,6 +395,8 @@ namespace Web.Controllers
                 recipients = await GetAllEmailsMatchingFilter(recipientFilter);
                 if (recipients.Count == 0)
                     return Ok(new { message = "No recipients matched the filter." });
+
+                toDisplay = EmailAudience.ForCommitteeSend(committeeLabel);
             }
 
             // Create job
@@ -352,6 +407,7 @@ namespace Web.Controllers
                 Category = category,
                 FromEmail = fromEmail,
                 FromDisplay = fromDisplay,
+                ToDisplay = toDisplay,
                 Subject = emailInfo.Subject,
                 CreatedUtc = DateTime.UtcNow,
                 CreatedByUserId = apiUser.UniqueId,
@@ -391,7 +447,7 @@ namespace Web.Controllers
                 throw;
             }
 
-            await AuditEmail(auditFrom, emailInfo, apiUser);
+            await AuditEmail(committeeLabel, emailInfo, apiUser);
 
             try
             {

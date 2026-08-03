@@ -8,6 +8,7 @@ import { ApiUser } from 'src/app/models';
 import { NotificationsService } from 'src/app/services/notifications.service';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
 import { ApplicationState, applicationState } from 'src/app/state';
+import { observeCompactLayout } from 'src/app/utils/compact-layout';
 
 /** One tool in the Manage rail. Visibility mirrors the old per-tab getters exactly. */
 interface ManageNavItem {
@@ -74,12 +75,9 @@ export class ManageComponent implements OnInit {
 
     this.approvalsCount$ = this.notifications.notifications$.pipe(map(list => list.filter(n => n.type === 'HeldMessage').length));
 
-    // 959.98px mirrors the top navbar's desktop/mobile nav threshold (navbar.component.css),
-    // so the rail flips to a drawer at the same width the rest of the app switches navigation.
-    this.isHandset$ = this.breakpointObserver.observe('(max-width: 959.98px)').pipe(
-      map(result => result.matches),
-      shareReplay({ bufferSize: 1, refCount: true }),
-    );
+    // Shared with the admin tables (utils/compact-layout) and the top navbar's desktop/mobile
+    // threshold, so the rail flips to a drawer at the same width everything else switches.
+    this.isHandset$ = observeCompactLayout(this.breakpointObserver);
 
     this.groups = [
       {

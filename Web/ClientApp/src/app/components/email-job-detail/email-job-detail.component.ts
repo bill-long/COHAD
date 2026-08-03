@@ -5,6 +5,7 @@ import { DeliveryStatus, EmailDeliveryEventDetail, EmailJobDetail, EmailJobStatu
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
+import { EMPTY_EMAIL_JOB_PARTIES, EmailJobParties, emailJobParties } from 'src/app/utils/email-job-parties';
 import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
 import { ApplicationState, applicationState } from 'src/app/state';
 
@@ -35,6 +36,8 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
   // refresh) can complete out of order; we only apply the response from the
   // most recently issued request so an older fetch can't overwrite newer state.
   private deliveryEventsRequestSeq = 0;
+  private partiesCacheKey: EmailJobDetail | null = null;
+  private partiesCacheValue: EmailJobParties = EMPTY_EMAIL_JOB_PARTIES;
 
   /** Queued for this long without starting counts as stale (client-side nudge only). */
   private readonly staleQueuedThresholdMs = 12 * 60 * 1000;
@@ -122,6 +125,23 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
         this.loading = false;
       },
     });
+  }
+
+  /**
+   * Who the job was from and to. A forwarded committee message is sent as the committee mailbox,
+   * so `fromDisplay` alone would name the committee as the author; see `emailJobParties`.
+   *
+   * Memoized on the job object, matching the list component, so the template's several bindings
+   * do not each rebuild it every change-detection pass. Job updates replace the object, which
+   * invalidates the entry.
+   */
+  get parties(): EmailJobParties {
+    if (this.job == null) return EMPTY_EMAIL_JOB_PARTIES;
+    if (this.job !== this.partiesCacheKey) {
+      this.partiesCacheKey = this.job;
+      this.partiesCacheValue = emailJobParties(this.job);
+    }
+    return this.partiesCacheValue;
   }
 
   get progressPercent(): number {

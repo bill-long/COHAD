@@ -28,7 +28,12 @@ const makeDetail = (overrides: Partial<EmailJobDetail> = {}): EmailJobDetail => 
   id: 'j1',
   status: 'Completed',
   category: 'Board',
+  fromEmail: 'board@cohad.org',
   fromDisplay: 'COHAD Board',
+  toDisplay: 'Board opt-in residents',
+  originalSenderEmail: null,
+  originalSenderDisplay: null,
+  originalSenderWithheld: false,
   subject: 'Test subject',
   createdUtc: '2026-01-01T00:00:00Z',
   startedUtc: null,
@@ -102,6 +107,50 @@ describe('EmailJobDetailComponent', () => {
     expect(emailJobServiceSpy.getJob).toHaveBeenCalledWith('j1');
     expect(component.job).toEqual(makeDetail());
     expect(component.loading).toBeFalse();
+  });
+
+  it('parties are empty before the job loads', () => {
+    expect(component.parties.from).toBe('');
+    expect(component.parties.to).toBe('');
+    expect(component.parties.forwardedTo).toBeNull();
+  });
+
+  it('parties name the sending mailbox and audience for a message composed in COHAD', () => {
+    component.ngOnInit();
+    expect(component.parties.from).toBe('COHAD Board <board@cohad.org>');
+    expect(component.parties.to).toBe('Board opt-in residents');
+    expect(component.parties.forwardedTo).toBeNull();
+  });
+
+  it('parties name the resident, not the committee, on a forwarded job', () => {
+    emailJobServiceSpy.getJob.and.returnValue(
+      of(
+        makeDetail({
+          category: 'committee-forward',
+          fromEmail: 'architectural@cohad.org',
+          fromDisplay: 'Architectural Committee',
+          toDisplay: 'Architectural Committee forwarding members',
+          originalSenderEmail: 'jane@example.com',
+          originalSenderDisplay: 'Jane Doe',
+        }),
+      ),
+    );
+    component.ngOnInit();
+
+    expect(component.parties.from).toBe('Jane Doe <jane@example.com>');
+    expect(component.parties.to).toBe('Architectural Committee <architectural@cohad.org>');
+    expect(component.parties.forwardedTo).toBe('Architectural Committee forwarding members');
+  });
+
+  it('parties are recomputed only when the job object changes', () => {
+    component.ngOnInit();
+    const first = component.parties;
+    expect(component.parties).toBe(first);
+
+    progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 5, failedCount: 0, totalRecipients: 12 });
+
+    expect(component.parties).not.toBe(first);
+    expect(component.parties.to).toBe('Board opt-in residents');
   });
 
   it('goBack() navigates to /manage/send-email with jobs fragment and focus job', () => {

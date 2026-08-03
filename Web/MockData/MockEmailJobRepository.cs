@@ -224,6 +224,9 @@ namespace Web.MockData
                         Category = "board",
                         FromEmail = "board@cohad.org",
                         FromDisplay = "COHAD Board",
+                        // Built the same way SendCommitteeEmail builds it, so mock mode cannot show a
+                        // description production never renders.
+                        ToDisplay = EmailAudience.ForCommitteeSend("Board"),
                         Subject = d.Subject,
                         ContentBlobPath = contentPath,
                         CreatedUtc = created,
@@ -243,15 +246,77 @@ namespace Web.MockData
 
                     _jobs[job.Id] = CloneJob(job);
                 }
+
+                _jobs[MockDataConstants.SampleForwardedEmailJobSeed] = CloneJob(BuildSeedForwardedJob(now));
             }
 
             var htmlBytes = Encoding.UTF8.GetBytes(SeedHtmlBody);
-            foreach (var d in definitions)
+            foreach (var path in definitions
+                .Select(d => $"email-jobs/{d.Id:D}.html")
+                .Append($"email-jobs/{MockDataConstants.SampleForwardedEmailJobSeed:D}.html"))
             {
-                var path = $"email-jobs/{d.Id:D}.html";
                 using var stream = new MemoryStream(htmlBytes, writable: false);
                 fileStore.UploadAsync(path, stream, "text/html").GetAwaiter().GetResult();
             }
+        }
+
+        /// <summary>
+        /// A committee-forwarding job: written by a resident, sent as the committee mailbox, delivered
+        /// to the committee's forwarding members. Its From (the mailbox) and its author are deliberately
+        /// different so the job pages can be checked against the case they were confusing.
+        /// <para>
+        /// The mailbox and recipients must match the Architectural Committee seeded by
+        /// <c>MockCommitteeRepository</c> - one forwarding member, the chair at mock@cohad.local - or
+        /// cross-checking this job against Manage - Committees shows a combination the real forwarding
+        /// paths cannot produce.
+        /// </para>
+        /// </summary>
+        private EmailJob BuildSeedForwardedJob(DateTime now)
+        {
+            var created = now.AddDays(-3);
+            var completed = created.AddMinutes(3);
+
+            var job = new EmailJob
+            {
+                Id = MockDataConstants.SampleForwardedEmailJobSeed,
+                Status = EmailJobStatus.Completed,
+                Category = EmailJob.CommitteeForwardCategory,
+                FromEmail = MockDataConstants.ArchitecturalCommitteeEmail,
+                FromDisplay = MockDataConstants.ArchitecturalCommitteeDisplayName,
+                Subject = "Fwd: [Mock] Request to repaint front door",
+                ContentBlobPath = $"email-jobs/{MockDataConstants.SampleForwardedEmailJobSeed:D}.html",
+                CreatedUtc = created,
+                StartedUtc = created.AddMinutes(1),
+                CompletedUtc = completed,
+                LastProgressUtc = completed,
+                CreatedByUserId = "system:mail-poller",
+                CreatedByDisplayName = "Committee Mail Poller",
+                MaxRecipientAttempts = 3,
+                GroupRecipients = true,
+                InternetMessageId = "<mock-forward-seed@cohad.local>",
+                // The committee's single forwarding member. Taylor is the author of this message and
+                // is not on the committee, so a forward would never be delivered back to them.
+                Recipients = new List<EmailJobRecipient>
+                {
+                    new()
+                    {
+                        Email = "mock@cohad.local",
+                        HomeId = MockDataConstants.SampleHomeId,
+                        Status = EmailJobRecipientStatus.Sent,
+                        AttemptCount = 1,
+                        LastAttemptUtc = completed.AddSeconds(-30),
+                        SentUtc = completed.AddSeconds(-25),
+                    },
+                },
+                ETag = Interlocked.Increment(ref _versionCounter).ToString(),
+            };
+
+            job.TotalRecipients = job.Recipients.Count;
+            job.SentCount = job.Recipients.Count;
+
+            CommitteeForwardJob.ApplyOriginator(job, job.FromDisplay, "taylor@cohad.local", "Taylor Test");
+
+            return job;
         }
 
         private static List<EmailJobRecipient> BuildSeedRecipients(int sent, int failed, DateTime completedUtc)
@@ -310,6 +375,9 @@ namespace Web.MockData
                 Category = job.Category,
                 FromEmail = job.FromEmail,
                 FromDisplay = job.FromDisplay,
+                ToDisplay = job.ToDisplay,
+                OriginalSenderEmail = job.OriginalSenderEmail,
+                OriginalSenderDisplay = job.OriginalSenderDisplay,
                 Subject = job.Subject,
                 ContentBlobPath = job.ContentBlobPath,
                 CreatedUtc = job.CreatedUtc,
