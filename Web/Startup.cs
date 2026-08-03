@@ -242,16 +242,7 @@ namespace Web
                     "CommitteeEditor",
                     policy =>
                         policy.Requirements.Add(
-                            new AnyRoleAuthorizationRequirement(
-                                User.Role.Administrator,
-                                User.Role.Board,
-                                User.Role.WelcomeCommittee,
-                                User.Role.GardenClub,
-                                User.Role.SocialCommittee,
-                                User.Role.SunshineCommittee,
-                                User.Role.ArchitecturalCommittee,
-                                User.Role.LandscapeCommittee
-                            )
+                            new AnyRoleAuthorizationRequirement(AuthorizationRoleSets.CommitteeEditor.ToArray())
                         )
                 );
             });

@@ -46,7 +46,8 @@ namespace Web.Controllers
             // hands it to a background upsert, and the accessor's instance is shared with everything
             // else in the request. Nothing else reads the caller on this path - no role policy guards
             // it - so owning the instance costs no extra read.
-            var user = await _userRepository.GetByUniqueIdAsync(Models.User.GetUniqueIdFromClaims(User.Claims));
+            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
+            var user = await _userRepository.GetByUniqueIdAsync(uniqueId);
             if (user != null)
             {
                 user.GivenName = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.GivenName)?.Value;
@@ -85,7 +86,7 @@ namespace Web.Controllers
                 StreetAddress = User.Claims.FirstOrDefault(c => c.Type == "streetAddress")?.Value,
                 Roles = new List<User.Role>(),
                 OwnedHomeIds = new List<System.Guid>(),
-                UniqueId = Models.User.GetUniqueIdFromClaims(User.Claims),
+                UniqueId = uniqueId,
                 LastLoggedIn = DateTime.UtcNow,
             };
 

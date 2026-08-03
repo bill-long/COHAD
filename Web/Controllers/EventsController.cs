@@ -865,9 +865,10 @@ namespace Web.Controllers
                 var apiUser = await _currentUser.GetAsync(User);
                 return apiUser != null ? (true, apiUser.OwnedHomeIds, apiUser.UniqueId) : (false, null, null);
             }
-            // Cancellation excluded per the repo checklist: a client that navigated away is not a
-            // fault, and logging it as one buries the real ones.
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            // Deliberately still only InvalidOperationException, which is what this caught before the
+            // accessor existed. Widening it would swallow faults that used to reach the client -
+            // CosmosException among them - and degrading on those is not this method's call to make.
+            catch (InvalidOperationException ex)
             {
                 _logger.LogWarning(
                     ex,

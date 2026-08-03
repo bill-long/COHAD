@@ -155,4 +155,27 @@ public sealed class AnyRoleAuthorizationHandlerTests
             AuthorizationRoleSets.EmailSender.ToArray()
         );
     }
+
+    [Fact]
+    public void The_CommitteeEditor_role_set_is_exactly_these_roles()
+    {
+        // Same reason as the EmailSender set, plus one this list carries alone: it has to stay in
+        // step with the frontend's rolePermissions.manageCommitteesRoles, which nothing compiles
+        // against. Changing either side without the other silently disagrees about who may manage
+        // a committee, so this is the place that says what the backend admits.
+        Assert.Equal(
+            new[]
+            {
+                User.Role.Administrator,
+                User.Role.Board,
+                User.Role.WelcomeCommittee,
+                User.Role.GardenClub,
+                User.Role.SocialCommittee,
+                User.Role.SunshineCommittee,
+                User.Role.ArchitecturalCommittee,
+                User.Role.LandscapeCommittee,
+            },
+            AuthorizationRoleSets.CommitteeEditor.ToArray()
+        );
+    }
 }

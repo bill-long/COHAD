@@ -34,6 +34,26 @@ namespace Web.Authorization
                     User.Role.SunshineCommittee,
                 }
             );
+
+        /// <summary>
+        /// Roles admitted by the "CommitteeEditor" policy. Kept here for the same reason as
+        /// <see cref="EmailSender"/>, and because this one must also stay in step with the frontend's
+        /// <c>rolePermissions.manageCommitteesRoles</c> - a list that has no compiler to check it.
+        /// </summary>
+        public static IReadOnlyList<User.Role> CommitteeEditor { get; } =
+            Array.AsReadOnly(
+                new[]
+                {
+                    User.Role.Administrator,
+                    User.Role.Board,
+                    User.Role.WelcomeCommittee,
+                    User.Role.GardenClub,
+                    User.Role.SocialCommittee,
+                    User.Role.SunshineCommittee,
+                    User.Role.ArchitecturalCommittee,
+                    User.Role.LandscapeCommittee,
+                }
+            );
     }
 
     /// <summary>
