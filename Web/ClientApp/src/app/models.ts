@@ -164,7 +164,11 @@ export interface EmailJobSummary {
    * "Board opt-in residents". Null on jobs created before this existed.
    */
   toDisplay: string | null;
-  /** The person who actually wrote the message; null when it originated in COHAD. */
+  /**
+   * The person who actually wrote the message. Null when it originated in COHAD, and also when a
+   * forward's incoming message carried no sender address (an auto-reply, a mailer daemon) - the UI
+   * falls back to the mailbox it was sent as.
+   */
   originalSenderEmail: string | null;
   originalSenderDisplay: string | null;
   subject: string;

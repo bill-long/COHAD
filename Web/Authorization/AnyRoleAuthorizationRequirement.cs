@@ -66,9 +66,10 @@ namespace Web.Authorization
 
         public AnyRoleAuthorizationRequirement(params User.Role[] requiredRoles)
         {
-            // Copied, not aliased: this instance outlives the call and decides access for the
-            // process's lifetime, so it must not share an array the caller can still write to.
-            RequiredRoles = requiredRoles?.ToArray() ?? Array.Empty<User.Role>();
+            // Copied and wrapped, not aliased: this instance outlives the call and decides access for
+            // the process's lifetime. The copy stops the caller writing through the array it passed;
+            // the wrapper stops anyone casting RequiredRoles back to User.Role[] and writing to that.
+            RequiredRoles = Array.AsReadOnly(requiredRoles?.ToArray() ?? Array.Empty<User.Role>());
         }
     }
 

@@ -21,7 +21,9 @@ namespace Web.PresentationModels
         public string ToDisplay { get; set; }
 
         /// <summary>
-        /// The author of a forwarded message, or null when the message originated in COHAD.
+        /// The author of a forwarded message. Null when the message originated in COHAD, and also when
+        /// a forward's incoming message carried no sender address at all - an auto-reply or a mailer
+        /// daemon - in which case the client falls back to the mailbox it was sent as.
         /// </summary>
         public string OriginalSenderEmail { get; set; }
 
