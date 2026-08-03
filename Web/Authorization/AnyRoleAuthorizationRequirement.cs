@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,35 +10,42 @@ using Web.Services;
 namespace Web.Authorization
 {
     /// <summary>
-    /// Requires the user to have at least one of the specified roles.
-    /// Used for endpoints that multiple committee roles can access (e.g. email job management).
-    /// </summary>
-    /// <summary>
     /// Role sets that more than one place needs to agree on. Policies are declared in
     /// <c>Startup</c>, but a test that claims to cover "every role this policy admits" has to read
     /// the same list rather than restate it, or it silently stops covering a role that gets added.
     /// </summary>
     public static class AuthorizationRoleSets
     {
-        /// <summary>Roles admitted by the "EmailSender" policy.</summary>
-        public static readonly User.Role[] EmailSender =
-        {
-            User.Role.Administrator,
-            User.Role.Board,
-            User.Role.WelcomeCommittee,
-            User.Role.GardenClub,
-            User.Role.SocialCommittee,
-            User.Role.SunshineCommittee,
-        };
+        /// <summary>
+        /// Roles admitted by the "EmailSender" policy. Exposed as a read-only list: the live policy is
+        /// built from these values, so a writable array here would let any caller silently change who
+        /// may reach every endpoint that policy guards.
+        /// </summary>
+        public static IReadOnlyList<User.Role> EmailSender { get; } =
+            new[]
+            {
+                User.Role.Administrator,
+                User.Role.Board,
+                User.Role.WelcomeCommittee,
+                User.Role.GardenClub,
+                User.Role.SocialCommittee,
+                User.Role.SunshineCommittee,
+            };
     }
 
+    /// <summary>
+    /// Requires the user to have at least one of the specified roles.
+    /// Used for endpoints that multiple committee roles can access (e.g. email job management).
+    /// </summary>
     public class AnyRoleAuthorizationRequirement : IAuthorizationRequirement
     {
         public IReadOnlyList<User.Role> RequiredRoles { get; }
 
         public AnyRoleAuthorizationRequirement(params User.Role[] requiredRoles)
         {
-            RequiredRoles = requiredRoles;
+            // Copied, not aliased: this instance outlives the call and decides access for the
+            // process's lifetime, so it must not share an array the caller can still write to.
+            RequiredRoles = requiredRoles?.ToArray() ?? Array.Empty<User.Role>();
         }
     }
 

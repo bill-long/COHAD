@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using Moq;
@@ -44,7 +45,8 @@ public sealed class EventsControllerTests
             new SkiaSharpOgThumbnailService(),
             imageUploadHelper ?? DefaultImageUploadHelper(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
-            Options.Create(new JsonOptions())
+            Options.Create(new JsonOptions()),
+            NullLogger<EventsController>.Instance
         );
 
         c.ControllerContext = new ControllerContext
@@ -1936,7 +1938,8 @@ public sealed class EventsControllerTests
             new SkiaSharpOgThumbnailService(),
             DefaultImageUploadHelper(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
-            Options.Create(new JsonOptions())
+            Options.Create(new JsonOptions()),
+            NullLogger<EventsController>.Instance
         );
         c.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
 

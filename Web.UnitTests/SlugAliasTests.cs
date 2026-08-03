@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
@@ -197,7 +198,8 @@ public sealed class SlugAliasTests
             Mock.Of<IOgThumbnailService>(),
             DefaultImageUploadHelper(),
             Options.Create(new DocumentStorageOptions { MaxUploadBytes = 1024 * 1024 }),
-            Options.Create(new JsonOptions())
+            Options.Create(new JsonOptions()),
+            NullLogger<EventsController>.Instance
         );
 
         c.ControllerContext = new ControllerContext

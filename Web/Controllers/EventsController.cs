@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using Web.Configuration;
@@ -54,6 +55,7 @@ namespace Web.Controllers
         private readonly IImageUploadHelper _imageUploadHelper;
         private readonly DocumentStorageOptions _storageOptions;
         private readonly JsonSerializerOptions _jsonSerializerOptions;
+        private readonly ILogger<EventsController> _logger;
 
         public EventsController(
             ICurrentUserAccessor currentUser,
@@ -64,7 +66,8 @@ namespace Web.Controllers
             IOgThumbnailService ogThumbnailService,
             IImageUploadHelper imageUploadHelper,
             IOptions<DocumentStorageOptions> storageOptions,
-            IOptions<JsonOptions> jsonOptions
+            IOptions<JsonOptions> jsonOptions,
+            ILogger<EventsController> logger
         )
         {
             _currentUser = currentUser;
@@ -76,6 +79,7 @@ namespace Web.Controllers
             _imageUploadHelper = imageUploadHelper;
             _storageOptions = storageOptions.Value;
             _jsonSerializerOptions = jsonOptions.Value.JsonSerializerOptions;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -851,12 +855,24 @@ namespace Web.Controllers
                 return (false, null, null);
             }
 
-            // No catch here any more: this used to absorb GetUniqueIdFromClaims throwing on a
-            // claim-less token, which the accessor now returns null for. Anything still thrown comes
-            // from the repository, and swallowing that would quietly show a signed-in resident the
-            // anonymous view - hiding their household's signup and letting them submit a duplicate.
-            var apiUser = await _currentUser.GetAsync(User);
-            return apiUser != null ? (true, apiUser.OwnedHomeIds, apiUser.UniqueId) : (false, null, null);
+            // This catch used to absorb GetUniqueIdFromClaims throwing on a claim-less token, which
+            // the accessor now returns null for, so all it can still catch is a repository failure.
+            // Degrading is still right - the caller renders a public event page, and a transient
+            // fault should not 500 it - but the fault is logged rather than swallowed, because the
+            // degraded view hides the reader's own signup and will accept a duplicate.
+            try
+            {
+                var apiUser = await _currentUser.GetAsync(User);
+                return apiUser != null ? (true, apiUser.OwnedHomeIds, apiUser.UniqueId) : (false, null, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Could not resolve the signed-in user for an event page; rendering it as anonymous."
+                );
+                return (false, null, null);
+            }
         }
 
         private static bool HasEventManagementAccess(Models.User user)

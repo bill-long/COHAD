@@ -94,8 +94,8 @@ public sealed class CurrentUserAccessorTests
     [Fact]
     public async Task A_miss_is_not_remembered_so_a_document_created_mid_request_is_seen()
     {
-        // MeController creates the user document when there is none; anything asking afterwards in
-        // the same request should see it rather than the miss that preceded it.
+        // A request that finds no user and then creates one (a first sign-in) should not keep
+        // answering null to everything that asks afterwards.
         var created = new User { UniqueId = "google.comu1" };
         var repo = new Mock<IUserRepository>();
         repo.SetupSequence(r => r.GetByUniqueIdAsync(It.IsAny<string>()))

@@ -29,7 +29,6 @@ namespace Web.Controllers
         [HttpGet]
         public async Task<IActionResult> Get()
         {
-            var uniqueId = Models.User.GetUniqueIdFromClaims(User.Claims);
             var user = await _currentUser.GetAsync(User);
             if (user == null)
             {

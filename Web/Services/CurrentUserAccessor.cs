@@ -57,6 +57,7 @@ namespace Web.Services
             if (uniqueId == null)
                 return Task.FromResult<User?>(null);
 
+            TaskCompletionSource<User?> completion;
             lock (_gate)
             {
                 // Keyed rather than unconditional: a scope serves one caller in practice, but returning
@@ -67,13 +68,15 @@ namespace Web.Services
                 // Published before the read starts, so that a repository which completes synchronously
                 // (the in-memory one) cannot run the forget-on-failure path before there is anything to
                 // forget, which would leave a cached task paired with no id.
-                var completion = new TaskCompletionSource<User?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                completion = new TaskCompletionSource<User?>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _cachedUniqueId = uniqueId;
                 _cachedLookup = completion.Task;
-
-                _ = LoadAsync(completion, uniqueId);
-                return completion.Task;
             }
+
+            // Started outside the lock: the repository call runs synchronously up to its first await,
+            // and that should not happen while another caller is blocked on the gate.
+            _ = LoadAsync(completion, uniqueId);
+            return completion.Task;
         }
 
         /// <summary>
@@ -82,8 +85,8 @@ namespace Web.Services
         /// <para>
         /// Keeping a faulted task would turn one transient Cosmos error into a guaranteed failure for
         /// every later caller in the request, where before each did its own read and could succeed.
-        /// Keeping a null would outlast the miss: <c>MeController</c> creates the user document when
-        /// there is none, and anything asking afterwards should see it.
+        /// Keeping a null would outlast the miss: a request that finds no user and then creates one
+        /// (a first sign-in) should not keep answering null to everything that asks afterwards.
         /// </para>
         /// </summary>
         private async Task LoadAsync(TaskCompletionSource<User?> completion, string uniqueId)
