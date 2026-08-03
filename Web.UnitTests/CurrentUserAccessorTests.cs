@@ -142,8 +142,9 @@ public sealed class CurrentUserAccessorTests
     [Fact]
     public async Task A_token_missing_the_required_claims_yields_null_rather_than_throwing()
     {
-        // GetUniqueIdFromClaims throws when the identity-provider claim is absent. A partially
-        // claimed token is a request to reject, not an exception to surface.
+        // GetUniqueIdFromClaims throws when the NameIdentifier claim is absent (the identity
+        // provider defaults to "local", so only NameIdentifier is mandatory). A partially claimed
+        // token is a request to reject, not an exception to surface.
         var repo = RepoReturning(new User());
         var accessor = new CurrentUserAccessor(repo.Object);
         var partial = new ClaimsPrincipal(

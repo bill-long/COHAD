@@ -17,20 +17,23 @@ namespace Web.Authorization
     public static class AuthorizationRoleSets
     {
         /// <summary>
-        /// Roles admitted by the "EmailSender" policy. Exposed as a read-only list: the live policy is
-        /// built from these values, so a writable array here would let any caller silently change who
-        /// may reach every endpoint that policy guards.
+        /// Roles admitted by the "EmailSender" policy. Wrapped rather than merely typed as a read-only
+        /// list: an <c>IReadOnlyList</c> over a bare array casts straight back to the array, and the
+        /// live policy is built from these values, so a caller could silently change who may reach
+        /// every endpoint that policy guards.
         /// </summary>
         public static IReadOnlyList<User.Role> EmailSender { get; } =
-            new[]
-            {
-                User.Role.Administrator,
-                User.Role.Board,
-                User.Role.WelcomeCommittee,
-                User.Role.GardenClub,
-                User.Role.SocialCommittee,
-                User.Role.SunshineCommittee,
-            };
+            Array.AsReadOnly(
+                new[]
+                {
+                    User.Role.Administrator,
+                    User.Role.Board,
+                    User.Role.WelcomeCommittee,
+                    User.Role.GardenClub,
+                    User.Role.SocialCommittee,
+                    User.Role.SunshineCommittee,
+                }
+            );
     }
 
     /// <summary>

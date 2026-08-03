@@ -865,7 +865,9 @@ namespace Web.Controllers
                 var apiUser = await _currentUser.GetAsync(User);
                 return apiUser != null ? (true, apiUser.OwnedHomeIds, apiUser.UniqueId) : (false, null, null);
             }
-            catch (Exception ex)
+            // Cancellation excluded per the repo checklist: a client that navigated away is not a
+            // fault, and logging it as one buries the real ones.
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(
                     ex,
