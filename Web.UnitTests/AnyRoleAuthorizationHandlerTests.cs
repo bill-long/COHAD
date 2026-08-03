@@ -140,8 +140,8 @@ public sealed class AnyRoleAuthorizationHandlerTests
     {
         // The behaviour theories derive their cases from this set, so they cannot notice it growing.
         // This is the one place that says which roles the policy admits - and, by omission, which it
-        // does not: Resident, ArchitecturalCommittee and LandscapeCommittee are deliberately absent,
-        // and adding one here means deciding that role may read every email job.
+        // does not: Resident is deliberately absent, and adding it here means deciding that every
+        // resident may read every email job, including who wrote privately to a committee.
         Assert.Equal(
             new[]
             {
@@ -151,6 +151,8 @@ public sealed class AnyRoleAuthorizationHandlerTests
                 User.Role.GardenClub,
                 User.Role.SocialCommittee,
                 User.Role.SunshineCommittee,
+                User.Role.ArchitecturalCommittee,
+                User.Role.LandscapeCommittee,
             },
             AuthorizationRoleSets.EmailSender.ToArray()
         );

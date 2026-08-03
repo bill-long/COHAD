@@ -23,7 +23,17 @@ export const rolePermissions = {
     'ArchitecturalCommittee',
     'LandscapeCommittee',
   ],
-  manageEmailRoles: ['Administrator', 'WelcomeCommittee', 'GardenClub', 'Board', 'SocialCommittee', 'SunshineCommittee'],
+  // Must match AuthorizationRoleSets.EmailSender on the server, which gates the same endpoints.
+  manageEmailRoles: [
+    'Administrator',
+    'WelcomeCommittee',
+    'GardenClub',
+    'Board',
+    'SocialCommittee',
+    'SunshineCommittee',
+    'ArchitecturalCommittee',
+    'LandscapeCommittee',
+  ],
   manageEventsRoles: [
     'Administrator',
     'WelcomeCommittee',

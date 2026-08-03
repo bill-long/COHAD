@@ -225,7 +225,9 @@ namespace Web
                     policy => policy.Requirements.Add(new RoleAuthorizationRequirement(User.Role.LandscapeCommittee))
                 );
 
-                // Any role that can send committee emails — used for email job management endpoints and the SignalR hub.
+                // Every committee role plus Administrator - used for email job management endpoints and the
+                // SignalR hub. Not the same as being able to send: the from-* endpoints have their own
+                // per-committee policies, and two of these roles have no mailbox to send as.
                 options.AddPolicy(
                     "EmailSender",
                     policy =>

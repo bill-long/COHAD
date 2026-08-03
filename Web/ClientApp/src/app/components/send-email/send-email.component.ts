@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { HttpClient, HttpResponse } from '@angular/common/http';
 import { AfterViewInit, Component, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
-import { Observable, Subscription, zip } from 'rxjs';
+import { Observable, Subscription, combineLatest, zip } from 'rxjs';
 import { filter, map, take } from 'rxjs/operators';
 import { EmailJobSummary, EmailJobStatus, TestRecipientOption } from 'src/app/models';
 import { EmailJobListComponent } from 'src/app/components/email-job-list/email-job-list.component';
@@ -152,6 +152,21 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     // Instant so we reliably beat any remaining scroll-to-top and avoid fighting smooth row scroll.
     el.scrollIntoView({ behavior: 'auto', block: 'start' });
+  }
+
+  /**
+   * True when the caller can send as at least one committee. Architectural and Landscape hold the
+   * email-management role so they can see jobs forwarded to their own committee, but neither has a
+   * mailbox to send as, so the compose form has nothing to offer them.
+   */
+  get canSendFromAny(): Observable<boolean> {
+    return combineLatest([
+      this.canSendFromBoard,
+      this.canSendFromGardenClub,
+      this.canSendFromSocialCommittee,
+      this.canSendFromWelcomeCommittee,
+      this.canSendFromSunshineCommittee,
+    ]).pipe(map(flags => flags.some(Boolean)));
   }
 
   get canSendFromBoard(): Observable<boolean> {

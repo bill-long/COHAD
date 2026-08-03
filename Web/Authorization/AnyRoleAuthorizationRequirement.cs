@@ -17,10 +17,18 @@ namespace Web.Authorization
     public static class AuthorizationRoleSets
     {
         /// <summary>
-        /// Roles admitted by the "EmailSender" policy. Wrapped rather than merely typed as a read-only
-        /// list: an <c>IReadOnlyList</c> over a bare array casts straight back to the array, and the
-        /// live policy is built from these values, so a caller could silently change who may reach
-        /// every endpoint that policy guards.
+        /// Roles admitted by the "EmailSender" policy - every committee role, plus Administrator.
+        /// <para>
+        /// Architectural and Landscape have no committee mailbox of their own to send as, so they see
+        /// the job list and their committee's forwarded mail without a send form. That is deliberate:
+        /// a committee's moderators being unable to see mail forwarded to their own committee, while
+        /// unrelated committees could, was the asymmetry this set had before.
+        /// </para>
+        /// <para>
+        /// Wrapped rather than merely typed as a read-only list: an <c>IReadOnlyList</c> over a bare
+        /// array casts straight back to the array, and the live policy is built from these values, so
+        /// a caller could silently change who may reach every endpoint that policy guards.
+        /// </para>
         /// </summary>
         public static IReadOnlyList<User.Role> EmailSender { get; } =
             Array.AsReadOnly(
@@ -32,6 +40,8 @@ namespace Web.Authorization
                     User.Role.GardenClub,
                     User.Role.SocialCommittee,
                     User.Role.SunshineCommittee,
+                    User.Role.ArchitecturalCommittee,
+                    User.Role.LandscapeCommittee,
                 }
             );
 

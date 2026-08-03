@@ -1,5 +1,8 @@
 <div class="send-email-page">
-  <mat-card>
+  <!-- Architectural and Landscape can manage email jobs so they see mail forwarded to their own
+       committee, but have no mailbox to send as - the compose form would offer them an empty From
+       list and a Send button that cannot work, so they get the job list below on its own. -->
+  <mat-card *ngIf="canSendFromAny | async">
     <mat-card-content>
       <h2 class="page-title">Send Neighborhood Email</h2>
 
