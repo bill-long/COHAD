@@ -55,6 +55,21 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
   private jobSubscriptions: Subscription[] = [];
   private testJobSubscriptions: Subscription[] = [];
 
+  /**
+   * The five committees that can be sent as, in the order the default-selection logic prefers them.
+   * Declared once so the compose card's visibility and that default cannot disagree about who can
+   * send; the template's option list is the third reader of the same rule.
+   */
+  private get senderAvailability(): Observable<boolean>[] {
+    return [
+      this.canSendFromBoard,
+      this.canSendFromGardenClub,
+      this.canSendFromSocialCommittee,
+      this.canSendFromWelcomeCommittee,
+      this.canSendFromSunshineCommittee,
+    ];
+  }
+
   constructor(
     private httpClient: HttpClient,
     private route: ActivatedRoute,
@@ -65,13 +80,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(DOCUMENT) private document: Document,
   ) {
-    zip(
-      this.canSendFromBoard,
-      this.canSendFromGardenClub,
-      this.canSendFromSocialCommittee,
-      this.canSendFromWelcomeCommittee,
-      this.canSendFromSunshineCommittee,
-    )
+    zip(...this.senderAvailability)
       .pipe(take(1))
       .subscribe(([board, garden, social, welcome, sunshine]) => {
         if (board) {
@@ -155,19 +164,17 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * True when the caller can send as at least one committee. Architectural and Landscape hold the
-   * email-management role so they can see jobs forwarded to their own committee, but neither has a
-   * mailbox to send as, so the compose form has nothing to offer them.
+   * True when the caller can send as at least one committee.
+   * <para>
+   * This is not the same as being allowed on this page. Managing email jobs is one permission and
+   * sending is another: Architectural and Landscape have no mailbox to send as, and neither does an
+   * Administrator who holds no committee role - the per-committee policies admit only the committee's
+   * own role. All of them get the job list; none of them gets a compose form that could only fail.
+   * </para>
    */
-  get canSendFromAny(): Observable<boolean> {
-    return combineLatest([
-      this.canSendFromBoard,
-      this.canSendFromGardenClub,
-      this.canSendFromSocialCommittee,
-      this.canSendFromWelcomeCommittee,
-      this.canSendFromSunshineCommittee,
-    ]).pipe(map(flags => flags.some(Boolean)));
-  }
+  readonly canSendFromAny: Observable<boolean> = combineLatest(this.senderAvailability).pipe(
+    map(flags => flags.some(Boolean)),
+  );
 
   get canSendFromBoard(): Observable<boolean> {
     return this.appState.pipe(

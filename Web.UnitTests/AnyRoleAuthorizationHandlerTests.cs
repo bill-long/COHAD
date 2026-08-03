@@ -142,6 +142,10 @@ public sealed class AnyRoleAuthorizationHandlerTests
         // This is the one place that says which roles the policy admits - and, by omission, which it
         // does not: Resident is deliberately absent, and adding it here means deciding that every
         // resident may read every email job, including who wrote privately to a committee.
+        //
+        // The frontend keeps its own copy in rolePermissions.manageEmailRoles, gating the same pages;
+        // its spec pins the same list. If these two ever disagree a user either sees a page whose API
+        // calls all 403, or is bounced from one the backend would have allowed.
         Assert.Equal(
             new[]
             {

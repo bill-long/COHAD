@@ -19,10 +19,17 @@ namespace Web.Authorization
         /// <summary>
         /// Roles admitted by the "EmailSender" policy - every committee role, plus Administrator.
         /// <para>
-        /// Architectural and Landscape have no committee mailbox of their own to send as, so they see
-        /// the job list and their committee's forwarded mail without a send form. That is deliberate:
-        /// a committee's moderators being unable to see mail forwarded to their own committee, while
-        /// unrelated committees could, was the asymmetry this set had before.
+        /// The endpoints this guards are not scoped to a committee: a holder of any of these roles can
+        /// read every job, including the sender and recipients of another committee's forwarded mail,
+        /// and can retry or cancel any of them. Adding a role here grants all of that, not just sight
+        /// of its own committee's mail. Architectural and Landscape are here because the alternative
+        /// was worse - they could not see mail forwarded to their own committee while five unrelated
+        /// committees could - but the fix for the breadth is scoping the endpoints, not this list.
+        /// </para>
+        /// <para>
+        /// Currently identical to <see cref="CommitteeEditor"/> by coincidence, not by rule: that set
+        /// answers "may moderate a committee" and this one "may manage email jobs". A future send-only
+        /// or read-only role would land in one and not the other, so they stay separate.
         /// </para>
         /// <para>
         /// Wrapped rather than merely typed as a read-only list: an <c>IReadOnlyList</c> over a bare
