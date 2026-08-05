@@ -3,7 +3,7 @@ import { Injectable, Inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, Subject } from 'rxjs';
 import { environment } from 'src/environments/environment';
-import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
+import { OAuthService } from 'angular-oauth2-oidc';
 import { IdentityClaims } from '../models';
 import {
   ApplicationState,
@@ -16,6 +16,7 @@ import {
   MockLogin,
   Logout,
 } from '../state';
+import { buildAuthCodeFlowConfig } from './auth-code-flow.config';
 import { MockAuthTokenService } from './mock-auth-token.service';
 import { ApplicationInsightsService } from './application-insights.service';
 
@@ -47,31 +48,7 @@ export class AuthService {
     @Inject(dispatcher) private dispatcher: Subject<Action>,
   ) {
     if (!environment.useMockAuth) {
-      const authCodeFlowConfig: AuthConfig = {
-        issuer: 'https://cohadorgb2c.b2clogin.com/a7e9006b-c606-4670-960c-3998b35ea5ee/v2.0/',
-
-        tokenEndpoint: 'https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/oauth2/v2.0/token',
-
-        loginUrl: 'https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/oauth2/v2.0/authorize',
-
-        logoutUrl: 'https://cohadorgb2c.b2clogin.com/cohadorgb2c.onmicrosoft.com/b2c_1_default/oauth2/v2.0/logout',
-
-        strictDiscoveryDocumentValidation: false,
-
-        redirectUri: window.location.origin,
-
-        clientId: '66d25d05-4ece-4b61-a40d-a16b2fe0adbd',
-
-        dummyClientSecret: '***REMOVED***',
-
-        responseType: 'code',
-
-        scope: 'openid profile email offline_access https://cohadorgb2c.onmicrosoft.com/5803d9fa-a62f-401c-b0f4-269b3cb468eb/API',
-
-        showDebugInformation: environment.production ? false : true,
-      };
-
-      this.oauthService.configure(authCodeFlowConfig);
+      this.oauthService.configure(buildAuthCodeFlowConfig());
 
       this.oauthService.setupAutomaticSilentRefresh();
 
