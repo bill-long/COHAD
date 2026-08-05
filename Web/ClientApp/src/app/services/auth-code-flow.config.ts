@@ -34,6 +34,6 @@ export function buildAuthCodeFlowConfig(): AuthConfig {
 
     scope: 'openid profile email offline_access https://cohadorgb2c.onmicrosoft.com/5803d9fa-a62f-401c-b0f4-269b3cb468eb/API',
 
-    showDebugInformation: environment.production ? false : true,
+    showDebugInformation: !environment.production,
   };
 }
