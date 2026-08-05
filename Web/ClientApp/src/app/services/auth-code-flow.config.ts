@@ -13,6 +13,14 @@ import { environment } from 'src/environments/environment';
  *
  * Lives in its own file so the "no credential in the browser config" rule has something to assert
  * against - see auth-code-flow.config.spec.ts.
+ *
+ * `clientId` must name a B2C registration whose redirect URIs are registered under the
+ * *Single-page application* platform, and whose supported-account type is "any identity provider
+ * or organizational directory" (signInAudience AzureADandPersonalMicrosoftAccount). A Web-platform
+ * registration makes B2C treat the code redemption as a confidential grant and reject it with
+ * AADB2C90079 unless a client_secret is sent - which is what put a real credential in this file for
+ * years. A single-tenant registration is rejected outright with AADB2C90068, because user flows
+ * authenticate consumer identities rather than directory members.
  */
 export function buildAuthCodeFlowConfig(): AuthConfig {
   return {
@@ -28,7 +36,7 @@ export function buildAuthCodeFlowConfig(): AuthConfig {
 
     redirectUri: window.location.origin,
 
-    clientId: '66d25d05-4ece-4b61-a40d-a16b2fe0adbd',
+    clientId: 'f0a9bdce-3ffa-43f9-99f8-79894cf69c38',
 
     responseType: 'code',
 
