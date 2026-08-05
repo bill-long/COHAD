@@ -23,6 +23,8 @@ import { ApplicationInsightsService } from './application-insights.service';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private authSessionResolvedDispatched = false;
+  /** Guards against a failing refresh re-entering through the OAuth error event it raises. */
+  private refreshInFlight = false;
   private static readonly postLoginRedirectKey = 'auth.postLoginRedirect';
   private static readonly defaultPostLoginPath = '/residents';
 
@@ -148,19 +150,36 @@ export class AuthService {
         console.log('Found expired token. Refreshing.');
       }
 
+      // A failing refresh emits an OAuth error event, and the events subscription routes that back
+      // here - so without this guard the retry re-enters on its own failure and hammers the token
+      // endpoint until the tab closes.
+      if (this.refreshInFlight) {
+        return false;
+      }
+      this.refreshInFlight = true;
+
       try {
-        const refreshResult: any = this.oauthService.refreshToken();
+        // Typed as possibly absent rather than as the declared Promise: a stubbed OAuthService can
+        // return nothing, and the in-flight flag must still be cleared when it does.
+        const refreshResult: Promise<unknown> | undefined = this.oauthService.refreshToken();
 
         // Handle refresh errors explicitly so that the auth session is resolved even on failure.
-        if (refreshResult && typeof refreshResult.catch === 'function') {
-          (refreshResult as Promise<unknown>).catch(err => {
-            console.error('Token refresh failed.', err);
-            this.markAuthSessionResolvedOnce();
-          });
+        if (refreshResult && typeof refreshResult.then === 'function') {
+          refreshResult.then(
+            () => {
+              this.refreshInFlight = false;
+            },
+            err => {
+              this.refreshInFlight = false;
+              this.abandonUnrefreshableSession(err);
+            },
+          );
+        } else {
+          this.refreshInFlight = false;
         }
       } catch (err) {
-        console.error('Token refresh threw an error.', err);
-        this.markAuthSessionResolvedOnce();
+        this.refreshInFlight = false;
+        this.abandonUnrefreshableSession(err);
       }
       return false;
     }
@@ -175,6 +194,30 @@ export class AuthService {
       this.telemetry.clearAuthenticatedUser();
     }
     return true;
+  }
+
+  /**
+   * Drops a session whose refresh token can no longer be redeemed.
+   *
+   * Leaving the stored tokens in place is the dangerous option: the expired access token keeps
+   * `updateState` reporting a signed-in user, so the header renders as logged in while every API
+   * call returns 401, and nothing ever tells the person why. Clearing them locally makes the next
+   * pass fall through to the signed-out branch, which both fixes the display and stops the retry.
+   *
+   * Deliberately a local sign-out (`logOut(true)`): a redirect to the B2C logout URL would throw
+   * the user out of whatever page they were on to fix a failure they did not cause.
+   */
+  private abandonUnrefreshableSession(err: unknown): void {
+    console.error('Token refresh failed; clearing the local session.', err);
+    try {
+      this.oauthService.logOut(true);
+    } catch (logoutErr) {
+      // Storage may already be unusable; the dispatch below is what the UI actually reads.
+      console.error('Clearing the local session failed.', logoutErr);
+    }
+    this.dispatcher.next(new AuthenticatedUserChanged(null));
+    this.telemetry.clearAuthenticatedUser();
+    this.markAuthSessionResolvedOnce();
   }
 
   private markPostLoginRedirect(redirectTo?: string): void {

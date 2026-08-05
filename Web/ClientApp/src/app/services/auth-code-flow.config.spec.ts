@@ -12,6 +12,9 @@ import { buildAuthCodeFlowConfig } from './auth-code-flow.config';
  * of in advance - the first version of this file used one that did not even match the secret it
  * was written to catch. An allowlist has the opposite failure mode: it does not need to recognise
  * anything, it just refuses to let a new key through silently.
+ *
+ * What this file cannot see is the call site. auth.service.spec.ts covers that, by asserting on the
+ * object actually handed to OAuthService.configure().
  */
 describe('buildAuthCodeFlowConfig', () => {
   /**
@@ -33,6 +36,17 @@ describe('buildAuthCodeFlowConfig', () => {
     'tokenEndpoint',
   ];
 
+  /**
+   * Matches an Entra client secret: a short prefix, a `~`, then a long tail. Declared once and
+   * shared by the sweep and its self-test - two copies would let the self-test go on validating a
+   * pattern the sweep no longer uses, which is the precise way the original defect stayed hidden.
+   *
+   * This recognises the modern Entra format only. It is a second layer, not the guard: a credential
+   * with no `~` (a Cosmos key, an API token) will not match, and the allowlist above is what
+   * actually stops those, by rejecting the new key rather than by recognising the value.
+   */
+  const entraClientSecret = /[A-Za-z0-9._-]{2,}~[A-Za-z0-9._~-]{20,}/;
+
   /** Every string anywhere in the config, including inside nested objects and arrays. */
   function allStrings(value: unknown): string[] {
     if (typeof value === 'string') {
@@ -45,33 +59,36 @@ describe('buildAuthCodeFlowConfig', () => {
   }
 
   it('carries only known-public keys', () => {
-    expect(Object.keys(buildAuthCodeFlowConfig()).sort()).toEqual(allowedKeys);
+    // Reported as two sets rather than one array comparison, so a failure says which key appeared
+    // and does not read as a credential warning when someone simply removes an option.
+    const actual = Object.keys(buildAuthCodeFlowConfig());
+
+    expect(actual.filter(k => !allowedKeys.includes(k))).toEqual([]);
+    expect(allowedKeys.filter(k => !actual.includes(k))).toEqual([]);
   });
 
   it('carries no credential-shaped value at any depth', () => {
-    // Secondary to the allowlist: this catches a credential smuggled into a value that is already
-    // allowed, such as a secret appended to tokenEndpoint as a query parameter. An Entra client
-    // secret is a short prefix, a `~`, then a long tail - and nothing legitimate here (issuer,
-    // endpoints, guids, scope) contains a `~` at all.
-    const entraClientSecret = /[A-Za-z0-9._-]{2,}~[A-Za-z0-9._~-]{20,}/;
+    // Catches a secret smuggled into a value that is already allowed - appended to tokenEndpoint as
+    // a query parameter, say - which the allowlist alone would not notice.
     const offenders = allStrings(buildAuthCodeFlowConfig()).filter(s => entraClientSecret.test(s));
+
     expect(offenders).toEqual([]);
   });
 
   it('recognises a real Entra client secret', () => {
-    // Locks the detector against the regression it already had once: a pattern that matched
-    // nothing passed this suite while the config was leaking. These are the two shapes that have
-    // actually appeared in this file's history, reduced to their structure.
-    const entraClientSecret = /[A-Za-z0-9._-]{2,}~[A-Za-z0-9._~-]{20,}/;
-    expect(entraClientSecret.test('Rwv8Q~1ZlfAAAAAAAAAAAAAAAAAAAAAA.aAAAAAA')).toBeTrue();
-    expect(entraClientSecret.test('9g~nU-gAAAAAAAAAAAAAAAAAAAAAAAAAA.A')).toBeTrue();
+    // Locks the detector against the regression it already had once: a pattern that matched nothing
+    // passed this suite while the config was leaking. These fixtures reproduce the *structure* of
+    // the two shapes that have appeared in this file's history - a 5-character prefix and a
+    // 2-character one - without reusing any real secret's leading characters.
+    expect(entraClientSecret.test('Ab1cD~2EfGhIjKlMnOpQrStUvWxYz0123.4AbCdEf')).toBeTrue();
+    expect(entraClientSecret.test('Zq~wErTyUiOpAsDfGhJkLzXcVbNm12345.6')).toBeTrue();
   });
 
   it('leaves PKCE enabled', () => {
     // PKCE is what replaces the secret for a public client, so assert the effective value rather
-    // than just the absence of an override: the config must not set disablePKCE, *and* the
-    // library default it falls back to must still be off. A dependency upgrade that flipped that
-    // default would otherwise stop sending code_verifier with this test still green.
+    // than just the absence of an override: the config must not set disablePKCE, *and* the library
+    // default it falls back to must still be off. A dependency upgrade that flipped that default
+    // would otherwise stop sending code_verifier with this suite still green.
     expect(buildAuthCodeFlowConfig().disablePKCE).toBeUndefined();
     expect(new AuthConfig().disablePKCE).toBeFalse();
   });
