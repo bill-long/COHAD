@@ -236,11 +236,15 @@ These jobs previously ran as timer-triggered Azure Functions. Deleting the proje
 
 Cut over in this order:
 
-1. Deploy the `Web` app with `UserPurge__Enabled=false` and `PayPal__SyncEnabled=false`.
-2. On the **Function App**, set `UserPurge__Enabled=false` and `PayPal__SyncEnabled=false`, or stop the app outright.
-3. Enable the flags on the **Web** app and confirm from the logs that a run happens.
-4. Delete the Function App, and the storage account it used for `AzureWebJobsStorage` if nothing else does. Check whether it shares the web app's Application Insights resource before deleting that.
-5. Remove the now-unused GitHub secrets `AzureFunctionApp_Name_UserPurge` and `AzureFunctionApp_PublishProfile_UserPurge`.
+1. **Copy the job settings off the Function App first** - they exist nowhere else, and step 5 destroys them. From the Function App's configuration, carry over to the **Web** app:
+   - `PayPal__ClientId`, `PayPal__ClientSecret`, and `PayPal__ApiBaseUrl` / `PayPal__SyncLookbackDays` if they were overridden. Without the credentials the sync returns on every tick and imports nothing.
+   - `UserPurge__DryRun`, `UserPurge__PurgeAfterDays`, `UserPurge__MaxDeletesPerRun` if they were overridden. Note that `DryRun` now defaults to **`true`**, so a purge that was live on the Function App needs an explicit `UserPurge__DryRun=false` here or it will silently stop deleting.
+   - The schedule keys (`UserPurgeSchedule`, `PayPalSyncSchedule`) have no equivalent and should not be carried over; see `UserPurge:IntervalHours` and `PayPal:SyncIntervalDays`.
+2. Deploy the `Web` app with `UserPurge__Enabled=false` and `PayPal__SyncEnabled=false`.
+3. On the **Function App**, set `UserPurge__Enabled=false` and `PayPal__SyncEnabled=false`, or stop the app outright.
+4. Enable the flags on the **Web** app and confirm from the logs that a run happens. Verifying the purge with `UserPurge__DryRun=true` first is safe: a dry run deletes nothing and paces on a separate key, so it neither consumes the live interval nor is blocked by one. The `BackgroundJobState` container must already exist (see step 1 of *Deployment* above) - a dry run uses it too.
+5. Delete the Function App, and the storage account it used for `AzureWebJobsStorage` if nothing else does. Check whether it shares the web app's Application Insights resource before deleting that.
+6. Remove the now-unused GitHub secrets `AzureFunctionApp_Name_UserPurge` and `AzureFunctionApp_PublishProfile_UserPurge`.
 
 ---
 

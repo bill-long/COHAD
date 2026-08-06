@@ -20,12 +20,6 @@ namespace Web.Services
         /// <summary>The largest delay <c>Task.Delay</c> accepts.</summary>
         public static readonly TimeSpan MaxDelay = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
 
-        public static TimeSpan FromDays(int days, int minDays = 1) =>
-            TimeSpan.FromDays(Math.Clamp((double)days, minDays, MaxDelay.TotalDays));
-
-        public static TimeSpan FromHours(int hours, int minHours = 1) =>
-            TimeSpan.FromHours(Math.Clamp((double)hours, minHours, MaxDelay.TotalHours));
-
         public static TimeSpan FromMinutes(int minutes, int minMinutes = 1) =>
             TimeSpan.FromMinutes(Math.Clamp((double)minutes, minMinutes, MaxDelay.TotalMinutes));
 
@@ -36,5 +30,19 @@ namespace Web.Services
         public static TimeSpan Clamp(TimeSpan delay) => delay > MaxDelay ? MaxDelay
             : delay < TimeSpan.Zero ? TimeSpan.Zero
             : delay;
+
+        // Comparison windows ("has it been N days since the last success?") are never passed to
+        // Task.Delay, so MaxDelay does not apply to them - clamping a window to ~49.7 days would silently
+        // cap a legitimate quarterly cadence. They still need a guard, because TimeSpan.From*(int) throws
+        // on values beyond TimeSpan's own range, so clamp to that instead.
+        private static readonly double MaxWindowDays = TimeSpan.MaxValue.TotalDays - 1;
+
+        /// <summary>Builds a comparison window in days. Not a <c>Task.Delay</c> argument.</summary>
+        public static TimeSpan WindowFromDays(int days, int minDays = 1) =>
+            TimeSpan.FromDays(Math.Clamp((double)days, minDays, MaxWindowDays));
+
+        /// <summary>Builds a comparison window in hours. Not for <c>Task.Delay</c>.</summary>
+        public static TimeSpan WindowFromHours(int hours, int minHours = 1) =>
+            TimeSpan.FromHours(Math.Clamp((double)hours, minHours, MaxWindowDays * 24));
     }
 }

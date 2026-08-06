@@ -73,6 +73,7 @@ namespace Web.Services.Repositories
                 JobName = doc.Value<string>("JobName") ?? string.Empty,
                 LastSuccessUtc = doc["LastSuccessUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
                 LastAttemptUtc = doc["LastAttemptUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
+                LastAttemptFailed = doc["LastAttemptFailed"]?.ToObject<bool>() ?? false,
                 ETag = doc.Value<string>("_etag"),
             };
         }
@@ -87,6 +88,7 @@ namespace Web.Services.Repositories
                 ["JobName"] = normalized,
                 ["LastSuccessUtc"] = JToken.FromObject(s.LastSuccessUtc),
                 ["LastAttemptUtc"] = JToken.FromObject(s.LastAttemptUtc),
+                ["LastAttemptFailed"] = s.LastAttemptFailed,
             };
         }
     }

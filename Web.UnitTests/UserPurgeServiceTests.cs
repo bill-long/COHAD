@@ -176,6 +176,140 @@ public sealed class UserPurgeServiceTests
     }
 
     [Fact]
+    public async Task A_dry_run_does_not_consume_the_pacing_interval()
+    {
+        // A dry run deletes nothing, so it has no blast radius to cap. Consuming the interval would make
+        // the cut-over runbook's "verify with DryRun, then turn it off" step wait a full day for the
+        // first real run, with no way to force one.
+        var jobState = new MockBackgroundJobStateRepository();
+        var options = Enabled();
+        options.DryRun = true;
+        var (service, users) = Create(options, jobState);
+
+        await service.RunIfDueAsync(CancellationToken.None);
+
+        users.Verify(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Once);
+        // The live key is untouched, so a dry run never delays a real purge...
+        Assert.Null(await jobState.GetAsync(UserPurgeService.JobName));
+        // ...but the dry sweep still paces itself, so a recycling host does not re-scan Users every start.
+        Assert.NotNull(await jobState.GetAsync(UserPurgeService.DryRunJobName));
+    }
+
+    [Fact]
+    public async Task A_dry_run_is_paced_by_its_own_key_across_restarts()
+    {
+        var jobState = new MockBackgroundJobStateRepository();
+        await jobState.UpsertAsync(
+            new BackgroundJobState
+            {
+                JobName = UserPurgeService.DryRunJobName,
+                LastAttemptUtc = DateTime.UtcNow.AddHours(-2),
+            }
+        );
+
+        var options = Enabled();
+        options.DryRun = true;
+        var (service, users) = Create(options, jobState);
+
+        var waited = await service.RunIfDueAsync(CancellationToken.None);
+
+        users.Verify(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Never);
+        Assert.InRange(waited, TimeSpan.FromHours(21.5), TimeSpan.FromHours(22.5));
+    }
+
+    [Fact]
+    public async Task A_future_dated_success_stamp_does_not_latch_the_purge_off()
+    {
+        var jobState = new MockBackgroundJobStateRepository();
+        await jobState.UpsertAsync(
+            new BackgroundJobState
+            {
+                JobName = UserPurgeService.JobName,
+                LastAttemptUtc = DateTime.UtcNow.AddYears(1),
+                LastSuccessUtc = DateTime.UtcNow.AddYears(1),
+            }
+        );
+
+        var (service, users) = Create(Enabled(), jobState);
+
+        await service.RunIfDueAsync(CancellationToken.None);
+
+        users.Verify(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_dry_run_is_not_blocked_by_an_interval_a_live_run_consumed()
+    {
+        // The runbook tells the operator to verify with DryRun. If a live sweep earlier in the interval
+        // could silence it, that verification step would show nothing for up to a day.
+        var jobState = new MockBackgroundJobStateRepository();
+        await jobState.UpsertAsync(
+            new BackgroundJobState
+            {
+                JobName = UserPurgeService.JobName,
+                LastAttemptUtc = DateTime.UtcNow.AddHours(-2),
+                LastSuccessUtc = DateTime.UtcNow.AddHours(-2),
+            }
+        );
+
+        var options = Enabled();
+        options.DryRun = true;
+        var (service, users) = Create(options, jobState);
+
+        await service.RunIfDueAsync(CancellationToken.None);
+
+        users.Verify(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_future_dated_attempt_stamp_does_not_latch_the_purge_off()
+    {
+        // Clock skew or a hand-edited document makes every later comparison negative; without a guard the
+        // job would silently never run again.
+        var jobState = new MockBackgroundJobStateRepository();
+        await jobState.UpsertAsync(
+            new BackgroundJobState
+            {
+                JobName = UserPurgeService.JobName,
+                LastAttemptUtc = DateTime.UtcNow.AddYears(1),
+                LastSuccessUtc = DateTime.UtcNow.AddYears(1),
+            }
+        );
+
+        var (service, users) = Create(Enabled(), jobState);
+
+        await service.RunIfDueAsync(CancellationToken.None);
+
+        users.Verify(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task An_interval_beyond_the_Task_Delay_ceiling_is_not_silently_capped()
+    {
+        // IntervalHours is a comparison window, not a Task.Delay argument. Capping it at the ~49.7 day
+        // delay ceiling would make a quarterly purge sweep roughly twice per configured period.
+        var jobState = new MockBackgroundJobStateRepository();
+        await jobState.UpsertAsync(
+            new BackgroundJobState
+            {
+                JobName = UserPurgeService.JobName,
+                LastAttemptUtc = DateTime.UtcNow.AddDays(-60),
+                LastSuccessUtc = DateTime.UtcNow.AddDays(-60),
+            }
+        );
+
+        var options = Enabled();
+        options.IntervalHours = 2160; // 90 days
+
+        var (service, users) = Create(options, jobState);
+
+        var waited = await service.RunIfDueAsync(CancellationToken.None);
+
+        users.Verify(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Never);
+        Assert.InRange(waited, TimeSpan.FromDays(29), TimeSpan.FromDays(31));
+    }
+
+    [Fact]
     public async Task RunIfDue_observes_cancellation()
     {
         var jobState = new Mock<IBackgroundJobStateRepository>(MockBehavior.Strict);

@@ -29,10 +29,17 @@ namespace Web.Services
         /// <summary>Key for this job's <see cref="BackgroundJobState"/> document.</summary>
         public const string JobName = "user-purge";
 
+        /// <summary>
+        /// Pacing key used while <see cref="UserPurgeOptions.DryRun"/> is set. Kept separate so a dry
+        /// sweep neither consumes the live interval nor is blocked by one a live sweep consumed.
+        /// </summary>
+        public const string DryRunJobName = "user-purge-dryrun";
+
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly UserPurgeOptions _options;
         private readonly ILogger<UserPurgeService> _logger;
         private readonly TimeSpan _interval;
+        private readonly TimeSpan _tickInterval;
         private readonly TimeSpan _startupDelay;
 
         public UserPurgeService(
@@ -44,7 +51,11 @@ namespace Web.Services
             _scopeFactory = scopeFactory;
             _options = options.Value;
             _logger = logger;
-            _interval = JobInterval.FromHours(_options.IntervalHours);
+            // A comparison window, not a Task.Delay argument - the loop waits at most _tickInterval.
+            // Building it with the delay-capped family would silently cap a quarterly IntervalHours at
+            // ~49.7 days and purge twice as often as configured.
+            _interval = JobInterval.WindowFromHours(_options.IntervalHours);
+            _tickInterval = JobInterval.FromMinutes(_options.TickIntervalMinutes);
             _startupDelay = JobInterval.FromSeconds(_options.StartupDelaySeconds);
         }
 
@@ -77,7 +88,11 @@ namespace Web.Services
             {
                 // Check before waiting, so a restart can never skip an interval. Whether the check
                 // actually purges is decided by persisted state, so restarting often does not purge often.
-                var wait = _interval;
+                //
+                // On failure fall back to the *tick* interval, never the pacing interval: nothing ran and
+                // no state was consumed, so a single transient Cosmos read failure must not postpone the
+                // next check by a full IntervalHours (which for a quarterly cadence is seven weeks).
+                var wait = _tickInterval;
                 try
                 {
                     wait = await RunIfDueAsync(stoppingToken);
@@ -91,6 +106,11 @@ namespace Web.Services
                     _logger.LogError(ex, "Unhandled error in user purge run");
                 }
 
+                // Never sleep past the tick interval either: the pacing decision is cheap and re-checking
+                // keeps the loop responsive to a state document changed out of band.
+                if (wait > _tickInterval)
+                    wait = _tickInterval;
+
                 try
                 {
                     await Task.Delay(JobInterval.Clamp(wait), stoppingToken);
@@ -103,8 +123,9 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// Purges if the interval has elapsed since the last successful run, and returns how long to wait
-        /// before checking again.
+        /// Purges if the interval has elapsed since the last <em>attempt</em>, and returns how long to wait
+        /// before checking again. Pacing on the attempt rather than the last success is deliberate: see the
+        /// remarks on <see cref="UserPurgeService"/>.
         /// </summary>
         internal async Task<TimeSpan> RunIfDueAsync(CancellationToken cancellationToken)
         {
@@ -113,15 +134,21 @@ namespace Web.Services
             using var scope = _scopeFactory.CreateScope();
             var jobState = scope.ServiceProvider.GetRequiredService<IBackgroundJobStateRepository>();
 
-            var state =
-                await jobState.GetAsync(JobName).ConfigureAwait(false)
-                ?? new BackgroundJobState { JobName = JobName };
+            // A dry sweep paces on its own key. Sharing the live key would either let a dry run consume
+            // the live interval (delaying real purges) or let a live run silence the dry run the cut-over
+            // runbook tells the operator to verify with. It still paces, so a host that recycles several
+            // times a day does not re-scan the Users container on every start.
+            var jobName = _options.DryRun ? DryRunJobName : JobName;
 
-            // Paced on the *attempt*, not the success. A sweep that is interrupted partway (host shutdown
-            // during a deploy cancels UserPurgeRunner between candidates) has already performed some
-            // irreversible deletions, so letting the next start run again with a fresh MaxDeletesPerRun
-            // budget would restore exactly the per-restart cap this durable state exists to prevent.
-            var elapsed = DateTime.UtcNow - state.LastAttemptUtc;
+            var state =
+                await jobState.GetAsync(jobName).ConfigureAwait(false)
+                ?? new BackgroundJobState { JobName = jobName };
+
+            // Paced on the *attempt*, not the success. A sweep interrupted partway (host shutdown during a
+            // deploy cancels UserPurgeRunner between candidates) has already performed some irreversible
+            // deletions, so letting the next start run again with a fresh MaxDeletesPerRun budget would
+            // restore the per-restart cap this state exists to prevent.
+            var elapsed = ElapsedSince(state.LastAttemptUtc, nameof(state.LastAttemptUtc));
             if (elapsed < _interval)
                 return _interval - elapsed;
 
@@ -136,10 +163,21 @@ namespace Web.Services
             // LastSuccessUtc records only a clean sweep. Per-candidate failures are counted rather than
             // thrown, so stamping it unconditionally would report a wholly failed purge (deleted=0,
             // errors=100) as a healthy run to anyone inspecting the state document.
+            //
+            // The sweep has already committed irreversible deletions by this point, so a failure to write
+            // the health stamp must not propagate: it would be logged as "unhandled error in user purge"
+            // and suppress the summary below, telling the operator nothing was deleted when it was.
             if (result.Errors == 0)
             {
                 state.LastSuccessUtc = DateTime.UtcNow;
-                await jobState.UpsertAsync(state).ConfigureAwait(false);
+                try
+                {
+                    await jobState.UpsertAsync(state).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogError(ex, "User purge completed but its success timestamp could not be persisted");
+                }
             }
 
             _logger.LogInformation(
@@ -153,6 +191,25 @@ namespace Web.Services
             );
 
             return _interval;
+        }
+
+        /// <summary>
+        /// Time since a pacing stamp. A future-dated stamp (clock skew, or a state document restored from
+        /// another environment) would make every comparison negative and latch the job off silently, so it
+        /// is reported as fully elapsed and warned about instead.
+        /// </summary>
+        private TimeSpan ElapsedSince(DateTime stampUtc, string field)
+        {
+            var elapsed = DateTime.UtcNow - stampUtc;
+            if (elapsed >= TimeSpan.Zero)
+                return elapsed;
+
+            _logger.LogWarning(
+                "User purge state has a future-dated {Field} ({Stamp:o}); treating the purge as due",
+                field,
+                stampUtc
+            );
+            return TimeSpan.MaxValue;
         }
     }
 }

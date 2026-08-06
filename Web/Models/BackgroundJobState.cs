@@ -9,6 +9,15 @@ namespace Web.Models
     /// typical uptime (deployments restart the host) cannot pace themselves from an in-process timer
     /// alone, so they persist when they last ran and consult it on each scheduler tick.
     /// </summary>
+    /// <remarks>
+    /// Which of the two timestamps paces a job is the job's own decision, not a property of this record.
+    /// <c>PayPalSyncScheduler</c> paces on <see cref="LastSuccessUtc"/> and uses <see cref="LastAttemptUtc"/>
+    /// only to back off after a failure, so a failed sync retries in hours rather than a week.
+    /// <c>UserPurgeService</c> paces on <see cref="LastAttemptUtc"/>, because an interrupted sweep has
+    /// already performed irreversible deletions and must still consume the interval; it stamps
+    /// <see cref="LastSuccessUtc"/> only for a clean sweep, as a health signal.
+    /// </remarks>
+    /// <seealso cref="LastAttemptFailed"/>
     public class BackgroundJobState
     {
         /// <summary>Stable job identifier and the document's natural key, e.g. <c>paypal-sync</c>.</summary>
@@ -16,15 +25,21 @@ namespace Web.Models
 
         /// <summary>
         /// When the job last completed successfully, or <see cref="DateTime.MinValue"/> if it never has.
-        /// This is what paces the job's normal interval.
         /// </summary>
         public DateTime LastSuccessUtc { get; set; }
 
         /// <summary>
-        /// When the job was last attempted, successful or not. Paces retries so a persistently failing
-        /// job backs off instead of retrying on every scheduler tick.
+        /// When the job was last attempted, successful or not.
         /// </summary>
         public DateTime LastAttemptUtc { get; set; }
+
+        /// <summary>
+        /// Whether the last attempt failed. Stored explicitly rather than derived from
+        /// <c>LastAttemptUtc &gt; LastSuccessUtc</c>, because that comparison silently inverts when either
+        /// stamp is future-dated (clock skew, or a document restored from another environment) - which
+        /// would disable a retry backoff exactly when a job is already failing.
+        /// </summary>
+        public bool LastAttemptFailed { get; set; }
 
         [JsonIgnore]
         public string? ETag { get; set; }

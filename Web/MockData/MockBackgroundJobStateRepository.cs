@@ -52,6 +52,7 @@ namespace Web.MockData
                 JobName = s.JobName,
                 LastSuccessUtc = s.LastSuccessUtc,
                 LastAttemptUtc = s.LastAttemptUtc,
+                LastAttemptFailed = s.LastAttemptFailed,
                 ETag = s.ETag,
             };
         }

@@ -54,30 +54,66 @@ namespace Web.Services
             if (!opt.SyncEnabled)
                 return false;
 
-            if (string.IsNullOrWhiteSpace(opt.ClientId) || string.IsNullOrWhiteSpace(opt.ClientSecret))
+            var credentialsMissing =
+                string.IsNullOrWhiteSpace(opt.ClientId) || string.IsNullOrWhiteSpace(opt.ClientSecret);
+
+            BackgroundJobState state;
+            try
             {
-                _logger.LogWarning("PayPal sync is enabled but PayPal:ClientId or PayPal:ClientSecret is missing.");
-                return false;
+                state =
+                    await _jobState.GetAsync(JobName).ConfigureAwait(false)
+                    ?? new BackgroundJobState { JobName = JobName };
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException && credentialsMissing)
+            {
+                // A fresh cut-over is likely to be missing the credentials *and* the out-of-band
+                // BackgroundJobState container at once. Without this, the state read throws first and the
+                // operator only ever sees a Cosmos stack trace, fixes the container, and only then
+                // discovers the second missing piece - one wasted debug cycle.
+                _logger.LogWarning(
+                    "PayPal sync is enabled but PayPal:ClientId or PayPal:ClientSecret is missing, and the "
+                        + "job-state read also failed. Both need fixing."
+                );
+                throw;
             }
 
-            var state =
-                await _jobState.GetAsync(JobName).ConfigureAwait(false)
-                ?? new BackgroundJobState { JobName = JobName };
-
             var now = DateTime.UtcNow;
-            var syncInterval = JobInterval.FromDays(opt.SyncIntervalDays);
-            if (now - state.LastSuccessUtc < syncInterval)
+            var syncInterval = JobInterval.WindowFromDays(opt.SyncIntervalDays);
+            if (ElapsedSince(state.LastSuccessUtc, nameof(state.LastSuccessUtc)) < syncInterval)
                 return false;
 
-            // A run is due, but if the last attempt failed recently, back off instead of retrying on
-            // every tick - otherwise a bad credential means an API call every check interval, forever.
-            var retryInterval = JobInterval.FromHours(opt.SyncRetryIntervalHours);
-            if (now - state.LastAttemptUtc < retryInterval)
+            // A run is due. If the last attempt failed, back off instead of retrying on every tick, so a
+            // bad credential cannot mean an API call every check interval forever.
+            //
+            // The gate reads the persisted LastAttemptFailed flag rather than comparing the two stamps:
+            // LastAttemptUtc is written for successful runs too, so gating every attempt on it would let a
+            // SyncRetryIntervalHours larger than SyncIntervalDays silently override the configured cadence,
+            // while deriving "failed" from LastAttemptUtc > LastSuccessUtc inverts under a future-dated
+            // stamp and would drop the backoff entirely in exactly that case.
+            var retryInterval = JobInterval.WindowFromHours(opt.SyncRetryIntervalHours);
+            if (
+                state.LastAttemptFailed
+                && ElapsedSince(state.LastAttemptUtc, nameof(state.LastAttemptUtc)) < retryInterval
+            )
                 return false;
 
-            // Record the attempt before running so a failure (or a crash mid-run) still paces the retry.
+            // Record the attempt before running, marked failed until proven otherwise, so a failure (or a
+            // crash mid-run) still paces the retry. Missing credentials count as a failed attempt
+            // deliberately: this stamp is what backs the warning below off to once per
+            // SyncRetryIntervalHours instead of once per tick - ~8,700 traces a year on an hourly tick.
             state.LastAttemptUtc = now;
+            state.LastAttemptFailed = true;
             await _jobState.UpsertAsync(state).ConfigureAwait(false);
+
+            if (credentialsMissing)
+            {
+                _logger.LogWarning(
+                    "PayPal sync is enabled but PayPal:ClientId or PayPal:ClientSecret is missing. "
+                        + "Retrying in {Retry} h.",
+                    retryInterval.TotalHours
+                );
+                return false;
+            }
 
             var result = await _runner.RunAsync(cancellationToken).ConfigureAwait(false);
 
@@ -86,6 +122,7 @@ namespace Web.Services
             // failure. The run is still re-attempted once the retry interval elapses, because
             // LastSuccessUtc stayed stale - bounded re-work, never a lost import.
             state.LastSuccessUtc = DateTime.UtcNow;
+            state.LastAttemptFailed = false;
             try
             {
                 await _jobState.UpsertAsync(state).ConfigureAwait(false);
@@ -114,6 +151,25 @@ namespace Web.Services
             );
 
             return true;
+        }
+
+        /// <summary>
+        /// Time since a pacing stamp. A future-dated stamp (clock skew, or a state document restored from
+        /// another environment) would make every comparison negative and latch the sync off silently, so
+        /// it is reported as fully elapsed and warned about instead.
+        /// </summary>
+        private TimeSpan ElapsedSince(DateTime stampUtc, string field)
+        {
+            var elapsed = DateTime.UtcNow - stampUtc;
+            if (elapsed >= TimeSpan.Zero)
+                return elapsed;
+
+            _logger.LogWarning(
+                "PayPal sync state has a future-dated {Field} ({Stamp:o}); treating the sync as due",
+                field,
+                stampUtc
+            );
+            return TimeSpan.MaxValue;
         }
     }
 }
