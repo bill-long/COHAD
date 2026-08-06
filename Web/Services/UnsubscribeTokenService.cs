@@ -14,6 +14,10 @@ namespace Web.Services
         private const int NonceSize = 12; // AES-GCM standard nonce
         private const int TagSize = 16; // AES-GCM auth tag
 
+        /// <summary>Inclusive bounds of the range <see cref="DateTimeOffset.FromUnixTimeSeconds"/> accepts.</summary>
+        private static readonly long MinUnixSeconds = DateTimeOffset.MinValue.ToUnixTimeSeconds();
+        private static readonly long MaxUnixSeconds = DateTimeOffset.MaxValue.ToUnixTimeSeconds();
+
         private readonly byte[] _encryptionKey;
 
         public UnsubscribeTokenService(IOptions<UnsubscribeTokenOptions> options)
@@ -37,7 +41,20 @@ namespace Web.Services
                 throw new ArgumentException("Email must not be empty.", nameof(email));
 
             var unixSeconds = issued.ToUnixTimeSeconds();
-            var payload = $"{homeId:D}|{email}|{unixSeconds}";
+            return Encrypt($"{homeId:D}|{email}|{unixSeconds}");
+        }
+
+        /// <summary>
+        /// Encrypts an arbitrary payload string.
+        /// <para>
+        /// Internal rather than private so tests can mint a token that authenticates but carries a
+        /// payload <see cref="GenerateToken(Guid, string)"/> would never emit. That is the only way
+        /// to reach <see cref="ValidateToken"/>'s post-decryption parsing paths, which are exactly
+        /// the ones the design doc's untrusted legacy key makes reachable in production.
+        /// </para>
+        /// </summary>
+        internal string Encrypt(string payload)
+        {
             var plaintext = Encoding.UTF8.GetBytes(payload);
 
             var nonce = new byte[NonceSize];
@@ -58,23 +75,23 @@ namespace Web.Services
             return Base64UrlEncode(combined);
         }
 
-        public UnsubscribeTokenPayload ValidateToken(string token)
+        public UnsubscribeTokenResult ValidateToken(string token)
         {
             if (string.IsNullOrWhiteSpace(token))
-                return null;
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.Missing);
 
             byte[] combined;
             try
             {
                 combined = Base64UrlDecode(token.AsSpan());
             }
-            catch
+            catch (FormatException)
             {
-                return null;
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.MalformedBase64);
             }
 
             if (combined.Length < NonceSize + TagSize + 1)
-                return null;
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.TooShort);
 
             var nonce = combined.AsSpan(0, NonceSize);
             var ciphertextLength = combined.Length - NonceSize - TagSize;
@@ -89,7 +106,7 @@ namespace Web.Services
             }
             catch (CryptographicException)
             {
-                return null;
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.DecryptFailed);
             }
 
             var payload = Encoding.UTF8.GetString(plaintext);
@@ -99,29 +116,53 @@ namespace Web.Services
             var firstPipe = payload.IndexOf('|');
             var lastPipe = payload.LastIndexOf('|');
             if (firstPipe < 0 || lastPipe <= firstPipe)
-                return null;
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.MalformedPayload);
 
             var guidPart = payload[..firstPipe];
             var emailPart = payload[(firstPipe + 1)..lastPipe];
             var timestampPart = payload[(lastPipe + 1)..];
 
             if (!Guid.TryParse(guidPart, out var homeId))
-                return null;
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.MalformedPayload);
+
+            // GenerateToken refuses an empty email, but validation has to refuse one too: a payload
+            // of {guid}||{unix} parses cleanly and would authorise an empty address, which
+            // FindMatchingEmailAddresses normalises to "" and then matches against every
+            // blank-address record on the home. Anyone able to mint a payload - the legacy key is
+            // treated as untrusted, see docs/email-suppression-and-unsubscribe.md - could read and
+            // clear those records' preferences.
+            if (string.IsNullOrWhiteSpace(emailPart))
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.MalformedPayload);
 
             if (!long.TryParse(timestampPart, out var unixSeconds))
-                return null;
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.MalformedPayload);
+
+            // long.TryParse accepts values far outside what FromUnixTimeSeconds supports, and that
+            // call would throw rather than return. Every rejection has to name a reason - an
+            // exception here would surface as a 500 with nothing logged, which is precisely the
+            // blind spot this type was reworked to remove.
+            if (unixSeconds < MinUnixSeconds || unixSeconds > MaxUnixSeconds)
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.MalformedPayload);
 
             var issued = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
             var age = DateTimeOffset.UtcNow - issued;
-            if (age < TimeSpan.FromMinutes(-5) || age > MaxTokenAge)
-                return null;
 
-            return new UnsubscribeTokenPayload
-            {
-                HomeId = homeId,
-                Email = emailPart,
-                Issued = issued,
-            };
+            // Order matters for diagnosis, not for the outcome: a future timestamp and an expired
+            // one are both rejections, but they point at different causes (clock skew vs an old link).
+            if (age < TimeSpan.FromMinutes(-5))
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.IssuedInFuture);
+
+            if (age > MaxTokenAge)
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.Expired);
+
+            return UnsubscribeTokenResult.Success(
+                new UnsubscribeTokenPayload
+                {
+                    HomeId = homeId,
+                    Email = emailPart,
+                    Issued = issued,
+                }
+            );
         }
 
         private static string Base64UrlEncode(byte[] data)
