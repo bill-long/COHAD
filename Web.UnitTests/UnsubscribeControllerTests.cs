@@ -50,7 +50,7 @@ namespace Web.UnitTests
         /// does with failures the action never sees, is covered by
         /// <see cref="UnsubscribeDiagnosticsPipelineTests"/> against a real MVC pipeline.
         /// </summary>
-        private UnsubscribeRejection Recorded() => UnsubscribeDiagnostics.Get(_httpContext);
+        private UnsubscribeRejection? Recorded() => UnsubscribeDiagnostics.Get(_httpContext);
 
         private static UnsubscribeTokenResult Valid(Guid homeId, string email) =>
             UnsubscribeTokenResult.Success(new UnsubscribeTokenPayload { HomeId = homeId, Email = email });

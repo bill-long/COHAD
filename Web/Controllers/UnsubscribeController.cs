@@ -146,9 +146,16 @@ namespace Web.Controllers
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing token." });
 
-            // Belt and braces. [ApiController]'s model-state filter rejects an absent or unparseable
-            // body with a 400 before this action runs, so over HTTP this is unreachable - the filter
-            // logs that case from the status code. Kept so a direct caller cannot NRE below.
+            // Belt and braces. [ApiController] rejects an absent or unparseable body before this
+            // action runs, so over HTTP this is unreachable and the middleware logs that case from
+            // the status code. Kept so a direct caller cannot NRE below.
+            //
+            // Do NOT add `#nullable enable` to this file to "fix" the annotation. On an MVC action,
+            // reference-type nullability is not documentation - it is binding semantics. Annotating
+            // it made `category` implicitly required (a whitespace-mangled segment stopped reaching
+            // the action, losing its classification) and flipped this parameter's EmptyBodyBehavior
+            // to Allow (a wrong Content-Type stopped surfacing as 415). The contract-bearing types
+            // are annotated in their own files, where they carry no binding behaviour.
             if (dto == null)
             {
                 RecordPostCredentialRejection("missing-request-body");

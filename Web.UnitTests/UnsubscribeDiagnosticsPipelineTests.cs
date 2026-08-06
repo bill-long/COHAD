@@ -169,6 +169,67 @@ namespace Web.UnitTests
             Assert.Contains(Warnings, w => w.Message.Contains("rejected-before-action"));
         }
 
+        // --- Locks on the controller's non-annotated nullability context ---
+        //
+        // `#nullable enable` on an MVC action is binding semantics, not documentation: annotating
+        // the parameters made `category` implicitly required and flipped `[FromBody]`'s
+        // EmptyBodyBehavior to Allow. Each test below names which half it actually pins, because an
+        // earlier version of this block claimed both and one of them passed for an unrelated reason.
+
+        [Fact]
+        public async Task NoContentType_IsRejectedBeforeTheActionAsUnsupportedMediaType()
+        {
+            // Independent of nullability: with no Content-Type the body binder finds no input
+            // formatter and returns 415 before EmptyBodyBehavior is ever consulted. Kept because the
+            // 415 classification is worth locking, NOT because it detects an annotation change.
+            _tokenService.Setup(s => s.ValidateToken(It.IsAny<string>())).Returns(Valid(Guid.NewGuid(), "j@x.com"));
+
+            var response = await _client.PutAsync("/api/email/preferences?token=abc", content: null);
+
+            Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+            Assert.Contains(Warnings, w => w.Message.Contains("unsupported-media-type"));
+        }
+
+        [Fact]
+        public async Task EmptyJsonBody_IsRejectedBeforeTheActionRatherThanReachingIt()
+        {
+            // This is the EmptyBodyBehavior lock. A well-formed request with an empty JSON body is
+            // turned away by model binding today. Make the body parameter nullable and the action
+            // runs instead, logging "missing-request-body" and erasing the pre-action signal.
+            _tokenService.Setup(s => s.ValidateToken(It.IsAny<string>())).Returns(Valid(Guid.NewGuid(), "j@x.com"));
+
+            var response = await _client.PutAsync(
+                "/api/email/preferences?token=abc",
+                new StringContent("", System.Text.Encoding.UTF8, "application/json")
+            );
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains(Warnings, w => w.Message.Contains("rejected-before-action"));
+            Assert.DoesNotContain(Warnings, w => w.Message.Contains("missing-request-body"));
+        }
+
+        [Fact]
+        public async Task WhitespaceCategory_StillReachesTheActionAndIsClassified()
+        {
+            // This is the implicit-[Required] lock. A category segment mangled to whitespace in
+            // transit is exactly the failure class this PR exists to diagnose; annotate the
+            // controller and model binding rejects it before the action, losing the classification.
+            var homeId = Guid.NewGuid();
+            _tokenService.Setup(s => s.ValidateToken(It.IsAny<string>())).Returns(Valid(homeId, "j@x.com"));
+
+            var response = await _client.PostAsync(
+                "/api/email/unsubscribe/%20?token=tok",
+                new StringContent(
+                    "List-Unsubscribe=One-Click",
+                    System.Text.Encoding.UTF8,
+                    "application/x-www-form-urlencoded"
+                )
+            );
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains(Warnings, w => w.Message.Contains("unknown-category"));
+        }
+
         // --- Distinctions model binding erases ---
 
         [Fact]
@@ -225,7 +286,7 @@ namespace Web.UnitTests
         {
             var homeId = Guid.NewGuid();
             _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, "j@x.com"));
-            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync((Home)null);
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync((Home?)null);
             _residentRepository.Setup(r => r.GetByHomeIdAsync(homeId)).ReturnsAsync(new List<Resident>());
 
             var response = await _client.GetAsync("/api/email/preferences?token=tok");
@@ -434,7 +495,7 @@ namespace Web.UnitTests
 
             private sealed class RecordingLogger(RecordingLoggerProvider provider, string category) : ILogger
             {
-                public IDisposable BeginScope<TState>(TState state)
+                public IDisposable? BeginScope<TState>(TState state)
                     where TState : notnull => null;
 
                 public bool IsEnabled(LogLevel logLevel) => true;

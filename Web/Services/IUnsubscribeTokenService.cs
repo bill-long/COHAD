@@ -1,3 +1,10 @@
+#nullable enable
+
+// Nullable annotations are enabled for this file only: the Web project does not enable them
+// globally, but these types encode a contract that is entirely about what is absent - a
+// rejected token has no payload, a rejection recorded before the token was read has no
+// reason or ends - and a signature that cannot say so invites the null-deref it documents.
+
 using System;
 
 namespace Web.Services
@@ -8,7 +15,7 @@ namespace Web.Services
         /// Generates an opaque, AES-GCM-encrypted token for the given home and email.
         /// The token is a base64url string containing nonce + ciphertext + authentication tag.
         /// </summary>
-        string GenerateToken(Guid homeId, string email);
+        string? GenerateToken(Guid homeId, string email);
 
         /// <summary>
         /// Decrypts and validates a token, extracting the home ID and email address.
@@ -20,13 +27,13 @@ namespace Web.Services
         /// <c>docs/email-suppression-and-unsubscribe.md</c>.
         /// </para>
         /// </summary>
-        UnsubscribeTokenResult ValidateToken(string token);
+        UnsubscribeTokenResult ValidateToken(string? token);
     }
 
     public class UnsubscribeTokenPayload
     {
         public Guid HomeId { get; set; }
-        public string Email { get; set; }
+        public required string Email { get; set; }
         public DateTimeOffset Issued { get; set; }
     }
 
@@ -74,14 +81,14 @@ namespace Web.Services
     /// </summary>
     public sealed class UnsubscribeTokenResult
     {
-        private UnsubscribeTokenResult(UnsubscribeTokenPayload payload, UnsubscribeTokenFailure failure)
+        private UnsubscribeTokenResult(UnsubscribeTokenPayload? payload, UnsubscribeTokenFailure failure)
         {
             Payload = payload;
             Failure = failure;
         }
 
         /// <summary>The decoded payload, or null when <see cref="IsValid"/> is false.</summary>
-        public UnsubscribeTokenPayload Payload { get; }
+        public UnsubscribeTokenPayload? Payload { get; }
 
         /// <summary>Why validation failed, or <see cref="UnsubscribeTokenFailure.None"/> on success.</summary>
         public UnsubscribeTokenFailure Failure { get; }
@@ -111,9 +118,9 @@ namespace Web.Services
     /// </summary>
     public class NullUnsubscribeTokenService : IUnsubscribeTokenService
     {
-        public string GenerateToken(Guid homeId, string email) => null;
+        public string? GenerateToken(Guid homeId, string email) => null;
 
-        public UnsubscribeTokenResult ValidateToken(string token) =>
+        public UnsubscribeTokenResult ValidateToken(string? token) =>
             UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.NotConfigured);
     }
 }

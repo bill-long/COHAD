@@ -1,3 +1,10 @@
+#nullable enable
+
+// Nullable annotations are enabled for this file only: the Web project does not enable them
+// globally, but these types encode a contract that is entirely about what is absent - a
+// rejected token has no payload, a rejection recorded before the token was read has no
+// reason or ends - and a signature that cannot say so invites the null-deref it documents.
+
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -13,7 +20,7 @@ namespace Web.Services
     public sealed class UnsubscribeRejection
     {
         /// <summary>Short, non-attacker-controlled classification, e.g. <c>home-not-found</c>.</summary>
-        public string Reason { get; init; }
+        public string? Reason { get; init; }
 
         /// <summary>Which budget this draws on.</summary>
         public UnsubscribeWarningKind Kind { get; init; } = UnsubscribeWarningKind.TokenRejection;
@@ -25,7 +32,7 @@ namespace Web.Services
         public int? TokenLength { get; init; }
 
         /// <summary>Redacted ends of the presented token, when there was one.</summary>
-        public string TokenEnds { get; init; }
+        public string? TokenEnds { get; init; }
     }
 
     /// <summary>Records a rejection on the current request for the diagnostics middleware to log.</summary>
@@ -103,7 +110,7 @@ namespace Web.Services
             httpContext.Items[ItemKey] = rejection;
         }
 
-        public static UnsubscribeRejection Get(HttpContext httpContext) =>
+        public static UnsubscribeRejection? Get(HttpContext? httpContext) =>
             httpContext?.Items.TryGetValue(ItemKey, out var value) == true ? value as UnsubscribeRejection : null;
     }
 

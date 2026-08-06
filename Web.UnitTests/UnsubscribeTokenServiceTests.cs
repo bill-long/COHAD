@@ -225,6 +225,8 @@ namespace Web.UnitTests
             // But both validate to the same data
             var p1 = service.ValidateToken(token1).Payload;
             var p2 = service.ValidateToken(token2).Payload;
+            Assert.NotNull(p1);
+            Assert.NotNull(p2);
             Assert.Equal(p1.HomeId, p2.HomeId);
             Assert.Equal(p1.Email, p2.Email);
         }
