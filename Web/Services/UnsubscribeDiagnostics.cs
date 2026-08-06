@@ -100,11 +100,6 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// The kind a request draws on when the action never recorded one. Shared rule with
-        /// <c>UnsubscribeController</c>: presenting a token is what moves a rejection into the
-        /// token stream.
-        /// </summary>
-        /// <summary>
         /// Whether a credential was actually supplied, as opposed to whether the parameter appeared.
         /// A value is required: `?token=` carries the key but no credential.
         /// <para>
@@ -117,6 +112,20 @@ namespace Web.Services
         public static string DescribeCredentialType(HttpContext context) =>
             string.IsNullOrWhiteSpace(context.Request.Query[TokenParameter]) ? NoCredential : LegacyTokenCredential;
 
+        /// <summary>
+        /// The single rule for which budget a rejection draws on. Every site that classifies one
+        /// calls this - the controller when it records a rejection, and the middleware as the
+        /// fallback when the action never ran to record anything. A new rejection path should call
+        /// it rather than hard-code a <see cref="UnsubscribeWarningKind"/>: a tokenless request
+        /// billed to the token stream lets an anonymous flood suppress the stripped-link evidence
+        /// this feature exists to surface.
+        /// <para>
+        /// The parameter being <em>present</em> is what moves a rejection into the token stream,
+        /// deliberately including a stripped <c>?token=</c> - that is the evidence worth protecting.
+        /// Contrast <see cref="DescribeCredentialType"/>, which requires a value because it feeds
+        /// the legacy-redemption counter rather than the budget.
+        /// </para>
+        /// </summary>
         public static UnsubscribeWarningKind ClassifyByTokenPresence(HttpContext context) =>
             context.Request.Query.ContainsKey(TokenParameter)
                 ? UnsubscribeWarningKind.TokenRejection
