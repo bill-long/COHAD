@@ -20,19 +20,11 @@ public sealed class UserPurgeOptions
 
     public int PurgeAfterDays { get; set; } = 30;
 
-    public int MaxDeletesPerRun { get; set; } = 100;
-
     /// <summary>
-    /// Minimum hours between purge sweeps. Enforced against durable state, not an in-process timer.
-    /// Consumed by the hosted service, not by <see cref="UserPurgeRunner"/> itself.
+    /// How long <see cref="UserPurgeService"/> waits between sweeps. Consumed by the hosted service, not
+    /// by <see cref="UserPurgeRunner"/> itself.
     /// </summary>
     public int IntervalHours { get; set; } = 24;
-
-    /// <summary>
-    /// How often <see cref="UserPurgeService"/> wakes to check whether a sweep is due. Deliberately
-    /// decoupled from <see cref="IntervalHours"/> so a transient failure costs one tick, not one interval.
-    /// </summary>
-    public int TickIntervalMinutes { get; set; } = 60;
 
     /// <summary>
     /// Delay before the first run after startup, so the app finishes booting first. Consumed by the
@@ -59,11 +51,6 @@ public sealed class UserPurgeResult
 /// </summary>
 public sealed class UserPurgeRunner
 {
-    /// <summary>
-    /// Consecutive <see cref="IUserRepository.DeleteAsync"/> failures that abort the rest of a sweep.
-    /// </summary>
-    internal const int MaxConsecutiveDeleteFailures = 3;
-
     private readonly IUserRepository _userRepository;
     private readonly IAuditLogRepository _auditLogRepository;
     private readonly ILogger<UserPurgeRunner> _logger;
@@ -90,36 +77,16 @@ public sealed class UserPurgeRunner
             return result;
         }
 
-        var max = Math.Max(1, options.MaxDeletesPerRun);
-        var cutoff = DateTime.UtcNow.AddDays(-Math.Max(1, options.PurgeAfterDays));
+        // Clamped once: the audit text below must state the retention rule that was actually applied.
+        var purgeAfterDays = Math.Max(1, options.PurgeAfterDays);
+        var cutoff = DateTime.UtcNow.AddDays(-purgeAfterDays);
 
-        var candidates = await _userRepository.GetPurgeCandidatesAsync(cutoff, max).ConfigureAwait(false);
+        var candidates = await _userRepository.GetPurgeCandidatesAsync(cutoff).ConfigureAwait(false);
         result.CandidatesFound = candidates.Count;
-
-        var consecutiveDeleteFailures = 0;
 
         foreach (var user in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            // Deletes are audited before they are attempted (see below), so a systematically failing
-            // delete would otherwise write two entries per candidate for the whole batch on every sweep -
-            // hundreds of audit rows describing purges that never happened. Stop early instead: if several
-            // deletes in a row fail, the container is unhealthy and the remaining candidates will fail too.
-            if (consecutiveDeleteFailures >= MaxConsecutiveDeleteFailures)
-            {
-                _logger.LogError(
-                    "Aborting the purge sweep after {Count} consecutive delete failures; {Remaining} "
-                        + "candidates were not attempted",
-                    consecutiveDeleteFailures,
-                    result.CandidatesFound
-                        - result.Deleted
-                        - result.WouldDelete
-                        - result.SkippedAdministrator
-                        - result.Errors
-                );
-                break;
-            }
 
             if (user.Roles != null && user.Roles.Contains(User.Role.Administrator))
             {
@@ -134,9 +101,30 @@ public sealed class UserPurgeRunner
                 continue;
             }
 
-            // Audit first, so a deletion can never go unrecorded: the delete is irreversible and the entry
-            // is the only durable trace of who was removed, whereas a failure here simply leaves the user
-            // in place for the next sweep. A failed audit write must therefore abort this candidate.
+            try
+            {
+                await _userRepository.DeleteAsync(user.UniqueId).ConfigureAwait(false);
+                result.Deleted++;
+                _logger.LogInformation("Purged user {UniqueId}", user.UniqueId);
+            }
+            catch (Exception ex)
+            {
+                result.Errors++;
+                _logger.LogError(ex, "Failed to purge user {UniqueId}", user.UniqueId);
+                continue;
+            }
+
+            // Audited after the delete succeeded, deliberately, and this ordering should not be flipped
+            // again without reading this note. Both orderings lose something, because the two writes go to
+            // different containers with no transaction between them:
+            //
+            //   audit first  -> a failed delete leaves a permanent entry asserting a purge that did not
+            //                   happen, which cannot be distinguished from a real one by reading the log;
+            //   delete first -> a failed audit leaves a deletion recorded only in the error log below.
+            //
+            // The second is preferred: the audit log then only ever describes deletions that actually
+            // occurred, and the gap is both visible and recoverable from the error log, which names the
+            // user. An unfalsifiable false entry is worse than a gap that says where to look.
             try
             {
                 await _auditLogRepository
@@ -146,7 +134,7 @@ public sealed class UserPurgeRunner
                             Id = Guid.NewGuid(),
                             SubjectId = user.UniqueId,
                             SubjectName = user.Emails,
-                            Action = $"Purged inactive user (no homes or no roles for {options.PurgeAfterDays}+ days).",
+                            Action = $"Purged inactive user (no homes or no roles for {purgeAfterDays}+ days).",
                             Time = DateTime.UtcNow,
                             UserDisplayName = "System",
                             UserId = "user-purge",
@@ -157,58 +145,15 @@ public sealed class UserPurgeRunner
             catch (Exception ex)
             {
                 result.Errors++;
-                _logger.LogError(ex, "Failed to audit the purge of user {UniqueId}; not deleting", user.UniqueId);
-                continue;
-            }
-
-            try
-            {
-                await _userRepository.DeleteAsync(user.UniqueId).ConfigureAwait(false);
-                result.Deleted++;
-                consecutiveDeleteFailures = 0;
-                _logger.LogInformation("Purged user {UniqueId}", user.UniqueId);
-            }
-            catch (Exception ex)
-            {
-                result.Errors++;
-                consecutiveDeleteFailures++;
-                _logger.LogError(ex, "Failed to purge user {UniqueId}", user.UniqueId);
-
-                // The audit entry above asserts a completed deletion that may not have happened. Record the
-                // uncertainty rather than either leaving the claim unqualified or denying it: a throw does
-                // not prove the delete did not commit (a write timeout can surface after the server
-                // applied it), so an entry stating it definitely failed could itself be false and would
-                // never be corrected, because a deleted user is never a candidate again. Best-effort - if
-                // this write also fails, the error logged above is all that is left.
-                try
-                {
-                    await _auditLogRepository
-                        .AddAsync(
-                            new NewAuditLogEntry
-                            {
-                                Id = Guid.NewGuid(),
-                                SubjectId = user.UniqueId,
-                                SubjectName = user.Emails,
-                                Action =
-                                    "Purge of inactive user did not complete cleanly; the deletion may or "
-                                    + "may not have been applied. Verify whether the preceding purge entry "
-                                    + "for this user reflects a completed deletion.",
-                                Time = DateTime.UtcNow,
-                                UserDisplayName = "System",
-                                UserId = "user-purge",
-                            }
-                        )
-                        .ConfigureAwait(false);
-                }
-                catch (Exception compensationEx)
-                {
-                    _logger.LogError(
-                        compensationEx,
-                        "Failed to write the compensating audit entry for user {UniqueId}; the audit log "
-                            + "now records a purge that did not complete",
-                        user.UniqueId
-                    );
-                }
+                // UniqueId only: this job exists to remove stale personal data, so it must not copy the
+                // addresses into Application Insights, which has its own retention and which the purge
+                // cannot clean up. The id is enough to reconstruct what was deleted.
+                _logger.LogError(
+                    ex,
+                    "Purged user {UniqueId} but failed to write the audit entry; this log line is the only "
+                        + "record of that deletion",
+                    user.UniqueId
+                );
             }
         }
 

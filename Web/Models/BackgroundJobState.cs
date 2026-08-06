@@ -10,12 +10,11 @@ namespace Web.Models
     /// alone, so they persist when they last ran and consult it on each scheduler tick.
     /// </summary>
     /// <remarks>
-    /// Which of the two timestamps paces a job is the job's own decision, not a property of this record.
-    /// <c>PayPalSyncScheduler</c> paces on <see cref="LastSuccessUtc"/> and uses <see cref="LastAttemptUtc"/>
-    /// only to back off after a failure, so a failed sync retries in hours rather than a week.
-    /// <c>UserPurgeService</c> paces on <see cref="LastAttemptUtc"/>, because an interrupted sweep has
-    /// already performed irreversible deletions and must still consume the interval; it stamps
-    /// <see cref="LastSuccessUtc"/> only for a clean sweep, as a health signal.
+    /// Used by <c>PayPalSyncScheduler</c> only. <c>UserPurgeService</c> deliberately keeps no durable
+    /// state: its sweep is unbounded, so running more often than configured is free and running less often
+    /// is harmless. The sync paces on <see cref="LastSuccessUtc"/> and uses <see cref="LastAttemptUtc"/>
+    /// with <see cref="LastAttemptFailed"/> only to back off after a failure, so a failed sync retries in
+    /// hours rather than waiting out a full week.
     /// </remarks>
     /// <seealso cref="LastAttemptFailed"/>
     public class BackgroundJobState

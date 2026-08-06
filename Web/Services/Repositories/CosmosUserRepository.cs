@@ -22,7 +22,7 @@ namespace Web.Services.Repositories
         /// <summary>
         /// Users whose no-home or no-role clock is on or before <paramref name="cutoffUtc"/>.
         /// </summary>
-        Task<List<User>> GetPurgeCandidatesAsync(DateTime cutoffUtc, int maxCount);
+        Task<List<User>> GetPurgeCandidatesAsync(DateTime cutoffUtc);
 
         Task DeleteAsync(string uniqueId);
     }
@@ -79,13 +79,8 @@ namespace Web.Services.Repositories
             return user;
         }
 
-        public async Task<List<User>> GetPurgeCandidatesAsync(DateTime cutoffUtc, int maxCount)
+        public async Task<List<User>> GetPurgeCandidatesAsync(DateTime cutoffUtc)
         {
-            if (maxCount < 1)
-            {
-                return new List<User>();
-            }
-
             // OwnedHomeIds and Roles are commonly stored as JSON strings (legacy).
             var query = new CosmosQueryDefinition(
                 @"
@@ -116,7 +111,7 @@ WHERE c.Discriminator = 'User'
 
             var results = new List<User>();
             var iterator = _usersContainer.GetItemQueryIterator<JObject>(query);
-            while (iterator.HasMoreResults && results.Count < maxCount)
+            while (iterator.HasMoreResults)
             {
                 var response = await iterator.ReadNextAsync();
                 foreach (var doc in response)
@@ -133,10 +128,6 @@ WHERE c.Discriminator = 'User'
                     if (noHomesEligible || noRolesEligible)
                     {
                         results.Add(user);
-                        if (results.Count >= maxCount)
-                        {
-                            break;
-                        }
                     }
                 }
             }

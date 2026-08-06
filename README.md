@@ -228,7 +228,7 @@ There is **no** working `ng lint` target in this repo; use `ng build` for TypeSc
 2. **Host** the published output on your platform (e.g. Azure App Service, container, IIS + Kestrel).
 3. **Configure** production settings via environment variables or Azure App Settings: **Cosmos**, **document storage**, **SMTP**, **`AppBaseUrl`**, **`UnsubscribeToken:SigningKey`**, Application Insights, etc.
 4. **Do not** run with `ASPNETCORE_ENVIRONMENT=MockData` in production — MockData is for local/testing only.
-5. **Scheduled jobs** (user purge, PayPal sync) run in-process as hosted services in the `Web` app - there is nothing separate to deploy. Both are off by default; enable via `UserPurge__Enabled` / `PayPal__SyncEnabled`. Both require a **`BackgroundJobState`** Cosmos container (non-partitioned, `/NoPartitionKey`), provisioned out-of-band like every other container, which is what paces them across restarts. **Always On** must be enabled on the host, or the app unloads when idle and the timers never fire.
+5. **Scheduled jobs** (user purge, PayPal sync) run in-process as hosted services in the `Web` app - there is nothing separate to deploy. Both are off by default; enable via `UserPurge__Enabled` / `PayPal__SyncEnabled`. The PayPal sync requires a **`BackgroundJobState`** Cosmos container (non-partitioned, `/NoPartitionKey`), provisioned out-of-band like every other container, which is what paces it across restarts; the purge needs no state. **Always On** must be enabled on the host, or the app unloads when idle and the timers never fire.
 
 ### Decommissioning the old UserPurge Function App
 
@@ -236,15 +236,16 @@ These jobs previously ran as timer-triggered Azure Functions. Deleting the proje
 
 Cut over in this order:
 
-1. **Copy the job settings off the Function App first** - they exist nowhere else, and step 5 destroys them. From the Function App's configuration, carry over to the **Web** app:
+1. **Copy the job settings off the Function App first** - they exist nowhere else, and step 6 destroys them. From the Function App's configuration, carry over to the **Web** app:
    - `PayPal__ClientId`, `PayPal__ClientSecret`, and `PayPal__ApiBaseUrl` / `PayPal__SyncLookbackDays` if they were overridden. Without the credentials the sync returns on every tick and imports nothing.
-   - `UserPurge__DryRun`, `UserPurge__PurgeAfterDays`, `UserPurge__MaxDeletesPerRun` if they were overridden. Note that `DryRun` now defaults to **`true`**, so a purge that was live on the Function App needs an explicit `UserPurge__DryRun=false` here or it will silently stop deleting.
+   - `UserPurge__PurgeAfterDays` if it was overridden. Do **not** carry `UserPurge__DryRun=false` over yet - step 4 turns the purge live deliberately, after you have seen what it would delete. (`UserPurge__MaxDeletesPerRun` no longer exists; the sweep is unbounded.)
    - The schedule keys (`UserPurgeSchedule`, `PayPalSyncSchedule`) have no equivalent and should not be carried over; see `UserPurge:IntervalHours` and `PayPal:SyncIntervalDays`.
 2. Deploy the `Web` app with `UserPurge__Enabled=false` and `PayPal__SyncEnabled=false`.
 3. On the **Function App**, set `UserPurge__Enabled=false` and `PayPal__SyncEnabled=false`, or stop the app outright.
-4. Enable the flags on the **Web** app and confirm from the logs that a run happens. Verifying the purge with `UserPurge__DryRun=true` first is safe: a dry run deletes nothing and paces on a separate key, so it neither consumes the live interval nor is blocked by one. The `BackgroundJobState` container must already exist (see step 1 of *Deployment* above) - a dry run uses it too.
-5. Delete the Function App, and the storage account it used for `AzureWebJobsStorage` if nothing else does. Check whether it shares the web app's Application Insights resource before deleting that.
-6. Remove the now-unused GitHub secrets `AzureFunctionApp_Name_UserPurge` and `AzureFunctionApp_PublishProfile_UserPurge`.
+4. **Verify the purge before it can delete anything.** Set `UserPurge__Enabled=true` leaving `DryRun` at its default of `true`, and read the `DryRun: would purge user ...` lines. The sweep is unbounded, so this list is exactly what the first live run will delete - check it against what you expect before going further. If `PurgeAfterDays` or the `UnassociatedSinceUtc` / `NoRolesSinceUtc` stamps are wrong in the data, this is where you find out.
+5. Set `UserPurge__DryRun=false` and `PayPal__SyncEnabled=true`, then confirm from the logs that a real run happens. The purge keeps no pacing state, so the first live run starts shortly after the restart the setting change causes.
+6. Delete the Function App, and the storage account it used for `AzureWebJobsStorage` if nothing else does. Check whether it shares the web app's Application Insights resource before deleting that.
+7. Remove the now-unused GitHub secrets `AzureFunctionApp_Name_UserPurge` and `AzureFunctionApp_PublishProfile_UserPurge`.
 
 ---
 

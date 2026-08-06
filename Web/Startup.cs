@@ -440,11 +440,11 @@ namespace Web
             // separate Function App; they are hosted in-process so there is one deployable and no
             // dependency on the Functions runtime. Both self-disable when their Enabled flag is off.
             //
-            // Both pace from persisted timestamps in the BackgroundJobState container rather than from an
-            // in-process timer, which would restart with the process: the PayPal sync because its interval
-            // is longer than the app's typical uptime between deploys, and the purge so that
-            // MaxDeletesPerRun stays a per-interval cap on irreversible deletions instead of a per-restart
-            // one. That container is provisioned out-of-band; without it neither job runs.
+            // Only the PayPal sync paces from persisted state (the out-of-band BackgroundJobState
+            // container), because its interval is longer than the app's typical uptime between deploys, so
+            // an in-process timer would rarely reach the next occurrence. The purge needs none: its sweep
+            // is unbounded, so running more often than configured is free and running less often is
+            // harmless. See UserPurgeService's remarks before adding pacing state back.
             services.Configure<UserPurgeOptions>(Configuration.GetSection("UserPurge"));
             services.Configure<PayPalOptions>(Configuration.GetSection("PayPal"));
             if (useMockData)
@@ -458,8 +458,21 @@ namespace Web
             services.AddHttpClient<PayPalTransactionSearchClient>();
             services.AddScoped<IPayPalPaymentSyncRunner, PayPalPaymentSyncRunner>();
             services.AddScoped<PayPalSyncScheduler>();
-            services.AddHostedService<UserPurgeService>();
-            services.AddHostedService<PayPalSyncService>();
+            // Registered only when their data layer can actually work. Without this the loops would run
+            // and throw on every tick, contradicting the startup error logged in Configure that says they
+            // are not running.
+            var jobsHaveDataLayer =
+                useMockData
+                || (
+                    !string.IsNullOrWhiteSpace(Configuration["CosmosUri"])
+                    && !string.IsNullOrWhiteSpace(Configuration["CosmosKey"])
+                    && !string.IsNullOrWhiteSpace(Configuration["CosmosDatabase"])
+                );
+            if (jobsHaveDataLayer)
+            {
+                services.AddHostedService<UserPurgeService>();
+                services.AddHostedService<PayPalSyncService>();
+            }
 
             // Email job queue and background processor (shared across environments)
             services.AddSingleton<EmailJobQueue>();
@@ -615,8 +628,9 @@ namespace Web
             {
                 logger.LogError(
                     "Scheduled jobs are enabled but CosmosUri/CosmosKey/CosmosDatabase are not all "
-                        + "configured. Neither the user purge nor the PayPal sync will run. Both also "
-                        + "require the out-of-band 'BackgroundJobState' container to exist."
+                        + "configured, so neither the user purge nor the PayPal sync was started. The "
+                        + "PayPal sync additionally requires the out-of-band 'BackgroundJobState' "
+                        + "container; the user purge does not."
                 );
             }
 

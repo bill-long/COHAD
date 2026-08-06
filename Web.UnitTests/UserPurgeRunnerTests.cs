@@ -40,7 +40,7 @@ public sealed class UserPurgeRunnerTests
         var result = await runner.RunAsync(new UserPurgeOptions { Enabled = false }, CancellationToken.None);
 
         Assert.Equal(0, result.CandidatesFound);
-        users.Verify(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Never);
+        users.Verify(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>()), Times.Never);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class UserPurgeRunnerTests
     {
         var list = new List<User> { MakeUser("u1"), MakeUser("u2") };
         var users = new Mock<IUserRepository>();
-        users.Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>())).ReturnsAsync(list);
+        users.Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>())).ReturnsAsync(list);
         var audit = new Mock<IAuditLogRepository>(MockBehavior.Strict);
         var runner = new UserPurgeRunner(users.Object, audit.Object, NullLogger<UserPurgeRunner>.Instance);
 
@@ -58,7 +58,6 @@ public sealed class UserPurgeRunnerTests
                 Enabled = true,
                 DryRun = true,
                 PurgeAfterDays = 30,
-                MaxDeletesPerRun = 50,
             },
             CancellationToken.None
         );
@@ -75,7 +74,7 @@ public sealed class UserPurgeRunnerTests
     {
         var list = new List<User> { MakeUser("admin", administrator: true), MakeUser("resident") };
         var users = new Mock<IUserRepository>();
-        users.Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>())).ReturnsAsync(list);
+        users.Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>())).ReturnsAsync(list);
         var audit = new Mock<IAuditLogRepository>();
         var runner = new UserPurgeRunner(users.Object, audit.Object, NullLogger<UserPurgeRunner>.Instance);
 
@@ -85,7 +84,6 @@ public sealed class UserPurgeRunnerTests
                 Enabled = true,
                 DryRun = false,
                 PurgeAfterDays = 14,
-                MaxDeletesPerRun = 10,
             },
             CancellationToken.None
         );
@@ -108,26 +106,16 @@ public sealed class UserPurgeRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_passes_cutoff_and_max_to_repository()
+    public async Task RunAsync_passes_the_cutoff_to_the_repository()
     {
         var users = new Mock<IUserRepository>();
-        users
-            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
-            .ReturnsAsync(new List<User>());
         var audit = new Mock<IAuditLogRepository>(MockBehavior.Strict);
         var runner = new UserPurgeRunner(users.Object, audit.Object, NullLogger<UserPurgeRunner>.Instance);
 
         DateTime? capturedCutoff = null;
-        int? capturedMax = null;
         users
-            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
-            .Callback<DateTime, int>(
-                (c, m) =>
-                {
-                    capturedCutoff = c;
-                    capturedMax = m;
-                }
-            )
+            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>()))
+            .Callback<DateTime>(c => capturedCutoff = c)
             .ReturnsAsync(new List<User>());
 
         await runner.RunAsync(
@@ -136,16 +124,14 @@ public sealed class UserPurgeRunnerTests
                 Enabled = true,
                 DryRun = true,
                 PurgeAfterDays = 7,
-                MaxDeletesPerRun = 42,
             },
             CancellationToken.None
         );
 
         Assert.NotNull(capturedCutoff);
-        Assert.Equal(42, capturedMax);
         var expectedLatest = DateTime.UtcNow.AddDays(-7);
         var expectedEarliest = DateTime.UtcNow.AddDays(-7).AddMinutes(-1);
-        Assert.True(capturedCutoff.Value <= expectedLatest);
+        Assert.True(capturedCutoff!.Value <= expectedLatest);
         Assert.True(capturedCutoff.Value >= expectedEarliest.AddMinutes(-1));
     }
 
@@ -155,18 +141,41 @@ public sealed class UserPurgeRunnerTests
             Enabled = true,
             DryRun = false,
             PurgeAfterDays = 30,
-            MaxDeletesPerRun = 100,
         };
 
     [Fact]
-    public async Task RunAsync_does_not_delete_when_the_audit_write_fails()
+    public async Task RunAsync_writes_no_audit_entry_when_the_delete_fails()
     {
-        // The invariant: no account is ever hard-deleted without a durable record of it. The delete is
-        // irreversible; a failed audit merely leaves the user in place for the next sweep.
-        var users = new Mock<IUserRepository>(MockBehavior.Strict);
+        // The delete runs first, so the audit log only ever describes deletions that actually happened.
+        // A failed delete must leave no trace claiming otherwise - a false entry cannot be distinguished
+        // from a real one by reading the log, whereas the user simply remains a candidate next sweep.
+        var users = new Mock<IUserRepository>();
         users
-            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>()))
             .ReturnsAsync(new List<User> { MakeUser("u1") });
+        users.Setup(r => r.DeleteAsync("u1")).ThrowsAsync(new InvalidOperationException("cosmos down"));
+
+        var audit = new Mock<IAuditLogRepository>(MockBehavior.Strict);
+        var runner = new UserPurgeRunner(users.Object, audit.Object, NullLogger<UserPurgeRunner>.Instance);
+
+        var result = await runner.RunAsync(LiveOptions(), CancellationToken.None);
+
+        audit.Verify(a => a.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+        Assert.Equal(0, result.Deleted);
+        Assert.Equal(1, result.Errors);
+    }
+
+    [Fact]
+    public async Task RunAsync_counts_an_error_when_the_audit_write_fails_after_a_delete()
+    {
+        // The account is gone, so Deleted stays counted - but the sweep is not clean, and the error count
+        // is the only aggregate the job emits. Reporting errors=0 here would read as a healthy run while
+        // the deletion exists only in the error log.
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<User> { MakeUser("u1") });
+        users.Setup(r => r.DeleteAsync("u1")).Returns(Task.CompletedTask);
 
         var audit = new Mock<IAuditLogRepository>();
         audit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).ThrowsAsync(new InvalidOperationException("429"));
@@ -175,49 +184,14 @@ public sealed class UserPurgeRunnerTests
 
         var result = await runner.RunAsync(LiveOptions(), CancellationToken.None);
 
-        users.Verify(r => r.DeleteAsync(It.IsAny<string>()), Times.Never);
-        Assert.Equal(0, result.Deleted);
+        Assert.Equal(1, result.Deleted);
         Assert.Equal(1, result.Errors);
     }
 
     [Fact]
-    public async Task RunAsync_writes_a_compensating_entry_when_the_delete_fails_after_auditing()
+    public async Task RunAsync_attempts_every_candidate_even_when_deletes_keep_failing()
     {
-        // The audit entry is written first, so a failed delete leaves the log asserting a deletion that
-        // did not happen. That claim must be corrected rather than left standing.
-        var users = new Mock<IUserRepository>();
-        users
-            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
-            .ReturnsAsync(new List<User> { MakeUser("u1") });
-        users.Setup(r => r.DeleteAsync("u1")).ThrowsAsync(new InvalidOperationException("cosmos down"));
-
-        var entries = new List<NewAuditLogEntry>();
-        var audit = new Mock<IAuditLogRepository>();
-        audit
-            .Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>()))
-            .Callback<NewAuditLogEntry>(entries.Add)
-            .Returns(Task.CompletedTask);
-
-        var runner = new UserPurgeRunner(users.Object, audit.Object, NullLogger<UserPurgeRunner>.Instance);
-
-        var result = await runner.RunAsync(LiveOptions(), CancellationToken.None);
-
-        Assert.Equal(0, result.Deleted);
-        Assert.Equal(1, result.Errors);
-        Assert.Equal(2, entries.Count);
-        Assert.Equal("u1", entries[1].SubjectId);
-        // The entry must record uncertainty, not deny the deletion: a write that throws may still have
-        // committed, and a deleted user is never a candidate again so nothing would ever correct a denial.
-        Assert.Contains("may or", entries[1].Action);
-        Assert.Contains("did not complete cleanly", entries[1].Action);
-    }
-
-    [Fact]
-    public async Task RunAsync_aborts_the_sweep_after_repeated_delete_failures()
-    {
-        // Deletes are audited before they are attempted, so a systematically failing delete would write
-        // two audit entries per candidate for the whole batch - hundreds of rows describing purges that
-        // never happened, repeated every sweep. The breaker bounds that.
+        // There is no per-run cap and no early abort: the sweep is unbounded by design.
         var candidates = new List<User>();
         for (var i = 0; i < 20; i++)
         {
@@ -225,52 +199,18 @@ public sealed class UserPurgeRunnerTests
         }
 
         var users = new Mock<IUserRepository>();
-        users.Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>())).ReturnsAsync(candidates);
+        users.Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>())).ReturnsAsync(candidates);
         users.Setup(r => r.DeleteAsync(It.IsAny<string>())).ThrowsAsync(new InvalidOperationException("429"));
 
-        var audit = new Mock<IAuditLogRepository>();
-        var entries = new List<NewAuditLogEntry>();
-        audit
-            .Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>()))
-            .Callback<NewAuditLogEntry>(entries.Add)
-            .Returns(Task.CompletedTask);
-
+        var audit = new Mock<IAuditLogRepository>(MockBehavior.Strict);
         var runner = new UserPurgeRunner(users.Object, audit.Object, NullLogger<UserPurgeRunner>.Instance);
 
         var result = await runner.RunAsync(LiveOptions(), CancellationToken.None);
 
-        users.Verify(
-            r => r.DeleteAsync(It.IsAny<string>()),
-            Times.Exactly(UserPurgeRunner.MaxConsecutiveDeleteFailures)
-        );
-        Assert.Equal(UserPurgeRunner.MaxConsecutiveDeleteFailures, result.Errors);
+        users.Verify(r => r.DeleteAsync(It.IsAny<string>()), Times.Exactly(20));
+        Assert.Equal(20, result.Errors);
         Assert.Equal(0, result.Deleted);
-        // Two entries per attempted candidate (the purge claim plus its correction), and nothing beyond.
-        Assert.Equal(UserPurgeRunner.MaxConsecutiveDeleteFailures * 2, entries.Count);
-    }
-
-    [Fact]
-    public async Task RunAsync_resets_the_failure_breaker_after_a_successful_delete()
-    {
-        var users = new Mock<IUserRepository>();
-        users
-            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
-            .ReturnsAsync(new List<User> { MakeUser("bad1"), MakeUser("ok"), MakeUser("bad2") });
-        users.Setup(r => r.DeleteAsync(It.Is<string>(id => id.StartsWith("bad"))))
-            .ThrowsAsync(new InvalidOperationException("429"));
-        users.Setup(r => r.DeleteAsync("ok")).Returns(Task.CompletedTask);
-
-        var audit = new Mock<IAuditLogRepository>();
-        audit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
-
-        var runner = new UserPurgeRunner(users.Object, audit.Object, NullLogger<UserPurgeRunner>.Instance);
-
-        var result = await runner.RunAsync(LiveOptions(), CancellationToken.None);
-
-        // Interleaved failures never reach the consecutive threshold, so the whole batch is attempted.
-        Assert.Equal(1, result.Deleted);
-        Assert.Equal(2, result.Errors);
-        users.Verify(r => r.DeleteAsync(It.IsAny<string>()), Times.Exactly(3));
+        audit.Verify(a => a.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
     }
 
     [Fact]
@@ -278,7 +218,7 @@ public sealed class UserPurgeRunnerTests
     {
         var users = new Mock<IUserRepository>();
         users
-            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .Setup(r => r.GetPurgeCandidatesAsync(It.IsAny<DateTime>()))
             .ReturnsAsync(new List<User> { MakeUser("u1") });
         users.Setup(r => r.DeleteAsync("u1")).Returns(Task.CompletedTask);
 
@@ -296,6 +236,7 @@ public sealed class UserPurgeRunnerTests
         Assert.Equal(1, result.Deleted);
         Assert.Equal(0, result.Errors);
         Assert.Single(entries);
-        Assert.DoesNotContain("FAILED", entries[0].Action);
+        Assert.Equal("u1", entries[0].SubjectId);
+        Assert.Contains("30+ days", entries[0].Action);
     }
 }

@@ -20,6 +20,9 @@ namespace Web.Services
         /// <summary>The largest delay <c>Task.Delay</c> accepts.</summary>
         public static readonly TimeSpan MaxDelay = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
 
+        public static TimeSpan FromHours(int hours, int minHours = 1) =>
+            TimeSpan.FromHours(Math.Clamp((double)hours, minHours, MaxDelay.TotalHours));
+
         public static TimeSpan FromMinutes(int minutes, int minMinutes = 1) =>
             TimeSpan.FromMinutes(Math.Clamp((double)minutes, minMinutes, MaxDelay.TotalMinutes));
 

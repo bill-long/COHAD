@@ -18,6 +18,18 @@ public sealed class JobIntervalTests
     }
 
     [Theory]
+    [InlineData(24)]
+    [InlineData(8760)] // "yearly" typo - 365 days, far past Task.Delay's ~49.7 day ceiling
+    [InlineData(int.MaxValue)] // would overflow TimeSpan.FromHours itself
+    public async Task FromHours_never_produces_a_delay_Task_Delay_rejects(int hours)
+    {
+        var interval = JobInterval.FromHours(hours);
+
+        Assert.True(interval <= JobInterval.MaxDelay);
+        await AssertUsableAsDelay(interval);
+    }
+
+    [Theory]
     [InlineData(60)]
     [InlineData(525600)] // "yearly" typo - 365 days, far past Task.Delay's ~49.7 day ceiling
     [InlineData(int.MaxValue)] // would overflow TimeSpan.FromMinutes itself
