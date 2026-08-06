@@ -50,7 +50,7 @@ public sealed class UserPurgeIntegrationTests
         try
         {
             var cutoff = DateTime.UtcNow.AddDays(-30);
-            var candidates = await repo.GetPurgeCandidatesAsync(cutoff, 100).ConfigureAwait(false);
+            var candidates = await repo.GetPurgeCandidatesAsync(cutoff).ConfigureAwait(false);
             Assert.Contains(candidates, c => c.UniqueId == uniqueId);
         }
         finally
@@ -77,7 +77,7 @@ public sealed class UserPurgeIntegrationTests
         try
         {
             var cutoff = DateTime.UtcNow.AddDays(-30);
-            var candidates = await repo.GetPurgeCandidatesAsync(cutoff, 100).ConfigureAwait(false);
+            var candidates = await repo.GetPurgeCandidatesAsync(cutoff).ConfigureAwait(false);
             Assert.DoesNotContain(candidates, c => c.UniqueId == uniqueId);
         }
         finally
@@ -102,7 +102,7 @@ public sealed class UserPurgeIntegrationTests
         try
         {
             var cutoff = DateTime.UtcNow.AddDays(-30);
-            var candidates = await repo.GetPurgeCandidatesAsync(cutoff, 100).ConfigureAwait(false);
+            var candidates = await repo.GetPurgeCandidatesAsync(cutoff).ConfigureAwait(false);
             Assert.DoesNotContain(candidates, c => c.UniqueId == uniqueId);
         }
         finally
@@ -131,7 +131,7 @@ public sealed class UserPurgeIntegrationTests
         try
         {
             var cutoff = DateTime.UtcNow.AddDays(-30);
-            var candidates = await repo.GetPurgeCandidatesAsync(cutoff, 100).ConfigureAwait(false);
+            var candidates = await repo.GetPurgeCandidatesAsync(cutoff).ConfigureAwait(false);
             Assert.Contains(candidates, c => c.UniqueId == uniqueId);
         }
         finally
@@ -165,7 +165,7 @@ public sealed class UserPurgeIntegrationTests
         try
         {
             var cutoff = DateTime.UtcNow.AddDays(-30);
-            var candidates = await repo.GetPurgeCandidatesAsync(cutoff, 100).ConfigureAwait(false);
+            var candidates = await repo.GetPurgeCandidatesAsync(cutoff).ConfigureAwait(false);
             Assert.DoesNotContain(candidates, c => c.UniqueId == uniqueId);
         }
         finally
@@ -207,10 +207,10 @@ public sealed class UserPurgeIntegrationTests
         try
         {
             var cutoff = DateTime.UtcNow.AddDays(-30);
-            var pre = await userRepo.GetPurgeCandidatesAsync(cutoff, 200).ConfigureAwait(false);
+            var pre = await userRepo.GetPurgeCandidatesAsync(cutoff).ConfigureAwait(false);
             Skip.If(
                 !pre.Exists(u => u.UniqueId == uniqueId),
-                "Test user was not returned as a purge candidate; use a clean integration DB or increase max scan."
+                "Test user was not returned as a purge candidate; use a clean integration DB."
             );
 
             var runner = new UserPurgeRunner(userRepo, auditRepo, NullLogger<UserPurgeRunner>.Instance);
@@ -222,7 +222,6 @@ public sealed class UserPurgeIntegrationTests
                         Enabled = true,
                         DryRun = true,
                         PurgeAfterDays = 30,
-                        MaxDeletesPerRun = 200,
                     }
                 )
                 .ConfigureAwait(false);
@@ -267,13 +266,19 @@ public sealed class UserPurgeIntegrationTests
         try
         {
             var cutoff = DateTime.UtcNow.AddDays(-30);
-            var pre = await userRepo.GetPurgeCandidatesAsync(cutoff, 200).ConfigureAwait(false);
+            var pre = await userRepo.GetPurgeCandidatesAsync(cutoff).ConfigureAwait(false);
             Skip.If(
                 !pre.Exists(u => u.UniqueId == adminId) || !pre.Exists(u => u.UniqueId == residentId),
-                "Both test users must appear in the purge candidate set; use a clean integration DB or increase max scan."
+                "Both test users must appear in the purge candidate set; use a clean integration DB."
             );
 
-            var runner = new UserPurgeRunner(userRepo, auditRepo, NullLogger<UserPurgeRunner>.Instance);
+            // The sweep is deliberately unbounded in production, so a live DryRun=false run here would
+            // hard-delete every purge-eligible account in whatever database the fixture points at - and
+            // still report green, because the assertions below only look at the two seeded users. Scope
+            // the candidate set to this test's own ids; everything else (the real Cosmos delete, the real
+            // audit write, the administrator skip) still exercises production code paths.
+            var scopedRepo = new ScopedCandidateUserRepository(userRepo, adminId, residentId);
+            var runner = new UserPurgeRunner(scopedRepo, auditRepo, NullLogger<UserPurgeRunner>.Instance);
 
             var result = await runner
                 .RunAsync(
@@ -282,13 +287,12 @@ public sealed class UserPurgeIntegrationTests
                         Enabled = true,
                         DryRun = false,
                         PurgeAfterDays = 30,
-                        MaxDeletesPerRun = 200,
                     }
                 )
                 .ConfigureAwait(false);
 
-            Assert.True(result.SkippedAdministrator >= 1);
-            Assert.True(result.Deleted >= 1);
+            Assert.Equal(1, result.SkippedAdministrator);
+            Assert.Equal(1, result.Deleted);
 
             var adminAfter = await userRepo.GetByUniqueIdAsync(adminId).ConfigureAwait(false);
             Assert.NotNull(adminAfter);
@@ -301,5 +305,35 @@ public sealed class UserPurgeIntegrationTests
             await userRepo.DeleteAsync(adminId).ConfigureAwait(false);
             await userRepo.DeleteAsync(residentId).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Delegates to the real Cosmos repository but narrows the purge candidate set to this test's own
+    /// seeded ids, so a live (DryRun=false) run cannot delete unrelated accounts in a shared database.
+    /// </summary>
+    private sealed class ScopedCandidateUserRepository : IUserRepository
+    {
+        private readonly IUserRepository _inner;
+        private readonly HashSet<string> _allowedIds;
+
+        public ScopedCandidateUserRepository(IUserRepository inner, params string[] allowedIds)
+        {
+            _inner = inner;
+            _allowedIds = new HashSet<string>(allowedIds, StringComparer.Ordinal);
+        }
+
+        public async Task<List<User>> GetPurgeCandidatesAsync(DateTime cutoffUtc)
+        {
+            var all = await _inner.GetPurgeCandidatesAsync(cutoffUtc).ConfigureAwait(false);
+            return all.FindAll(u => _allowedIds.Contains(u.UniqueId));
+        }
+
+        public Task<List<User>> GetAllAsync() => _inner.GetAllAsync();
+
+        public Task<User> GetByUniqueIdAsync(string uniqueId) => _inner.GetByUniqueIdAsync(uniqueId);
+
+        public Task<User> UpsertAsync(User user) => _inner.UpsertAsync(user);
+
+        public Task DeleteAsync(string uniqueId) => _inner.DeleteAsync(uniqueId);
     }
 }

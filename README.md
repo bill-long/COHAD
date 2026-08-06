@@ -12,7 +12,7 @@ For day-to-day AI/editor hints, see [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](A
 
 | Tool | Notes |
 |------|--------|
-| **.NET 10 SDK** | Required for `Web`, `Web.UnitTests`, `Web.IntegrationTests`, and `Functions/UserPurgeFunction`. |
+| **.NET 10 SDK** | Required for `Web`, `Web.UnitTests`, and `Web.IntegrationTests`. |
 | **Node.js 22+** and **npm** | For `Web/ClientApp` (`package-lock.json`). |
 
 ---
@@ -21,12 +21,11 @@ For day-to-day AI/editor hints, see [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](A
 
 | Path | Purpose |
 |------|---------|
-| [`COHAD.sln`](COHAD.sln) | Solution: Web, unit tests, integration tests, UserPurge function. |
+| [`COHAD.sln`](COHAD.sln) | Solution: Web, unit tests, integration tests. |
 | [`Web/`](Web/) | ASP.NET Core app: APIs, `Startup.cs`, `ClientApp/` (Angular). |
 | [`Web/ClientApp/`](Web/ClientApp/) | Angular SPA (`ng serve` in dev; `dist` produced on publish). |
 | [`Web.UnitTests/`](Web.UnitTests/) | Fast unit tests (no Cosmos by default). |
 | [`Web.IntegrationTests/`](Web.IntegrationTests/) | Cosmos-dependent tests (skipped unless `RUN_COSMOS_INTEGRATION_TESTS=1`). |
-| [`Functions/UserPurgeFunction/`](Functions/UserPurgeFunction/) | Azure Function for scheduled user purge; has its own [README](Functions/UserPurgeFunction/README.md). |
 | [`scripts/run-mock-data.sh`](scripts/run-mock-data.sh) | MockData instructions; `./scripts/run-mock-data.sh api` generates signing keys and serves the API (same **https://127.0.0.1:5001** as Development). |
 
 ---
@@ -229,7 +228,24 @@ There is **no** working `ng lint` target in this repo; use `ng build` for TypeSc
 2. **Host** the published output on your platform (e.g. Azure App Service, container, IIS + Kestrel).
 3. **Configure** production settings via environment variables or Azure App Settings: **Cosmos**, **document storage**, **SMTP**, **`AppBaseUrl`**, **`UnsubscribeToken:SigningKey`**, Application Insights, etc.
 4. **Do not** run with `ASPNETCORE_ENVIRONMENT=MockData` in production — MockData is for local/testing only.
-5. **User purge** and other timers live in **`Functions/UserPurgeFunction`** — deploy separately; see [Functions/UserPurgeFunction/README.md](Functions/UserPurgeFunction/README.md).
+5. **Scheduled jobs** (user purge, PayPal sync) run in-process as hosted services in the `Web` app - there is nothing separate to deploy. Both are off by default; enable via `UserPurge__Enabled` / `PayPal__SyncEnabled`. The PayPal sync requires a **`BackgroundJobState`** Cosmos container (non-partitioned, `/NoPartitionKey`), provisioned out-of-band like every other container, which is what paces it across restarts; the purge needs no state. **Always On** must be enabled on the host, or the app unloads when idle and the timers never fire.
+
+### Decommissioning the old UserPurge Function App
+
+These jobs previously ran as timer-triggered Azure Functions. Deleting the project and its workflow from this repo does **not** stop the deployed Function App - it still exists in Azure with its own App Settings and its last-deployed code, and it points at the same Cosmos database. If both run, PayPal transactions are imported twice (payments get a random `id`, so the dedup read-then-write does not catch a concurrent importer) and the purge double-writes audit entries.
+
+Cut over in this order:
+
+1. **Copy the job settings off the Function App first** - they exist nowhere else, and step 6 destroys them. From the Function App's configuration, carry over to the **Web** app:
+   - `PayPal__ClientId`, `PayPal__ClientSecret`, and `PayPal__ApiBaseUrl` / `PayPal__SyncLookbackDays` if they were overridden. Without the credentials the sync returns on every tick and imports nothing.
+   - `UserPurge__PurgeAfterDays` if it was overridden. Do **not** carry `UserPurge__DryRun=false` over yet - step 4 turns the purge live deliberately, after you have seen what it would delete. (`UserPurge__MaxDeletesPerRun` no longer exists; the sweep is unbounded.)
+   - The schedule keys (`UserPurgeSchedule`, `PayPalSyncSchedule`) have no equivalent and should not be carried over; see `UserPurge:IntervalHours` and `PayPal:SyncIntervalDays`.
+2. Deploy the `Web` app with `UserPurge__Enabled=false` and `PayPal__SyncEnabled=false`.
+3. On the **Function App**, set `UserPurge__Enabled=false` and `PayPal__SyncEnabled=false`, or stop the app outright.
+4. **Verify the purge before it can delete anything.** Set `UserPurge__Enabled=true` leaving `DryRun` at its default of `true`, and read the `DryRun: would purge user ...` lines. The sweep is unbounded, so this list is exactly what the first live run will delete - check it against what you expect before going further. If `PurgeAfterDays` or the `UnassociatedSinceUtc` / `NoRolesSinceUtc` stamps are wrong in the data, this is where you find out.
+5. Set `UserPurge__DryRun=false` and `PayPal__SyncEnabled=true`, then confirm from the logs that a real run happens. The purge keeps no pacing state, so the first live run starts shortly after the restart the setting change causes.
+6. Delete the Function App, and the storage account it used for `AzureWebJobsStorage` if nothing else does. Check whether it shares the web app's Application Insights resource before deleting that.
+7. Remove the now-unused GitHub secrets `AzureFunctionApp_Name_UserPurge` and `AzureFunctionApp_PublishProfile_UserPurge`.
 
 ---
 

@@ -13,10 +13,19 @@ using Web.Services.Repositories;
 namespace Web.Services
 {
     /// <summary>
+    /// Imports PayPal Transaction Search rows into Cosmos. Extracted as an interface so the scheduler
+    /// that paces it (<see cref="PayPalSyncScheduler"/>) can be unit-tested without a live PayPal client.
+    /// </summary>
+    public interface IPayPalPaymentSyncRunner
+    {
+        Task<PayPalPaymentSyncResult> RunAsync(CancellationToken cancellationToken = default);
+    }
+
+    /// <summary>
     /// Imports PayPal Transaction Search rows. Associates each payment with a <see cref="Payment.HomeId"/> when the
     /// payer email matches a resident, home email, associated user, or a user account that owns a home.
     /// </summary>
-    public sealed class PayPalPaymentSyncRunner
+    public sealed class PayPalPaymentSyncRunner : IPayPalPaymentSyncRunner
     {
         private readonly PayPalTransactionSearchClient _payPal;
         private readonly IPaymentRepository _payments;

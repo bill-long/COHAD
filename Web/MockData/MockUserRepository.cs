@@ -79,9 +79,34 @@ namespace Web.MockData
             }
         }
 
-        public Task<List<User>> GetPurgeCandidatesAsync(DateTime cutoffUtc, int maxCount)
+        /// <summary>
+        /// Mirrors <see cref="Web.Services.Repositories.CosmosUserRepository.GetPurgeCandidatesAsync"/>:
+        /// users whose no-home or no-role clock is on or before the cutoff. Previously this returned an
+        /// empty list unconditionally, which was harmless while the purge ran in a separate Function App
+        /// but makes the in-process job impossible to exercise in the MockData environment.
+        /// </summary>
+        public Task<List<User>> GetPurgeCandidatesAsync(DateTime cutoffUtc)
         {
-            return Task.FromResult(new List<User>());
+            lock (_users)
+            {
+                var candidates = _users
+                    .Values.Where(u =>
+                    {
+                        var noHomesEligible =
+                            (u.OwnedHomeIds == null || u.OwnedHomeIds.Count == 0)
+                            && u.UnassociatedSinceUtc != null
+                            && u.UnassociatedSinceUtc <= cutoffUtc;
+                        var noRolesEligible =
+                            (u.Roles == null || u.Roles.Count == 0)
+                            && u.NoRolesSinceUtc != null
+                            && u.NoRolesSinceUtc <= cutoffUtc;
+                        return noHomesEligible || noRolesEligible;
+                    })
+                    .Select(CloneUser)
+                    .ToList();
+
+                return Task.FromResult(candidates);
+            }
         }
 
         public Task DeleteAsync(string uniqueId)

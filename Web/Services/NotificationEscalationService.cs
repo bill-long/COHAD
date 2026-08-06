@@ -35,7 +35,7 @@ namespace Web.Services
             _scopeFactory = scopeFactory;
             _options = options.Value;
             _logger = logger;
-            _sweepInterval = TimeSpan.FromMinutes(Math.Max(1, _options.SweepIntervalMinutes));
+            _sweepInterval = JobInterval.FromMinutes(_options.SweepIntervalMinutes);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
