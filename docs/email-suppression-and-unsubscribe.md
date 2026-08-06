@@ -244,7 +244,15 @@ into a bare `null`.
   retired, and capping them would corrupt that count. The exposure requires a valid token and is
   bounded in practice by the size of this association.
 - Credential type is recorded on every resolution, success and failure, so legacy traffic is
-  measurable. Acceptances log at Information; `appsettings.json` raises
+  measurable - and it reflects whether a credential was actually **supplied** (`LegacyToken` vs
+  `None`), meaning the parameter carried a value. This is deliberately **not** the same rule that
+  selects the budget, and the difference is the whole point: the budget asks "did this look like it
+  came from an unsubscribe link" and so keys on the parameter being *present*, because a stripped
+  `?token=` is the evidence most worth protecting from a flood. The credential type asks "was a
+  credential actually supplied", and the two answers diverge on exactly that input. Deriving one
+  from the other logged a stripped link as a rejected legacy token with `Token length 0`, which
+  would hold the retirement counter above zero for precisely the traffic this work exists to
+  surface. Acceptances log at Information; `appsettings.json` raises
   `Logging:LogLevel:Web.Controllers.UnsubscribeController` to `Information` so they are exported.
 
 This distinguishes a mangled link (`MalformedBase64` / `DecryptFailed` at short length) from a key

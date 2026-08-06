@@ -47,6 +47,14 @@ namespace Web.Services
         /// </summary>
         public const string LegacyTokenCredential = "LegacyToken";
 
+        /// <summary>
+        /// Credential type for a request that presented none. Distinct from
+        /// <see cref="LegacyTokenCredential"/> because the retirement decision counts legacy
+        /// redemptions: labelling tokenless crawler traffic as a legacy token would keep that count
+        /// permanently above zero and legacy support would never be retired on evidence.
+        /// </summary>
+        public const string NoCredential = "None";
+
         /// <summary>The unsubscribe route prefix and the stable label logged for it.</summary>
         internal readonly record struct UnsubscribeRoute(string Prefix, string Label);
 
@@ -96,6 +104,19 @@ namespace Web.Services
         /// <c>UnsubscribeController</c>: presenting a token is what moves a rejection into the
         /// token stream.
         /// </summary>
+        /// <summary>
+        /// Whether a credential was actually supplied, as opposed to whether the parameter appeared.
+        /// A value is required: `?token=` carries the key but no credential.
+        /// <para>
+        /// Distinct from <see cref="ClassifyByTokenPresence"/> on purpose - see the note at its call
+        /// site in the middleware. This one feeds the legacy-redemption counter, which must not be
+        /// inflated by stripped links, and it must agree with the acceptance log for that count to
+        /// mean anything.
+        /// </para>
+        /// </summary>
+        public static string DescribeCredentialType(HttpContext context) =>
+            string.IsNullOrWhiteSpace(context.Request.Query[TokenParameter]) ? NoCredential : LegacyTokenCredential;
+
         public static UnsubscribeWarningKind ClassifyByTokenPresence(HttpContext context) =>
             context.Request.Query.ContainsKey(TokenParameter)
                 ? UnsubscribeWarningKind.TokenRejection
@@ -206,6 +227,16 @@ namespace Web.Services
             var operation = UnsubscribeDiagnostics.DescribeEndpoint(context);
             var statusCode = context.Response.StatusCode;
 
+            // Deliberately NOT derived from `kind`. The budget asks "did this look like it came
+            // from an unsubscribe link", so it keys on the parameter being *present* - a stripped
+            // `?token=` must draw on the token budget, because that is the evidence worth
+            // protecting. CredentialType asks a different question, "was a credential actually
+            // supplied", and the two answers diverge on exactly that input: `?token=` has the key
+            // and no credential. Deriving one from the other logged a stripped link as a rejected
+            // legacy token with `Token length 0`, holding the retirement counter above zero for the
+            // very traffic this feature exists to surface.
+            var credentialType = UnsubscribeDiagnostics.DescribeCredentialType(context);
+
             try
             {
                 if (rejection?.Failure is not null)
@@ -222,7 +253,7 @@ namespace Web.Services
                         "Unsubscribe credential rejected for {Operation} ({WarningKind}, type {CredentialType}) with status {StatusCode}: {Reason}. Token length {TokenLength}, ends {TokenEnds}.",
                         operation,
                         kind,
-                        UnsubscribeDiagnostics.LegacyTokenCredential,
+                        credentialType,
                         statusCode,
                         rejection.Failure,
                         rejection.TokenLength ?? 0,
@@ -231,12 +262,13 @@ namespace Web.Services
                 }
                 else
                 {
-                    // Same leading dimensions as the branch above - Operation, WarningKind,
+                    // Same dimensions as the branch above - Operation, WarningKind, CredentialType,
                     // StatusCode, Reason - so one query covers both halves of an incident.
                     logger.LogWarning(
-                        "Unsubscribe request rejected for {Operation} ({WarningKind}) with status {StatusCode}: {Reason}.",
+                        "Unsubscribe request rejected for {Operation} ({WarningKind}, type {CredentialType}) with status {StatusCode}: {Reason}.",
                         operation,
                         kind,
+                        credentialType,
                         statusCode,
                         rejection?.Reason ?? DescribeStatus(statusCode)
                     );

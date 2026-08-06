@@ -468,6 +468,48 @@ namespace Web.UnitTests
             return context;
         }
 
+        [Theory]
+        [InlineData("/api/email/preferences?token=bad", "LegacyToken")]
+        // A link stripped in transit: the parameter survives, the credential does not. This is the
+        // row that matters - it draws on the token budget (the evidence is worth protecting) while
+        // contributing nothing to the legacy-redemption count.
+        [InlineData("/api/email/preferences?token=", "None")]
+        [InlineData("/api/email/preferences", "None")]
+        public async Task CredentialTypeReflectsWhetherOneWasActuallyPresented(string url, string expected)
+        {
+            // The design doc makes CredentialType the counter that decides when the legacy path can
+            // be retired ("removed when this reaches zero and holds"), so anything that is not a
+            // real redemption must not be counted as one.
+            _tokenService
+                .Setup(s => s.ValidateToken(It.IsAny<string>()))
+                .Returns(Rejected(UnsubscribeTokenFailure.Missing));
+
+            var response = await _client.GetAsync(url);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains(Warnings, w => w.Message.Contains($"type {expected}"));
+        }
+
+        [Theory]
+        [InlineData("?token=abc", "LegacyToken")]
+        [InlineData("?token=", "None")]
+        public async Task CredentialTypeIsAlsoRecordedOnPreActionRejections(string query, string expected)
+        {
+            // Exercises the OTHER log template - the one taken when routing rejects before any
+            // action records a rejection. Both templates must carry the dimension or a query for an
+            // incident sees only half of it.
+            var response = await _client.PostAsync(
+                "/api/email/unsubscribe/board" + query,
+                new StringContent("{}", System.Text.Encoding.UTF8, "application/json")
+            );
+
+            Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+            Assert.Contains(
+                Warnings,
+                w => w.Message.Contains("unsupported-media-type") && w.Message.Contains($"type {expected}")
+            );
+        }
+
         [Fact]
         public async Task BudgetNoticeSurvivesAFaultInTheRejectionLog()
         {
