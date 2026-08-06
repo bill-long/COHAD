@@ -56,7 +56,7 @@ namespace Web.Services
 
             _enabled = config.GetValue("CommitteeForwarding:Enabled", false);
             var intervalMinutes = config.GetValue("CommitteeForwarding:PollIntervalMinutes", 10);
-            _pollInterval = TimeSpan.FromMinutes(Math.Max(1, intervalMinutes));
+            _pollInterval = JobInterval.FromMinutes(intervalMinutes);
 
             // Non-directory (held) messages sit in an antispam quarantine for this long before their
             // moderators are notified, giving automatic antispam a chance to act on them first. 0 disables

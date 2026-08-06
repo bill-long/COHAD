@@ -11,11 +11,28 @@ public sealed class UserPurgeOptions
 {
     public bool Enabled { get; set; }
 
-    public bool DryRun { get; set; }
+    /// <summary>
+    /// Log candidates without deleting. Defaults to <c>true</c> so that a config source supplying
+    /// <see cref="Enabled"/> but omitting this key cannot perform irreversible deletions; the deleted
+    /// Function host enforced the same fail-safe at its read site.
+    /// </summary>
+    public bool DryRun { get; set; } = true;
 
     public int PurgeAfterDays { get; set; } = 30;
 
     public int MaxDeletesPerRun { get; set; } = 100;
+
+    /// <summary>
+    /// How long <see cref="UserPurgeService"/> waits between runs. Consumed by the hosted service, not
+    /// by <see cref="UserPurgeRunner"/> itself.
+    /// </summary>
+    public int IntervalHours { get; set; } = 24;
+
+    /// <summary>
+    /// Delay before the first run after startup, so the app finishes booting first. Consumed by the
+    /// hosted service; tests set it to zero.
+    /// </summary>
+    public int StartupDelaySeconds { get; set; } = 15;
 }
 
 public sealed class UserPurgeResult
@@ -85,6 +102,22 @@ public sealed class UserPurgeRunner
 
             try
             {
+                await _userRepository.DeleteAsync(user.UniqueId).ConfigureAwait(false);
+                result.Deleted++;
+                _logger.LogInformation("Purged user {UniqueId}", user.UniqueId);
+            }
+            catch (Exception ex)
+            {
+                result.Errors++;
+                _logger.LogError(ex, "Failed to purge user {UniqueId}", user.UniqueId);
+                continue;
+            }
+
+            // Audited only after the delete actually succeeded. Writing the entry first would leave a
+            // permanent "Purged inactive user" record for an account that is still present whenever the
+            // delete fails, which is worse than a gap: an audit log that lies cannot be reconciled.
+            try
+            {
                 await _auditLogRepository
                     .AddAsync(
                         new NewAuditLogEntry
@@ -99,15 +132,14 @@ public sealed class UserPurgeRunner
                         }
                     )
                     .ConfigureAwait(false);
-
-                await _userRepository.DeleteAsync(user.UniqueId).ConfigureAwait(false);
-                result.Deleted++;
-                _logger.LogInformation("Purged user {UniqueId}", user.UniqueId);
             }
             catch (Exception ex)
             {
+                // The user is already gone, so Deleted stays counted - but this still counts as an error.
+                // The summary's error count is the only aggregate the job emits; reporting errors=0 for a
+                // sweep that deleted accounts without auditing them would read as a clean run.
                 result.Errors++;
-                _logger.LogError(ex, "Failed to purge user {UniqueId}", user.UniqueId);
+                _logger.LogError(ex, "Purged user {UniqueId} but failed to write the audit entry", user.UniqueId);
             }
         }
 

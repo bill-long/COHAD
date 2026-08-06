@@ -399,7 +399,7 @@ namespace Web.Services
             {
                 try
                 {
-                    await Task.Delay(TimeSpan.FromMinutes(_stallWatchdogIntervalMinutes), stoppingToken);
+                    await Task.Delay(JobInterval.FromMinutes(_stallWatchdogIntervalMinutes), stoppingToken);
                     await ResumeIncompleteJobsAsync(stoppingToken, stallCheckOnly: true);
                     await SweepCompletedJobDeliveryEventsAsync(stoppingToken);
                 }
@@ -1093,7 +1093,7 @@ namespace Web.Services
                     _reEnqueueDelaySeconds
                 );
                 if (_reEnqueueDelaySeconds > 0)
-                    await Task.Delay(TimeSpan.FromSeconds(_reEnqueueDelaySeconds), ct);
+                    await Task.Delay(JobInterval.FromSeconds(_reEnqueueDelaySeconds), ct);
                 await _queue.EnqueueAsync(job.Id, ct);
                 await NotifyProgressAsync(latest);
                 return;

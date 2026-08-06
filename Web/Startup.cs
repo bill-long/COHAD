@@ -306,6 +306,7 @@ namespace Web
                 services.AddSingleton<IHeldMessageRepository, MockHeldMessageRepository>();
                 services.AddSingleton<INotificationRepository, MockNotificationRepository>();
                 services.AddSingleton<INotificationDigestStateRepository, MockNotificationDigestStateRepository>();
+                services.AddSingleton<IBackgroundJobStateRepository, MockBackgroundJobStateRepository>();
             }
             else
             {
@@ -400,6 +401,10 @@ namespace Web
                     sp.GetRequiredService<CosmosClient>().GetContainer(db, "NotificationDigestState")
                 ));
 
+                services.AddScoped<IBackgroundJobStateRepository>(sp => new CosmosBackgroundJobStateRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "BackgroundJobState")
+                ));
+
                 // Graph API for committee mailbox forwarding — registered only when credentials are configured.
                 var graphTenantId = Configuration["Graph:TenantId"];
                 var graphClientId = Configuration["Graph:ClientId"];
@@ -430,6 +435,31 @@ namespace Web
             services.AddScoped<INotificationRecipientResolver, NotificationRecipientResolver>();
             services.AddScoped<NotificationEscalationRunner>();
             services.AddHostedService<NotificationEscalationService>();
+
+            // Scheduled maintenance jobs. These previously ran as timer-triggered Azure Functions in a
+            // separate Function App; they are hosted in-process so there is one deployable and no
+            // dependency on the Functions runtime. Both self-disable when their Enabled flag is off.
+            //
+            // Both pace from persisted timestamps in the BackgroundJobState container rather than from an
+            // in-process timer, which would restart with the process: the PayPal sync because its interval
+            // is longer than the app's typical uptime between deploys, and the purge so that
+            // MaxDeletesPerRun stays a per-interval cap on irreversible deletions instead of a per-restart
+            // one. That container is provisioned out-of-band; without it neither job runs.
+            services.Configure<UserPurgeOptions>(Configuration.GetSection("UserPurge"));
+            services.Configure<PayPalOptions>(Configuration.GetSection("PayPal"));
+            if (useMockData)
+            {
+                // Never let a mock run reach the live PayPal API, whatever the config says. Mirrors the
+                // PostConfigure used for PostmarkOptions below.
+                services.PostConfigure<PayPalOptions>(opts => opts.SyncEnabled = false);
+            }
+
+            services.AddScoped<UserPurgeRunner>();
+            services.AddHttpClient<PayPalTransactionSearchClient>();
+            services.AddScoped<IPayPalPaymentSyncRunner, PayPalPaymentSyncRunner>();
+            services.AddScoped<PayPalSyncScheduler>();
+            services.AddHostedService<UserPurgeService>();
+            services.AddHostedService<PayPalSyncService>();
 
             // Email job queue and background processor (shared across environments)
             services.AddSingleton<EmailJobQueue>();
@@ -565,6 +595,30 @@ namespace Web
                     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
                 }
             );
+
+            // Both scheduled jobs need Cosmos. The web app deliberately starts without Cosmos configured
+            // (documented behavior - API calls fail at runtime instead), so unlike the deleted Function
+            // host this cannot refuse to start. Say so once at startup instead: otherwise a typo'd
+            // CosmosDatabase leaves the site serving traffic normally while the jobs never do their work.
+            if (
+                !env.IsEnvironment("MockData")
+                && (
+                    Configuration.GetValue("UserPurge:Enabled", false)
+                    || Configuration.GetValue("PayPal:SyncEnabled", false)
+                )
+                && (
+                    string.IsNullOrWhiteSpace(Configuration["CosmosUri"])
+                    || string.IsNullOrWhiteSpace(Configuration["CosmosKey"])
+                    || string.IsNullOrWhiteSpace(Configuration["CosmosDatabase"])
+                )
+            )
+            {
+                logger.LogError(
+                    "Scheduled jobs are enabled but CosmosUri/CosmosKey/CosmosDatabase are not all "
+                        + "configured. Neither the user purge nor the PayPal sync will run. Both also "
+                        + "require the out-of-band 'BackgroundJobState' container to exist."
+                );
+            }
 
             var useDevSpaProxy = env.IsDevelopment() || env.IsEnvironment("MockData");
 
