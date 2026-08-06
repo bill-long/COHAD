@@ -206,49 +206,76 @@ namespace Web.Services
             var operation = UnsubscribeDiagnostics.DescribeEndpoint(context);
             var statusCode = context.Response.StatusCode;
 
-            if (rejection?.Failure is not null)
+            try
             {
-                // The token is a bearer credential and is never logged - only its length and, for
-                // tokens long enough that it identifies nothing, its sanitised ends. Length is a
-                // property in its own right so the mangled-link/wrong-key split is a numeric
-                // comparison rather than a regex over the message text.
-                // {WarningKind} is the only thing separating a stripped `?token=` from a request
-                // that carried no token at all: model binding collapses both to null, so Failure,
-                // TokenLength and TokenEnds are identical for the two. Computing the distinction and
-                // then not logging it would leave the mangled-link evidence indistinguishable from
-                // crawler noise, which is the diagnosis this whole change exists to enable.
-                logger.LogWarning(
-                    "Unsubscribe credential rejected for {Operation} ({WarningKind}, type {CredentialType}) with status {StatusCode}: {Reason}. Token length {TokenLength}, ends {TokenEnds}.",
-                    operation,
-                    kind,
-                    UnsubscribeDiagnostics.LegacyTokenCredential,
-                    statusCode,
-                    rejection.Failure,
-                    rejection.TokenLength ?? 0,
-                    rejection.TokenEnds
-                );
+                if (rejection?.Failure is not null)
+                {
+                    // {WarningKind} is the only thing separating a stripped `?token=` from a request
+                    // that carried no token at all: model binding collapses both to null, so Failure,
+                    // TokenLength and TokenEnds are identical for the two. Computing the distinction
+                    // and then not logging it would leave the mangled-link evidence indistinguishable
+                    // from crawler noise, which is the diagnosis this whole change exists to enable.
+                    //
+                    // The token is a bearer credential and is never logged - only its length and, for
+                    // tokens long enough that it identifies nothing, its sanitised ends.
+                    logger.LogWarning(
+                        "Unsubscribe credential rejected for {Operation} ({WarningKind}, type {CredentialType}) with status {StatusCode}: {Reason}. Token length {TokenLength}, ends {TokenEnds}.",
+                        operation,
+                        kind,
+                        UnsubscribeDiagnostics.LegacyTokenCredential,
+                        statusCode,
+                        rejection.Failure,
+                        rejection.TokenLength ?? 0,
+                        rejection.TokenEnds
+                    );
+                }
+                else
+                {
+                    // Same leading dimensions as the branch above - Operation, WarningKind,
+                    // StatusCode, Reason - so one query covers both halves of an incident.
+                    logger.LogWarning(
+                        "Unsubscribe request rejected for {Operation} ({WarningKind}) with status {StatusCode}: {Reason}.",
+                        operation,
+                        kind,
+                        statusCode,
+                        rejection?.Reason ?? DescribeStatus(statusCode)
+                    );
+                }
             }
-            else
+            finally
             {
-                // Same leading dimensions as the branch above - Operation, WarningKind, StatusCode,
-                // Reason - so one query covers both halves of an incident rather than two.
-                logger.LogWarning(
-                    "Unsubscribe request rejected for {Operation} ({WarningKind}) with status {StatusCode}: {Reason}.",
-                    operation,
-                    kind,
-                    statusCode,
-                    rejection?.Reason ?? DescribeStatus(statusCode)
-                );
+                // The notice is what makes the ensuing silence attributable, so losing it to a fault
+                // in the rejection log above would leave an operator unable to tell a spent budget
+                // from a quiet endpoint - hence the finally.
+                //
+                // Its own failure is swallowed, though: throwing out of a finally while an exception
+                // is already in flight *replaces* that exception, so a broken announcement template
+                // would erase the record of the broken rejection template - the more important of
+                // the two, and the one InvokeAsync's catch exists to name. It was an announcement
+                // template that threw during development, so this is not hypothetical.
+                try
+                {
+                    AnnounceIfBudgetSpent(kind, decision, logger);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Deliberately not rethrown or logged through the same logger that just failed.
+                    System.Diagnostics.Debug.WriteLine(ex);
+                }
             }
-
-            AnnounceIfBudgetSpent(kind, decision, logger);
         }
 
         private static bool IsUnsubscribeRequest(HttpContext context)
         {
             var descriptor = context.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>();
             if (descriptor != null)
-                return descriptor.ControllerTypeInfo.AsType() == typeof(Controllers.UnsubscribeController);
+                // `global::` and not merely `Web.Controllers.`: inside `namespace Web.Services` even
+                // a leading `Web` is resolved by walking enclosing scopes first, so a future
+                // `Web.Services.Web` or `Web.Services.Controllers` would silently rebind this to a
+                // different type. The middleware would then go quiet for every unsubscribe request
+                // with nothing failing to say so, which is the one outcome this file exists to
+                // prevent. Only the global alias is immune.
+                return descriptor.ControllerTypeInfo.AsType() == typeof(global::Web.Controllers.UnsubscribeController);
 
             // One matcher: the label lookup already walks the route table, and "unknown" is exactly
             // "no route matched". A second copy of the rule is what the route table replaced.

@@ -468,11 +468,32 @@ namespace Web.UnitTests
             return context;
         }
 
+        [Fact]
+        public async Task BudgetNoticeSurvivesAFaultInTheRejectionLog()
+        {
+            // The notice is what makes the ensuing silence attributable, so it is emitted from a
+            // finally. Without that, a fault in the rejection log - a mismatched template, a sink
+            // outage - takes the notice with it and the suppression becomes indistinguishable from
+            // a quiet endpoint. Nothing else in the suite would notice that.
+            _logs.FailOnMessageContaining = "DecryptFailed";
+            _tokenService
+                .Setup(s => s.ValidateToken(It.IsAny<string>()))
+                .Returns(Rejected(UnsubscribeTokenFailure.DecryptFailed));
+
+            for (var i = 0; i < UnsubscribeWarningBudget.MaxWarningsPerWindow; i++)
+                await _client.GetAsync("/api/email/preferences?token=bad");
+
+            Assert.Contains(Ours, e => e.Message.Contains("suppressed"));
+        }
+
         private sealed record RecordedLog(LogLevel Level, string Category, string Message);
 
         private sealed class RecordingLoggerProvider : ILoggerProvider
         {
             private readonly List<RecordedLog> _entries = new();
+
+            /// <summary>When set, any log whose rendered message contains this throws instead.</summary>
+            public string? FailOnMessageContaining { get; set; }
 
             public IReadOnlyList<RecordedLog> Entries
             {
@@ -504,11 +525,20 @@ namespace Web.UnitTests
                     LogLevel logLevel,
                     EventId eventId,
                     TState state,
-                    Exception exception,
-                    Func<TState, Exception, string> formatter
+                    Exception? exception,
+                    Func<TState, Exception?, string> formatter
                 )
                 {
-                    provider.Add(new RecordedLog(logLevel, category, formatter(state, exception)));
+                    var message = formatter(state, exception);
+                    if (
+                        provider.FailOnMessageContaining is { } marker
+                        && message.Contains(marker, StringComparison.Ordinal)
+                    )
+                    {
+                        throw new InvalidOperationException("Injected logging fault.");
+                    }
+
+                    provider.Add(new RecordedLog(logLevel, category, message));
                 }
             }
         }

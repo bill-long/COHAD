@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Microsoft.Extensions.Options;
 using Web.Configuration;
 using Web.Services;
@@ -63,7 +64,7 @@ namespace Web.UnitTests
         {
             var service = CreateService();
             Assert.Equal(UnsubscribeTokenFailure.Missing, service.ValidateToken("").Failure);
-            Assert.Equal(UnsubscribeTokenFailure.Missing, service.ValidateToken(null!).Failure);
+            Assert.Equal(UnsubscribeTokenFailure.Missing, service.ValidateToken(null).Failure);
             Assert.Equal(UnsubscribeTokenFailure.Missing, service.ValidateToken("   ").Failure);
         }
 
@@ -151,6 +152,43 @@ namespace Web.UnitTests
             var result = service.ValidateToken(token);
 
             Assert.Equal(UnsubscribeTokenFailure.MalformedPayload, result.Failure);
+        }
+
+        [Fact]
+        public void NullabilityContractIsDeliberate()
+        {
+            // Two deliberate, opposite decisions that a reviewer has already proposed reverting
+            // once, and that a comment alone cannot defend: widening the return would make callers
+            // null-check something that cannot be null, and narrowing the parameter would break the
+            // documented Missing path that ValidateToken(null) exercises.
+            var context = new NullabilityInfoContext();
+
+            // The interface first: it is what UnsubscribeController and EmailJobProcessor bind to,
+            // so narrowing it there is what would actually break the documented Missing path.
+            var interfaceValidate = typeof(IUnsubscribeTokenService).GetMethod(
+                nameof(IUnsubscribeTokenService.ValidateToken),
+                new[] { typeof(string) }
+            )!;
+            Assert.Equal(NullabilityState.Nullable, context.Create(interfaceValidate.GetParameters()[0]).WriteState);
+
+            var interfaceGenerate = typeof(IUnsubscribeTokenService).GetMethod(
+                nameof(IUnsubscribeTokenService.GenerateToken),
+                new[] { typeof(Guid), typeof(string) }
+            )!;
+            Assert.Equal(NullabilityState.Nullable, context.Create(interfaceGenerate.ReturnParameter).ReadState);
+
+            // Then the implementation, whose return is deliberately narrower than the interface's.
+            var generate = typeof(UnsubscribeTokenService).GetMethod(
+                nameof(UnsubscribeTokenService.GenerateToken),
+                new[] { typeof(Guid), typeof(string) }
+            )!;
+            Assert.Equal(NullabilityState.NotNull, context.Create(generate.ReturnParameter).ReadState);
+
+            var validate = typeof(UnsubscribeTokenService).GetMethod(
+                nameof(UnsubscribeTokenService.ValidateToken),
+                new[] { typeof(string) }
+            )!;
+            Assert.Equal(NullabilityState.Nullable, context.Create(validate.GetParameters()[0]).WriteState);
         }
 
         [Fact]

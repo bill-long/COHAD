@@ -1,3 +1,8 @@
+#nullable enable
+
+// Annotated to match IUnsubscribeTokenService. Safe here because this is a plain service with no
+// framework surface; see UnsubscribeController for why the controller is deliberately excluded.
+
 using System;
 using System.Security.Cryptography;
 using System.Text;
@@ -30,6 +35,12 @@ namespace Web.Services
             _encryptionKey = SHA256.HashData(Encoding.UTF8.GetBytes(key));
         }
 
+        // Non-nullable on purpose, though the interface declares `string?`. Returning a
+        // non-nullable value from a method that promises a nullable one is legal and strictly more
+        // precise: this implementation never returns null - it either produces a token or throws on
+        // a blank email - and only NullUnsubscribeTokenService returns null. Widening it here would
+        // make every caller of the concrete type null-check something that cannot be null. Locked by
+        // NullabilityContractIsDeliberate.
         public string GenerateToken(Guid homeId, string email)
         {
             return GenerateToken(homeId, email, DateTimeOffset.UtcNow);
@@ -75,7 +86,7 @@ namespace Web.Services
             return Base64UrlEncode(combined);
         }
 
-        public UnsubscribeTokenResult ValidateToken(string token)
+        public UnsubscribeTokenResult ValidateToken(string? token)
         {
             if (string.IsNullOrWhiteSpace(token))
                 return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.Missing);
