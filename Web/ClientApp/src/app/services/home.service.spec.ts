@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, of, throwError } from 'rxjs';
 import { HomeService } from './home.service';
-import { Action, dispatcher } from '../state';
+import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted } from '../state';
 import { Home } from '../models';
 
 /**
@@ -117,6 +117,48 @@ describe('HomeService failure reporting', () => {
     const message = snackSpy.open.calls.mostRecent().args[0] as string;
     expect(message).not.toContain('Could not save');
     expect(message).toContain('may not have saved');
+  });
+
+  it('keeps serving home reloads after one of them fails', () => {
+    // The error used to be handled on the outer subscription, which terminates it. The first failed
+    // GET therefore stopped every later LoadAllHomes for the rest of the session - including the
+    // re-sync the save-failure paths dispatch, which run precisely when the API is already failing,
+    // so a transient outage left an empty home list until a page reload.
+    httpSpy = jasmine.createSpyObj('HttpClient', ['get', 'put', 'delete']);
+    let getCalls = 0;
+    httpSpy.get.and.callFake(
+      (() =>
+        getCalls++ === 0
+          ? throwError(() => new HttpErrorResponse({ status: 500 }))
+          : of([{ id: 'h-1' } as unknown as Home])) as never,
+    );
+    snackSpy = jasmine.createSpyObj('MatSnackBar', ['open']);
+    const bus = new Subject<Action>();
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        HomeService,
+        { provide: HttpClient, useValue: httpSpy },
+        { provide: MatSnackBar, useValue: snackSpy },
+        { provide: dispatcher, useValue: bus },
+      ],
+    });
+
+    const completed: Home[][] = [];
+    bus.subscribe(a => {
+      if (a instanceof LoadAllHomesCompleted) {
+        completed.push(a.homes);
+      }
+    });
+    TestBed.inject(HomeService);
+
+    bus.next(new LoadAllHomes());
+    bus.next(new LoadAllHomes());
+
+    expect(completed.length).toBe(2);
+    expect(completed[0]).toEqual([]);
+    expect(completed[1].length).toBe(1);
   });
 
   it('says nothing when the save succeeds', () => {

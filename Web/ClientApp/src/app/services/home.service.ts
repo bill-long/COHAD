@@ -18,12 +18,14 @@ export class HomeService {
     this.dispatcher
       .pipe(
         filter(a => a instanceof LoadAllHomes),
-        switchMap(a => this.httpClient.get<Home[]>('api/home')),
+        // Caught inside the switchMap, not on the subscription. An error that reaches the outer
+        // subscriber terminates it for good, so the first failed GET used to stop every later
+        // LoadAllHomes for the rest of the session - the list stayed empty until a page reload.
+        // That mattered most exactly when it was least visible: the save-failure paths below
+        // dispatch LoadAllHomes to re-sync, and they run when the API is already failing.
+        switchMap(() => this.httpClient.get<Home[]>('api/home').pipe(catchError(() => of<Home[]>([])))),
       )
-      .subscribe(
-        h => this.dispatcher.next(new LoadAllHomesCompleted(h)),
-        err => this.dispatcher.next(new LoadAllHomesCompleted([])),
-      );
+      .subscribe(homes => this.dispatcher.next(new LoadAllHomesCompleted(homes)));
   }
 
   saveHomeAndReloadAll(home: Home): Observable<boolean> {

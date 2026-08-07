@@ -385,13 +385,13 @@ Two consequences are accepted rather than solved: the admin's typed edits are st
 (as they always were, just silently), and the failure path dispatches `LoadAllHomes` but not
 `LoadDirectory`, so the directory view can lag until the next refresh.
 
-**Still open, and pre-existing: `HomeService`'s constructor subscription is not fault-tolerant.**
-`LoadAllHomes` is handled by a `switchMap` over the dispatcher whose error callback lives on the
-outer subscription, so the first failing `GET api/home` terminates it permanently - the store is set
-to an empty home list and no later dispatch is ever served until a page reload. This predates the
-change (the failure path already dispatched `LoadAllHomes`), but making failures visible makes it
-easier to reach: the snackbar invites a retry during exactly the outage that kills the subscription.
-The fix is to move the error handling inside the `switchMap` so the outer stream survives.
+**Fixed in passing: `HomeService`'s constructor subscription was not fault-tolerant.** `LoadAllHomes`
+is handled by a `switchMap` over the dispatcher, and the error callback lived on the *outer*
+subscription, so the first failing `GET api/home` terminated it permanently - the store was set to
+an empty home list and no later dispatch was served until a page reload. It predates this change,
+but the change makes it easy to reach: the failure paths dispatch `LoadAllHomes` to re-sync, and
+they run precisely when the API is already failing. The error is now caught inside the `switchMap`,
+so the outer stream survives; a test drives one failing reload followed by a successful one.
 
 ### Part 2: Recovery paths
 
