@@ -326,6 +326,15 @@ Held out of Part 1 because it is a behavioural change rather than a diagnostic o
   documented `>= 500` carve-out is the second line of defence, for a 5xx *returned* as a result, and
   no unsubscribe path produces one of those - it remains unexercised.
 
+**Still open: other log sites render addresses unsanitised.** The Error line above sanitises the
+address it logs, because storage accepts any value containing an '@' and a CR/LF saved into a
+resident record would otherwise forge a second log entry. The same is true of the pre-existing sites
+that log an address - `EmailDeliveryActionService`, `EmailJobProcessor`, `PostmarkEmailTransport`,
+`NotificationEscalationRunner` - and of `CommitteeMailPoller`'s `{Sender}`, which is the strongest
+case of the set because it comes from inbound external mail rather than from a directory record.
+Most are below the production `Warning` filter, which limits but does not close it. Fixing them
+means one shared helper rather than a private one per call site, so it is its own change.
+
 **Still open: residents have no optimistic concurrency.** `Resident` carries no `ETag` and
 `CosmosResidentRepository.UpsertAsync` sends no precondition, so two writers who loaded the same
 resident silently last-writer-wins - an opt-out saved during a concurrent Manage Homes save is

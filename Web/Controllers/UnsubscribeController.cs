@@ -333,6 +333,12 @@ namespace Web.Controllers
         /// newline in it would otherwise split the rendered message in any line-oriented sink and
         /// let the caller author what looks like a second, genuine entry. A real token is base64url,
         /// so it survives this unchanged.
+        /// <para>
+        /// Deliberately stricter than <see cref="SanitizeAddressForLog"/>. The shared invariant is
+        /// only that nothing rendered into a log can contain a line break; the two alphabets differ
+        /// because what each value must stay useful <em>as</em> differs, and collapsing everything
+        /// outside base64url is right for an opaque credential and wrong for a readable address.
+        /// </para>
         /// </summary>
         private static string SanitizeForLog(string value)
         {
@@ -345,6 +351,42 @@ namespace Web.Controllers
                     {
                         var c = source[i];
                         destination[i] = char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_' ? c : '.';
+                    }
+                }
+            );
+        }
+
+        /// <summary>
+        /// Neutralises line breaks and other control characters in an address before it is logged,
+        /// leaving everything else - so the result stays a readable identifier an operator can match
+        /// against a record, which is the entire reason it is logged.
+        /// <para>
+        /// The address reaches the log from the token payload, which is minted from a stored
+        /// <c>EmailAddress.Address</c>, and storage accepts any value containing an '@'
+        /// (<c>HomeController</c> validates no further). So a resident record saved with a CR/LF in
+        /// its address would otherwise split the rendered line and let whoever entered it author
+        /// what looks like a second, genuine entry - the same forging this file already guards
+        /// against for tokens, reached through persisted data rather than a query string.
+        /// </para>
+        /// <para>
+        /// U+2028 and U+2029 are included: they are not <see cref="char.IsControl(char)"/>, but
+        /// several log viewers treat them as line terminators.
+        /// </para>
+        /// </summary>
+        internal static string SanitizeAddressForLog(string value)
+        {
+            if (value == null)
+                return null;
+
+            return string.Create(
+                value.Length,
+                value,
+                (destination, source) =>
+                {
+                    for (var i = 0; i < source.Length; i++)
+                    {
+                        var c = source[i];
+                        destination[i] = char.IsControl(c) || c == '\u2028' || c == '\u2029' ? '.' : c;
                     }
                 }
             );
@@ -437,7 +479,10 @@ namespace Web.Controllers
                     // after a partial write, and comparing the home's copy of the address with the
                     // resident's shows exactly which flags failed to land - so the category does not
                     // have to be threaded down here to make the line actionable. The address is
-                    // redacted with the same helper the delivery audit path uses.
+                    // redacted with the same helper the delivery audit path uses, then sanitised:
+                    // it originates in a stored record, and storage accepts any value containing an
+                    // '@', so redaction alone would let a CR/LF saved in a resident record forge a
+                    // second log entry.
                     //
                     // Deliberately NOT filtered on OperationCanceledException, against the usual
                     // repo rule. That rule exists so a BackgroundService shutdown is not logged as a
@@ -451,7 +496,7 @@ namespace Web.Controllers
                         ex,
                         "Unsubscribe save failed for home {HomeId}, address {Email}; the change may be partially applied",
                         payload.HomeId,
-                        EmailDeliveryActionService.RedactEmail(payload.Email)
+                        SanitizeAddressForLog(EmailDeliveryActionService.RedactEmail(payload.Email))
                     );
                     throw;
                 }
