@@ -71,6 +71,42 @@ describe('HomeService failure reporting', () => {
     expect(snackSpy.open).toHaveBeenCalled();
   });
 
+  it('passes on a conflict sent as a bare string, not just the object shape', () => {
+    // The controller uses both shapes: Update returns `{ error: "..." }` while
+    // RemoveAssociatedUser returns a bare string. Handling only the object shape downgraded this
+    // conflict - which tells the user the association is already gone - to "please try again".
+    httpSpy = jasmine.createSpyObj('HttpClient', ['get', 'put', 'delete']);
+    httpSpy.get.and.returnValue(of([]));
+    httpSpy.delete.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 409,
+            error: 'The specified user is not associated with the specified home.',
+          }),
+      ),
+    );
+    snackSpy = jasmine.createSpyObj('MatSnackBar', ['open']);
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        HomeService,
+        { provide: HttpClient, useValue: httpSpy },
+        { provide: MatSnackBar, useValue: snackSpy },
+        { provide: dispatcher, useValue: new Subject<Action>() },
+      ],
+    });
+
+    TestBed.inject(HomeService).removeAssociatedUser('h-1', 'u-1', true).subscribe();
+
+    expect(snackSpy.open).toHaveBeenCalledWith(
+      'The specified user is not associated with the specified home.',
+      'Dismiss',
+      jasmine.any(Object),
+    );
+  });
+
   it('passes on the conflict message instead of telling the user to just try again', () => {
     // A 409 means someone else changed the record, so "please try again" is the opposite of the
     // right advice - retrying re-sends the same stale payload. The server's message says refresh.

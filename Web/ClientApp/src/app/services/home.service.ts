@@ -130,7 +130,13 @@ export class HomeService {
       return null;
     }
 
-    const message = response.error?.error;
+    // Both shapes, because this controller uses both: `Update` returns `{ error: "..." }` and
+    // `RemoveAssociatedUser` returns a bare string. Reading only the object shape silently
+    // downgraded the owner-removal conflict - "the specified user is not associated with the
+    // specified home", which tells the user the state is already what they wanted - to generic
+    // retry advice.
+    const body: unknown = response.error;
+    const message = typeof body === 'string' ? body : (body as { error?: unknown } | null)?.error;
     return typeof message === 'string' && message.trim().length > 0 ? message : null;
   }
 }
