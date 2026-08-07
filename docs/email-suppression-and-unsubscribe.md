@@ -358,7 +358,10 @@ behaviour, so it is deliberately not folded into a fix about reporting failure h
 case above - it returned 200 **and** fell through to write an audit entry recording "Updated home
 information." for creates, updates and deletes that never landed, so the one record an operator
 would consult contradicted the data. The resident block now logs, records a *qualified* audit entry
-("resident changes failed and may be partly applied"), and rethrows. The entry is qualified rather
+("Update partially applied: the home record was saved, resident changes failed."), and rethrows. It
+names only what is certainly true: the home document was written, so it is named, but what the
+payload *changed* is not, because the client sends the whole home on every save and a residents-only
+edit carries the existing email and phone unchanged. The entry is qualified rather
 than dropped because the home's own email/phone write has already committed by then: writing
 nothing would leave a real change to a published address with no record of who made it.
 
@@ -381,9 +384,13 @@ repositories accept no `CancellationToken`, so an abandoned request cannot surfa
 the only realistic source is `CosmosOperationCanceledException` - which derives from it and *is* a
 genuine half-applied write, exactly what the audit entry exists to record.
 
-Two consequences are accepted rather than solved: the admin's typed edits are still lost on failure
-(as they always were, just silently), and the failure path dispatches `LoadAllHomes` but not
-`LoadDirectory`, so the directory view can lag until the next refresh.
+Two consequences are accepted rather than solved, and both are tracked:
+
+- The admin's typed edits are still lost on failure (as they always were, just silently). Closing
+  the editor is what discards the mutated `homeCopy`, so keeping the user on the page needs a
+  rollback model first - [#284](https://github.com/bill-long/COHAD-archive/issues/284).
+- The failure path dispatches `LoadAllHomes` but not `LoadDirectory`, so the directory view can lag
+  until the next refresh - [#285](https://github.com/bill-long/COHAD-archive/issues/285).
 
 **Fixed in passing: `HomeService`'s constructor subscription was not fault-tolerant.** `LoadAllHomes`
 is handled by a `switchMap` over the dispatcher, and the error callback lived on the *outer*
