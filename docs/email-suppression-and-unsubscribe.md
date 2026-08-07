@@ -354,16 +354,51 @@ ETag each time. Skipping the write when no home-level address matched fixes both
 it changes which documents an unsubscribe touches and several existing tests assert the current
 behaviour, so it is deliberately not folded into a fix about reporting failure honestly.
 
-**Still open: the same swallow in `HomeController.UpdateHome`** (`Web/Controllers/HomeController.cs:178`,
-"Failed to apply resident changes for home {HomeId} after home save succeeded"). It is commented
-and deliberate, but it is *worse* than the case fixed here, not better: it returns 200 **and** falls
-through to write an audit entry recording "Updated home information." for creates, updates and
-deletes that never landed, so the one record an operator would consult contradicts the data. Its
-`catch (Exception ex)` also does not exclude `OperationCanceledException`, against the repo
-checklist, so a client disconnect mid-save produces the same false success. It is out of scope of
-this PR only because it is authenticated, has a wider blast radius (deletes and the committee
-cascade), and needs its own decision about the audit entry - not because the deferral is
-comfortable. It should be fixed next.
+**Fixed since, separately: the same swallow in `HomeController.Update`.** It was *worse* than the
+case above - it returned 200 **and** fell through to write an audit entry recording "Updated home
+information." for creates, updates and deletes that never landed, so the one record an operator
+would consult contradicted the data. The resident block now logs, records a *qualified* audit entry
+("Update partially applied: the home record was saved, resident changes failed."), and rethrows. It
+names only what is certainly true: the home document was written, so it is named, but what the
+payload *changed* is not, because the client sends the whole home on every save and a residents-only
+edit carries the existing email and phone unchanged. The entry is qualified rather
+than dropped because the home's own email/phone write has already committed by then: writing
+nothing would leave a real change to a published address with no record of who made it.
+
+Making that failure reach the admin needed a second change, and finding out why is the useful part.
+The API returning 500 changed nothing on screen: `HomeService` converts any HTTP failure into
+`of(false)` rather than an error notification, and every caller in `edit-home.component.ts` passes a
+hardcoded `true` onward with an `error` handler that can never fire. The failure is now reported
+from `HomeService` itself - the single point that already knows - and **no caller's control flow was
+touched**. That restraint is the design, not laziness: the components mutate one shared `homeCopy`
+optimistically and have no rollback, so the current behaviour of closing the editor and re-syncing
+from the server is what keeps unsaved edits from being re-submitted by a later, unrelated save.
+Keeping the user on the page with a failed save - the obvious "better" fix - creates a data-loss
+path where a failed resident deletion is silently committed by the next successful save. Any future
+inline error state here has to bring a rollback model with it.
+
+The doc previously flagged that this `catch (Exception ex)` does not exclude
+`OperationCanceledException`, against the repo checklist. It still does not, now deliberately and
+for a reason specific to this call site rather than inherited from the unsubscribe one: these
+repositories accept no `CancellationToken`, so an abandoned request cannot surface here at all, and
+the only realistic source is `CosmosOperationCanceledException` - which derives from it and *is* a
+genuine half-applied write, exactly what the audit entry exists to record.
+
+Two consequences are accepted rather than solved, and both are tracked:
+
+- The admin's typed edits are still lost on failure (as they always were, just silently). Closing
+  the editor is what discards the mutated `homeCopy`, so keeping the user on the page needs a
+  rollback model first - [#284](https://github.com/bill-long/COHAD-archive/issues/284).
+- The failure path dispatches `LoadAllHomes` but not `LoadDirectory`, so the directory view can lag
+  until the next refresh - [#285](https://github.com/bill-long/COHAD-archive/issues/285).
+
+**Fixed in passing: `HomeService`'s constructor subscription was not fault-tolerant.** `LoadAllHomes`
+is handled by a `switchMap` over the dispatcher, and the error callback lived on the *outer*
+subscription, so the first failing `GET api/home` terminated it permanently - the store was set to
+an empty home list and no later dispatch was served until a page reload. It predates this change,
+but the change makes it easy to reach: the failure paths dispatch `LoadAllHomes` to re-sync, and
+they run precisely when the API is already failing. The error is now caught inside the `switchMap`,
+so the outer stream survives; a test drives one failing reload followed by a successful one.
 
 ### Part 2: Recovery paths
 

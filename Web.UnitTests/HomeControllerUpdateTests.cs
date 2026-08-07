@@ -156,6 +156,227 @@ public sealed class HomeControllerUpdateTests
     }
 
     [Fact]
+    public async Task Update_when_a_resident_write_fails_reports_the_failure_and_audits_it_as_partial()
+    {
+        // The resident block used to log and fall through, so the admin saw a successful save for
+        // changes that never landed - and execution continued into the audit write, recording
+        // "Updated home information." for them. The entry is not simply dropped now: the home's own
+        // email/phone write already committed, so writing nothing would leave a real change to a
+        // published address with no record of who made it. The log says what actually happened.
+        var homeId = Guid.NewGuid();
+        var uniqueId = ExpectedUniqueId("admin", "google.com");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    GivenName = "Admin",
+                    Surname = "User",
+                    UniqueId = uniqueId,
+                    OwnedHomeIds = new List<Guid>(),
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes
+            .Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(
+                new Home
+                {
+                    Id = homeId,
+                    StreetNumber = 5,
+                    StreetName = "Oak",
+                    Residents = new List<Resident>(),
+                }
+            );
+        mockHomes.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync((Home h) => h);
+
+        var mockResidents = CreateResidentMock(homeId);
+        mockResidents
+            .Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
+            .ThrowsAsync(new InvalidOperationException("Cosmos is unavailable."));
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockHomes.Object,
+            mockAudit.Object,
+            mockResidents.Object,
+            nameId: "admin"
+        );
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            c.Update(
+                new UpdatedHome
+                {
+                    Id = homeId,
+                    Residents = new List<Resident>
+                    {
+                        new Resident { GivenName = "New", Surname = "Resident" },
+                    },
+                }
+            )
+        );
+
+        // Never the unqualified success entry - that is what made the audit log unfalsifiable.
+        mockAudit.Verify(
+            r => r.AddAsync(It.Is<NewAuditLogEntry>(e => e.Action == "Updated home information.")),
+            Times.Never
+        );
+        mockAudit.Verify(r => r.AddAsync(It.Is<NewAuditLogEntry>(e => e.Action.Contains("failed"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task Update_when_a_resident_delete_fails_reports_the_failure_too()
+    {
+        // Deletes run after the upserts and are the half with the larger blast radius, so they get
+        // their own fact: the two are separate awaits, and a fix covering only one would still pass
+        // the test above.
+        var homeId = Guid.NewGuid();
+        var uniqueId = ExpectedUniqueId("admin", "google.com");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    GivenName = "Admin",
+                    Surname = "User",
+                    UniqueId = uniqueId,
+                    OwnedHomeIds = new List<Guid>(),
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes
+            .Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(
+                new Home
+                {
+                    Id = homeId,
+                    StreetNumber = 5,
+                    StreetName = "Oak",
+                    Residents = new List<Resident>(),
+                }
+            );
+        mockHomes.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync((Home h) => h);
+
+        // One existing resident and a payload that omits them, so the diff is a delete.
+        var existing = new Resident
+        {
+            Id = Guid.NewGuid(),
+            HomeId = homeId,
+            GivenName = "Departing",
+        };
+        var mockResidents = CreateResidentMock(homeId, new List<Resident> { existing });
+        mockResidents
+            .Setup(r => r.DeleteAsync(existing.Id))
+            .ThrowsAsync(new InvalidOperationException("Cosmos is unavailable."));
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockHomes.Object,
+            mockAudit.Object,
+            mockResidents.Object,
+            nameId: "admin"
+        );
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            c.Update(new UpdatedHome { Id = homeId, Residents = new List<Resident>() })
+        );
+
+        mockAudit.Verify(
+            r => r.AddAsync(It.Is<NewAuditLogEntry>(e => e.Action == "Updated home information.")),
+            Times.Never
+        );
+
+        // The positive half matters as much: a narrower catch around only the upsert loop would
+        // leave a failed delete with no entry at all, and the home's committed email/phone change
+        // would reach production with no record of who made it.
+        mockAudit.Verify(r => r.AddAsync(It.Is<NewAuditLogEntry>(e => e.Action.Contains("failed"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task Update_when_the_audit_write_also_fails_still_surfaces_the_original_fault()
+    {
+        // The inner guard exists so a fault writing the partial-update entry cannot displace the
+        // exception in flight. Without it, the 500 the caller gets and the entry the global handler
+        // logs both name the audit log, and the Cosmos resident fault - the thing an operator needs
+        // to diagnose the partial update - is recorded nowhere.
+        var homeId = Guid.NewGuid();
+        var uniqueId = ExpectedUniqueId("admin", "google.com");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    GivenName = "Admin",
+                    Surname = "User",
+                    UniqueId = uniqueId,
+                    OwnedHomeIds = new List<Guid>(),
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes
+            .Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(
+                new Home
+                {
+                    Id = homeId,
+                    StreetNumber = 5,
+                    StreetName = "Oak",
+                    Residents = new List<Resident>(),
+                }
+            );
+        mockHomes.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync((Home h) => h);
+
+        var mockResidents = CreateResidentMock(homeId);
+        mockResidents
+            .Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
+            .ThrowsAsync(new InvalidOperationException("Cosmos residents are unavailable."));
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit
+            .Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
+            .ThrowsAsync(new InvalidOperationException("Cosmos audit log is unavailable."));
+
+        var c = CreateController(
+            mockUsers.Object,
+            mockHomes.Object,
+            mockAudit.Object,
+            mockResidents.Object,
+            nameId: "admin"
+        );
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            c.Update(
+                new UpdatedHome
+                {
+                    Id = homeId,
+                    Residents = new List<Resident>
+                    {
+                        new Resident { GivenName = "New", Surname = "Resident" },
+                    },
+                }
+            )
+        );
+
+        // The resident fault, not the audit fault.
+        Assert.Equal("Cosmos residents are unavailable.", thrown.Message);
+    }
+
+    [Fact]
     public async Task Update_returns_Ok_when_administrator_without_ownership()
     {
         var homeId = Guid.NewGuid();
