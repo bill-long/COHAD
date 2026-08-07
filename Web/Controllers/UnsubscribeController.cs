@@ -50,14 +50,40 @@ namespace Web.Controllers
         )
         {
             if (!string.Equals(listUnsubscribe, "One-Click", StringComparison.Ordinal))
-                return BadRequest(new { error = "Invalid or missing List-Unsubscribe confirmation." });
+            {
+                // Form binding collapses an empty value to null exactly as query binding does, so
+                // the bound string cannot tell "the provider omitted the field" from "the field was
+                // emptied in transit" - and that distinction is the whole subject of this work. Ask
+                // the form collection, which still knows. The value itself is attacker-controlled
+                // and is never recorded.
+                var present = Request.HasFormContentType && Request.Form.ContainsKey("List-Unsubscribe");
 
-            var payload = _tokenService.ValidateToken(token);
+                RecordRejection(
+                    new UnsubscribeRejection
+                    {
+                        // A request that carried a token belongs to the token stream even though the
+                        // body check rejected it before the token was read - otherwise a provider
+                        // changing its RFC 8058 body, which is exactly the regression worth
+                        // catching, would be billed to the budget an empty POST can flood.
+                        Kind = UnsubscribeDiagnostics.ClassifyByTokenPresence(HttpContext),
+                        Reason = present ? "confirmation-present-but-not-one-click" : "confirmation-field-absent",
+                    }
+                );
+
+                return BadRequest(new { error = "Invalid or missing List-Unsubscribe confirmation." });
+            }
+
+            var payload = ResolveCredential(token);
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing token." });
 
             if (!EmailSubscriptionCategories.TryGetCategorySetter(category, out var setter))
+            {
+                // The category comes from the route, so it is attacker-controlled; only whether it
+                // was recognised is recorded, never the value.
+                RecordPostCredentialRejection("unknown-category");
                 return BadRequest(new { error = $"Unknown category: {category}" });
+            }
 
             return await WithOptimisticRetry(
                 payload,
@@ -82,18 +108,13 @@ namespace Web.Controllers
         [HttpGet("preferences")]
         public async Task<IActionResult> GetPreferences([FromQuery] string token)
         {
-            var payload = _tokenService.ValidateToken(token);
+            var payload = ResolveCredential(token);
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing token." });
 
-            var home = await _homeRepository.GetByIdAsync(payload.HomeId);
-            if (home == null)
-                return NotFound(new { error = "Home not found." });
-
-            var residents = await _residentRepository.GetByHomeIdAsync(payload.HomeId);
-            var (matchingAddresses, _) = FindMatchingEmailAddresses(home, residents, payload.Email);
-            if (matchingAddresses.Count == 0)
-                return NotFound(new { error = "Email address not found on this home." });
+            var (home, matchingAddresses, _, failure) = await LoadHomeAndMatchesAsync(payload);
+            if (failure != null)
+                return failure;
 
             // Aggregate preferences: show true if any matching address has it enabled
             var dto = new EmailPreferencesDto
@@ -120,12 +141,25 @@ namespace Web.Controllers
             [FromBody] UpdateEmailPreferencesDto dto
         )
         {
-            var payload = _tokenService.ValidateToken(token);
+            var payload = ResolveCredential(token);
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing token." });
 
+            // Belt and braces. [ApiController] rejects an absent or unparseable body before this
+            // action runs, so over HTTP this is unreachable and the middleware logs that case from
+            // the status code. Kept so a direct caller cannot NRE below.
+            //
+            // Do NOT add `#nullable enable` to this file to "fix" the annotation. On an MVC action,
+            // reference-type nullability is not documentation - it is binding semantics. Annotating
+            // it made `category` implicitly required (a whitespace-mangled segment stopped reaching
+            // the action, losing its classification) and flipped this parameter's EmptyBodyBehavior
+            // to Allow (a wrong Content-Type stopped surfacing as 415). The contract-bearing types
+            // are annotated in their own files, where they carry no binding behaviour.
             if (dto == null)
+            {
+                RecordPostCredentialRejection("missing-request-body");
                 return BadRequest(new { error = "Request body is required." });
+            }
 
             return await WithOptimisticRetry(
                 payload,
@@ -151,6 +185,172 @@ namespace Web.Controllers
         }
 
         /// <summary>
+        /// Resolves a presented credential to its payload, recording the outcome, and returns null
+        /// when it is rejected.
+        /// <para>
+        /// Acceptances log here, at Information, which <c>appsettings.json</c> raises for this
+        /// category so legacy redemptions stay countable. Rejections are only <em>recorded</em>;
+        /// <see cref="UnsubscribeDiagnosticsMiddleware"/> logs them, because an action cannot see the
+        /// failures the MVC pipeline produces before it runs and must not be the only place that
+        /// knows how a rejection is written down.
+        /// </para>
+        /// <para>
+        /// Every rejection is treated the same, regardless of reason. An earlier revision demoted
+        /// the "no token supplied" case to Debug to blunt anonymous flooding, but ASP.NET Core binds
+        /// an empty <c>?token=</c> to null exactly like an absent one, so that carve-out silenced
+        /// the stripped-link signal this work exists to capture. Flood protection belongs in
+        /// <see cref="IUnsubscribeWarningBudget"/>, which bounds volume without discarding a class
+        /// of evidence.
+        /// </para>
+        /// </summary>
+        private UnsubscribeTokenPayload ResolveCredential(string token)
+        {
+            var result = _tokenService.ValidateToken(token);
+
+            if (result.IsValid)
+            {
+                _logger.LogInformation(
+                    "Unsubscribe credential accepted for {Operation} (type {CredentialType}).",
+                    UnsubscribeDiagnostics.DescribeEndpoint(HttpContext),
+                    UnsubscribeDiagnostics.LegacyTokenCredential
+                );
+                return result.Payload;
+            }
+
+            // The token itself is a bearer credential and is never recorded - only its length and,
+            // for tokens long enough that it identifies nothing, its sanitised ends.
+            RecordRejection(
+                new UnsubscribeRejection
+                {
+                    // The shared rule, not a hard-coded TokenRejection: a bare request with no
+                    // token still reaches here (ValidateToken(null) returns Missing), and billing
+                    // that to the token stream would let tokenless crawler noise drain the budget
+                    // protecting real mangled-link evidence.
+                    Kind = UnsubscribeDiagnostics.ClassifyByTokenPresence(HttpContext),
+                    // Reason is not set: the middleware logs Failure for token rejections, and a
+                    // second copy of the same value would be dead state nothing could catch drifting.
+                    Failure = result.Failure,
+                    TokenLength = token?.Length ?? 0,
+                    TokenEnds = DescribeTokenEnds(token),
+                }
+            );
+
+            return null;
+        }
+
+        /// <summary>
+        /// Records a rejection that happened <em>after</em> the credential was accepted - a missing
+        /// home, an address no longer on the home, an unknown category, a lost write race.
+        /// <para>
+        /// These returned 4xx silently, which left the most confusing case of all invisible: the
+        /// token is valid, the resident still lands on "the link may be invalid or expired" because
+        /// the SPA renders every failure identically, and the log showed only an acceptance. An
+        /// operator reading it would conclude the request succeeded.
+        /// </para>
+        /// </summary>
+        private void RecordPostCredentialRejection(string reason)
+        {
+            RecordRejection(new UnsubscribeRejection { Kind = UnsubscribeWarningKind.TokenRejection, Reason = reason });
+        }
+
+        private void RecordRejection(UnsubscribeRejection rejection)
+        {
+            UnsubscribeDiagnostics.Record(HttpContext, rejection);
+        }
+
+        /// <summary>
+        /// Loads the home and its residents and finds the addresses matching the credential, or
+        /// returns the rejection response - recorded for the diagnostics middleware - when either
+        /// lookup comes up empty. Defined once because both endpoints need the identical sequence
+        /// and a drifted copy is where the next silent 404 would hide.
+        /// <para>
+        /// The two reads are deliberately <b>sequential</b>, against the repo checklist's
+        /// parallelise-independent-IO rule. Starting them together saves one round-trip but makes
+        /// the resident read happen even when the home is missing, and a transient fault on it then
+        /// masks a diagnosable "home-not-found" with an unlogged 500 - or, if the fault is merely
+        /// abandoned, disappears entirely. Two prior revisions of this method shipped exactly those
+        /// bugs. One round-trip on a page a resident opens once is not worth re-introducing them.
+        /// </para>
+        /// </summary>
+        private async Task<(
+            Home Home,
+            List<EmailAddress> Addresses,
+            HashSet<Resident> AffectedResidents,
+            IActionResult Failure
+        )> LoadHomeAndMatchesAsync(UnsubscribeTokenPayload payload)
+        {
+            var home = await _homeRepository.GetByIdAsync(payload.HomeId);
+            if (home == null)
+            {
+                RecordPostCredentialRejection("home-not-found");
+                return (null, null, null, NotFound(new { error = "Home not found." }));
+            }
+
+            var residents = await _residentRepository.GetByHomeIdAsync(payload.HomeId);
+            var (matchingAddresses, affectedResidents) = FindMatchingEmailAddresses(home, residents, payload.Email);
+            if (matchingAddresses.Count == 0)
+            {
+                RecordPostCredentialRejection("email-not-on-home");
+                return (null, null, null, NotFound(new { error = "Email address not found on this home." }));
+            }
+
+            return (home, matchingAddresses, affectedResidents, null);
+        }
+
+        /// <summary>
+        /// The shortest token whose first and last four characters may be logged. A legacy token is
+        /// ~135 characters, so eight of them identify nothing; the typed recovery code Part 2
+        /// introduces is nine, and head+tail is itself eight, so disclosing the ends of a short
+        /// credential would hand over nearly all of it. Below this length the ends are withheld and
+        /// the logged length carries the diagnosis on its own.
+        /// </summary>
+        internal const int MinLengthForEndDisclosure = 32;
+
+        /// <summary>
+        /// Describes a token's ends for logging without disclosing the token. Returns a marker for
+        /// the absent, blank, and too-short-to-disclose cases; the length is logged separately.
+        /// <para>
+        /// "blank" is unreachable for the query-bound <c>token</c> parameter, because ASP.NET Core
+        /// converts an empty or whitespace query value to null before the action runs. It is kept
+        /// because this is a general helper and Part 2's typed code arrives in a form body, where
+        /// empty strings survive binding.
+        /// </para>
+        /// </summary>
+        internal static string DescribeTokenEnds(string token)
+        {
+            if (token == null)
+                return "absent";
+            if (string.IsNullOrWhiteSpace(token))
+                return "blank";
+            if (token.Length < MinLengthForEndDisclosure)
+                return "withheld";
+            return $"{SanitizeForLog(token[..4])}...{SanitizeForLog(token[^4..])}";
+        }
+
+        /// <summary>
+        /// Replaces anything outside the base64url alphabet with '.', so disclosed characters cannot
+        /// forge a log line. The token arrives from an anonymous query string, and a percent-encoded
+        /// newline in it would otherwise split the rendered message in any line-oriented sink and
+        /// let the caller author what looks like a second, genuine entry. A real token is base64url,
+        /// so it survives this unchanged.
+        /// </summary>
+        private static string SanitizeForLog(string value)
+        {
+            return string.Create(
+                value.Length,
+                value,
+                (destination, source) =>
+                {
+                    for (var i = 0; i < source.Length; i++)
+                    {
+                        var c = source[i];
+                        destination[i] = char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_' ? c : '.';
+                    }
+                }
+            );
+        }
+
+        /// <summary>
         /// Executes a read-modify-write on the home with optimistic concurrency retry.
         /// The action receives the freshly-loaded home and matching email addresses,
         /// applies modifications in place, and returns the IActionResult. If a
@@ -163,14 +363,9 @@ namespace Web.Controllers
         {
             for (int attempt = 0; attempt < MaxRetries; attempt++)
             {
-                var home = await _homeRepository.GetByIdAsync(payload.HomeId);
-                if (home == null)
-                    return NotFound(new { error = "Home not found." });
-
-                var residents = await _residentRepository.GetByHomeIdAsync(payload.HomeId);
-                var (matchingAddresses, affectedResidents) = FindMatchingEmailAddresses(home, residents, payload.Email);
-                if (matchingAddresses.Count == 0)
-                    return NotFound(new { error = "Email address not found on this home." });
+                var (home, matchingAddresses, affectedResidents, failure) = await LoadHomeAndMatchesAsync(payload);
+                if (failure != null)
+                    return failure;
 
                 var result = modifyAndRespond(home, matchingAddresses);
 
@@ -196,14 +391,14 @@ namespace Web.Controllers
                 }
                 catch (ConcurrencyConflictException)
                 {
-                    if (attempt >= MaxRetries - 1)
-                        return Conflict(
-                            new { error = "Unable to save preferences due to concurrent updates. Please try again." }
-                        );
-                    // Otherwise retry with fresh data
+                    // Fall through to the next attempt, or out of the loop on the last one. The
+                    // conflict response lives in exactly one place below; an earlier revision also
+                    // returned it from inside the catch, which made this one unreachable and left
+                    // two copies of the same response to drift apart.
                 }
             }
 
+            RecordPostCredentialRejection("concurrency-retries-exhausted");
             return Conflict(new { error = "Unable to save preferences due to concurrent updates. Please try again." });
         }
 

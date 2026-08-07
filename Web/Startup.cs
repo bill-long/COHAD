@@ -273,6 +273,12 @@ namespace Web
                 services.AddSingleton<IUnsubscribeTokenService, NullUnsubscribeTokenService>();
             }
 
+            // Bounds how many unsubscribe rejection warnings the [AllowAnonymous] endpoints can
+            // write per fixed 24h window. Singleton because the count is shared across requests;
+            // in-memory and non-durable on purpose (see IUnsubscribeWarningBudget).
+            services.AddSingleton(TimeProvider.System);
+            services.AddSingleton<IUnsubscribeWarningBudget, UnsubscribeWarningBudget>();
+
             // Repository / persistence
             if (useMockData)
             {
@@ -721,6 +727,12 @@ namespace Web
                 app.UseSpaStaticFiles();
             }
             app.UseRouting();
+
+            // After UseRouting so the selected endpoint is known, and outside everything that
+            // follows so it observes the status actually sent - including the 415 that routing
+            // itself produces for a wrong content type, which no MVC filter ever sees.
+            app.UseMiddleware<UnsubscribeDiagnosticsMiddleware>();
+
             app.UseCors();
             app.UseAuthentication();
             app.UseAuthorization();
