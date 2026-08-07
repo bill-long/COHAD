@@ -291,6 +291,71 @@ where it can end up.
   tickets, and prefer rotating the signing key over relying on redaction if a token is known to have
   been exposed.
 
+### Part 1 follow-up: a save that did not persist no longer reports success - **implemented**
+
+`WithOptimisticRetry` caught every exception from the resident upsert, logged it at Error, and
+returned the success response anyway. The per-address opt-in booleans live on `Resident` documents,
+so the opt-out was not stored while the endpoint answered "Successfully unsubscribed" - and a
+mailbox provider driving RFC 8058 one-click records that as honoured and stops offering the
+control, leaving the resident with no way to make the mail stop and no sign anything went wrong.
+
+Held out of Part 1 because it is a behavioural change rather than a diagnostic one.
+
+- The resident write is now part of the save. A lost race retries the whole read-modify-write -
+  re-reading and re-applying is what makes an already-written home safe to write again - and any
+  other fault surfaces as a 500, which the SPA already renders as "Please try again" rather than as
+  an expired link.
+- The failure is logged at Error naming the home and the redacted address before it is rethrown.
+  The global handler logs the fault itself, so this is not the only trace - it is the only one that
+  says *which record* to repair, since the path it logs carries no identifier. Home plus address is
+  enough: comparing the two copies of that address shows exactly which flags failed to land, so the
+  category never has to reach this layer. It is deliberately **not** filtered on
+  `OperationCanceledException`, against the usual repo rule - that rule protects a
+  `BackgroundService` from logging shutdown as failure, whereas here it would only discard the log
+  for `CosmosOperationCanceledException`, which derives from it. These repositories pass no
+  cancellation token so that is not the common fault, but an abandoned save leaves the same split
+  state as any other, and silence is what this line exists to prevent.
+- The two containers have no transaction between them, so a fault after the first write still
+  leaves a partial one - and a partial write is not a partial opt-out: `GetAllEmailsMatchingFilter`
+  includes an address if *either* copy still opts in, so mail keeps flowing until both are written.
+  That state is recoverable and findable; reporting success for it was neither.
+- A failed save does not spend the warning budget, and a test now drives a full window of them
+  followed by a genuine rejection to prove it - a Cosmos outage must not silence the mangled-link
+  evidence at the moment the endpoint is loudest. Note *which* mechanism does that work: the failure
+  is thrown, so it unwinds past `await _next` and the middleware's post-processing never runs. The
+  documented `>= 500` carve-out is the second line of defence, for a 5xx *returned* as a result, and
+  no unsubscribe path produces one of those - it remains unexercised.
+
+**Still open: residents have no optimistic concurrency.** `Resident` carries no `ETag` and
+`CosmosResidentRepository.UpsertAsync` sends no precondition, so two writers who loaded the same
+resident silently last-writer-wins - an opt-out saved during a concurrent Manage Homes save is
+still lost, with a 200 and no log. The retry above is uniform over both containers, so the control
+flow is ready for it, but closing the gap means giving `Resident` an ETag on every read and write
+path (Cosmos *and* Mock, per the repository conventions) and deciding what each existing caller
+does with a 409. That is its own change; it is not what "the save no longer reports false success"
+covers.
+
+**Still open: the home is written even when nothing on it changed.** `WithOptimisticRetry` upserts
+the home unconditionally, including when the matched address lives only on a resident. That rotates
+the ETag-guarded home document and can hand a concurrent admin edit a spurious 409. The three-
+attempt retry around it is unchanged by this work - it predates it - but the honest failure does
+widen the exposure in one case: a resident write that fails *deterministically* now 500s instead of
+returning 200, and a mailbox provider retrying one-click will re-run the cycle, rotating the home's
+ETag each time. Skipping the write when no home-level address matched fixes both, and is small, but
+it changes which documents an unsubscribe touches and several existing tests assert the current
+behaviour, so it is deliberately not folded into a fix about reporting failure honestly.
+
+**Still open: the same swallow in `HomeController.UpdateHome`** (`Web/Controllers/HomeController.cs:178`,
+"Failed to apply resident changes for home {HomeId} after home save succeeded"). It is commented
+and deliberate, but it is *worse* than the case fixed here, not better: it returns 200 **and** falls
+through to write an audit entry recording "Updated home information." for creates, updates and
+deletes that never landed, so the one record an operator would consult contradicts the data. Its
+`catch (Exception ex)` also does not exclude `OperationCanceledException`, against the repo
+checklist, so a client disconnect mid-save produces the same false success. It is out of scope of
+this PR only because it is authenticated, has a wider blast radius (deletes and the committee
+cascade), and needs its own decision about the audit entry - not because the deferral is
+comfortable. It should be fixed next.
+
 ### Part 2: Recovery paths
 
 - Short link generation and the `/u/{id}` route.

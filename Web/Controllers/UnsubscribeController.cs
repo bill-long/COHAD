@@ -355,6 +355,23 @@ namespace Web.Controllers
         /// The action receives the freshly-loaded home and matching email addresses,
         /// applies modifications in place, and returns the IActionResult. If a
         /// concurrency conflict occurs, the entire cycle is retried.
+        /// <para>
+        /// The success response is returned only after <em>every</em> document the change touches
+        /// has been written. The home and the residents are separate containers with no transaction
+        /// between them, so a fault after the first write leaves a partial one, and a partial one is
+        /// not a partial opt-out: recipient selection includes an address if <em>either</em> copy
+        /// still opts in (<c>EmailController.GetAllEmailsMatchingFilter</c>), so mail keeps flowing
+        /// until both are written. That state is recoverable - the caller is told the save failed,
+        /// and the log names the home - whereas reporting success for it is not, because nothing
+        /// downstream would ever revisit it.
+        /// </para>
+        /// <para>
+        /// <b>Not covered here:</b> a resident document has no <c>ETag</c> and
+        /// <c>CosmosResidentRepository.UpsertAsync</c> sends no precondition, so two writers who
+        /// loaded the same resident still last-writer-wins silently. That is a data-layer gap rather
+        /// than a control-flow one, and closing it means giving <c>Resident</c> optimistic
+        /// concurrency across every path that writes one - see the design doc.
+        /// </para>
         /// </summary>
         private async Task<IActionResult> WithOptimisticRetry(
             UnsubscribeTokenPayload payload,
@@ -372,20 +389,25 @@ namespace Web.Controllers
                 try
                 {
                     await _homeRepository.UpsertAsync(home);
-                    // Only upsert residents that own a matched email address.
-                    try
-                    {
-                        foreach (var resident in affectedResidents)
-                            await _residentRepository.UpsertAsync(resident);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(
-                            ex,
-                            "Failed to persist resident preference updates for home {HomeId} after home save succeeded",
-                            payload.HomeId
-                        );
-                    }
+
+                    // Only the residents that own a matched email address. These writes are part of
+                    // the save, not a best-effort afterthought: the per-address opt-in booleans live
+                    // on Resident documents, so a swallowed failure here answered "Successfully
+                    // unsubscribed" for an opt-out that was never stored. A mailbox provider driving
+                    // RFC 8058 one-click records that as honoured and stops offering the control, so
+                    // the resident is left with no way to make the mail stop and no sign that
+                    // anything went wrong - the exact reputation damage this endpoint exists to
+                    // prevent. Failing is the honest answer: the SPA renders "Please try again", and
+                    // the one-click path - where there is no human to retry - at least leaves an
+                    // Error naming the home instead of a success nobody will ever revisit.
+                    //
+                    // Sequential rather than Task.WhenAll: this is one or two documents on a page a
+                    // resident opens once, so there is no round-trip worth winning. Note that
+                    // stopping at the first failure is not itself a virtue here - under the union
+                    // semantics above, an address keeps receiving mail until *every* copy is
+                    // written, so writing fewer of them on the way to a failure is neutral at best.
+                    foreach (var resident in affectedResidents)
+                        await _residentRepository.UpsertAsync(resident);
 
                     return result;
                 }
@@ -395,6 +417,43 @@ namespace Web.Controllers
                     // conflict response lives in exactly one place below; an earlier revision also
                     // returned it from inside the catch, which made this one unreachable and left
                     // two copies of the same response to drift apart.
+                    //
+                    // Only the home write raises this today - a resident document carries no ETag,
+                    // so its write cannot detect a lost race at all (see the remarks above). The
+                    // catch sits outside both writes rather than around the home one because the
+                    // rule is about the cycle, not about which container lost: re-reading and
+                    // re-applying the whole change is what makes a retry safe either way, since an
+                    // already-written home is simply written again with the same values.
+                }
+                catch (Exception ex)
+                {
+                    // Rethrown - the caller must still see the failure - but named here first. The
+                    // global handler logs the fault itself, with a stack trace, so this is not the
+                    // only trace; it is the only one that says *which record* to repair. The
+                    // handler sees the method and path, and the path carries no identifier (the
+                    // credential rides in the query string and is never logged).
+                    //
+                    // Home plus address is what a repair actually needs. The two documents disagree
+                    // after a partial write, and comparing the home's copy of the address with the
+                    // resident's shows exactly which flags failed to land - so the category does not
+                    // have to be threaded down here to make the line actionable. The address is
+                    // redacted with the same helper the delivery audit path uses.
+                    //
+                    // Deliberately NOT filtered on OperationCanceledException, against the usual
+                    // repo rule. That rule exists so a BackgroundService shutdown is not logged as a
+                    // failure; this is a request path that rethrows either way, so the filter buys
+                    // nothing here. It would cost something, though: `CosmosOperationCanceledException`
+                    // derives from `OperationCanceledException`, so the filter would discard the log
+                    // for it. These repositories pass no cancellation token, so that is not the
+                    // common fault - but an abandoned save leaves the same split state as any other,
+                    // and silence is the one outcome this line exists to prevent.
+                    _logger.LogError(
+                        ex,
+                        "Unsubscribe save failed for home {HomeId}, address {Email}; the change may be partially applied",
+                        payload.HomeId,
+                        EmailDeliveryActionService.RedactEmail(payload.Email)
+                    );
+                    throw;
                 }
             }
 

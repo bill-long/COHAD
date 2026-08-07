@@ -36,11 +36,12 @@ namespace Web.UnitTests
     /// </para>
     /// <para>
     /// What this harness does <b>not</b> establish: it builds its own pipeline
-    /// (<c>UseRouting</c> -> this middleware -> <c>UseEndpoints</c>) rather than running
-    /// <c>Startup</c>, so it cannot catch a regression in production's middleware <em>ordering</em>.
-    /// Production additionally has <c>UseExceptionHandler</c> outside this middleware (the basis for
-    /// observing 4xx only), auth between it and the endpoints, and <c>UseSpa</c>'s catch-all that
-    /// turns an unmatched unsubscribe URL into a 200. Moving
+    /// (<c>UseExceptionHandler</c> -> <c>UseRouting</c> -> this middleware -> <c>UseEndpoints</c>)
+    /// rather than running <c>Startup</c>, so it cannot catch a regression in production's
+    /// middleware <em>ordering</em>. The exception handler is placed outside the middleware as
+    /// production places it - that ordering is what makes 5xx invisible here - but nothing ties the
+    /// two together. Production additionally has auth between this middleware and the endpoints, and
+    /// <c>UseSpa</c>'s catch-all that turns an unmatched unsubscribe URL into a 200. Moving
     /// <c>app.UseMiddleware&lt;UnsubscribeDiagnosticsMiddleware&gt;()</c> after <c>UseEndpoints</c>
     /// would change production behaviour while every test here still passed.
     /// </para>
@@ -98,6 +99,30 @@ namespace Web.UnitTests
                         })
                         .Configure(app =>
                         {
+                            // Production registers UseExceptionHandler before UseRouting, and that
+                            // ordering is the basis for the middleware observing 4xx only. Mirrored
+                            // here so a fault inside an action is answered with the same 500 a
+                            // caller would receive, rather than surfacing as a thrown exception at
+                            // the test client - which would hide what the caller actually sees.
+                            //
+                            // It mirrors the status code only. Production's handler also logs the
+                            // fault at Error (Startup.cs), and nothing here locks that; asserting a
+                            // stand-in's own logging would prove nothing about Startup. What the
+                            // suite does lock is the controller's Error line naming the home, which
+                            // is the evidence a half-applied opt-out actually needs.
+                            //
+                            // A consequence worth knowing: a throwing action no longer fails a test
+                            // by escaping the client call. Tests that assert the *absence* of
+                            // something must anchor on the expected status first or they can pass
+                            // for the wrong reason.
+                            app.UseExceptionHandler(errorApp =>
+                                errorApp.Run(async context =>
+                                {
+                                    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                                    context.Response.ContentType = "application/json";
+                                    await context.Response.WriteAsync("{\"error\":\"An unexpected error occurred.\"}");
+                                })
+                            );
                             app.UseRouting();
                             app.UseMiddleware<UnsubscribeDiagnosticsMiddleware>();
                             app.UseEndpoints(e => e.MapControllers());
@@ -316,6 +341,123 @@ namespace Web.UnitTests
             Assert.Empty(Warnings);
         }
 
+        // --- A save that did not persist must not be reported as a success ---
+
+        [Fact]
+        public async Task OneClickUnsubscribe_WhenTheResidentSaveFails_TheCallerIsNotToldItSucceeded()
+        {
+            // The per-address opt-in booleans live on Resident documents, so a failed resident write
+            // means the opt-out was not stored. Reporting 200 for it is worse than reporting the
+            // failure: Gmail records a one-click as honoured and stops offering the control, so the
+            // resident is left with no way to make the mail stop and no sign that anything went
+            // wrong. Asserted end to end because the response text is the thing that lied.
+            var homeId = ArrangeAFailingResidentSave();
+
+            var response = await OneClickUnsubscribeAsync();
+
+            // Not a body assertion: the harness writes the 500 body itself, so checking it for the
+            // absence of the success text could not fail. The status is the whole contract.
+            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+
+            // The home write already landed, so this request leaves a half-applied opt-out and the
+            // resident keeps receiving mail. Nothing else names the record: the middleware skips 5xx
+            // by design and the global handler logs only the method and path. Without this line the
+            // fix would trade a false success for an unrepairable one - so the home id and the
+            // redacted address are both asserted, since either alone leaves the operator guessing.
+            Assert.Contains(
+                Ours,
+                e =>
+                    e.Level == LogLevel.Error
+                    && e.Message.Contains(homeId.ToString())
+                    && e.Message.Contains("jan***@example.com")
+            );
+        }
+
+        [Fact]
+        public async Task AFailedSaveIsNeitherLoggedAsARejectionNorBilledToTheBudget()
+        {
+            // A save that faults must not be able to drain the budget: during a Cosmos outage every
+            // unsubscribe attempt fails, and if those spent the window the mangled-link evidence the
+            // budget exists to protect would be suppressed exactly when the endpoint is loudest.
+            //
+            // Two things keep that from happening, and it is worth being precise about which does
+            // the work here. The failure is *thrown*, so it unwinds past `await _next` and the
+            // middleware's post-processing never runs at all - the `>= 500` carve-out is the second
+            // line of defence, for a 5xx *returned* as a result, and this test does not reach it.
+            // What is asserted is the outcome the two produce together, which had no test before.
+            //
+            // The loop is what makes that an assertion rather than a hope: checking only that the
+            // faults logged no warning cannot tell an unspent budget from a suppressed one. Driving
+            // a whole window's worth and then a genuine rejection can.
+            ArrangeAFailingResidentSave();
+
+            for (var i = 0; i < UnsubscribeWarningBudget.MaxWarningsPerWindow; i++)
+            {
+                var failure = await OneClickUnsubscribeAsync();
+                Assert.Equal(HttpStatusCode.InternalServerError, failure.StatusCode);
+            }
+
+            Assert.Empty(Warnings);
+
+            _tokenService
+                .Setup(s => s.ValidateToken("bad"))
+                .Returns(Rejected(UnsubscribeTokenFailure.DecryptFailed));
+            var rejected = await _client.GetAsync("/api/email/preferences?token=bad");
+
+            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+            Assert.Contains(Warnings, w => w.Message.Contains("DecryptFailed"));
+        }
+
+        /// <summary>
+        /// Arranges the half-applied case: the address is on <b>both</b> the home and the resident,
+        /// and only the resident write fails. The home copy really is opted out and the resident
+        /// copy really is not, which is the split state the Error log exists to make repairable.
+        /// An earlier version gave the home a different address, so the home write persisted an
+        /// unchanged document and the opt-out was wholly unapplied rather than half-applied - the
+        /// fixture did not build the state its own comments described.
+        /// </summary>
+        private Guid ArrangeAFailingResidentSave()
+        {
+            var homeId = Guid.NewGuid();
+            const string email = "jane@example.com";
+            var home = new Home
+            {
+                Id = homeId,
+                StreetNumber = 123,
+                StreetName = "Oak Avenue",
+                EmailAddress = new EmailAddress { Address = email, BoardEmailOptedIn = true },
+            };
+            var resident = new Resident
+            {
+                Id = Guid.NewGuid(),
+                HomeId = homeId,
+                EmailAddresses = new List<EmailAddress>
+                {
+                    new EmailAddress { Address = email, BoardEmailOptedIn = true },
+                },
+            };
+
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
+            _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync(home);
+            _residentRepository.Setup(r => r.GetByHomeIdAsync(homeId)).ReturnsAsync(new List<Resident> { resident });
+            _residentRepository
+                .Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
+                .ThrowsAsync(new InvalidOperationException("Cosmos is unavailable."));
+
+            return homeId;
+        }
+
+        private Task<HttpResponseMessage> OneClickUnsubscribeAsync() =>
+            _client.PostAsync(
+                "/api/email/unsubscribe/board?token=tok",
+                new StringContent(
+                    "List-Unsubscribe=One-Click",
+                    System.Text.Encoding.UTF8,
+                    "application/x-www-form-urlencoded"
+                )
+            );
+
         // --- Budget ---
 
         [Fact]
@@ -411,7 +553,7 @@ namespace Web.UnitTests
         [Fact]
         public async Task AttackerControlledConfirmationBody_NeverReachesARenderedLogLine()
         {
-            await _client.PostAsync(
+            var response = await _client.PostAsync(
                 "/api/email/unsubscribe/board",
                 new StringContent(
                     "List-Unsubscribe=" + Uri.EscapeDataString("One-Click\nInjectedLogLine"),
@@ -420,6 +562,12 @@ namespace Web.UnitTests
                 )
             );
 
+            // Anchor on the rejection first, as the sibling above does. A bare DoesNotContain
+            // passes trivially when nothing was logged at all, and since the harness gained an
+            // exception handler a throwing action no longer fails the test by escaping - it becomes
+            // a 500 the middleware skips, which is exactly that vacuous green.
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains(Warnings, w => w.Message.Contains("confirmation-present-but-not-one-click"));
             Assert.DoesNotContain(Ours, e => e.Message.Contains("InjectedLogLine"));
         }
 
