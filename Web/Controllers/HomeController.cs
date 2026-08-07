@@ -147,8 +147,18 @@ namespace Web.Controllers
                 }
 
                 // Home saved — now apply resident creates/updates/deletes.
-                // If any resident operation fails after the home save, log the error
-                // but still return Ok — the home update was already committed.
+                //
+                // A failure here is reported, not swallowed. This block used to log and fall
+                // through to Ok, so an admin saw a successful save for residents that were never
+                // created, updated or deleted - and execution continued into the audit write below
+                // and recorded "Updated home information." for them. That entry is the record an
+                // operator consults to reconstruct what happened, and a false one is unfalsifiable
+                // from the log alone.
+                //
+                // The home fields were already committed above and there is no transaction across
+                // the two containers, so this leaves a partial update. The audit entry says so
+                // rather than being dropped: without it a real, durable change to a published email
+                // address would have no record of who made it.
                 try
                 {
                     foreach (var incoming in incomingResidents)
@@ -175,6 +185,12 @@ namespace Web.Controllers
                     // Cascade: remove deleted residents from any committees they belong to.
                     await _residentCleanup.RemoveFromCommitteesAsync(removedResidentIds);
                 }
+                // Deliberately not filtered on OperationCanceledException, against the repo
+                // checklist, and the reason is specific rather than inherited: these repositories
+                // accept no CancellationToken, so an abandoned request cannot surface here at all.
+                // The only realistic source is CosmosOperationCanceledException, which derives from
+                // it and is a genuine half-applied write - exactly what the entry below exists to
+                // record. Filtering would discard that and gain nothing.
                 catch (Exception ex)
                 {
                     _logger.LogError(
@@ -182,6 +198,34 @@ namespace Web.Controllers
                         "Failed to apply resident changes for home {HomeId} after home save succeeded",
                         updatedHome.Id
                     );
+
+                    // Says only what is certainly true. The home document was written above, so it
+                    // is named; what the payload *changed* is not, because the client sends the
+                    // whole home on every save and a residents-only edit carries the existing email
+                    // and phone unchanged. Claiming the contact details were updated would put a
+                    // false statement in the audit log - the defect this change exists to remove.
+                    //
+                    // The inner failure is swallowed deliberately: a fault writing this entry must
+                    // not replace the exception in flight, which is the one the caller and the
+                    // global handler need.
+                    try
+                    {
+                        await WriteAuditAsync(
+                            storedHome,
+                            apiUser,
+                            "Update partially applied: the home record was saved, resident changes failed."
+                        );
+                    }
+                    catch (Exception auditEx)
+                    {
+                        _logger.LogError(
+                            auditEx,
+                            "Failed to record the partial update of home {HomeId} in the audit log",
+                            storedHome.Id
+                        );
+                    }
+
+                    throw;
                 }
             }
             else
@@ -202,20 +246,29 @@ namespace Web.Controllers
                 }
             }
 
-            await _auditLogRepository.AddAsync(
+            await WriteAuditAsync(storedHome, apiUser, "Updated home information.");
+
+            return Ok();
+        }
+
+        /// <summary>
+        /// Records what happened to a home. Defined once so the success path and the partial-failure
+        /// path cannot drift into describing the same outcome differently.
+        /// </summary>
+        private Task WriteAuditAsync(Home storedHome, Models.User apiUser, string action)
+        {
+            return _auditLogRepository.AddAsync(
                 new NewAuditLogEntry
                 {
                     Id = Guid.NewGuid(),
                     SubjectId = storedHome.Id.ToString(),
                     SubjectName = $"{storedHome.StreetNumber} {storedHome.StreetName}",
-                    Action = "Updated home information.",
+                    Action = action,
                     Time = DateTime.UtcNow,
                     UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
                     UserId = apiUser.UniqueId,
                 }
             );
-
-            return Ok();
         }
 
         [HttpDelete("{homeId}/owners/{userUniqueId}")]

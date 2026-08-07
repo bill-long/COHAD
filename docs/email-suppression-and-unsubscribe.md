@@ -354,16 +354,44 @@ ETag each time. Skipping the write when no home-level address matched fixes both
 it changes which documents an unsubscribe touches and several existing tests assert the current
 behaviour, so it is deliberately not folded into a fix about reporting failure honestly.
 
-**Still open: the same swallow in `HomeController.UpdateHome`** (`Web/Controllers/HomeController.cs:178`,
-"Failed to apply resident changes for home {HomeId} after home save succeeded"). It is commented
-and deliberate, but it is *worse* than the case fixed here, not better: it returns 200 **and** falls
-through to write an audit entry recording "Updated home information." for creates, updates and
-deletes that never landed, so the one record an operator would consult contradicts the data. Its
-`catch (Exception ex)` also does not exclude `OperationCanceledException`, against the repo
-checklist, so a client disconnect mid-save produces the same false success. It is out of scope of
-this PR only because it is authenticated, has a wider blast radius (deletes and the committee
-cascade), and needs its own decision about the audit entry - not because the deferral is
-comfortable. It should be fixed next.
+**Fixed since, separately: the same swallow in `HomeController.Update`.** It was *worse* than the
+case above - it returned 200 **and** fell through to write an audit entry recording "Updated home
+information." for creates, updates and deletes that never landed, so the one record an operator
+would consult contradicted the data. The resident block now logs, records a *qualified* audit entry
+("resident changes failed and may be partly applied"), and rethrows. The entry is qualified rather
+than dropped because the home's own email/phone write has already committed by then: writing
+nothing would leave a real change to a published address with no record of who made it.
+
+Making that failure reach the admin needed a second change, and finding out why is the useful part.
+The API returning 500 changed nothing on screen: `HomeService` converts any HTTP failure into
+`of(false)` rather than an error notification, and every caller in `edit-home.component.ts` passes a
+hardcoded `true` onward with an `error` handler that can never fire. The failure is now reported
+from `HomeService` itself - the single point that already knows - and **no caller's control flow was
+touched**. That restraint is the design, not laziness: the components mutate one shared `homeCopy`
+optimistically and have no rollback, so the current behaviour of closing the editor and re-syncing
+from the server is what keeps unsaved edits from being re-submitted by a later, unrelated save.
+Keeping the user on the page with a failed save - the obvious "better" fix - creates a data-loss
+path where a failed resident deletion is silently committed by the next successful save. Any future
+inline error state here has to bring a rollback model with it.
+
+The doc previously flagged that this `catch (Exception ex)` does not exclude
+`OperationCanceledException`, against the repo checklist. It still does not, now deliberately and
+for a reason specific to this call site rather than inherited from the unsubscribe one: these
+repositories accept no `CancellationToken`, so an abandoned request cannot surface here at all, and
+the only realistic source is `CosmosOperationCanceledException` - which derives from it and *is* a
+genuine half-applied write, exactly what the audit entry exists to record.
+
+Two consequences are accepted rather than solved: the admin's typed edits are still lost on failure
+(as they always were, just silently), and the failure path dispatches `LoadAllHomes` but not
+`LoadDirectory`, so the directory view can lag until the next refresh.
+
+**Still open, and pre-existing: `HomeService`'s constructor subscription is not fault-tolerant.**
+`LoadAllHomes` is handled by a `switchMap` over the dispatcher whose error callback lives on the
+outer subscription, so the first failing `GET api/home` terminates it permanently - the store is set
+to an empty home list and no later dispatch is ever served until a page reload. This predates the
+change (the failure path already dispatched `LoadAllHomes`), but making failures visible makes it
+easier to reach: the snackbar invites a retry during exactly the outage that kills the subscription.
+The fix is to move the error handling inside the `switchMap` so the outer stream survives.
 
 ### Part 2: Recovery paths
 
