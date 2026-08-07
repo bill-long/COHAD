@@ -436,6 +436,90 @@ namespace Web.UnitTests
         }
 
         [Fact]
+        public async Task OneClickUnsubscribe_WhenTheResidentSaveFails_DoesNotReportSuccess()
+        {
+            // The opt-in booleans live on the Resident document, so a swallowed failure here left
+            // the resident subscribed while telling Gmail the one-click had been honoured.
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(CreateTestHome(homeId, email));
+            _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync((Home h) => h);
+            _residentRepository
+                .Setup(r => r.GetByHomeIdAsync(homeId))
+                .ReturnsAsync(new List<Resident> { CreateTestResident(homeId, email) });
+            _residentRepository
+                .Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
+                .ThrowsAsync(new InvalidOperationException("Cosmos is unavailable."));
+
+            var controller = CreateController();
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => controller.OneClickUnsubscribe("board", "tok", "One-Click")
+            );
+        }
+
+        [Fact]
+        public async Task FailedSave_LogsAnAddressThatCannotForgeALogLine()
+        {
+            // The address is not attacker-supplied in the request - it comes from the token payload,
+            // which is minted from a stored EmailAddress.Address. But storage accepts any value
+            // containing an '@' (HomeController validates no further), so a CR/LF entered once into
+            // a resident record would ride the token into this line and split it. Asserted on the
+            // rendered message, because the redaction helper alone happily passes control characters
+            // through and a test of the helper would not catch a call site that skipped sanitising.
+            var homeId = Guid.NewGuid();
+            const string hostile = "ja\r\nInjectedLogLine@example.com";
+
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, hostile));
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(CreateTestHome(homeId, hostile));
+            _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync((Home h) => h);
+            _residentRepository
+                .Setup(r => r.GetByHomeIdAsync(homeId))
+                .ReturnsAsync(new List<Resident> { CreateTestResident(homeId, hostile) });
+            _residentRepository
+                .Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
+                .ThrowsAsync(new InvalidOperationException("Cosmos is unavailable."));
+
+            var controller = CreateController();
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => controller.OneClickUnsubscribe("board", "tok", "One-Click")
+            );
+
+            VerifyLogged(
+                LogLevel.Error,
+                m => m.Contains(homeId.ToString()) && !m.Contains('\r') && !m.Contains('\n')
+            );
+        }
+
+        [Fact]
+        public async Task UpdatePreferences_WhenTheResidentSaveFails_DoesNotReportSuccess()
+        {
+            // Same swallow, other endpoint: the preferences page reported "Your preferences have
+            // been saved" for a write that never landed.
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(CreateTestHome(homeId, email));
+            _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync((Home h) => h);
+            _residentRepository
+                .Setup(r => r.GetByHomeIdAsync(homeId))
+                .ReturnsAsync(new List<Resident> { CreateTestResident(homeId, email) });
+            _residentRepository
+                .Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
+                .ThrowsAsync(new InvalidOperationException("Cosmos is unavailable."));
+
+            var controller = CreateController();
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => controller.UpdatePreferences("tok", new UpdateEmailPreferencesDto { BoardEmailOptedIn = false })
+            );
+        }
+
+        [Fact]
         public async Task OneClickUnsubscribe_ReturnsConflictAfterMaxRetries()
         {
             var homeId = Guid.NewGuid();
