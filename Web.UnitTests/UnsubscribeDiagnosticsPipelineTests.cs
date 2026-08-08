@@ -652,7 +652,7 @@ namespace Web.UnitTests
         {
             // The retirement counter is a single query grouping by type, so the new shape has to be
             // distinguishable from the legacy one rather than sharing its label.
-            var response = await _client.GetAsync("/api/email/preferences?id=no-such-link");
+            var response = await _client.GetAsync("/api/email/preferences?u=no-such-link");
 
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
             Assert.Contains(Warnings, w => w.Message.Contains("type ShortLink"));
@@ -669,7 +669,7 @@ namespace Web.UnitTests
                 .Setup(s => s.ValidateToken(It.IsAny<string>()))
                 .Returns(Rejected(UnsubscribeTokenFailure.Missing));
 
-            var response = await _client.GetAsync("/api/email/preferences?id=");
+            var response = await _client.GetAsync("/api/email/preferences?u=");
 
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
             Assert.Contains(Warnings, w => w.Message.Contains(nameof(UnsubscribeWarningKind.TokenRejection)));
@@ -697,7 +697,7 @@ namespace Web.UnitTests
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
             _residentRepository.Setup(r => r.GetByHomeIdAsync(homeId)).ReturnsAsync(new List<Resident>());
 
-            var response = await _client.GetAsync($"/api/email/preferences?id={link.Id}");
+            var response = await _client.GetAsync($"/api/email/preferences?u={link.Id}");
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.DoesNotContain(Warnings, w => w.Message.Contains("rejected"));

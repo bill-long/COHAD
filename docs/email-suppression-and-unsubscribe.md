@@ -280,12 +280,30 @@ where it can end up.
   emits, a V8-only stack sentinel, and so on. It was not converging, and it is not Part 1's problem
   to solve.
 
-  **Part 2 removes the exposure at its source.** Replacing `?token=<135 chars>` with `/u/{id}` puts
-  the credential in a path segment rather than a query parameter, so the SDK stops recording it as a
-  query value at all. Hardening a query-string redactor for a query string we plan to stop using is
-  the wrong order of work. If a browser-side rule is still wanted after Part 2, it should be built
-  against executed evidence - every field name read off the SDK source, every transform run against
-  a table of real inputs - and reviewed on its own, not folded into a diagnostics change.
+  **Part 2 was expected to remove the exposure at its source. It did not, and the reason is worth
+  recording, because the expectation was wrong in both directions.** The claim was that moving the
+  credential from `?token=` into the `/u/{id}` path would stop the SDK recording it as a query
+  value. What review of the implemented change established:
+
+  - **The page view got worse before it got better.** `ApplicationInsightsService` strips the query
+    and fragment from the tracked URI, so the legacy `?token=` was *already* protected there. A path
+    segment is not stripped, so `/u/{id}` was published verbatim - and `location.replaceState` in
+    the component cannot help, because the router URL is read before the component initialises.
+    Fixed in PR 2a by redacting the `/u/{id}` segment where the page view is tracked.
+  - **The SPA's own API call still carries the credential as a query value**, because the page has
+    to send it somewhere, and that is a fetch/XHR dependency whose full URL the SDK records. This is
+    unchanged from the legacy scheme, which sent `?token=` from the same place - so it is the
+    pre-existing gap this document already describes, not a regression. Closing it means moving the
+    credential to a request header, which telemetry does not record. That is a change to the API
+    contract rather than the link format, so it is tracked on its own rather than folded in.
+
+  The lesson generalises: "the credential is in the path now" says nothing about where the page
+  subsequently *sends* it. A credential's exposure is the union of every place it travels, and the
+  emitted link is only the first.
+
+  If a broader browser-side rule is still wanted, it should be built against executed evidence -
+  every field name read off the SDK source, every transform run against a table of real inputs - and
+  reviewed on its own, not folded into another change.
 
   Until then, treat the browser half as uncovered: do not paste production telemetry URLs into
   tickets, and prefer rotating the signing key over relying on redaction if a token is known to have

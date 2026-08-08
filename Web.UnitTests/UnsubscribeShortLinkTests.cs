@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Newtonsoft.Json.Linq;
 using Web.MockData;
 using Web.Models;
 using Web.Services;
@@ -86,6 +87,55 @@ namespace Web.UnitTests
             // A blank id is a rejection, not a server error: it must not reach Cosmos, where it is
             // not a legal document id and would surface as an argument fault rather than a 404.
             Assert.Null(await _links.GetByIdAsync(id));
+        }
+
+        [Fact]
+        public void Repository_DocumentSurvivesARealJsonRoundTrip()
+        {
+            // Through actual JSON text, not just the in-memory JObject. Cosmos writes the document
+            // and reads it back as text, so a mapping can be correct against a freshly-built JObject
+            // and still throw on every stored row - which is invisible to the Mock repository,
+            // because it stores live objects and never serialises.
+            var link = new UnsubscribeLink
+            {
+                Id = UnsubscribeLink.NewId(),
+                HomeId = Guid.NewGuid(),
+                Email = "jane@example.com",
+                IssuedUtc = new DateTime(2026, 8, 8, 12, 0, 0, DateTimeKind.Utc),
+            };
+
+            var asStored = JObject.Parse(CosmosUnsubscribeLinkRepository.ToDocument(link).ToString());
+            var read = CosmosUnsubscribeLinkRepository.ToLink(asStored);
+
+            Assert.Equal(link.Id, read.Id);
+            Assert.Equal(link.HomeId, read.HomeId);
+            Assert.Equal(link.Email, read.Email);
+            Assert.Equal(link.IssuedUtc, read.IssuedUtc);
+
+            // Kind as well as value. The resolver's expiry check does SpecifyKind(..., Utc), which
+            // relabels rather than converts - so a value that came back as Local would be treated as
+            // UTC and shift the credential's expiry by the host's offset, silently.
+            Assert.Equal(DateTimeKind.Utc, read.IssuedUtc.Kind);
+        }
+
+        [Fact]
+        public void Repository_WritesARetentionTtlThatOutlivesTheCredential()
+        {
+            // The row is a new store of personal data where the previous scheme persisted nothing,
+            // so retention is stated in code rather than only in the container's out-of-band
+            // configuration - and it must outlive MaxLinkAge, or links would stop resolving before
+            // they expire and the failure would read as a lost record rather than an expired one.
+            var doc = CosmosUnsubscribeLinkRepository.ToDocument(
+                new UnsubscribeLink
+                {
+                    Id = UnsubscribeLink.NewId(),
+                    HomeId = Guid.NewGuid(),
+                    Email = "j@x.com",
+                }
+            );
+
+            var ttl = doc.Value<int>("ttl");
+            Assert.True(ttl > UnsubscribeLink.MaxLinkAge.TotalSeconds, "Retention must outlive the credential.");
         }
 
         // --- Issuer ---

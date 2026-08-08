@@ -61,7 +61,7 @@ namespace Web.Services
             if (string.IsNullOrWhiteSpace(email))
                 throw new ArgumentException("Email must not be empty.", nameof(email));
 
-            DuplicateUnsubscribeLinkIdException lastCollision = null;
+            DuplicateUnsubscribeLinkIdException? lastCollision = null;
 
             for (var attempt = 1; attempt <= MaxAttempts; attempt++)
             {

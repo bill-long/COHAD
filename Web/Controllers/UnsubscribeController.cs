@@ -46,7 +46,7 @@ namespace Web.Controllers
         public async Task<IActionResult> OneClickUnsubscribe(
             string category,
             [FromQuery] string token,
-            [FromQuery] string id,
+            [FromQuery(Name = "u")] string linkId,
             [FromForm(Name = "List-Unsubscribe")] string listUnsubscribe
         )
         {
@@ -74,7 +74,7 @@ namespace Web.Controllers
                 return BadRequest(new { error = "Invalid or missing List-Unsubscribe confirmation." });
             }
 
-            var payload = await ResolveCredentialAsync(token, id);
+            var payload = await ResolveCredentialAsync(token, linkId);
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing credential." });
 
@@ -107,9 +107,9 @@ namespace Web.Controllers
         /// Returns current email preferences for the token's home + email.
         /// </summary>
         [HttpGet("preferences")]
-        public async Task<IActionResult> GetPreferences([FromQuery] string token, [FromQuery] string id)
+        public async Task<IActionResult> GetPreferences([FromQuery] string token, [FromQuery(Name = "u")] string linkId)
         {
-            var payload = await ResolveCredentialAsync(token, id);
+            var payload = await ResolveCredentialAsync(token, linkId);
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing credential." });
 
@@ -139,11 +139,11 @@ namespace Web.Controllers
         [HttpPut("preferences")]
         public async Task<IActionResult> UpdatePreferences(
             [FromQuery] string token,
-            [FromQuery] string id,
+            [FromQuery(Name = "u")] string linkId,
             [FromBody] UpdateEmailPreferencesDto dto
         )
         {
-            var payload = await ResolveCredentialAsync(token, id);
+            var payload = await ResolveCredentialAsync(token, linkId);
             if (payload == null)
                 return BadRequest(new { error = "Invalid or missing credential." });
 

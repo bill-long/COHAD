@@ -37,7 +37,7 @@ describe('EmailPreferencesService', () => {
   it('sends a short link as the id parameter', () => {
     service.getPreferences({ kind: 'shortLink', id: 'abc123' }).subscribe();
 
-    const req = httpMock.expectOne('api/email/preferences?id=abc123');
+    const req = httpMock.expectOne('api/email/preferences?u=abc123');
     expect(req.request.method).toBe('GET');
     expect(req.request.params.get('token')).toBeNull();
     req.flush(prefs);
@@ -48,14 +48,14 @@ describe('EmailPreferencesService', () => {
 
     const req = httpMock.expectOne('api/email/preferences?token=long-legacy-token');
     expect(req.request.method).toBe('GET');
-    expect(req.request.params.get('id')).toBeNull();
+    expect(req.request.params.get('u')).toBeNull();
     req.flush(prefs);
   });
 
   it('saves with the same credential shape it read with', () => {
     service.updatePreferences({ kind: 'shortLink', id: 'abc123' }, prefs).subscribe();
 
-    const req = httpMock.expectOne('api/email/preferences?id=abc123');
+    const req = httpMock.expectOne('api/email/preferences?u=abc123');
     expect(req.request.method).toBe('PUT');
     expect(req.request.params.get('token')).toBeNull();
     req.flush({});

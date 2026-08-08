@@ -43,10 +43,12 @@ export class EmailPreferencesComponent implements OnInit {
     // Strip the credential from the address bar to reduce leakage risk (browser history, referrer
     // headers, copy/paste). Keep it in memory for the API calls.
     //
-    // This matters more for the short link than it did for the token: /u/{id} puts the credential in
-    // a path segment, and the Application Insights JS SDK records full request URLs on telemetry
-    // this app does not raise by hand. Replacing the path is what keeps the id out of the page-view
-    // URL. See the query-string exposure note in docs/email-suppression-and-unsubscribe.md.
+    // This does NOT keep the credential out of telemetry, and it is worth being exact about why,
+    // because an earlier version of this comment claimed it did. The page-view URI is captured from
+    // the router before this runs, so redaction has to happen there - see
+    // ApplicationInsightsService.redactShortLinkId. And the credential still goes out as a query
+    // value on this page's own API calls, which is the pre-existing browser-side gap documented in
+    // docs/email-suppression-and-unsubscribe.md.
     this.location.replaceState('/email-preferences');
 
     this.prefsService.getPreferences(this.credential).subscribe({

@@ -87,10 +87,18 @@ namespace Web.Services
         /// <summary>
         /// The query parameter carrying the short link id. The body link puts the id in a path
         /// segment (<c>/u/{id}</c>) and the SPA forwards it here; the <c>List-Unsubscribe</c> header
-        /// URL uses this parameter directly, which is safe because that URL is fetched by the mailbox
-        /// provider rather than by our browser, so the Application Insights JS SDK never sees it.
+        /// URL uses this parameter directly.
+        /// <para>
+        /// Deliberately <c>u</c> and not <c>id</c>. <see cref="ClassifyByTokenPresence"/> bills any
+        /// request carrying a credential parameter to the credential warning budget, and <c>id</c>
+        /// is one of the most common query names on the web - so on an <c>[AllowAnonymous]</c>
+        /// endpoint a crawler walking <c>?id=1..N</c> would drain the budget that protects the
+        /// stripped-link evidence, which is the exact outcome the two-budget split exists to
+        /// prevent. It would inflate the retirement counter with the same traffic. A parameter name
+        /// nobody guesses by accident costs nothing and removes the whole class.
+        /// </para>
         /// </summary>
-        internal const string LinkIdParameter = "id";
+        internal const string LinkIdParameter = "u";
 
         /// <summary>
         /// Every parameter that can carry a credential, in the resolver's precedence order. Defined

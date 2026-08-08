@@ -957,6 +957,42 @@ namespace Web.Services
                     {
                         ct.ThrowIfCancellationRequested();
 
+                        // Issue the unsubscribe credential BEFORE the attempt is counted, and reuse
+                        // one already stamped on the recipient.
+                        //
+                        // Both halves matter. Reuse makes issuance idempotent per recipient per job,
+                        // so a retried send does not leave the recipient holding several valid
+                        // credentials for the same address. Issuing before the increment is what
+                        // keeps a storage fault from being charged to the recipient's three
+                        // attempts: a failure here stops the job and re-queues it, exactly as a
+                        // persistence conflict does, instead of quietly consuming the retry budget
+                        // and then dropping the recipient's mail for good.
+                        if (
+                            string.IsNullOrEmpty(recipient.UnsubscribeLinkId)
+                            && recipient.HomeId != Guid.Empty
+                            && !string.IsNullOrEmpty(_appBaseUrl)
+                        )
+                        {
+                            try
+                            {
+                                var link = await linkIssuer.IssueAsync(recipient.HomeId, recipient.Email);
+                                recipient.UnsubscribeLinkId = link.Id;
+                            }
+                            catch (Exception ex) when (ex is not OperationCanceledException)
+                            {
+                                // Not swallowed into a footerless send: mail with no unsubscribe
+                                // mechanism is the failure this work exists to prevent, and it would
+                                // be invisible. Stopping is recoverable; sending is not.
+                                _logger.LogError(
+                                    ex,
+                                    "Could not issue an unsubscribe link for job {JobId}; stopping the job before it sends mail with no unsubscribe mechanism. Check that the UnsubscribeLink container exists.",
+                                    job.Id
+                                );
+                                stoppedEarly = true;
+                                break;
+                            }
+                        }
+
                         var attemptStartedUtc = DateTime.UtcNow;
                         recipient.AttemptCount++;
                         recipient.LastAttemptUtc = attemptStartedUtc;
@@ -978,26 +1014,11 @@ namespace Web.Services
 
                         try
                         {
-                            // A short link, stored, rather than the ~135 character token this used to
-                            // mint in memory. One Cosmos write per recipient per send, which at this
-                            // association's volume is negligible against what it buys: the emitted
-                            // URL drops from ~190 characters to ~35, clear of the line-wrap and
-                            // header-length limits that are the documented causes of the truncated
-                            // credentials behind docs/email-suppression-and-unsubscribe.md.
-                            //
-                            // A failure issuing it is deliberately NOT swallowed. It reaches the
-                            // per-recipient catch below, which marks the recipient Failed with the
-                            // error and retries - because the alternative is sending bulk mail with
-                            // no unsubscribe mechanism at all, which is the failure this work exists
-                            // to prevent, and it would be invisible. The empty-footer path below is a
-                            // different thing: a configuration state an operator chose by leaving
-                            // AppBaseUrl unset, not a runtime fault degrading silently.
-                            string unsubscribeLinkId = null;
-                            if (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
-                            {
-                                var link = await linkIssuer.IssueAsync(recipient.HomeId, recipient.Email);
-                                unsubscribeLinkId = link.Id;
-                            }
+                            // Issued above, before the attempt was counted. Null only when there is
+                            // nothing to link to - no AppBaseUrl, or a recipient with no home - which
+                            // is a configuration state an operator chose rather than a runtime fault,
+                            // and which BuildUnsubscribeFooter renders as no footer at all.
+                            var unsubscribeLinkId = recipient.UnsubscribeLinkId;
 
                             var footer = EmailMessageBuilder.BuildUnsubscribeFooter(
                                 _appBaseUrl,
@@ -1026,12 +1047,15 @@ namespace Web.Services
                             if (unsubscribeLinkId != null && !string.IsNullOrEmpty(_appBaseUrl))
                             {
                                 // The id rides in a query parameter here, unlike the body link's path
-                                // segment, and that is fine: this URL is fetched by the mailbox
-                                // provider, never by our SPA, so the Application Insights JS SDK - the
-                                // unclosed browser-side leak Part 1 documented - never sees it. The
-                                // backend redacts query values in its own telemetry.
+                                // segment. That is acceptable for this URL specifically: it is
+                                // fetched by the mailbox provider, never by our SPA, so the
+                                // Application Insights JS SDK never sees it, and the backend's
+                                // OpenTelemetry instrumentation redacts query values by default.
+                                // It says nothing about the SPA's own calls - see the note on
+                                // EmailPreferencesService, where the credential is still a query
+                                // value and still reaches browser telemetry.
                                 var unsubUrl =
-                                    $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?id={Uri.EscapeDataString(unsubscribeLinkId)}";
+                                    $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?u={Uri.EscapeDataString(unsubscribeLinkId)}";
                                 message.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
                                 message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                             }
@@ -1107,7 +1131,7 @@ namespace Web.Services
                 }
 
                 _logger.LogWarning(
-                    "Email job {JobId} stopped early due to persistent concurrency conflicts (sent {Sent}/{Total}) — re-queuing after {Delay}s delay",
+                    "Email job {JobId} stopped early and will be retried (sent {Sent}/{Total}) — re-queuing after {Delay}s delay. The cause is logged above: persistent concurrency conflicts, or a failure issuing an unsubscribe link.",
                     job.Id,
                     job.SentCount,
                     job.TotalRecipients,

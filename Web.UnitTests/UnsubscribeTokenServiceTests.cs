@@ -274,12 +274,27 @@ namespace Web.UnitTests
             // earlier one - it bounds the leaked key's useful life to the legacy expiry window and
             // keeps genuine traffic honest.
             var cutover = DateTimeOffset.UtcNow.AddDays(-30);
-            var afterCutover = CreateLegacyService(cutover: cutover)
-                .GenerateToken(Guid.NewGuid(), "j@x.com", cutover.AddDays(1));
+            var wellPastGrace = cutover + UnsubscribeTokenService.LegacyCutoverGrace + TimeSpan.FromHours(1);
+            var afterCutover = CreateLegacyService(cutover: cutover).GenerateToken(Guid.NewGuid(), "j@x.com", wellPastGrace);
 
             var result = CreateLegacyService(cutover: cutover).ValidateToken(afterCutover);
 
             Assert.Equal(UnsubscribeTokenFailure.IssuedAfterLegacyCutover, result.Failure);
+        }
+
+        [Fact]
+        public void ATokenIssuedInsideTheCutoverGraceIsStillAccepted()
+        {
+            // The configured instant is operator-supplied and nothing ties it to the moment
+            // generation actually stopped, so a rolling deploy leaves genuine tokens minted just
+            // after it. Rejecting those means telling someone who asked the mail to stop that their
+            // link is invalid - the worst outcome available here, and a forger sets the timestamp
+            // anyway, so the tight bound would only constrain honest traffic.
+            var cutover = DateTimeOffset.UtcNow.AddDays(-30);
+            var justAfter = cutover + TimeSpan.FromHours(1);
+            var token = CreateLegacyService(cutover: cutover).GenerateToken(Guid.NewGuid(), "j@x.com", justAfter);
+
+            Assert.True(CreateLegacyService(cutover: cutover).ValidateToken(token).IsValid);
         }
 
         [Fact]

@@ -89,19 +89,37 @@ namespace Web.Services.Repositories
             }
         }
 
-        private static UnsubscribeLink ToLink(JObject doc)
+        /// <summary>
+        /// Internal so a test can round-trip a document through real JSON text.
+        /// <para>
+        /// That round trip is the point: the Mock repository stores live objects and never
+        /// serialises, so it cannot observe a mapping that only breaks once Cosmos has written and
+        /// re-read the document. A read that threw on every stored row shipped past a green suite
+        /// exactly that way.
+        /// </para>
+        /// </summary>
+        internal static UnsubscribeLink ToLink(JObject doc)
         {
+            // Parsed from the string form, matching every other Guid read in this codebase. Cosmos
+            // stores a Guid as a JSON string, and `Value<Guid?>` routes a String token through
+            // Convert.ChangeType, which throws InvalidCastException rather than returning null - so
+            // the read failed on every stored row while a suite backed by the Mock stayed green.
+            // A malformed value resolves to Guid.Empty, which the resolver rejects with a named
+            // reason instead of a 500 the diagnostics middleware cannot even see.
+            Guid.TryParse(doc.Value<string>("HomeId"), out var homeId);
+
             return new UnsubscribeLink
             {
                 Id = doc.Value<string>("id") ?? string.Empty,
-                HomeId = doc.Value<Guid?>("HomeId") ?? Guid.Empty,
+                HomeId = homeId,
                 Email = doc.Value<string>("Email") ?? string.Empty,
                 IssuedUtc = doc["IssuedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
                 ETag = doc.Value<string>("_etag"),
             };
         }
 
-        private static JObject ToDocument(UnsubscribeLink link)
+        /// <summary>Internal for the round-trip test described on <see cref="ToLink"/>.</summary>
+        internal static JObject ToDocument(UnsubscribeLink link)
         {
             return new JObject
             {
@@ -110,6 +128,9 @@ namespace Web.Services.Repositories
                 ["HomeId"] = link.HomeId,
                 ["Email"] = link.Email,
                 ["IssuedUtc"] = JToken.FromObject(link.IssuedUtc),
+                // Per-document retention, so a row holding an address deletes itself on a horizon
+                // this code controls rather than only on the container's out-of-band setting.
+                ["ttl"] = UnsubscribeLink.RetentionSeconds,
             };
         }
     }

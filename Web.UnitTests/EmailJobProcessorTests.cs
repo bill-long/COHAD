@@ -475,7 +475,7 @@ public sealed class EmailJobProcessorTests
         // The RFC 8058 header carries the same id, so one-click and the body link redeem the same
         // credential rather than two independently-minted ones.
         var listUnsubscribe = capturedMessage.Headers["List-Unsubscribe"];
-        Assert.Contains($"id={stored.Id}", listUnsubscribe);
+        Assert.Contains($"u={stored.Id}", listUnsubscribe);
         Assert.DoesNotContain("token=", listUnsubscribe);
     }
 

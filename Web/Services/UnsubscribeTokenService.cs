@@ -17,6 +17,12 @@ namespace Web.Services
         /// <summary>Maximum token age. Tokens older than this are rejected.</summary>
         internal static readonly TimeSpan MaxTokenAge = TimeSpan.FromDays(365);
 
+        /// <summary>
+        /// How far past the configured cutover a legacy token is still honoured, absorbing the gap
+        /// between an operator-chosen instant and the moment generation actually stopped.
+        /// </summary>
+        internal static readonly TimeSpan LegacyCutoverGrace = TimeSpan.FromHours(24);
+
         private const int NonceSize = 12; // AES-GCM standard nonce
         private const int TagSize = 16; // AES-GCM auth tag
 
@@ -196,7 +202,15 @@ namespace Web.Services
             // date did not come from us. Checked after the skew and expiry branches so those keep
             // naming their own causes: a token both expired and post-cutover is far more likely to
             // be an old link than a forgery, and the log should say so.
-            if (_legacyCutoverUtc.HasValue && issued > _legacyCutoverUtc.Value)
+            //
+            // The grace is not decoration. The configured instant is operator-supplied and nothing
+            // ties it to the moment the last token was actually minted: on a rolling deploy, or when
+            // the app setting lands before the slot swap, old instances keep issuing genuine tokens
+            // for minutes afterwards. Rejecting those would hand a resident "invalid or expired" and
+            // a mailbox provider a 400 on one-click - a false rejection of someone asking the mail
+            // to stop, which is the worst outcome this whole document is about. A forger sets the
+            // timestamp anyway, so a tight bound buys nothing against the only party it constrains.
+            if (_legacyCutoverUtc.HasValue && issued > _legacyCutoverUtc.Value + LegacyCutoverGrace)
                 return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.IssuedAfterLegacyCutover);
 
             return UnsubscribeTokenResult.Success(

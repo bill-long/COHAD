@@ -33,12 +33,16 @@ describe('ApplicationInsightsService', () => {
   let routerEvents$: Subject<any>;
   let titleService: jasmine.SpyObj<Title>;
   let sdkMock: SdkSpy;
+  // Mutable so a test can set the URL the initial page view is tracked from. `createSpyObj`'s
+  // property bag defines getters, which cannot be reassigned.
+  let routerStub: { events: unknown; url: string };
 
   function setup(connectionString: string): void {
     (envModule.environment as any).appInsightsConnectionString = connectionString;
 
     routerEvents$ = new Subject<any>();
-    const routerSpy = jasmine.createSpyObj('Router', [], { events: routerEvents$.asObservable(), url: '/test' });
+    routerStub = { events: routerEvents$.asObservable(), url: '/test' };
+    const routerSpy = routerStub;
     titleService = jasmine.createSpyObj('Title', ['getTitle']);
     titleService.getTitle.and.returnValue('Test Page');
 
@@ -124,6 +128,40 @@ describe('ApplicationInsightsService', () => {
       expect(sdkMock.trackPageView).toHaveBeenCalledWith({
         name: 'Test Page',
         uri: '/page',
+      });
+    });
+
+    // The unsubscribe short link is a bearer credential in a path segment, so stripping the query
+    // is not enough - it would otherwise be published verbatim as a page-view URI and stay
+    // replayable for its full lifetime.
+    it('should redact the unsubscribe short link id from tracked URIs', () => {
+      service.init();
+      sdkMock.trackPageView.calls.reset();
+      routerEvents$.next(new NavigationEnd(4, '/u/Ab3-x9_KqRs7TuVwXyZ01', '/u/Ab3-x9_KqRs7TuVwXyZ01'));
+      expect(sdkMock.trackPageView).toHaveBeenCalledWith({
+        name: 'Test Page',
+        uri: '/u/{id}',
+      });
+    });
+
+    it('should redact the short link id on the initial page view too', () => {
+      // The initial view is tracked from router.url rather than a NavigationEnd, and opening a
+      // short link straight from an email is exactly that case.
+      routerStub.url = '/u/Ab3-x9_KqRs7TuVwXyZ01';
+      service.init();
+      expect(sdkMock.trackPageView).toHaveBeenCalledWith({
+        name: 'Test Page',
+        uri: '/u/{id}',
+      });
+    });
+
+    it('should not mistake another route for a short link', () => {
+      service.init();
+      sdkMock.trackPageView.calls.reset();
+      routerEvents$.next(new NavigationEnd(5, '/users/123', '/users/123'));
+      expect(sdkMock.trackPageView).toHaveBeenCalledWith({
+        name: 'Test Page',
+        uri: '/users/123',
       });
     });
 

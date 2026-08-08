@@ -67,6 +67,31 @@ namespace Web.Models
         internal static readonly TimeSpan MaxLinkAge = TimeSpan.FromDays(365);
 
         /// <summary>
+        /// Per-document retention, written as the Cosmos <c>ttl</c> field so the row deletes itself.
+        /// Derived from <see cref="MaxLinkAge"/> rather than configured separately, so the two cannot
+        /// drift into a row that outlives the credential it carries or expires before it.
+        /// <para>
+        /// This matters because the row is a new store of personal data - an address and a home id -
+        /// where the scheme it replaced persisted nothing at all, keeping the address only inside an
+        /// encrypted token in the recipient's own mailbox. Retention is therefore stated here, in
+        /// code, rather than living solely in the out-of-band container configuration.
+        /// </para>
+        /// <para>
+        /// Deliberately <b>not</b> a cascade delete when a resident is removed. A link has to keep
+        /// working for its full life or the recovery path this whole design exists to build breaks
+        /// for exactly the person trying to use it - someone unsubscribing is often someone who has
+        /// already left. The margin over <see cref="MaxLinkAge"/> covers clock skew and leaves an
+        /// expired-but-present row to answer with a named rejection rather than a bare
+        /// <c>LinkNotFound</c>, which reads as a lost record.
+        /// </para>
+        /// <para>
+        /// Cosmos only honours a per-item <c>ttl</c> when the container has a default TTL enabled,
+        /// which is why the container is still created with one.
+        /// </para>
+        /// </summary>
+        internal static readonly int RetentionSeconds = (int)(MaxLinkAge + TimeSpan.FromDays(35)).TotalSeconds;
+
+        /// <summary>
         /// Generates a fresh id. Callers must treat a duplicate-id write as a collision and call this
         /// again rather than reusing the value; see <c>IUnsubscribeLinkIssuer</c>.
         /// </summary>
