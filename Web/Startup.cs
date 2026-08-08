@@ -260,10 +260,19 @@ namespace Web
             services.AddSingleton<IImageUploadHelper, ImageUploadHelper>();
             services.AddScoped<IEventSignupConversionService, EventSignupConversionService>();
 
-            // Unsubscribe token service — only registered when a signing key is configured.
-            // Without a key, the UnsubscribeController still works (returns 400 for all tokens)
-            // and EmailJobProcessor sends emails without unsubscribe headers/footer.
-            var unsubKey = Configuration.GetSection("UnsubscribeToken")["SigningKey"];
+            // Legacy unsubscribe token validation — only registered when a key is configured.
+            // Without one, the UnsubscribeController still works: short links resolve through the
+            // credential resolver, and a legacy ?token= is rejected as NotConfigured, which the log
+            // distinguishes from a bad token.
+            //
+            // LegacySigningKey first, SigningKey as the fallback, matching UnsubscribeTokenService.
+            // The precedence lives in two places because this one decides whether to register the
+            // real service at all, so it has to answer "is there any key" before the service exists
+            // to ask; both are named here so the pair is visible as a pair.
+            var unsubSection = Configuration.GetSection("UnsubscribeToken");
+            var unsubKey = unsubSection["LegacySigningKey"];
+            if (string.IsNullOrWhiteSpace(unsubKey))
+                unsubKey = unsubSection["SigningKey"];
             if (!string.IsNullOrWhiteSpace(unsubKey) && Encoding.UTF8.GetByteCount(unsubKey) >= 32)
             {
                 services.AddSingleton<IUnsubscribeTokenService, UnsubscribeTokenService>();
@@ -272,6 +281,14 @@ namespace Web
             {
                 services.AddSingleton<IUnsubscribeTokenService, NullUnsubscribeTokenService>();
             }
+
+            // Issues the short links that replace the long ?token= credential in outgoing mail.
+            // Scoped, because it writes through the scoped link repository.
+            services.AddScoped<IUnsubscribeLinkIssuer, UnsubscribeLinkIssuer>();
+
+            // The single place that turns any presented credential shape into one payload. Scoped
+            // for the same reason - it reads through the scoped link repository.
+            services.AddScoped<IUnsubscribeCredentialResolver, UnsubscribeCredentialResolver>();
 
             // Bounds how many unsubscribe rejection warnings the [AllowAnonymous] endpoints can
             // write per fixed 24h window. Singleton because the count is shared across requests;
@@ -313,6 +330,7 @@ namespace Web
                 services.AddSingleton<INotificationRepository, MockNotificationRepository>();
                 services.AddSingleton<INotificationDigestStateRepository, MockNotificationDigestStateRepository>();
                 services.AddSingleton<IBackgroundJobStateRepository, MockBackgroundJobStateRepository>();
+                services.AddSingleton<IUnsubscribeLinkRepository, MockUnsubscribeLinkRepository>();
             }
             else
             {
@@ -409,6 +427,13 @@ namespace Web
 
                 services.AddScoped<IBackgroundJobStateRepository>(sp => new CosmosBackgroundJobStateRepository(
                     sp.GetRequiredService<CosmosClient>().GetContainer(db, "BackgroundJobState")
+                ));
+
+                // Provisioned out of band like every container here, with a ~400 day TTL. The link
+                // lifetime itself is enforced in code (UnsubscribeLink.MaxLinkAge) - the TTL only
+                // prunes.
+                services.AddScoped<IUnsubscribeLinkRepository>(sp => new CosmosUnsubscribeLinkRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "UnsubscribeLink")
                 ));
 
                 // Graph API for committee mailbox forwarding — registered only when credentials are configured.

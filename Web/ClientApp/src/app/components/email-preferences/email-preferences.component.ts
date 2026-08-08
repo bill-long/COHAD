@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Location } from '@angular/common';
-import { EmailPreferencesService } from '../../services/email-preferences.service';
+import { EmailPreferencesService, UnsubscribeCredential } from '../../services/email-preferences.service';
 import { EmailPreferences } from '../../models';
 
 @Component({
@@ -11,7 +11,7 @@ import { EmailPreferences } from '../../models';
   standalone: false,
 })
 export class EmailPreferencesComponent implements OnInit {
-  token = '';
+  credential: UnsubscribeCredential | null = null;
   prefs: EmailPreferences | null = null;
   loading = true;
   saving = false;
@@ -33,18 +33,23 @@ export class EmailPreferencesComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.token = this.route.snapshot.queryParamMap.get('token') ?? '';
-    if (!this.token) {
+    this.credential = this.readCredential();
+    if (!this.credential) {
       this.loading = false;
-      this.errorMessage = 'No token provided. Please use the link from your email.';
+      this.errorMessage = 'No credential provided. Please use the link from your email.';
       return;
     }
 
-    // Remove the token from the browser address bar to reduce leakage risk
-    // (browser history, referrer headers, copy/paste). Keep it in memory for API calls.
+    // Strip the credential from the address bar to reduce leakage risk (browser history, referrer
+    // headers, copy/paste). Keep it in memory for the API calls.
+    //
+    // This matters more for the short link than it did for the token: /u/{id} puts the credential in
+    // a path segment, and the Application Insights JS SDK records full request URLs on telemetry
+    // this app does not raise by hand. Replacing the path is what keeps the id out of the page-view
+    // URL. See the query-string exposure note in docs/email-suppression-and-unsubscribe.md.
     this.location.replaceState('/email-preferences');
 
-    this.prefsService.getPreferences(this.token).subscribe({
+    this.prefsService.getPreferences(this.credential).subscribe({
       next: data => {
         this.prefs = data;
         this.loading = false;
@@ -56,13 +61,29 @@ export class EmailPreferencesComponent implements OnInit {
     });
   }
 
+  /**
+   * Reads whichever credential shape the URL carries. The short link arrives as the `:id` path
+   * segment of `/u/:id`; the legacy link as `?token=` on `/email-preferences`. Discrimination is by
+   * where the value came from, never by inspecting it, matching the server-side resolver - and the
+   * short link wins for the same reason it does there, so one URL can only ever mean one thing.
+   */
+  private readCredential(): UnsubscribeCredential | null {
+    const id = this.route.snapshot.paramMap.get('id');
+    if (id) return { kind: 'shortLink', id };
+
+    const token = this.route.snapshot.queryParamMap.get('token');
+    if (token) return { kind: 'legacyToken', token };
+
+    return null;
+  }
+
   save(): void {
-    if (!this.prefs || this.saving) return;
+    if (!this.prefs || !this.credential || this.saving) return;
     this.saving = true;
     this.successMessage = '';
     this.errorMessage = '';
 
-    this.prefsService.updatePreferences(this.token, this.prefs).subscribe({
+    this.prefsService.updatePreferences(this.credential, this.prefs).subscribe({
       next: () => {
         this.saving = false;
         this.successMessage = 'Your preferences have been saved.';

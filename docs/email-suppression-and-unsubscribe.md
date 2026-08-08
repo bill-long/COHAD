@@ -111,10 +111,10 @@ waiting for admin approval is not, which is why signing in is a footnote and not
 
 1. The short link. Primary.
 2. The code. Instant, self-service, no account, immune to link mangling.
-3. Request removal. For people who no longer have the email and so cannot prove address control.
-   Admin-mediated. Rare by construction.
-4. A mailto, always visible.
-5. "If you already have an account you can also manage this under My Info." A note, not a step.
+3. A mailto, always visible. For people who no longer have the email and so cannot prove address
+   control. Admin-mediated, and rare by construction. An anonymous request endpoint was designed
+   for this slot and dropped in Part 2; the mailto serves the same people at no cost.
+4. "If you already have an account you can also manage this under My Info." A note, not a step.
    (`myinfo.component.html:19` renders `app-edit-home`, which already exposes every opt-in.)
 
 The abuse trade-off resolves cleanly: the instant paths require possession of the email, so they
@@ -133,7 +133,7 @@ input inline, not link elsewhere:
 > enter it here, along with your email address.
 > `[ your@email.com ] [ ____-____ ]  [ Continue ]`
 >
-> Don't have the email any more? [Request removal] or write to board@cohad.org.
+> Don't have the email any more? Write to board@cohad.org.
 
 ## Work items
 
@@ -326,14 +326,11 @@ Held out of Part 1 because it is a behavioural change rather than a diagnostic o
   documented `>= 500` carve-out is the second line of defence, for a 5xx *returned* as a result, and
   no unsubscribe path produces one of those - it remains unexercised.
 
-**Still open: other log sites render addresses unsanitised.** The Error line above sanitises the
-address it logs, because storage accepts any value containing an '@' and a CR/LF saved into a
-resident record would otherwise forge a second log entry. The same is true of the pre-existing sites
-that log an address - `EmailDeliveryActionService`, `EmailJobProcessor`, `PostmarkEmailTransport`,
-`NotificationEscalationRunner` - and of `CommitteeMailPoller`'s `{Sender}`, which is the strongest
-case of the set because it comes from inbound external mail rather than from a directory record.
-Most are below the production `Warning` filter, which limits but does not close it. Fixing them
-means one shared helper rather than a private one per call site, so it is its own change.
+**Closed, not open: sanitising the other log sites that render addresses.** Investigated and
+deliberately dropped ([PR #286](https://github.com/bill-long/COHAD-archive/pull/286), closed
+unmerged): O365 and Postmark own email security here, the residual log-forging risk carries no
+privilege gain, and App Insights stores each entry as a discrete item so the forged line largely
+does not land. Do not reopen it.
 
 **Still open: residents have no optimistic concurrency.** `Resident` carries no `ETag` and
 `CosmosResidentRepository.UpsertAsync` sends no precondition, so two writers who loaded the same
@@ -402,20 +399,92 @@ so the outer stream survives; a test drives one failing reload followed by a suc
 
 ### Part 2: Recovery paths
 
-- Short link generation and the `/u/{id}` route.
-- Derived code, the `/unsubscribe` page, and the inline error state above.
-- `[AllowAnonymous] POST api/email/unsubscribe-request`: creates a request record and raises an
-  `INotificationService` notification to the Administrators audience, which the existing
-  `NotificationEscalationRunner` turns into an emailed digest with a deep link. It does **not**
-  apply the opt-out directly. Identical generic response whether or not the address exists, so it
-  cannot enumerate the directory. Rate limited per address and per IP. Note field capped and
-  stripped.
+Three pieces in two PRs. A fourth was proposed and dropped; see below.
+
+**PR 2a - short link.** `UnsubscribeLink` and its repository pair, the credential resolver, minting
+one row per recipient in `EmailJobProcessor`'s per-recipient branch, the `/u/{id}` route, and the
+diagnostics wiring for a second credential shape. Ships with the legacy cutover it forces
+(`LegacySigningKey`, the cutover-date rejection, `GenerateToken` losing its production callers).
+
+**This PR changes the credential shape and nothing else.** What an unsubscribe *writes* is not
+touched here. That was briefly designed the other way - the resolver resolving an address to every
+home carrying it, so an opt-out applied everywhere - and it is the wrong mechanism: address scoping
+falls out of Part 3's suppression list for free, because a suppression is keyed on the address and
+there is only ever one document. Building a multi-home walk in the resolver would be building the
+same guarantee twice, in the harder place, and then deleting it.
+
+**PR 2b - typed code and the inline error state.** The derived code, the `/unsubscribe` page, the
+footer change, per-address and per-IP rate limiting with lockout, and the inline error state above.
+These ship together deliberately: a code with no page that accepts it is undiscoverable, and an
+inline code box in a release where no email carries a code is a worse dead end than the message it
+replaces.
+
+**One guard that survives the change of mechanism.** Part 1 rejects a blank address inside
+`ValidateToken`, but the short-link and code acquirers never call it. The check belongs in the
+resolver, where all three shapes converge; the legacy copy stays where it is so a malformed payload
+is still classified as malformed rather than as an empty address.
+
+#### Dropped: `POST api/email/unsubscribe-request`
+
+An anonymous request endpoint was proposed here, raising an Administrators notification that
+escalation would email. It is dropped in favour of recovery item 4, the always-visible mailto, which
+already serves the same people at no cost.
+
+The endpoint needed a notification type, frontend rendering for it, and a deep link to an admin page
+that does not exist - nothing in Manage Homes acts on "this address asked to be removed" - plus
+enumeration-safe response shaping and its own share of the rate limiter. It bought automation of a
+path this design already calls rare by construction, for people who no longer hold the email. It was
+also the only entry point in the set requiring no possession of the email, so it carried the abuse
+profile of the whole feature while serving its smallest audience. Revisit if the logs ever show
+people asking for it.
 
 ### Part 3: Suppression list
 
 - `EmailSuppression` keyed on normalized address: reason (`HardBounce`, `SpamComplaint`,
   `ResidentRequest`, `AdminAction`), consecutive failure count, first and last seen, causing job,
   `ClearedUtc` / `ClearedBy`.
+- **The record has to explain itself, because it is going on screen.** An admin looking at a
+  suppressed address needs to know when it happened and why without reading logs, so the record
+  carries the answer rather than leaving it to be reconstructed:
+  - `SuppressedUtc` and the first/last-seen pair above, so "when" is unambiguous for both a
+    one-off and a repeated failure.
+  - `SuppressedBy` - who or what caused it: `system:delivery-event`, the credential type for a
+    link-driven unsubscribe (which is also what Part 4 audits), or the admin's user id.
+  - The provider's own diagnostic for a bounce or complaint - Postmark's type and description -
+    because "why" for a hard bounce is the provider's text, and paraphrasing it into one of four
+    reason codes throws away the part that tells an admin whether the address is a typo or a
+    mailbox that has closed.
+  - `ClearedUtc` / `ClearedBy` for the same reasons, so an address that was suppressed and
+    restored reads as a history rather than as an absence.
+- **Surfacing it is in scope here, not a follow-up.** A suppression that only a Cosmos query can
+  explain rebuilds the original problem one layer down: the bounce is recorded and still nobody
+  hears about it. At minimum the address's suppression state and the fields above appear where an
+  admin already looks at an address, and the email job detail page explains a `Suppressed`
+  recipient in place rather than just labelling it.
+- **A suppression is all-mail and carries no category.** It answers "does this address receive
+  anything", not "which lists is this address on". Per-category choice stays where it is, in the
+  five opt-in booleans, and the two are evaluated independently at the single enforcement point:
+  an address is mailed when it is not suppressed **and** it opts in to the job's category.
+- **The invariant: only a human editing preferences writes the opt-in booleans.** Everything else
+  that wants mail to stop writes a suppression. This is a deliberate reversal of what the code does
+  today, and it has two writers, which is why it is stated once here rather than twice below:
+  - the **unsubscribe link** - the RFC 8058 one-click endpoint writes a suppression rather than
+    clearing the category boolean it clears today. A recipient who clicks Unsubscribe in Gmail is
+    asking for the mail to stop, and making it stop is the entire subject of this document.
+  - **provider feedback** - `EmailDeliveryActionService` writes a suppression on a hard bounce or a
+    spam complaint rather than clearing all five booleans.
+
+  Both do the same wrong thing now: they overwrite the resident's stated preferences in order to
+  record a fact that is not a preference, scatter it across every home carrying the address, and
+  leave nothing to restore from - only counts reach the audit log today. A suppression row records
+  it once, keyed on the address, and the preferences survive underneath it intact. That the two
+  writers converge on one mechanism is most of the value: a bounce and a click mean the same thing
+  to the send path, and today they are two different mutations of the same five fields.
+- **Still to settle when this part starts:** whether saving the *preferences page* also stops
+  writing booleans. It is reached from the same email link, but it is a human deliberately choosing
+  granular settings, and an all-mail suppression cannot express "Garden Club yes, Board no" - so the
+  working assumption is that the page keeps editing the booleans and only the unsubscribe *action*
+  writes a suppression. Decide it explicitly rather than inheriting it.
 - **Single enforcement point:** the `pendingRecipients` filter at
   `Web/Services/EmailJobProcessor.cs:870`. It sits above both the grouped and per-recipient
   branches, so one rule covers broadcasts, committee forwards, and escalation digests. Any design
@@ -452,6 +521,13 @@ Legacy tokens remain valid until 365 days after issue (`UnsubscribeTokenService.
 
 - Move the existing key to **`UnsubscribeToken:LegacySigningKey`**, validation only. Nothing is ever
   generated with it again. The new scheme gets fresh secrets.
+- **This is a rotation, not only a rename.** The production `UnsubscribeToken__SigningKey` leaked
+  into a transcript on 2026-08-06, so the Part 2 cutover must set a fresh value for it and move the
+  leaked one to `LegacySigningKey`. What that buys is bounded and worth stating plainly: the leaked
+  key can still mint payloads that the legacy validator accepts, and it must, because the links
+  already in people's inboxes were minted with it. The cutover-date rejection below is what
+  contains it - a forged token has to claim an issue date before cutover, so the exposure expires
+  on its own 365 days after cutover along with the genuine links.
 - `UnsubscribeTokenService.ValidateToken` survives as the legacy acquirer. `GenerateToken` loses its
   production callers, with a test locking that.
 - The legacy path additionally rejects tokens claiming to be issued after the cutover date. This
@@ -475,7 +551,9 @@ Two new Cosmos containers, provisioned out of band like every other container he
 
 New configuration:
 
-- `UnsubscribeToken:LegacySigningKey` - the existing key, validation only.
+- `UnsubscribeToken:LegacySigningKey` - the existing production key, validation only. It leaked into
+  a transcript on 2026-08-06, so moving it here is a rotation and not a rename: `SigningKey` gets a
+  fresh value at the same time. See Legacy compatibility for what the rotation does and does not buy.
 - A fresh key for the derived code.
 
 Mock implementations must be behaviourally identical to the Cosmos ones, including 409 on duplicate
@@ -487,11 +565,14 @@ Parts 1 and 2 first: small, they close the dead end, and they make the unexplain
 self-reporting. Part 3 next as the substantial piece. Parts 4 and 5 alongside either.
 
 Per the repo test policy, each new endpoint ships with its tests in the same PR: success,
-authorization, validation, rate limiting, and the enumeration-safety assertion on the request
-endpoint. Plus:
+authorization, validation, and rate limiting. Plus:
 
 - A legacy token still resolves to the same payload after the new scheme ships.
 - Short id and typed code resolve to an identical payload for the same address.
+- A credential carrying a blank address is rejected by the resolver, for every shape, before any
+  lookup runs.
+- An unsubscribe writes a suppression and leaves every opt-in boolean untouched - the invariant in
+  Part 3, locked once per writer (the one-click endpoint and the delivery-event path).
 - All three write audit entries recording the credential type.
 - A legacy token presented after legacy support is removed lands on the recovery page with the code
   input, not a bare error.

@@ -133,7 +133,6 @@ public sealed class EmailControllerJobTests
         return new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
-            tokenService.Object,
             router,
             hubContext.Object,
             config,

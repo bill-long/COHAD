@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
 using Web.Hubs;
+using Web.MockData;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
@@ -24,7 +25,15 @@ public sealed class EmailJobProcessorTests
 {
     private readonly Mock<IEmailJobRepository> _jobRepo = new();
     private readonly Mock<IDocumentFileStore> _fileStore = new();
-    private readonly Mock<IUnsubscribeTokenService> _tokenService = new();
+    /// <summary>
+    /// The real issuer over the Mock repository rather than a mocked issuer: these tests assert on
+    /// the messages that come out of the send path, and the link id in the footer and the
+    /// List-Unsubscribe header has to be one that was actually stored for those assertions to mean
+    /// anything.
+    /// </summary>
+    private readonly MockUnsubscribeLinkRepository _linkRepository = new();
+    private readonly IUnsubscribeLinkIssuer _linkIssuer;
+
     private readonly Mock<IEmailDeliveryEventRepository> _deliveryEventRepo = new();
     private readonly Mock<IEmailDeliveryActionService> _deliveryActionService = new();
     private readonly Mock<IClientProxy> _clientProxy = new();
@@ -32,6 +41,8 @@ public sealed class EmailJobProcessorTests
 
     public EmailJobProcessorTests()
     {
+        _linkIssuer = new UnsubscribeLinkIssuer(_linkRepository, TimeProvider.System, NullLogger<UnsubscribeLinkIssuer>.Instance);
+
         // Default: TryClaimAsync succeeds (single-instance tests)
         _jobRepo.Setup(r => r.TryClaimAsync(It.IsAny<EmailJob>())).ReturnsAsync(true);
 
@@ -63,6 +74,7 @@ public sealed class EmailJobProcessorTests
         serviceProvider
             .Setup(sp => sp.GetService(typeof(IEmailDeliveryActionService)))
             .Returns(_deliveryActionService.Object);
+        serviceProvider.Setup(sp => sp.GetService(typeof(IUnsubscribeLinkIssuer))).Returns(_linkIssuer);
         scope.Setup(s => s.ServiceProvider).Returns(serviceProvider.Object);
         scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
 
@@ -110,7 +122,6 @@ public sealed class EmailJobProcessorTests
         return new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
-            _tokenService.Object,
             CreateRouterFromTransport(mockSmtp.Object),
             hubContext.Object,
             config,
@@ -337,6 +348,138 @@ public sealed class EmailJobProcessorTests
     }
 
     [Fact]
+    public async Task RealSend_PerRecipient_EmitsAShortLinkThatWasActuallyStored()
+    {
+        // The whole point of the change: the emitted URL is /u/{id} against a stored row, not a
+        // ~135 character token inlined into the query string. Asserting the id resolves is what
+        // makes this more than a string-format test - a link that is short but unredeemable is
+        // worse than the long one it replaced.
+        var jobId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Annual Meeting",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            TotalRecipients = 1,
+            MaxRecipientAttempts = 3,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "jane@example.com",
+                    HomeId = homeId,
+                    Status = EmailJobRecipientStatus.Pending,
+                },
+            },
+        };
+
+        MimeKit.MimeMessage? capturedMessage = null;
+
+        var mockSmtp = new Mock<IEmailTransport>();
+        mockSmtp.Setup(t => t.ProviderName).Returns("SendGrid");
+        mockSmtp
+            .Setup(t =>
+                t.SendAsync(
+                    It.IsAny<MimeKit.MimeMessage>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .Callback<MimeKit.MimeMessage, string, string, string, CancellationToken>(
+                (msg, _, _, _, _) => capturedMessage = msg
+            )
+            .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+        _fileStore
+            .Setup(f => f.DownloadAsync(job.ContentBlobPath))
+            .ReturnsAsync(
+                new DocumentFileResult
+                {
+                    Stream = new MemoryStream("<p>Agenda</p>"u8.ToArray()),
+                    ContentType = "text/html",
+                }
+            );
+
+        var scopeFactory = new Mock<IServiceScopeFactory>();
+        var scope = new Mock<IServiceScope>();
+        var serviceProvider = new Mock<IServiceProvider>();
+        serviceProvider.Setup(sp => sp.GetService(typeof(IEmailJobRepository))).Returns(_jobRepo.Object);
+        serviceProvider.Setup(sp => sp.GetService(typeof(IDocumentFileStore))).Returns(_fileStore.Object);
+        serviceProvider
+            .Setup(sp => sp.GetService(typeof(IEmailDeliveryEventRepository)))
+            .Returns(_deliveryEventRepo.Object);
+        serviceProvider
+            .Setup(sp => sp.GetService(typeof(IEmailDeliveryActionService)))
+            .Returns(_deliveryActionService.Object);
+        serviceProvider.Setup(sp => sp.GetService(typeof(IUnsubscribeLinkIssuer))).Returns(_linkIssuer);
+        scope.Setup(s => s.ServiceProvider).Returns(serviceProvider.Object);
+        scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
+
+        var hubContext = new Mock<IHubContext<EmailJobHub>>();
+        var mockClients = new Mock<IHubClients>();
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(_clientProxy.Object);
+        hubContext.Setup(h => h.Clients).Returns(mockClients.Object);
+
+        var env = new Mock<IWebHostEnvironment>();
+        env.Setup(e => e.EnvironmentName).Returns("Production");
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["SmtpHost"] = "localhost",
+                    ["SmtpUser"] = "user",
+                    ["SmtpPassword"] = "pass",
+                    ["AppBaseUrl"] = "https://test.cohad.org",
+                    ["EmailJobs:Enabled"] = "true",
+                    ["EmailJobs:DefaultMaxRecipientAttempts"] = "3",
+                    ["EmailJobs:StallAfterMinutes"] = "30",
+                }
+            )
+            .Build();
+
+        var processor = new EmailJobProcessor(
+            _queue,
+            scopeFactory.Object,
+            CreateRouterFromTransport(mockSmtp.Object),
+            hubContext.Object,
+            config,
+            env.Object,
+            NullLogger<EmailJobProcessor>.Instance
+        );
+
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.NotNull(capturedMessage);
+
+        var body = capturedMessage!.HtmlBody ?? capturedMessage.TextBody ?? "";
+        var match = System.Text.RegularExpressions.Regex.Match(body, @"https://test\.cohad\.org/u/([A-Za-z0-9_-]+)");
+        Assert.True(match.Success, $"No short link in the footer. Body was: {body}");
+
+        // The id in the mail resolves to the row that was written for this recipient.
+        var stored = await _linkRepository.GetByIdAsync(match.Groups[1].Value);
+        Assert.NotNull(stored);
+        Assert.Equal(homeId, stored!.HomeId);
+        Assert.Equal("jane@example.com", stored.Email);
+
+        // The RFC 8058 header carries the same id, so one-click and the body link redeem the same
+        // credential rather than two independently-minted ones.
+        var listUnsubscribe = capturedMessage.Headers["List-Unsubscribe"];
+        Assert.Contains($"id={stored.Id}", listUnsubscribe);
+        Assert.DoesNotContain("token=", listUnsubscribe);
+    }
+
+    [Fact]
     public async Task RealSend_GroupRecipients_CallsTransportOnce_MarksAllSent()
     {
         var jobId = Guid.NewGuid();
@@ -432,6 +575,7 @@ public sealed class EmailJobProcessorTests
         serviceProvider
             .Setup(sp => sp.GetService(typeof(IEmailDeliveryActionService)))
             .Returns(_deliveryActionService.Object);
+        serviceProvider.Setup(sp => sp.GetService(typeof(IUnsubscribeLinkIssuer))).Returns(_linkIssuer);
         scope.Setup(s => s.ServiceProvider).Returns(serviceProvider.Object);
         scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
 
@@ -461,7 +605,6 @@ public sealed class EmailJobProcessorTests
         var processor = new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
-            _tokenService.Object,
             CreateRouterFromTransport(mockSmtp.Object),
             hubContext.Object,
             config,
@@ -785,7 +928,6 @@ public sealed class EmailJobProcessorTests
             var processor = new EmailJobProcessor(
                 queue,
                 scopeFactory.Object,
-                _tokenService.Object,
                 CreateRouterFromTransport(mockSmtp2.Object),
                 hubContext.Object,
                 config,

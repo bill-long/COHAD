@@ -6,6 +6,7 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Web.Configuration;
 
@@ -24,24 +25,49 @@ namespace Web.Services
         private static readonly long MaxUnixSeconds = DateTimeOffset.MaxValue.ToUnixTimeSeconds();
 
         private readonly byte[] _encryptionKey;
+        private readonly DateTimeOffset? _legacyCutoverUtc;
 
-        public UnsubscribeTokenService(IOptions<UnsubscribeTokenOptions> options)
+        public UnsubscribeTokenService(
+            IOptions<UnsubscribeTokenOptions> options,
+            ILogger<UnsubscribeTokenService> logger
+        )
         {
-            var key = options.Value.SigningKey;
+            // LegacySigningKey is where the key belongs after the cutover. SigningKey is the
+            // fallback, and the fallback is the point: without it, deploying this ahead of the
+            // app-setting change would invalidate every unsubscribe link currently sitting in an
+            // inbox. Making the deploy order not matter is worth one Warning.
+            var opts = options.Value;
+            var key = opts.LegacySigningKey;
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                key = opts.SigningKey;
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    logger.LogWarning(
+                        "UnsubscribeToken:LegacySigningKey is not set; falling back to UnsubscribeToken:SigningKey to validate legacy tokens. "
+                            + "Move the existing key to LegacySigningKey and rotate SigningKey - see docs/email-suppression-and-unsubscribe.md."
+                    );
+                }
+            }
+
             if (string.IsNullOrWhiteSpace(key) || Encoding.UTF8.GetByteCount(key) < 32)
-                throw new InvalidOperationException("UnsubscribeToken:SigningKey must be at least 32 UTF-8 bytes.");
+            {
+                throw new InvalidOperationException(
+                    "UnsubscribeToken:LegacySigningKey (or SigningKey) must be at least 32 UTF-8 bytes."
+                );
+            }
 
             // Derive a fixed 256-bit encryption key from the configurable signing key
             _encryptionKey = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+            _legacyCutoverUtc = opts.LegacyCutoverUtc;
         }
 
-        // Non-nullable on purpose, though the interface declares `string?`. Returning a
-        // non-nullable value from a method that promises a nullable one is legal and strictly more
-        // precise: this implementation never returns null - it either produces a token or throws on
-        // a blank email - and only NullUnsubscribeTokenService returns null. Widening it here would
-        // make every caller of the concrete type null-check something that cannot be null. Locked by
-        // NullabilityContractIsDeliberate.
-        public string GenerateToken(Guid homeId, string email)
+        /// <summary>
+        /// Mints a legacy token. Internal, and absent from <see cref="IUnsubscribeTokenService"/>:
+        /// short links replaced generation, and production reaches this type only through the
+        /// interface, so this exists solely to let the tests exercise the validation paths it feeds.
+        /// </summary>
+        internal string GenerateToken(Guid homeId, string email)
         {
             return GenerateToken(homeId, email, DateTimeOffset.UtcNow);
         }
@@ -165,6 +191,13 @@ namespace Web.Services
 
             if (age > MaxTokenAge)
                 return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.Expired);
+
+            // Nothing has generated a legacy token since the cutover, so one claiming a later issue
+            // date did not come from us. Checked after the skew and expiry branches so those keep
+            // naming their own causes: a token both expired and post-cutover is far more likely to
+            // be an old link than a forgery, and the log should say so.
+            if (_legacyCutoverUtc.HasValue && issued > _legacyCutoverUtc.Value)
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.IssuedAfterLegacyCutover);
 
             return UnsubscribeTokenResult.Success(
                 new UnsubscribeTokenPayload

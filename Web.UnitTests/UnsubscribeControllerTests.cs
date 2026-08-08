@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Web.Controllers;
+using Web.MockData;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -19,16 +20,23 @@ namespace Web.UnitTests
     public class UnsubscribeControllerTests
     {
         private readonly Mock<IUnsubscribeTokenService> _tokenService = new();
+        private readonly MockUnsubscribeLinkRepository _linkRepository = new();
         private readonly Mock<IHomeRepository> _homeRepository = new();
         private readonly Mock<IResidentRepository> _residentRepository = new();
         private readonly Mock<ILogger<UnsubscribeController>> _logger = new();
 
         private readonly DefaultHttpContext _httpContext = new();
 
+        /// <summary>
+        /// The real resolver over a mocked token service and the Mock link repository, rather than a
+        /// mocked resolver. The legacy <c>ValidateToken</c> setups throughout this class keep working
+        /// unchanged, and the precedence rule and the shared blank-address guard are exercised for
+        /// real instead of being stubbed past - those are the parts most worth not mocking.
+        /// </summary>
         private UnsubscribeController CreateController()
         {
             return new UnsubscribeController(
-                _tokenService.Object,
+                new UnsubscribeCredentialResolver(_tokenService.Object, _linkRepository, TimeProvider.System),
                 _homeRepository.Object,
                 _residentRepository.Object,
                 _logger.Object
@@ -116,7 +124,7 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken("bad")).Returns(Rejected());
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "bad", "One-Click");
+            var result = await controller.OneClickUnsubscribe("board", "bad", null, "One-Click");
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -125,7 +133,7 @@ namespace Web.UnitTests
         public async Task OneClickUnsubscribe_MissingFormBody_Returns400()
         {
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", null!);
+            var result = await controller.OneClickUnsubscribe("board", "tok", null, null!);
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -137,7 +145,7 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, "j@x.com"));
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("unknown", "tok", "One-Click");
+            var result = await controller.OneClickUnsubscribe("unknown", "tok", null, "One-Click");
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -150,7 +158,7 @@ namespace Web.UnitTests
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync((Home?)null);
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
+            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
 
             Assert.IsType<NotFoundObjectResult>(result);
         }
@@ -174,7 +182,7 @@ namespace Web.UnitTests
             SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe(category, "tok", "One-Click");
+            var result = await controller.OneClickUnsubscribe(category, "tok", null, "One-Click");
 
             Assert.IsType<OkObjectResult>(result);
             _homeRepository.Verify(r => r.UpsertAsync(home), Times.Once);
@@ -212,7 +220,7 @@ namespace Web.UnitTests
             SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
+            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
 
             Assert.IsType<NotFoundObjectResult>(result);
         }
@@ -230,7 +238,7 @@ namespace Web.UnitTests
             SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
+            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
 
             Assert.IsType<OkObjectResult>(result);
             Assert.False(resident.EmailAddresses[0].BoardEmailOptedIn);
@@ -244,7 +252,7 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken("bad")).Returns(Rejected());
 
             var controller = CreateController();
-            var result = await controller.GetPreferences("bad");
+            var result = await controller.GetPreferences("bad", null);
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -262,7 +270,7 @@ namespace Web.UnitTests
             SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
-            var result = await controller.GetPreferences("tok") as OkObjectResult;
+            var result = await controller.GetPreferences("tok", null) as OkObjectResult;
 
             Assert.NotNull(result);
             var dto = Assert.IsType<EmailPreferencesDto>(result.Value);
@@ -283,7 +291,7 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken("bad")).Returns(Rejected());
 
             var controller = CreateController();
-            var result = await controller.UpdatePreferences("bad", new UpdateEmailPreferencesDto());
+            var result = await controller.UpdatePreferences("bad", null, new UpdateEmailPreferencesDto());
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -294,7 +302,7 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(Guid.NewGuid(), "x@x.com"));
 
             var controller = CreateController();
-            var result = await controller.UpdatePreferences("tok", (UpdateEmailPreferencesDto)null!);
+            var result = await controller.UpdatePreferences("tok", null, (UpdateEmailPreferencesDto)null!);
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
@@ -321,7 +329,7 @@ namespace Web.UnitTests
                 SocialCommitteeEmailOptedIn = true,
                 SunshineCommitteeEmailOptedIn = false,
             };
-            var result = await controller.UpdatePreferences("tok", dto);
+            var result = await controller.UpdatePreferences("tok", null, dto);
 
             Assert.IsType<OkObjectResult>(result);
             _homeRepository.Verify(r => r.UpsertAsync(home), Times.Once);
@@ -382,7 +390,7 @@ namespace Web.UnitTests
 
             var controller = CreateController();
             var dto = new UpdateEmailPreferencesDto { BoardEmailOptedIn = false };
-            await controller.UpdatePreferences("tok", dto);
+            await controller.UpdatePreferences("tok", null, dto);
 
             // Both the resident and home-level email should be updated
             Assert.False(resident.EmailAddresses[0].BoardEmailOptedIn);
@@ -425,7 +433,7 @@ namespace Web.UnitTests
                 });
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
+            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
 
             Assert.IsType<OkObjectResult>(result);
             // Should have been called twice (first attempt + retry)
@@ -456,7 +464,7 @@ namespace Web.UnitTests
             var controller = CreateController();
 
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => controller.OneClickUnsubscribe("board", "tok", "One-Click")
+                () => controller.OneClickUnsubscribe("board", "tok", null, "One-Click")
             );
         }
 
@@ -485,7 +493,7 @@ namespace Web.UnitTests
             var controller = CreateController();
 
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => controller.OneClickUnsubscribe("board", "tok", "One-Click")
+                () => controller.OneClickUnsubscribe("board", "tok", null, "One-Click")
             );
 
             VerifyLogged(
@@ -515,7 +523,7 @@ namespace Web.UnitTests
             var controller = CreateController();
 
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => controller.UpdatePreferences("tok", new UpdateEmailPreferencesDto { BoardEmailOptedIn = false })
+                () => controller.UpdatePreferences("tok", null, new UpdateEmailPreferencesDto { BoardEmailOptedIn = false })
             );
         }
 
@@ -541,7 +549,7 @@ namespace Web.UnitTests
                 .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", "One-Click");
+            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
 
             Assert.IsType<ConflictObjectResult>(result);
         }
@@ -564,7 +572,7 @@ namespace Web.UnitTests
                 .Returns(Rejected(UnsubscribeTokenFailure.Missing));
 
             var controller = CreateController();
-            await controller.GetPreferences(null!);
+            await controller.GetPreferences(null!, null);
 
             Assert.Equal(UnsubscribeWarningKind.PreTokenRejection, Recorded()!.Kind);
         }
@@ -576,7 +584,7 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken(secret)).Returns(Rejected());
 
             var controller = CreateController();
-            await controller.GetPreferences(secret);
+            await controller.GetPreferences(secret, null);
 
             // Assert the exact disclosure, not merely that the whole 36-character secret is absent
             // from an 11-character field - that comparison cannot fail and would stay green if the
@@ -600,7 +608,7 @@ namespace Web.UnitTests
                 .Returns(Rejected(UnsubscribeTokenFailure.Missing));
 
             var controller = CreateController();
-            await controller.GetPreferences(token!);
+            await controller.GetPreferences(token!, null);
 
             // The point of this test is that the rejection is recorded at all. Which budget it
             // draws on is decided by token presence and is locked separately.
@@ -614,7 +622,7 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken(secret)).Returns(Rejected(UnsubscribeTokenFailure.DecryptFailed));
 
             var controller = CreateController();
-            await controller.GetPreferences(secret);
+            await controller.GetPreferences(secret, null);
 
             var recorded = Recorded();
             Assert.Equal(135, recorded!.TokenLength);
@@ -632,7 +640,7 @@ namespace Web.UnitTests
             SetupResidentForHome(homeId, CreateTestResident(homeId, email));
 
             var controller = CreateController();
-            await controller.GetPreferences("tok");
+            await controller.GetPreferences("tok", null);
 
             VerifyLogged(LogLevel.Information, m => m.Contains("LegacyToken"));
             Assert.Null(Recorded());
@@ -645,7 +653,7 @@ namespace Web.UnitTests
             // that carries the stripped-link evidence. The query string is left empty deliberately:
             // that is what makes this the tokenless case.
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", null!, null!);
+            var result = await controller.OneClickUnsubscribe("board", null!, null, null!);
 
             Assert.IsType<BadRequestObjectResult>(result);
             Assert.Equal(UnsubscribeWarningKind.PreTokenRejection, Recorded()!.Kind);
@@ -660,7 +668,7 @@ namespace Web.UnitTests
             _httpContext.Request.QueryString = new QueryString("?token=abc");
 
             var controller = CreateController();
-            await controller.OneClickUnsubscribe("board", "abc", "not-one-click");
+            await controller.OneClickUnsubscribe("board", "abc", null, "not-one-click");
 
             Assert.Equal(UnsubscribeWarningKind.TokenRejection, Recorded()!.Kind);
         }
@@ -671,7 +679,7 @@ namespace Web.UnitTests
             const string hostile = "One-Click\nInjected log line";
 
             var controller = CreateController();
-            await controller.OneClickUnsubscribe("board", "tok", hostile);
+            await controller.OneClickUnsubscribe("board", "tok", null, hostile);
 
             Assert.DoesNotContain("Injected", Recorded()!.Reason);
         }
@@ -690,7 +698,7 @@ namespace Web.UnitTests
             _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync((Home?)null);
 
             var controller = CreateController();
-            var result = await controller.GetPreferences("tok");
+            var result = await controller.GetPreferences("tok", null);
 
             Assert.IsType<NotFoundObjectResult>(result);
             Assert.Equal("home-not-found", Recorded()?.Reason);
@@ -707,7 +715,7 @@ namespace Web.UnitTests
             SetupResidentForHome(homeId, CreateTestResident(homeId, "other@example.com"));
 
             var controller = CreateController();
-            var result = await controller.GetPreferences("tok");
+            var result = await controller.GetPreferences("tok", null);
 
             Assert.IsType<NotFoundObjectResult>(result);
             Assert.Equal("email-not-on-home", Recorded()?.Reason);
@@ -720,7 +728,7 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, "j@x.com"));
 
             var controller = CreateController();
-            await controller.OneClickUnsubscribe("unknown\ninjected", "tok", "One-Click");
+            await controller.OneClickUnsubscribe("unknown\ninjected", "tok", null, "One-Click");
 
             Assert.Equal("unknown-category", Recorded()?.Reason);
         }
@@ -733,7 +741,7 @@ namespace Web.UnitTests
             _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(Guid.NewGuid(), "x@x.com"));
 
             var controller = CreateController();
-            await controller.UpdatePreferences("tok", null!);
+            await controller.UpdatePreferences("tok", null, null!);
 
             Assert.Equal("missing-request-body", Recorded()?.Reason);
         }

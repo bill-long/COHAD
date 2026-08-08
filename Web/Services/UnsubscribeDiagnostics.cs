@@ -55,6 +55,14 @@ namespace Web.Services
         /// </summary>
         public const string NoCredential = "None";
 
+        /// <summary>
+        /// Credential type for the short <c>/u/{id}</c> link. A new value in an existing log
+        /// dimension rather than a new dimension, so the retirement counter is a single query
+        /// grouping by type: legacy support goes when <see cref="LegacyTokenCredential"/> reaches
+        /// zero and this one carries the traffic.
+        /// </summary>
+        public const string ShortLinkCredential = "ShortLink";
+
         /// <summary>The unsubscribe route prefix and the stable label logged for it.</summary>
         internal readonly record struct UnsubscribeRoute(string Prefix, string Label);
 
@@ -73,8 +81,24 @@ namespace Web.Services
             new("/api/email/unsubscribe", "one-click-unsubscribe"),
         ];
 
-        /// <summary>The query parameter carrying the credential.</summary>
+        /// <summary>The query parameter carrying the legacy credential.</summary>
         internal const string TokenParameter = "token";
+
+        /// <summary>
+        /// The query parameter carrying the short link id. The body link puts the id in a path
+        /// segment (<c>/u/{id}</c>) and the SPA forwards it here; the <c>List-Unsubscribe</c> header
+        /// URL uses this parameter directly, which is safe because that URL is fetched by the mailbox
+        /// provider rather than by our browser, so the Application Insights JS SDK never sees it.
+        /// </summary>
+        internal const string LinkIdParameter = "id";
+
+        /// <summary>
+        /// Every parameter that can carry a credential, in the resolver's precedence order. Defined
+        /// once so presence tests and the resolver cannot disagree about what counts as "a
+        /// credential was presented" - a disagreement there would misfile rejections into the budget
+        /// an anonymous flood can drain.
+        /// </summary>
+        internal static readonly string[] CredentialParameters = [LinkIdParameter, TokenParameter];
 
         /// <summary>Label for a request that matched no unsubscribe route.</summary>
         internal const string UnknownEndpoint = "unknown";
@@ -109,8 +133,22 @@ namespace Web.Services
         /// mean anything.
         /// </para>
         /// </summary>
-        public static string DescribeCredentialType(HttpContext context) =>
-            string.IsNullOrWhiteSpace(context.Request.Query[TokenParameter]) ? NoCredential : LegacyTokenCredential;
+        /// <remarks>
+        /// Precedence matches <see cref="UnsubscribeCredentialResolver"/>: the short link wins when
+        /// both parameters carry a value, so the type logged names the credential that was actually
+        /// resolved. The resolver reports its own type on every outcome and the controller prefers
+        /// that; this remains the fallback for rejections produced before the action ran, where
+        /// there is no resolver result to ask.
+        /// </remarks>
+        public static string DescribeCredentialType(HttpContext context)
+        {
+            if (!string.IsNullOrWhiteSpace(context.Request.Query[LinkIdParameter]))
+                return ShortLinkCredential;
+
+            return string.IsNullOrWhiteSpace(context.Request.Query[TokenParameter])
+                ? NoCredential
+                : LegacyTokenCredential;
+        }
 
         /// <summary>
         /// The single rule for which budget a rejection draws on. Every site that classifies one
@@ -120,16 +158,30 @@ namespace Web.Services
         /// billed to the token stream lets an anonymous flood suppress the stripped-link evidence
         /// this feature exists to surface.
         /// <para>
-        /// The parameter being <em>present</em> is what moves a rejection into the token stream,
-        /// deliberately including a stripped <c>?token=</c> - that is the evidence worth protecting.
-        /// Contrast <see cref="DescribeCredentialType"/>, which requires a value because it feeds
-        /// the legacy-redemption counter rather than the budget.
+        /// A credential parameter being <em>present</em> is what moves a rejection into the token
+        /// stream, deliberately including a stripped <c>?token=</c> or <c>?id=</c> - that is the
+        /// evidence worth protecting, and under short links a stripped <c>?id=</c> is now the
+        /// likeliest shape of it. Contrast <see cref="DescribeCredentialType"/>, which requires a
+        /// value because it feeds the legacy-redemption counter rather than the budget.
+        /// </para>
+        /// <para>
+        /// The name says "token" and the <see cref="UnsubscribeWarningKind"/> values still do too,
+        /// while both now cover either shape. That is deliberate: <c>WarningKind</c> is an emitted
+        /// log dimension, operators are querying it against a live incident, and renaming the values
+        /// would silently break those queries to buy nothing an operator can see. The vocabulary
+        /// here is the cost of not moving an external contract mid-investigation.
         /// </para>
         /// </summary>
-        public static UnsubscribeWarningKind ClassifyByTokenPresence(HttpContext context) =>
-            context.Request.Query.ContainsKey(TokenParameter)
-                ? UnsubscribeWarningKind.TokenRejection
-                : UnsubscribeWarningKind.PreTokenRejection;
+        public static UnsubscribeWarningKind ClassifyByTokenPresence(HttpContext context)
+        {
+            foreach (var parameter in CredentialParameters)
+            {
+                if (context.Request.Query.ContainsKey(parameter))
+                    return UnsubscribeWarningKind.TokenRejection;
+            }
+
+            return UnsubscribeWarningKind.PreTokenRejection;
+        }
 
         private const string ItemKey = "Unsubscribe.Rejection";
 

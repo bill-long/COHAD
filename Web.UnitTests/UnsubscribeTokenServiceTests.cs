@@ -1,5 +1,7 @@
 using System;
+using System.Linq;
 using System.Reflection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Web.Configuration;
 using Web.Services;
@@ -13,7 +15,22 @@ namespace Web.UnitTests
         private static UnsubscribeTokenService CreateService(string key = TestKey)
         {
             var options = Options.Create(new UnsubscribeTokenOptions { SigningKey = key });
-            return new UnsubscribeTokenService(options);
+            return new UnsubscribeTokenService(options, NullLogger<UnsubscribeTokenService>.Instance);
+        }
+
+        /// <summary>
+        /// Builds the service the way the cutover configures it: the key under LegacySigningKey, and
+        /// optionally a cutover date after which no legacy token can genuinely have been issued.
+        /// </summary>
+        private static UnsubscribeTokenService CreateLegacyService(
+            string key = TestKey,
+            DateTimeOffset? cutover = null
+        )
+        {
+            var options = Options.Create(
+                new UnsubscribeTokenOptions { LegacySigningKey = key, LegacyCutoverUtc = cutover }
+            );
+            return new UnsubscribeTokenService(options, NullLogger<UnsubscribeTokenService>.Instance);
         }
 
         [Fact]
@@ -157,32 +174,18 @@ namespace Web.UnitTests
         [Fact]
         public void NullabilityContractIsDeliberate()
         {
-            // Two deliberate, opposite decisions that a reviewer has already proposed reverting
-            // once, and that a comment alone cannot defend: widening the return would make callers
-            // null-check something that cannot be null, and narrowing the parameter would break the
-            // documented Missing path that ValidateToken(null) exercises.
+            // A deliberate decision a reviewer has already proposed reverting once, and that a
+            // comment alone cannot defend: narrowing the parameter would break the documented
+            // Missing path that ValidateToken(null) exercises.
             var context = new NullabilityInfoContext();
 
-            // The interface first: it is what UnsubscribeController and EmailJobProcessor bind to,
-            // so narrowing it there is what would actually break the documented Missing path.
+            // The interface first: it is what the credential resolver binds to, so narrowing it
+            // there is what would actually break the documented Missing path.
             var interfaceValidate = typeof(IUnsubscribeTokenService).GetMethod(
                 nameof(IUnsubscribeTokenService.ValidateToken),
                 new[] { typeof(string) }
             )!;
             Assert.Equal(NullabilityState.Nullable, context.Create(interfaceValidate.GetParameters()[0]).WriteState);
-
-            var interfaceGenerate = typeof(IUnsubscribeTokenService).GetMethod(
-                nameof(IUnsubscribeTokenService.GenerateToken),
-                new[] { typeof(Guid), typeof(string) }
-            )!;
-            Assert.Equal(NullabilityState.Nullable, context.Create(interfaceGenerate.ReturnParameter).ReadState);
-
-            // Then the implementation, whose return is deliberately narrower than the interface's.
-            var generate = typeof(UnsubscribeTokenService).GetMethod(
-                nameof(UnsubscribeTokenService.GenerateToken),
-                new[] { typeof(Guid), typeof(string) }
-            )!;
-            Assert.Equal(NullabilityState.NotNull, context.Create(generate.ReturnParameter).ReadState);
 
             var validate = typeof(UnsubscribeTokenService).GetMethod(
                 nameof(UnsubscribeTokenService.ValidateToken),
@@ -192,13 +195,111 @@ namespace Web.UnitTests
         }
 
         [Fact]
+        public void GenerationIsNotReachableThroughTheInterface()
+        {
+            // Short links replaced legacy token generation, and the design doc requires that nothing
+            // in production mints one again. That is enforced by shape rather than by discipline:
+            // production resolves this type from DI as IUnsubscribeTokenService, so an interface
+            // without GenerateToken cannot be used to generate. The method survives as `internal`
+            // purely so the tests above can build the tokens whose validation they exercise.
+            //
+            // Asserted rather than left to a comment because the failure mode is a one-line
+            // interface addition that nothing else would object to.
+            Assert.Empty(
+                typeof(IUnsubscribeTokenService)
+                    .GetMethods()
+                    .Where(m => m.Name.Contains("Generate", StringComparison.Ordinal))
+            );
+
+            var generate = typeof(UnsubscribeTokenService).GetMethod(
+                "GenerateToken",
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public,
+                new[] { typeof(Guid), typeof(string) }
+            )!;
+            Assert.NotNull(generate);
+            Assert.False(generate.IsPublic);
+        }
+
+        [Fact]
         public void NullService_ReportsNotConfiguredRatherThanABadToken()
         {
             var service = new NullUnsubscribeTokenService();
 
             // Distinguishes "no signing key deployed" from "this token is bad" in the logs.
             Assert.Equal(UnsubscribeTokenFailure.NotConfigured, service.ValidateToken("anything").Failure);
-            Assert.Null(service.GenerateToken(Guid.NewGuid(), "test@example.com"));
+        }
+
+        [Fact]
+        public void LegacySigningKeyValidatesTokensMintedWithIt()
+        {
+            // The cutover moves the existing key to LegacySigningKey. If it stopped validating there,
+            // every unsubscribe link already sitting in an inbox would break.
+            var minted = CreateLegacyService().GenerateToken(Guid.NewGuid(), "j@x.com");
+
+            Assert.True(CreateLegacyService().ValidateToken(minted).IsValid);
+        }
+
+        [Fact]
+        public void SigningKeyIsUsedWhenLegacySigningKeyIsUnset()
+        {
+            // The fallback exists so the deploy order does not matter: shipping this code ahead of
+            // the app-setting change must not invalidate live links. A token minted under the old
+            // configuration still validates under the new code with the key still in its old place.
+            var minted = CreateService().GenerateToken(Guid.NewGuid(), "j@x.com");
+
+            Assert.True(CreateService().ValidateToken(minted).IsValid);
+        }
+
+        [Fact]
+        public void LegacySigningKeyTakesPrecedenceOverSigningKey()
+        {
+            // Once both are set, the legacy key is the one that validates - SigningKey has been
+            // rotated to a fresh value by then and must not be able to validate anything.
+            const string otherKey = "a-completely-different-key-32-bytes!!";
+            var mintedWithLegacy = CreateLegacyService().GenerateToken(Guid.NewGuid(), "j@x.com");
+
+            var options = Options.Create(
+                new UnsubscribeTokenOptions { SigningKey = otherKey, LegacySigningKey = TestKey }
+            );
+            var service = new UnsubscribeTokenService(options, NullLogger<UnsubscribeTokenService>.Instance);
+
+            Assert.True(service.ValidateToken(mintedWithLegacy).IsValid);
+        }
+
+        [Fact]
+        public void ATokenClaimingToBeIssuedAfterTheCutoverIsRejected()
+        {
+            // Nothing has generated a legacy token since the cutover, so a later issue date did not
+            // come from us. It does not stop a forger, who controls the timestamp and can claim an
+            // earlier one - it bounds the leaked key's useful life to the legacy expiry window and
+            // keeps genuine traffic honest.
+            var cutover = DateTimeOffset.UtcNow.AddDays(-30);
+            var afterCutover = CreateLegacyService(cutover: cutover)
+                .GenerateToken(Guid.NewGuid(), "j@x.com", cutover.AddDays(1));
+
+            var result = CreateLegacyService(cutover: cutover).ValidateToken(afterCutover);
+
+            Assert.Equal(UnsubscribeTokenFailure.IssuedAfterLegacyCutover, result.Failure);
+        }
+
+        [Fact]
+        public void ATokenIssuedBeforeTheCutoverIsStillAccepted()
+        {
+            var cutover = DateTimeOffset.UtcNow.AddDays(-30);
+            var beforeCutover = CreateLegacyService(cutover: cutover)
+                .GenerateToken(Guid.NewGuid(), "j@x.com", cutover.AddDays(-1));
+
+            Assert.True(CreateLegacyService(cutover: cutover).ValidateToken(beforeCutover).IsValid);
+        }
+
+        [Fact]
+        public void NoCutoverConfiguredMeansNoCutoverCheck()
+        {
+            // Unset is the correct default for an environment that has not cut over yet: it must not
+            // start rejecting the tokens it is still issuing links for.
+            var recent = CreateLegacyService().GenerateToken(Guid.NewGuid(), "j@x.com", DateTimeOffset.UtcNow);
+
+            Assert.True(CreateLegacyService().ValidateToken(recent).IsValid);
         }
 
         [Fact]

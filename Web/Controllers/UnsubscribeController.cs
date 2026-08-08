@@ -19,19 +19,19 @@ namespace Web.Controllers
     {
         private const int MaxRetries = 3;
 
-        private readonly IUnsubscribeTokenService _tokenService;
+        private readonly IUnsubscribeCredentialResolver _credentialResolver;
         private readonly IHomeRepository _homeRepository;
         private readonly IResidentRepository _residentRepository;
         private readonly ILogger<UnsubscribeController> _logger;
 
         public UnsubscribeController(
-            IUnsubscribeTokenService tokenService,
+            IUnsubscribeCredentialResolver credentialResolver,
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
             ILogger<UnsubscribeController> logger
         )
         {
-            _tokenService = tokenService;
+            _credentialResolver = credentialResolver;
             _homeRepository = homeRepository;
             _residentRepository = residentRepository;
             _logger = logger;
@@ -46,6 +46,7 @@ namespace Web.Controllers
         public async Task<IActionResult> OneClickUnsubscribe(
             string category,
             [FromQuery] string token,
+            [FromQuery] string id,
             [FromForm(Name = "List-Unsubscribe")] string listUnsubscribe
         )
         {
@@ -73,9 +74,9 @@ namespace Web.Controllers
                 return BadRequest(new { error = "Invalid or missing List-Unsubscribe confirmation." });
             }
 
-            var payload = ResolveCredential(token);
+            var payload = await ResolveCredentialAsync(token, id);
             if (payload == null)
-                return BadRequest(new { error = "Invalid or missing token." });
+                return BadRequest(new { error = "Invalid or missing credential." });
 
             if (!EmailSubscriptionCategories.TryGetCategorySetter(category, out var setter))
             {
@@ -106,11 +107,11 @@ namespace Web.Controllers
         /// Returns current email preferences for the token's home + email.
         /// </summary>
         [HttpGet("preferences")]
-        public async Task<IActionResult> GetPreferences([FromQuery] string token)
+        public async Task<IActionResult> GetPreferences([FromQuery] string token, [FromQuery] string id)
         {
-            var payload = ResolveCredential(token);
+            var payload = await ResolveCredentialAsync(token, id);
             if (payload == null)
-                return BadRequest(new { error = "Invalid or missing token." });
+                return BadRequest(new { error = "Invalid or missing credential." });
 
             var (home, matchingAddresses, _, failure) = await LoadHomeAndMatchesAsync(payload);
             if (failure != null)
@@ -138,12 +139,13 @@ namespace Web.Controllers
         [HttpPut("preferences")]
         public async Task<IActionResult> UpdatePreferences(
             [FromQuery] string token,
+            [FromQuery] string id,
             [FromBody] UpdateEmailPreferencesDto dto
         )
         {
-            var payload = ResolveCredential(token);
+            var payload = await ResolveCredentialAsync(token, id);
             if (payload == null)
-                return BadRequest(new { error = "Invalid or missing token." });
+                return BadRequest(new { error = "Invalid or missing credential." });
 
             // Belt and braces. [ApiController] rejects an absent or unparseable body before this
             // action runs, so over HTTP this is unreachable and the middleware logs that case from
@@ -203,35 +205,43 @@ namespace Web.Controllers
         /// of evidence.
         /// </para>
         /// </summary>
-        private UnsubscribeTokenPayload ResolveCredential(string token)
+        private async Task<UnsubscribeTokenPayload> ResolveCredentialAsync(string token, string linkId)
         {
-            var result = _tokenService.ValidateToken(token);
+            var result = await _credentialResolver.ResolveAsync(token, linkId);
 
             if (result.IsValid)
             {
+                // The type comes from the resolver, which is the thing that decided which shape it
+                // was actually resolving. Re-deriving it here from the query string would be a
+                // second copy of the precedence rule, free to drift from the one that did the work.
                 _logger.LogInformation(
                     "Unsubscribe credential accepted for {Operation} (type {CredentialType}).",
                     UnsubscribeDiagnostics.DescribeEndpoint(HttpContext),
-                    UnsubscribeDiagnostics.LegacyTokenCredential
+                    result.CredentialType
                 );
                 return result.Payload;
             }
 
-            // The token itself is a bearer credential and is never recorded - only its length and,
-            // for tokens long enough that it identifies nothing, its sanitised ends.
+            // The credential itself is a bearer credential and is never recorded - only its length
+            // and, when it is long enough that eight characters identify nothing, its sanitised
+            // ends. Note a short link is 22 characters and so falls below that bar: its length
+            // alone carries the diagnosis, which is the point of the threshold.
             RecordRejection(
                 new UnsubscribeRejection
                 {
                     // The shared rule, not a hard-coded TokenRejection: a bare request with no
-                    // token still reaches here (ValidateToken(null) returns Missing), and billing
-                    // that to the token stream would let tokenless crawler noise drain the budget
-                    // protecting real mangled-link evidence.
+                    // credential at all still reaches here, and billing that to the token stream
+                    // would let tokenless crawler noise drain the budget protecting real
+                    // mangled-link evidence.
                     Kind = UnsubscribeDiagnostics.ClassifyByTokenPresence(HttpContext),
-                    // Reason is not set: the middleware logs Failure for token rejections, and a
+                    // Reason is not set: the middleware logs Failure for credential rejections, and a
                     // second copy of the same value would be dead state nothing could catch drifting.
                     Failure = result.Failure,
-                    TokenLength = token?.Length ?? 0,
-                    TokenEnds = DescribeTokenEnds(token),
+                    // The value the resolver actually examined, not whichever parameter this method
+                    // reached for first - otherwise a rejected short link would be logged with the
+                    // length of an absent token.
+                    TokenLength = result.PresentedValue?.Length ?? 0,
+                    TokenEnds = DescribeTokenEnds(result.PresentedValue),
                 }
             );
 
@@ -298,11 +308,11 @@ namespace Web.Controllers
         }
 
         /// <summary>
-        /// The shortest token whose first and last four characters may be logged. A legacy token is
-        /// ~135 characters, so eight of them identify nothing; the typed recovery code Part 2
-        /// introduces is nine, and head+tail is itself eight, so disclosing the ends of a short
-        /// credential would hand over nearly all of it. Below this length the ends are withheld and
-        /// the logged length carries the diagnosis on its own.
+        /// The shortest credential whose first and last four characters may be logged. A legacy token
+        /// is ~135 characters, so eight of them identify nothing. A short link id is 22 and the typed
+        /// recovery code is nine, while head+tail is itself eight - so disclosing the ends of either
+        /// would hand over most or nearly all of it. Below this length the ends are withheld and the
+        /// logged length carries the diagnosis on its own, which is what it is there for.
         /// </summary>
         internal const int MinLengthForEndDisclosure = 32;
 

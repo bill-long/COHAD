@@ -27,7 +27,6 @@ namespace Web.Services
     {
         private readonly EmailJobQueue _queue;
         private readonly IServiceScopeFactory _scopeFactory;
-        private readonly IUnsubscribeTokenService _tokenService;
         private readonly EmailTransportRouter _transportRouter;
         private readonly IHubContext<EmailJobHub> _hubContext;
         private readonly ILogger<EmailJobProcessor> _logger;
@@ -311,7 +310,6 @@ namespace Web.Services
         public EmailJobProcessor(
             EmailJobQueue queue,
             IServiceScopeFactory scopeFactory,
-            IUnsubscribeTokenService tokenService,
             EmailTransportRouter transportRouter,
             IHubContext<EmailJobHub> hubContext,
             IConfiguration config,
@@ -321,7 +319,6 @@ namespace Web.Services
         {
             _queue = queue;
             _scopeFactory = scopeFactory;
-            _tokenService = tokenService;
             _transportRouter = transportRouter;
             _hubContext = hubContext;
             _logger = logger;
@@ -768,6 +765,7 @@ namespace Web.Services
                 {
                     var deliveryEventRepo = scope.ServiceProvider.GetRequiredService<IEmailDeliveryEventRepository>();
                     var deliveryActionService = scope.ServiceProvider.GetRequiredService<IEmailDeliveryActionService>();
+                    var linkIssuer = scope.ServiceProvider.GetRequiredService<IUnsubscribeLinkIssuer>();
                     await ProcessJobSendAsync(
                         job,
                         htmlBody,
@@ -775,6 +773,7 @@ namespace Web.Services
                         fileStore,
                         deliveryEventRepo,
                         deliveryActionService,
+                        linkIssuer,
                         jobCts.Token
                     );
                 }
@@ -807,6 +806,7 @@ namespace Web.Services
             IDocumentFileStore fileStore,
             IEmailDeliveryEventRepository deliveryEventRepo,
             IEmailDeliveryActionService deliveryActionService,
+            IUnsubscribeLinkIssuer linkIssuer,
             CancellationToken ct
         )
         {
@@ -978,15 +978,31 @@ namespace Web.Services
 
                         try
                         {
-                            var token =
-                                (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
-                                    ? _tokenService.GenerateToken(recipient.HomeId, recipient.Email)
-                                    : null;
+                            // A short link, stored, rather than the ~135 character token this used to
+                            // mint in memory. One Cosmos write per recipient per send, which at this
+                            // association's volume is negligible against what it buys: the emitted
+                            // URL drops from ~190 characters to ~35, clear of the line-wrap and
+                            // header-length limits that are the documented causes of the truncated
+                            // credentials behind docs/email-suppression-and-unsubscribe.md.
+                            //
+                            // A failure issuing it is deliberately NOT swallowed. It reaches the
+                            // per-recipient catch below, which marks the recipient Failed with the
+                            // error and retries - because the alternative is sending bulk mail with
+                            // no unsubscribe mechanism at all, which is the failure this work exists
+                            // to prevent, and it would be invisible. The empty-footer path below is a
+                            // different thing: a configuration state an operator chose by leaving
+                            // AppBaseUrl unset, not a runtime fault degrading silently.
+                            string unsubscribeLinkId = null;
+                            if (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
+                            {
+                                var link = await linkIssuer.IssueAsync(recipient.HomeId, recipient.Email);
+                                unsubscribeLinkId = link.Id;
+                            }
 
                             var footer = EmailMessageBuilder.BuildUnsubscribeFooter(
                                 _appBaseUrl,
                                 categoryDisplayName,
-                                token
+                                unsubscribeLinkId
                             );
                             var htmlWithFooter = imageData.ProcessedHtml + footer;
 
@@ -1007,10 +1023,15 @@ namespace Web.Services
                                 attachmentData
                             );
 
-                            if (token != null && !string.IsNullOrEmpty(_appBaseUrl))
+                            if (unsubscribeLinkId != null && !string.IsNullOrEmpty(_appBaseUrl))
                             {
+                                // The id rides in a query parameter here, unlike the body link's path
+                                // segment, and that is fine: this URL is fetched by the mailbox
+                                // provider, never by our SPA, so the Application Insights JS SDK - the
+                                // unclosed browser-side leak Part 1 documented - never sees it. The
+                                // backend redacts query values in its own telemetry.
                                 var unsubUrl =
-                                    $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?token={Uri.EscapeDataString(token)}";
+                                    $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?id={Uri.EscapeDataString(unsubscribeLinkId)}";
                                 message.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
                                 message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                             }

@@ -217,6 +217,10 @@ const routes: Routes = [
     ],
   },
   { path: 'email-preferences', component: EmailPreferencesComponent, title: 'Email Preferences' },
+  // The short unsubscribe link. Deliberately terse - the whole point is a URL short enough to
+  // survive quoted-printable line wrapping and gateway rewriting, so this path must stay one
+  // character. See docs/email-suppression-and-unsubscribe.md.
+  { path: 'u/:id', component: EmailPreferencesComponent, title: 'Email Preferences' },
   { path: 'unauthorized', component: UnauthorizedComponent, title: 'Unauthorized' },
 ];
 
