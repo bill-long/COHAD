@@ -569,6 +569,12 @@ Two new Cosmos containers, provisioned out of band like every other container he
 - `EmailSuppression`
 - `UnsubscribeLink` (set container TTL ~400 days)
 
+Cut-over note: links are stamped on recipients **when a job is created**, so a job already queued
+when the new build deploys predates the convention and has no ids. The retry endpoint backfills
+missing links (same seam as creation: synchronous, admin-visible, nothing sent on failure), which
+covers the failed-then-retried case; for the queued case, deploy with the send queue empty - at
+this association's send volume that is the normal state.
+
 New configuration:
 
 - `UnsubscribeToken:LegacySigningKey` - the existing production key, validation only. It leaked into

@@ -71,14 +71,16 @@ export function captureUnsubscribeCredentialFromUrl(pathname?: string): void {
       // Keep the raw segment.
     }
 
-    if (id) {
-      writeStoredId(id);
-    }
-
-    // Rewrite even when the id was empty: a stripped link is exactly the case this feature exists
-    // to detect, and leaving `/u/` in the address bar serves nobody. The query and fragment go too
-    // - the credential is never carried there, but neither is anything this page needs.
-    if (window.history && typeof window.history.replaceState === 'function') {
+    // The rewrite happens only when there is nothing left to lose: either the id landed in storage,
+    // or there was no id to begin with (a stripped link, where leaving a bare `/u/` in the address
+    // bar serves nobody). If the storage write FAILED - storage disabled by policy, some privacy
+    // modes - the URL is deliberately left alone: it is then the only copy of the credential, and
+    // the `/u/:id` route param is the fallback that keeps the page working. The cost is that the
+    // credential stays observable in that browser's telemetry and history, which is the pre-capture
+    // status quo; destroying the only copy to prevent observation would be burning the letter to
+    // keep it private.
+    const stored = !id || writeStoredId(id);
+    if (stored && window.history && typeof window.history.replaceState === 'function') {
       window.history.replaceState(null, '', PREFERENCES_PATH);
     }
   } catch {
@@ -114,11 +116,14 @@ export function clearCapturedUnsubscribeLinkId(): void {
   }
 }
 
-function writeStoredId(id: string): void {
+/** Returns whether the write actually landed - the caller must not destroy the URL copy if not. */
+function writeStoredId(id: string): boolean {
   try {
     window.sessionStorage.setItem(STORAGE_KEY, id);
+    // Read-back rather than trusting a silent setItem: some browsers no-op instead of throwing
+    // when storage is disabled, and a false "stored" here costs the user their only credential.
+    return window.sessionStorage.getItem(STORAGE_KEY) === id;
   } catch {
-    // Storage unavailable: the credential is lost for this load, and the page will say so. Still
-    // preferable to leaving it in the URL.
+    return false;
   }
 }

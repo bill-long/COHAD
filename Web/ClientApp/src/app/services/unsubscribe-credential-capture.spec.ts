@@ -64,6 +64,27 @@ describe('unsubscribe credential capture', () => {
     expect(replaceState).toHaveBeenCalledWith(null, '', '/email-preferences');
   });
 
+  it('keeps the URL when storage rejects the write, so the route param still works', () => {
+    // Storage disabled by policy or privacy mode. Rewriting anyway would destroy the only copy of
+    // the credential; leaving the URL intact keeps the /u/:id route param fallback alive.
+    spyOn(Storage.prototype, 'setItem').and.throwError('storage disabled');
+
+    captureUnsubscribeCredentialFromUrl('/u/abc123');
+
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+
+  it('keeps the URL when storage silently drops the write', () => {
+    // Some browsers no-op instead of throwing when storage is disabled - the write "succeeds" and
+    // the value is simply not there. Trusting setItem would burn the credential just the same.
+    spyOn(Storage.prototype, 'setItem').and.stub();
+    spyOn(Storage.prototype, 'getItem').and.returnValue(null);
+
+    captureUnsubscribeCredentialFromUrl('/u/abc123');
+
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+
   it('ignores a trailing segment rather than folding it into the id', () => {
     captureUnsubscribeCredentialFromUrl('/u/abc123/extra');
 

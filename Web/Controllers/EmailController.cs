@@ -5,7 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Web.Authorization;
 using Web.Models;
@@ -46,7 +48,7 @@ namespace Web.Controllers
             EmailJobCleanupService emailJobCleanup,
             IEmailDeliveryEventRepository deliveryEventRepository,
             IUnsubscribeLinkIssuer unsubscribeLinkIssuer,
-            Microsoft.Extensions.Configuration.IConfiguration config,
+            IConfiguration config,
             ILogger<EmailController> logger
         )
         {
@@ -217,6 +219,20 @@ namespace Web.Controllers
                 r.SentUtc = null;
             }
 
+            // Backfill unsubscribe links a job may be missing. Links are stamped at job creation and
+            // the processor only reads them, so a job created before that convention existed - or
+            // before AppBaseUrl was configured - would otherwise resend with no unsubscribe
+            // mechanism at all. Retry is the right place for the backfill because it is the same
+            // seam as creation: a synchronous admin action where failure is a visible error and no
+            // send happens. Grouped jobs are excluded because they never carry links; recipients
+            // that already have one keep it.
+            if (!job.GroupRecipients)
+            {
+                var issuanceFailure = await IssueUnsubscribeLinksOrErrorAsync(job.Recipients ?? new());
+                if (issuanceFailure != null)
+                    return issuanceFailure;
+            }
+
             job.FailedCount = 0;
             job.Status = EmailJobStatus.Queued;
             job.LastError = null;
@@ -379,7 +395,9 @@ namespace Web.Controllers
             // already-issued rows orphaned (valid but undelivered) until the container TTL prunes
             // them. That is bounded by one send's recipient count, visible to the admin who saw the
             // error, and preferable to any background retry semantics.
-            await IssueUnsubscribeLinksAsync(recipients);
+            var issuanceFailure = await IssueUnsubscribeLinksOrErrorAsync(recipients);
+            if (issuanceFailure != null)
+                return issuanceFailure;
 
             // Create job
             var job = new EmailJob
@@ -463,34 +481,72 @@ namespace Web.Controllers
         }
 
         /// <summary>
-        /// Issues an unsubscribe short link for every recipient that can carry one and stamps the id
-        /// on the recipient, before the job is created. The send path only ever reads the stamped
-        /// value - see the comment at the call site for why issuance lives here and nowhere else.
+        /// Issues an unsubscribe short link for every recipient that can carry one and does not
+        /// already have one, stamping the id on the recipient. The send path only ever reads the
+        /// stamped value - see the comment at the send call site for why issuance lives here and
+        /// nowhere else. Returns null on success, or the error response to send the caller.
         /// <para>
         /// Recipients with no home or a blank address are skipped, not failed: they have nothing to
         /// link to, the footer builder renders no footer for a null id, and one bad directory record
-        /// must not block everyone else's mail. In parallel per the repo convention for independent
-        /// I/O - the writes are independent rows and the Cosmos container client is thread-safe.
+        /// must not block everyone else's mail. Recipients already carrying an id keep it, which is
+        /// what makes the retry-path backfill idempotent.
+        /// </para>
+        /// <para>
+        /// The failure response names the likely cause instead of letting the exception surface as
+        /// an anonymous 500 - an admin staring at a generic error retries blindly, and each blind
+        /// retry orphans another batch of issued rows. Saying "check the container" once is the
+        /// difference between one support step and a loop.
         /// </para>
         /// </summary>
-        private async Task IssueUnsubscribeLinksAsync(List<EmailJobRecipient> recipients)
+        private async Task<IActionResult> IssueUnsubscribeLinksOrErrorAsync(List<EmailJobRecipient> recipients)
         {
             // No AppBaseUrl means no link can be emitted at all - a configuration state the operator
             // chose, matching the footer builder's own gate, not a fault worth failing a send over.
             if (string.IsNullOrEmpty(_appBaseUrl))
-                return;
+                return null;
 
             var eligible = recipients
-                .Where(r => r.HomeId != Guid.Empty && !string.IsNullOrWhiteSpace(r.Email))
+                .Where(r =>
+                    r.HomeId != Guid.Empty
+                    && !string.IsNullOrWhiteSpace(r.Email)
+                    && string.IsNullOrEmpty(r.UnsubscribeLinkId)
+                )
                 .ToList();
 
-            await Task.WhenAll(
-                eligible.Select(async r =>
+            try
+            {
+                // Parallel per the repo convention for independent I/O, but in bounded chunks: an
+                // association-wide send is a few hundred recipients, and firing every write at once
+                // against the shared-throughput container is a self-inflicted 429 burst that would
+                // fail the send at exactly the audience size the feature matters most for.
+                foreach (var chunk in eligible.Chunk(16))
                 {
-                    var link = await _unsubscribeLinkIssuer.IssueAsync(r.HomeId, r.Email);
-                    r.UnsubscribeLinkId = link.Id;
-                })
-            );
+                    await Task.WhenAll(
+                        chunk.Select(async r =>
+                        {
+                            var link = await _unsubscribeLinkIssuer.IssueAsync(r.HomeId, r.Email);
+                            r.UnsubscribeLinkId = link.Id;
+                        })
+                    );
+                }
+
+                return null;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to issue unsubscribe links; the send was refused before any mail went out."
+                );
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new
+                    {
+                        error = "Could not issue unsubscribe links, so nothing was sent. "
+                            + "Check that the UnsubscribeLink Cosmos container exists, then try again.",
+                    }
+                );
+            }
         }
 
         private async Task<List<EmailJobRecipient>> GetAllEmailsMatchingFilter(Func<EmailAddress, bool> filter)

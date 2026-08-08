@@ -82,17 +82,21 @@ export class EmailPreferencesComponent implements OnInit {
    * short link wins for the same reason it does there, so one URL can only ever mean one thing.
    */
   private readCredential(): UnsubscribeCredential | null {
-    // The captured value first: the short-link credential is normally stripped from the URL before
-    // Angular bootstraps, so by the time this runs the route param is usually gone. The param is
-    // still read as a fallback, so a direct navigation that bypassed the capture still works.
-    const captured = readCapturedUnsubscribeLinkId();
-    if (captured) return { kind: 'shortLink', id: captured };
-
+    // URL-carried credentials first, the stored capture last. The order matters: the capture is
+    // deliberately kept in sessionStorage after a FAILED load (so a refresh can retry), which means
+    // it can be stale - and a stale stored id must not shadow a fresh credential the user just
+    // arrived with. A `/u/:id` route param survives only when the pre-bootstrap capture could not
+    // store it (storage-blocked browsers), and a `?token=` is a different link opened on purpose;
+    // both are what the user is holding NOW. The stored id is only ever the memory of a previous
+    // arrival, so it goes last.
     const id = this.route.snapshot.paramMap.get('id');
     if (id) return { kind: 'shortLink', id };
 
     const token = this.route.snapshot.queryParamMap.get('token');
     if (token) return { kind: 'legacyToken', token };
+
+    const captured = readCapturedUnsubscribeLinkId();
+    if (captured) return { kind: 'shortLink', id: captured };
 
     return null;
   }

@@ -536,6 +536,171 @@ public sealed class EmailControllerJobTests
     }
 
     [Fact]
+    public async Task SendEmailFromBoard_TestEmail_AlsoStampsAStoredUnsubscribeLink()
+    {
+        // Test sends go to real subscription addresses on the sender's own homes, so they carry the
+        // same footer and the same credential as a broadcast - a test that renders differently from
+        // the real thing tests nothing.
+        SetupMockUser();
+        SetupMockUserHomes("test@example.com");
+
+        EmailJob? persisted = null;
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo
+            .Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => persisted = j)
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(
+            new EmailInfo
+            {
+                Subject = "Test",
+                HtmlBody = "<p>hi</p>",
+                IsTestEmail = true,
+                TestRecipientEmails = new List<string> { "test@example.com" },
+            }
+        );
+
+        Assert.IsType<AcceptedResult>(result);
+        var recipient = Assert.Single(persisted!.Recipients);
+        Assert.False(string.IsNullOrEmpty(recipient.UnsubscribeLinkId));
+
+        var stored = await _linkRepository.GetByIdAsync(recipient.UnsubscribeLinkId);
+        Assert.Equal(TestHomeId, stored!.HomeId);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_TestEmail_HomelessAdminRecipientIsSkippedNotFailed()
+    {
+        // An Administrator with no home test-sends to their own account email; that recipient is
+        // built with HomeId = Guid.Empty and the comment there says unsubscribe headers should be
+        // suppressed for them. The eligibility filter's promise is the other half: an ineligible
+        // recipient is skipped, never a reason to fail the send.
+        _users
+            .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "google.comu1",
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "admin@example.com",
+                    Roles = new List<User.Role> { User.Role.Board },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+
+        EmailJob? persisted = null;
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo
+            .Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => persisted = j)
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(
+            new EmailInfo
+            {
+                Subject = "Test",
+                HtmlBody = "<p>hi</p>",
+                IsTestEmail = true,
+                TestRecipientEmails = new List<string> { "admin@example.com" },
+            }
+        );
+
+        Assert.IsType<AcceptedResult>(result);
+        var recipient = Assert.Single(persisted!.Recipients);
+        Assert.Equal(Guid.Empty, recipient.HomeId);
+        Assert.Null(recipient.UnsubscribeLinkId);
+    }
+
+    [Fact]
+    public async Task RetryJob_BackfillsMissingUnsubscribeLinks()
+    {
+        // A job created before creation-time stamping existed - queued across the deploy, or failed
+        // and retried after it - carries null ids. Without this backfill it would resend with no
+        // unsubscribe mechanism at all. Retry is the same seam as creation: synchronous, admin
+        // visible, nothing sent on failure.
+        var jobId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Category = "board",
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "jane@example.com",
+                    HomeId = homeId,
+                    Status = EmailJobRecipientStatus.Failed,
+                },
+                new EmailJobRecipient
+                {
+                    Email = "kept@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Sent,
+                    UnsubscribeLinkId = "already-stamped",
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<OkObjectResult>(result);
+
+        // The missing id is backfilled with a stored link; the existing one is untouched, which is
+        // what keeps the backfill idempotent.
+        var backfilled = job.Recipients[0].UnsubscribeLinkId;
+        Assert.False(string.IsNullOrEmpty(backfilled));
+        Assert.NotNull(await _linkRepository.GetByIdAsync(backfilled));
+        Assert.Equal("already-stamped", job.Recipients[1].UnsubscribeLinkId);
+    }
+
+    [Fact]
+    public async Task RetryJob_GroupedJob_DoesNotIssueLinks()
+    {
+        // Grouped sends never carry links; the backfill must not start minting credentials for a
+        // job shape that has no way to emit them.
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Category = "registration",
+            GroupRecipients = true,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "admin@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Failed,
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Null(job.Recipients[0].UnsubscribeLinkId);
+    }
+
+    [Fact]
     public async Task SendEmailFromBoard_WhenLinkIssuanceFails_TheRequestFailsAndNoJobIsCreated()
     {
         // The whole point of creation-time issuance: failure is a synchronous error to the admin
@@ -551,17 +716,21 @@ public sealed class EmailControllerJobTests
 
         var controller = CreateController(linkIssuer: issuer.Object);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () =>
-                controller.SendEmailFromBoard(
-                    new EmailInfo
-                    {
-                        Subject = "Newsletter",
-                        HtmlBody = "<p>content</p>",
-                        IsTestEmail = false,
-                    }
-                )
+        var result = await controller.SendEmailFromBoard(
+            new EmailInfo
+            {
+                Subject = "Newsletter",
+                HtmlBody = "<p>content</p>",
+                IsTestEmail = false,
+            }
         );
+
+        // A named 500, not an anonymous one: the admin reading a generic error retries blindly, and
+        // each blind retry orphans another batch of issued rows. The message points at the likely
+        // cause (the out-of-band container) instead.
+        var error = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, error.StatusCode);
+        Assert.Contains("UnsubscribeLink", error.Value!.ToString());
 
         _jobRepo.Verify(r => r.AddAsync(It.IsAny<EmailJob>()), Times.Never);
         _fileStore.Verify(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()), Times.Never);
