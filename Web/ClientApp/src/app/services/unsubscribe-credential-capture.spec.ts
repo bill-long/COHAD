@@ -2,55 +2,85 @@ import { routes } from '../app-routing.module';
 import {
   SHORT_LINK_PREFIX,
   captureUnsubscribeCredentialFromUrl,
-  resetCapturedUnsubscribeLinkId,
-  takeCapturedUnsubscribeLinkId,
+  clearCapturedUnsubscribeLinkId,
+  readCapturedUnsubscribeLinkId,
 } from './unsubscribe-credential-capture';
 
 describe('unsubscribe credential capture', () => {
   let replaceState: jasmine.Spy;
 
   beforeEach(() => {
-    resetCapturedUnsubscribeLinkId();
+    clearCapturedUnsubscribeLinkId();
     replaceState = spyOn(window.history, 'replaceState');
+  });
+
+  afterEach(() => {
+    clearCapturedUnsubscribeLinkId();
   });
 
   it('captures the id and rewrites the address bar off the credential', () => {
     captureUnsubscribeCredentialFromUrl('/u/Ab3-x9_KqRs7TuVwXyZ01');
 
-    expect(takeCapturedUnsubscribeLinkId()).toBe('Ab3-x9_KqRs7TuVwXyZ01');
+    expect(readCapturedUnsubscribeLinkId()).toBe('Ab3-x9_KqRs7TuVwXyZ01');
     expect(replaceState).toHaveBeenCalledWith(null, '', '/email-preferences');
+  });
+
+  it('survives a refresh: the id is still readable on a second read', () => {
+    // A bootstrap or chunk-load failure after the URL rewrite leaves refresh as the user's only
+    // recovery, so the captured id must not die with the document.
+    captureUnsubscribeCredentialFromUrl('/u/abc123');
+
+    expect(readCapturedUnsubscribeLinkId()).toBe('abc123');
+    expect(readCapturedUnsubscribeLinkId()).toBe('abc123');
+  });
+
+  it('is gone after an explicit clear, so it cannot serve a later visitor', () => {
+    captureUnsubscribeCredentialFromUrl('/u/abc123');
+    clearCapturedUnsubscribeLinkId();
+
+    expect(readCapturedUnsubscribeLinkId()).toBeNull();
   });
 
   it('rewrites even when the id is missing, so a stripped link does not linger in the URL', () => {
     captureUnsubscribeCredentialFromUrl('/u/');
 
-    expect(takeCapturedUnsubscribeLinkId()).toBeNull();
+    expect(readCapturedUnsubscribeLinkId()).toBeNull();
     expect(replaceState).toHaveBeenCalled();
   });
 
   it('decodes a percent-encoded id', () => {
     captureUnsubscribeCredentialFromUrl('/u/' + encodeURIComponent('a b+c'));
 
-    expect(takeCapturedUnsubscribeLinkId()).toBe('a b+c');
+    expect(readCapturedUnsubscribeLinkId()).toBe('a b+c');
+  });
+
+  it('keeps the raw segment when decoding throws, and still rewrites the URL', () => {
+    // A truncated link can end in a bare '%', which makes decodeURIComponent throw URIError. That
+    // input is exactly the mangled-link case this feature exists to survive: it must neither kill
+    // the bootstrap (this runs above bootstrapModule) nor leave the credential in the address bar.
+    expect(() => captureUnsubscribeCredentialFromUrl('/u/Ab3-x9_KqRs7Tu%')).not.toThrow();
+
+    expect(readCapturedUnsubscribeLinkId()).toBe('Ab3-x9_KqRs7Tu%');
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/email-preferences');
   });
 
   it('ignores a trailing segment rather than folding it into the id', () => {
     captureUnsubscribeCredentialFromUrl('/u/abc123/extra');
 
-    expect(takeCapturedUnsubscribeLinkId()).toBe('abc123');
+    expect(readCapturedUnsubscribeLinkId()).toBe('abc123');
   });
 
   it('leaves every other route alone', () => {
     captureUnsubscribeCredentialFromUrl('/residents/directory');
 
-    expect(takeCapturedUnsubscribeLinkId()).toBeNull();
+    expect(readCapturedUnsubscribeLinkId()).toBeNull();
     expect(replaceState).not.toHaveBeenCalled();
   });
 
   it('is idempotent - a second call on the rewritten URL changes nothing', () => {
     captureUnsubscribeCredentialFromUrl('/email-preferences');
 
-    expect(takeCapturedUnsubscribeLinkId()).toBeNull();
+    expect(readCapturedUnsubscribeLinkId()).toBeNull();
     expect(replaceState).not.toHaveBeenCalled();
   });
 

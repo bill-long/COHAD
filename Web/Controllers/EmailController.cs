@@ -30,6 +30,8 @@ namespace Web.Controllers
         private readonly EmailJobProcessor _emailJobProcessor;
         private readonly EmailJobCleanupService _emailJobCleanup;
         private readonly IEmailDeliveryEventRepository _deliveryEventRepository;
+        private readonly IUnsubscribeLinkIssuer _unsubscribeLinkIssuer;
+        private readonly string _appBaseUrl;
         private readonly ILogger<EmailController> _logger;
 
         public EmailController(
@@ -43,6 +45,8 @@ namespace Web.Controllers
             EmailJobProcessor emailJobProcessor,
             EmailJobCleanupService emailJobCleanup,
             IEmailDeliveryEventRepository deliveryEventRepository,
+            IUnsubscribeLinkIssuer unsubscribeLinkIssuer,
+            Microsoft.Extensions.Configuration.IConfiguration config,
             ILogger<EmailController> logger
         )
         {
@@ -56,6 +60,8 @@ namespace Web.Controllers
             _emailJobProcessor = emailJobProcessor;
             _emailJobCleanup = emailJobCleanup;
             _deliveryEventRepository = deliveryEventRepository;
+            _unsubscribeLinkIssuer = unsubscribeLinkIssuer;
+            _appBaseUrl = (config["AppBaseUrl"] ?? "").TrimEnd('/');
             _logger = logger;
         }
 
@@ -357,6 +363,24 @@ namespace Web.Controllers
                 toDisplay = EmailAudience.ForCommitteeSend(committeeLabel);
             }
 
+            // Unsubscribe credentials, issued here - at job creation, synchronously, before the job
+            // exists - and never by the processor. This placement is the conclusion of three review
+            // rounds, so it is worth recording why:
+            //
+            // The send loop's ordering carries interlocking invariants (the per-recipient attempt
+            // budget bounds termination, the persist merges webhook state, the already-Sent skip
+            // depends on that merge), and issuance positioned anywhere inside it broke one of them
+            // per attempt - an infinite re-queue, then credentials minted for skipped recipients.
+            // Here, none of those exist. Failure is a plain error to the admin who clicked Send,
+            // with no job created, no partial send to account for, and a retry that is a visible
+            // human action rather than a background loop.
+            //
+            // What this placement costs, accepted knowingly: a failed submission leaves the
+            // already-issued rows orphaned (valid but undelivered) until the container TTL prunes
+            // them. That is bounded by one send's recipient count, visible to the admin who saw the
+            // error, and preferable to any background retry semantics.
+            await IssueUnsubscribeLinksAsync(recipients);
+
             // Create job
             var job = new EmailJob
             {
@@ -436,6 +460,37 @@ namespace Web.Controllers
             }
 
             return Accepted(EmailJobSummary.FromJob(job));
+        }
+
+        /// <summary>
+        /// Issues an unsubscribe short link for every recipient that can carry one and stamps the id
+        /// on the recipient, before the job is created. The send path only ever reads the stamped
+        /// value - see the comment at the call site for why issuance lives here and nowhere else.
+        /// <para>
+        /// Recipients with no home or a blank address are skipped, not failed: they have nothing to
+        /// link to, the footer builder renders no footer for a null id, and one bad directory record
+        /// must not block everyone else's mail. In parallel per the repo convention for independent
+        /// I/O - the writes are independent rows and the Cosmos container client is thread-safe.
+        /// </para>
+        /// </summary>
+        private async Task IssueUnsubscribeLinksAsync(List<EmailJobRecipient> recipients)
+        {
+            // No AppBaseUrl means no link can be emitted at all - a configuration state the operator
+            // chose, matching the footer builder's own gate, not a fault worth failing a send over.
+            if (string.IsNullOrEmpty(_appBaseUrl))
+                return;
+
+            var eligible = recipients
+                .Where(r => r.HomeId != Guid.Empty && !string.IsNullOrWhiteSpace(r.Email))
+                .ToList();
+
+            await Task.WhenAll(
+                eligible.Select(async r =>
+                {
+                    var link = await _unsubscribeLinkIssuer.IssueAsync(r.HomeId, r.Email);
+                    r.UnsubscribeLinkId = link.Id;
+                })
+            );
         }
 
         private async Task<List<EmailJobRecipient>> GetAllEmailsMatchingFilter(Func<EmailAddress, bool> filter)

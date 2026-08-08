@@ -58,9 +58,17 @@ namespace Web.UnitTests
 
             foreach (var property in writable)
             {
-                Assert.Equal(
-                    property.GetValue(recipient),
-                    property.GetValue(readBack)
+                var expected = property.GetValue(recipient);
+                var actual = property.GetValue(readBack);
+
+                // The property is named in the failure, because pointing at the dropped field is
+                // this test's entire job - a bare value mismatch would leave the next person
+                // bisecting the property list by hand.
+                Assert.True(
+                    Equals(expected, actual),
+                    $"{nameof(EmailJobRecipient)}.{property.Name} did not survive the Cosmos round trip "
+                        + $"(wrote '{expected}', read back '{actual}'). "
+                        + "Check both directions of CosmosLegacyDocumentMapper's recipient mapping."
                 );
             }
         }

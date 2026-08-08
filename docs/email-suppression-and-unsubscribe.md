@@ -420,8 +420,10 @@ so the outer stream survives; a test drives one failing reload followed by a suc
 Three pieces in two PRs. A fourth was proposed and dropped; see below.
 
 **PR 2a - short link.** `UnsubscribeLink` and its repository pair, the credential resolver, minting
-one row per recipient in `EmailJobProcessor`'s per-recipient branch, the `/u/{id}` route, and the
-diagnostics wiring for a second credential shape. Ships with the legacy cutover it forces
+one row per recipient **at job creation in `EmailController`** (the processor only reads the stamped
+id - three review rounds established that issuance cannot live safely inside the send loop, whose
+ordering carries the attempt-budget, webhook-merge and already-Sent-skip invariants), the `/u/{id}`
+route, and the diagnostics wiring for a second credential shape. Ships with the legacy cutover it forces
 (`LegacySigningKey`, the cutover-date rejection, `GenerateToken` losing its production callers).
 
 **This PR changes the credential shape and nothing else.** What an unsubscribe *writes* is not

@@ -2,7 +2,10 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Location } from '@angular/common';
 import { EmailPreferencesService, UnsubscribeCredential } from '../../services/email-preferences.service';
-import { takeCapturedUnsubscribeLinkId } from '../../services/unsubscribe-credential-capture';
+import {
+  clearCapturedUnsubscribeLinkId,
+  readCapturedUnsubscribeLinkId,
+} from '../../services/unsubscribe-credential-capture';
 import { EmailPreferences } from '../../models';
 
 @Component({
@@ -57,6 +60,13 @@ export class EmailPreferencesComponent implements OnInit {
       next: data => {
         this.prefs = data;
         this.loading = false;
+        // The load succeeded, so refresh-recovery is no longer needed and the stored credential
+        // must not outlive this visit on a shared machine. The in-memory copy on this component
+        // keeps serving the save calls; a later visitor to this route gets "no credential", which
+        // is correct. On a FAILED load it is deliberately kept, so a refresh can retry - a
+        // transient asset or API failure must not strand someone whose link was already consumed
+        // out of the URL.
+        clearCapturedUnsubscribeLinkId();
       },
       error: () => {
         this.loading = false;
@@ -75,7 +85,7 @@ export class EmailPreferencesComponent implements OnInit {
     // The captured value first: the short-link credential is normally stripped from the URL before
     // Angular bootstraps, so by the time this runs the route param is usually gone. The param is
     // still read as a fallback, so a direct navigation that bypassed the capture still works.
-    const captured = takeCapturedUnsubscribeLinkId();
+    const captured = readCapturedUnsubscribeLinkId();
     if (captured) return { kind: 'shortLink', id: captured };
 
     const id = this.route.snapshot.paramMap.get('id');

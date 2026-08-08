@@ -765,7 +765,6 @@ namespace Web.Services
                 {
                     var deliveryEventRepo = scope.ServiceProvider.GetRequiredService<IEmailDeliveryEventRepository>();
                     var deliveryActionService = scope.ServiceProvider.GetRequiredService<IEmailDeliveryActionService>();
-                    var linkIssuer = scope.ServiceProvider.GetRequiredService<IUnsubscribeLinkIssuer>();
                     await ProcessJobSendAsync(
                         job,
                         htmlBody,
@@ -773,7 +772,6 @@ namespace Web.Services
                         fileStore,
                         deliveryEventRepo,
                         deliveryActionService,
-                        linkIssuer,
                         jobCts.Token
                     );
                 }
@@ -799,77 +797,6 @@ namespace Web.Services
             }
         }
 
-        /// <summary>
-        /// Issues an unsubscribe credential for every recipient that still needs one, before the
-        /// job sends anything, and stamps it on the recipient.
-        /// <para>
-        /// Throwing is the failure mode, on purpose. It unwinds into <see cref="ProcessJobAsync"/>'s
-        /// fatal handler, which marks the job <c>Failed</c> and records the reason in
-        /// <c>LastError</c> - a terminal state an admin can see and act on. The alternatives are
-        /// both worse: sending bulk mail with no unsubscribe mechanism is the failure this whole
-        /// feature exists to prevent, and stopping without recording anything leaves the job
-        /// re-queuing forever, because nothing has changed to bound the retry.
-        /// </para>
-        /// <para>
-        /// Recipients that already carry an id keep it, so a resumed or retried job does not mint a
-        /// second live credential for the same address.
-        /// </para>
-        /// </summary>
-        private async Task IssueUnsubscribeLinksAsync(
-            EmailJob job,
-            List<EmailJobRecipient> recipients,
-            IEmailJobRepository repo,
-            IUnsubscribeLinkIssuer linkIssuer,
-            CancellationToken ct
-        )
-        {
-            // Nothing to link to. BuildUnsubscribeFooter renders no footer for a null id, which is a
-            // configuration state an operator chose by leaving AppBaseUrl unset - not a fault.
-            if (string.IsNullOrEmpty(_appBaseUrl))
-                return;
-
-            var issuedAny = false;
-
-            foreach (var recipient in recipients)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                if (recipient.HomeId == Guid.Empty || !string.IsNullOrEmpty(recipient.UnsubscribeLinkId))
-                    continue;
-
-                try
-                {
-                    var link = await linkIssuer.IssueAsync(recipient.HomeId, recipient.Email);
-                    recipient.UnsubscribeLinkId = link.Id;
-                    issuedAny = true;
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    throw new InvalidOperationException(
-                        "Could not issue unsubscribe links for this job, so it was failed before sending. "
-                            + "Check that the UnsubscribeLink Cosmos container exists.",
-                        ex
-                    );
-                }
-            }
-
-            if (!issuedAny)
-                return;
-
-            // Persisted once, so a later pass reuses these ids instead of minting more. A failure
-            // here is not fatal and deliberately does not throw: the links are already stored and
-            // valid, so the mail that follows is correct - the only cost is that a resumed job may
-            // mint fresh ids, which is untidy rather than wrong. Failing the job over it would
-            // trade a live send for a hygiene problem.
-            if (!await TryPersistJobAsync(repo, job))
-            {
-                _logger.LogWarning(
-                    "Could not persist unsubscribe link ids for job {JobId}; the send continues and a resumed pass may issue new ones.",
-                    job.Id
-                );
-            }
-        }
-
         private async Task ProcessJobSendAsync(
             EmailJob job,
             string htmlBody,
@@ -877,7 +804,6 @@ namespace Web.Services
             IDocumentFileStore fileStore,
             IEmailDeliveryEventRepository deliveryEventRepo,
             IEmailDeliveryActionService deliveryActionService,
-            IUnsubscribeLinkIssuer linkIssuer,
             CancellationToken ct
         )
         {
@@ -1024,20 +950,6 @@ namespace Web.Services
                 }
                 else
                 {
-                    // Every credential for the whole job, issued once, before any mail goes out.
-                    //
-                    // Deliberately not inside the loop below, and the reason is the loop rather than
-                    // the issuing. That loop's ordering carries interlocking invariants - the
-                    // per-recipient attempt budget is what bounds termination, the persist merges
-                    // webhook state that arrived mid-send, and the already-Sent skip depends on that
-                    // merge having happened. Issuing inside it broke two of them at once: a failure
-                    // that aborted before recording an attempt left the job re-queuing forever
-                    // because nothing had changed to bound it, and credentials were minted for
-                    // recipients the skip then passed over. Hoisting removes the ordering question
-                    // instead of answering it - by the time the loop runs, every recipient either
-                    // carries a credential or the job has already failed without sending anything.
-                    await IssueUnsubscribeLinksAsync(job, pendingRecipients, repo, linkIssuer, ct);
-
                     foreach (var recipient in pendingRecipients)
                     {
                         ct.ThrowIfCancellationRequested();
@@ -1063,10 +975,13 @@ namespace Web.Services
 
                         try
                         {
-                            // Issued above, before the attempt was counted. Null only when there is
-                            // nothing to link to - no AppBaseUrl, or a recipient with no home - which
-                            // is a configuration state an operator chose rather than a runtime fault,
-                            // and which BuildUnsubscribeFooter renders as no footer at all.
+                            // Stamped at job creation (EmailController), never here. The processor
+                            // deliberately cannot issue a credential: issuance inside this loop was
+                            // tried twice and broke a different invariant each time - the attempt
+                            // budget that bounds termination, then the already-Sent skip that
+                            // depends on the persist's webhook merge. This loop only reads. Null
+                            // means there was nothing to link to (no AppBaseUrl at creation, or a
+                            // recipient without a home), and the footer builder renders no footer.
                             var unsubscribeLinkId = recipient.UnsubscribeLinkId;
 
                             var footer = EmailMessageBuilder.BuildUnsubscribeFooter(

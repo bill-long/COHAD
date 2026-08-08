@@ -19,6 +19,7 @@ using Web.Authorization;
 using Web.Configuration;
 using Web.Controllers;
 using Web.Hubs;
+using Web.MockData;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -38,6 +39,7 @@ public sealed class EmailControllerJobTests
     private readonly Mock<IEmailJobRepository> _jobRepo = new();
     private readonly Mock<IDocumentFileStore> _fileStore = new();
     private readonly Mock<IEmailDeliveryEventRepository> _deliveryEventRepo = new();
+    private readonly MockUnsubscribeLinkRepository _linkRepository = new();
     private readonly EmailJobCleanupService _cleanup;
     private readonly EmailJobQueue _queue = new();
 
@@ -141,9 +143,24 @@ public sealed class EmailControllerJobTests
         );
     }
 
-    private EmailController CreateController(EmailJobProcessor? processor = null)
+    private EmailController CreateController(
+        EmailJobProcessor? processor = null,
+        IUnsubscribeLinkIssuer? linkIssuer = null,
+        string appBaseUrl = "https://test.cohad.org"
+    )
     {
         processor ??= CreateProcessor();
+        // The real issuer over the Mock store by default: job creation is where links are minted
+        // now, so send tests exercise real issuance unless a test injects a failing issuer.
+        linkIssuer ??= new UnsubscribeLinkIssuer(
+            _linkRepository,
+            TimeProvider.System,
+            NullLogger<UnsubscribeLinkIssuer>.Instance
+        );
+
+        var controllerConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["AppBaseUrl"] = appBaseUrl })
+            .Build();
 
         var controller = new EmailController(
             new CurrentUserAccessor(_users.Object),
@@ -156,6 +173,8 @@ public sealed class EmailControllerJobTests
             processor,
             _cleanup,
             _deliveryEventRepo.Object,
+            linkIssuer,
+            controllerConfig,
             NullLogger<EmailController>.Instance
         )
         {
@@ -463,6 +482,122 @@ public sealed class EmailControllerJobTests
         );
 
         _audit.Verify(a => a.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_StampsAStoredUnsubscribeLinkOnEveryRecipient()
+    {
+        // Issuance lives here - at job creation, before the job exists - and never in the
+        // processor, which only reads the stamped id. Three review rounds established that
+        // issuance cannot sit safely inside the send loop; this locks the creation half of that
+        // contract: every recipient with a home carries an id, and each id resolves to a stored
+        // row for that recipient's home and address.
+        SetupMockUser();
+        SetupHomesWithRecipients(3);
+
+        EmailJob? persisted = null;
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo
+            .Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => persisted = j)
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(
+            new EmailInfo
+            {
+                Subject = "Newsletter",
+                HtmlBody = "<p>content</p>",
+                IsTestEmail = false,
+            }
+        );
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(persisted);
+
+        foreach (var recipient in persisted!.Recipients)
+        {
+            Assert.False(string.IsNullOrEmpty(recipient.UnsubscribeLinkId));
+
+            var stored = await _linkRepository.GetByIdAsync(recipient.UnsubscribeLinkId);
+            Assert.NotNull(stored);
+            Assert.Equal(recipient.HomeId, stored!.HomeId);
+            Assert.Equal(recipient.Email, stored.Email);
+        }
+
+        // Distinct per recipient - a shared credential would let one resident's link manage
+        // another's preferences.
+        Assert.Equal(
+            persisted.Recipients.Count,
+            persisted.Recipients.Select(r => r.UnsubscribeLinkId).Distinct(StringComparer.Ordinal).Count()
+        );
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_WhenLinkIssuanceFails_TheRequestFailsAndNoJobIsCreated()
+    {
+        // The whole point of creation-time issuance: failure is a synchronous error to the admin
+        // who clicked Send, with no job persisted, no partial send, and no background retry state.
+        // The recovery is a human clicking Send again.
+        SetupMockUser();
+        SetupHomesWithRecipients(2);
+
+        var issuer = new Mock<IUnsubscribeLinkIssuer>();
+        issuer
+            .Setup(i => i.IssueAsync(It.IsAny<Guid>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("container missing"));
+
+        var controller = CreateController(linkIssuer: issuer.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                controller.SendEmailFromBoard(
+                    new EmailInfo
+                    {
+                        Subject = "Newsletter",
+                        HtmlBody = "<p>content</p>",
+                        IsTestEmail = false,
+                    }
+                )
+        );
+
+        _jobRepo.Verify(r => r.AddAsync(It.IsAny<EmailJob>()), Times.Never);
+        _fileStore.Verify(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_WithoutAppBaseUrl_CreatesTheJobWithNoLinks()
+    {
+        // No AppBaseUrl means no link can be emitted at all - a configuration state the operator
+        // chose. The send must proceed footerless rather than fail, matching the footer builder's
+        // own gate.
+        SetupMockUser();
+        SetupHomesWithRecipients(2);
+
+        EmailJob? persisted = null;
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo
+            .Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => persisted = j)
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController(appBaseUrl: "");
+        var result = await controller.SendEmailFromBoard(
+            new EmailInfo
+            {
+                Subject = "Newsletter",
+                HtmlBody = "<p>content</p>",
+                IsTestEmail = false,
+            }
+        );
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(persisted);
+        Assert.All(persisted!.Recipients, r => Assert.Null(r.UnsubscribeLinkId));
     }
 
     [Fact]
