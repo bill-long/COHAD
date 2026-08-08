@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Location } from '@angular/common';
 import { EmailPreferencesService, UnsubscribeCredential } from '../../services/email-preferences.service';
+import { takeCapturedUnsubscribeLinkId } from '../../services/unsubscribe-credential-capture';
 import { EmailPreferences } from '../../models';
 
 @Component({
@@ -43,11 +44,12 @@ export class EmailPreferencesComponent implements OnInit {
     // Strip the credential from the address bar to reduce leakage risk (browser history, referrer
     // headers, copy/paste). Keep it in memory for the API calls.
     //
-    // This does NOT keep the credential out of telemetry, and it is worth being exact about why,
-    // because an earlier version of this comment claimed it did. The page-view URI is captured from
-    // the router before this runs, so redaction has to happen there - see
-    // ApplicationInsightsService.redactShortLinkId. And the credential still goes out as a query
-    // value on this page's own API calls, which is the pre-existing browser-side gap documented in
+    // Mostly redundant now and kept for the legacy ?token= case, which still arrives in the URL.
+    // The short link is stripped before Angular bootstraps (see unsubscribe-credential-capture),
+    // because doing it here is too late for anything that reads location.pathname at startup.
+    //
+    // Neither keeps the credential out of this page's own API calls, where it goes out as a query
+    // value - the pre-existing browser-side gap documented in
     // docs/email-suppression-and-unsubscribe.md.
     this.location.replaceState('/email-preferences');
 
@@ -70,6 +72,12 @@ export class EmailPreferencesComponent implements OnInit {
    * short link wins for the same reason it does there, so one URL can only ever mean one thing.
    */
   private readCredential(): UnsubscribeCredential | null {
+    // The captured value first: the short-link credential is normally stripped from the URL before
+    // Angular bootstraps, so by the time this runs the route param is usually gone. The param is
+    // still read as a fallback, so a direct navigation that bypassed the capture still works.
+    const captured = takeCapturedUnsubscribeLinkId();
+    if (captured) return { kind: 'shortLink', id: captured };
+
     const id = this.route.snapshot.paramMap.get('id');
     if (id) return { kind: 'shortLink', id };
 

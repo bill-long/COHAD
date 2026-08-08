@@ -125,7 +125,10 @@ namespace Web.Services.Repositories
             {
                 ["id"] = link.Id,
                 ["Discriminator"] = "UnsubscribeLink",
-                ["HomeId"] = link.HomeId,
+                // ToString("D") like every other mapper here, so the stored format is stated rather
+                // than left to the serialiser. Writing the Guid directly is what paired with a
+                // Value<Guid?> read to throw on every stored row.
+                ["HomeId"] = link.HomeId.ToString("D"),
                 ["Email"] = link.Email,
                 ["IssuedUtc"] = JToken.FromObject(link.IssuedUtc),
                 // Per-document retention, so a row holding an address deletes itself on a horizon

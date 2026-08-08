@@ -421,6 +421,8 @@ namespace Web.Services.Cosmos
                                 : JValue.CreateNull(),
                         ["ProviderMessageId"] = r.ProviderMessageId != null ? r.ProviderMessageId : JValue.CreateNull(),
                         ["Provider"] = r.Provider != null ? r.Provider : JValue.CreateNull(),
+                        ["UnsubscribeLinkId"] =
+                            r.UnsubscribeLinkId != null ? r.UnsubscribeLinkId : JValue.CreateNull(),
                     }
                 );
             }
@@ -494,6 +496,7 @@ namespace Web.Services.Cosmos
                         DeliveryStatusUpdatedUtc = r["DeliveryStatusUpdatedUtc"]?.ToObject<DateTime?>(),
                         ProviderMessageId = r.Value<string>("ProviderMessageId"),
                         Provider = r.Value<string>("Provider"),
+                        UnsubscribeLinkId = r.Value<string>("UnsubscribeLinkId"),
                     })
                     .ToList();
             }

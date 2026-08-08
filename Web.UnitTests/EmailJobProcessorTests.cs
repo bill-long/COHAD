@@ -480,6 +480,180 @@ public sealed class EmailJobProcessorTests
     }
 
     [Fact]
+    public async Task RealSend_WhenLinksCannotBeIssued_FailsTheJobAndSendsNothing()
+    {
+        // The failure mode has been wrong twice, in opposite directions, so it is locked here.
+        // Marking the recipient Failed charged a storage fault to its three-attempt budget and then
+        // dropped the mail for good; stopping without recording anything left the job re-queuing
+        // forever, because nothing had changed to bound the retry. The answer is a terminal Failed
+        // job with the reason in LastError, and - the part that must never regress - no mail sent,
+        // because unsubscribable bulk mail is what this whole feature exists to prevent.
+        var jobId = Guid.NewGuid();
+        var job = CreateSingleRecipientJob(jobId, Guid.NewGuid());
+
+        var issuer = new Mock<IUnsubscribeLinkIssuer>();
+        issuer
+            .Setup(i => i.IssueAsync(It.IsAny<Guid>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("container missing"));
+
+        EmailJob? persisted = null;
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => persisted = j)
+            .Returns(Task.CompletedTask);
+
+        var mockSmtp = new Mock<IEmailTransport>();
+        mockSmtp.Setup(t => t.ProviderName).Returns("SendGrid");
+
+        var processor = CreateRealSendProcessor(mockSmtp, issuer.Object);
+        await RunProcessorForSingleJob(processor, jobId);
+
+        mockSmtp.Verify(
+            t =>
+                t.SendAsync(
+                    It.IsAny<MimeKit.MimeMessage>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()
+                ),
+            Times.Never
+        );
+
+        Assert.Equal(EmailJobStatus.Failed, job.Status);
+        Assert.False(string.IsNullOrWhiteSpace(job.LastError));
+        Assert.Contains("UnsubscribeLink", job.LastError);
+        Assert.NotNull(persisted);
+    }
+
+    [Fact]
+    public async Task RealSend_ReusesAnAlreadyStampedLinkRatherThanIssuingASecond()
+    {
+        // A recipient carrying an id keeps it, so a resumed or retried job does not leave one
+        // address holding several simultaneously-valid year-long credentials.
+        var jobId = Guid.NewGuid();
+        var job = CreateSingleRecipientJob(jobId, Guid.NewGuid());
+        job.Recipients[0].UnsubscribeLinkId = "already-issued-id";
+
+        var issuer = new Mock<IUnsubscribeLinkIssuer>();
+
+        MimeKit.MimeMessage? captured = null;
+        var mockSmtp = new Mock<IEmailTransport>();
+        mockSmtp.Setup(t => t.ProviderName).Returns("SendGrid");
+        mockSmtp
+            .Setup(t =>
+                t.SendAsync(
+                    It.IsAny<MimeKit.MimeMessage>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .Callback<MimeKit.MimeMessage, string, string, string, CancellationToken>((m, _, _, _, _) => captured = m)
+            .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var processor = CreateRealSendProcessor(mockSmtp, issuer.Object);
+        await RunProcessorForSingleJob(processor, jobId);
+
+        issuer.Verify(i => i.IssueAsync(It.IsAny<Guid>(), It.IsAny<string>()), Times.Never);
+        Assert.NotNull(captured);
+        Assert.Contains("already-issued-id", captured!.Headers["List-Unsubscribe"]);
+    }
+
+    private EmailJob CreateSingleRecipientJob(Guid jobId, Guid homeId)
+    {
+        return new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Annual Meeting",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            TotalRecipients = 1,
+            MaxRecipientAttempts = 3,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "jane@example.com",
+                    HomeId = homeId,
+                    Status = EmailJobRecipientStatus.Pending,
+                },
+            },
+        };
+    }
+
+    /// <summary>Builds a processor on the real (non-mock-environment) send path.</summary>
+    private EmailJobProcessor CreateRealSendProcessor(Mock<IEmailTransport> transport, IUnsubscribeLinkIssuer issuer)
+    {
+        _fileStore
+            .Setup(f => f.DownloadAsync(It.IsAny<string>()))
+            .ReturnsAsync(
+                new DocumentFileResult
+                {
+                    Stream = new MemoryStream("<p>Agenda</p>"u8.ToArray()),
+                    ContentType = "text/html",
+                }
+            );
+
+        var scopeFactory = new Mock<IServiceScopeFactory>();
+        var scope = new Mock<IServiceScope>();
+        var serviceProvider = new Mock<IServiceProvider>();
+        serviceProvider.Setup(sp => sp.GetService(typeof(IEmailJobRepository))).Returns(_jobRepo.Object);
+        serviceProvider.Setup(sp => sp.GetService(typeof(IDocumentFileStore))).Returns(_fileStore.Object);
+        serviceProvider
+            .Setup(sp => sp.GetService(typeof(IEmailDeliveryEventRepository)))
+            .Returns(_deliveryEventRepo.Object);
+        serviceProvider
+            .Setup(sp => sp.GetService(typeof(IEmailDeliveryActionService)))
+            .Returns(_deliveryActionService.Object);
+        serviceProvider.Setup(sp => sp.GetService(typeof(IUnsubscribeLinkIssuer))).Returns(issuer);
+        scope.Setup(s => s.ServiceProvider).Returns(serviceProvider.Object);
+        scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
+
+        var hubContext = new Mock<IHubContext<EmailJobHub>>();
+        var mockClients = new Mock<IHubClients>();
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(_clientProxy.Object);
+        hubContext.Setup(h => h.Clients).Returns(mockClients.Object);
+
+        var env = new Mock<IWebHostEnvironment>();
+        env.Setup(e => e.EnvironmentName).Returns("Production");
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["SmtpHost"] = "localhost",
+                    ["SmtpUser"] = "user",
+                    ["SmtpPassword"] = "pass",
+                    ["AppBaseUrl"] = "https://test.cohad.org",
+                    ["EmailJobs:Enabled"] = "true",
+                    ["EmailJobs:DefaultMaxRecipientAttempts"] = "3",
+                    ["EmailJobs:StallAfterMinutes"] = "30",
+                }
+            )
+            .Build();
+
+        return new EmailJobProcessor(
+            _queue,
+            scopeFactory.Object,
+            CreateRouterFromTransport(transport.Object),
+            hubContext.Object,
+            config,
+            env.Object,
+            NullLogger<EmailJobProcessor>.Instance
+        );
+    }
+
+    [Fact]
     public async Task RealSend_GroupRecipients_CallsTransportOnce_MarksAllSent()
     {
         var jobId = Guid.NewGuid();

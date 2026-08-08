@@ -167,8 +167,8 @@ namespace Web.Services
         /// this feature exists to surface.
         /// <para>
         /// A credential parameter being <em>present</em> is what moves a rejection into the token
-        /// stream, deliberately including a stripped <c>?token=</c> or <c>?id=</c> - that is the
-        /// evidence worth protecting, and under short links a stripped <c>?id=</c> is now the
+        /// stream, deliberately including a stripped <c>?token=</c> or <c>?u=</c> - that is the
+        /// evidence worth protecting, and under short links a stripped <c>?u=</c> is now the
         /// likeliest shape of it. Contrast <see cref="DescribeCredentialType"/>, which requires a
         /// value because it feeds the legacy-redemption counter rather than the budget.
         /// </para>

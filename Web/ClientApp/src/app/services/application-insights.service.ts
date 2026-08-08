@@ -4,6 +4,7 @@ import { Title } from '@angular/platform-browser';
 import { ApplicationInsights } from '@microsoft/applicationinsights-web';
 import { environment } from 'src/environments/environment';
 import { filter } from 'rxjs/operators';
+import { SHORT_LINK_PREFIX } from './unsubscribe-credential-capture';
 
 @Injectable({ providedIn: 'root' })
 export class ApplicationInsightsService {
@@ -100,7 +101,13 @@ export class ApplicationInsightsService {
    * cannot be defeated by an id that happens not to look like one.
    */
   private redactShortLinkId(path: string): string {
-    return path.replace(/^\/u\/[^/]+/i, '/u/{id}');
+    const prefix = SHORT_LINK_PREFIX;
+    if (!path.toLowerCase().startsWith(prefix)) {
+      return path;
+    }
+    const rest = path.substring(prefix.length);
+    const firstSlash = rest.indexOf('/');
+    return firstSlash === -1 ? `${prefix}{id}` : `${prefix}{id}${rest.substring(firstSlash)}`;
   }
 
   setAuthenticatedUser(userId: string, accountId?: string): void {
