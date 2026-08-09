@@ -1,12 +1,18 @@
+#nullable enable
+
+// Annotated like the other contract-bearing types (EmailSuppressionDto, the unsubscribe result
+// types): this is a response-only DTO, so the annotation carries no binding behaviour - see
+// UnsubscribeController for why the controller itself stays excluded.
+
 using System;
 
 namespace Web.PresentationModels
 {
     public class EmailPreferencesDto
     {
-        public string Email { get; set; }
+        public string Email { get; set; } = string.Empty;
 
-        public string HomeName { get; set; }
+        public string HomeName { get; set; } = string.Empty;
 
         public bool BoardEmailOptedIn { get; set; }
 
@@ -31,8 +37,9 @@ namespace Web.PresentationModels
         /// <summary>
         /// Why, as the <c>SuppressionReason</c> enum name - the credential holder owns the
         /// address, so telling them "you unsubscribed" versus "delivery failed" is theirs to see.
+        /// Null when no suppression is in force.
         /// </summary>
-        public string SuppressionReason { get; set; }
+        public string? SuppressionReason { get; set; }
 
         /// <summary>
         /// Whether the resident can lift the suppression themselves ("Resume receiving email").
