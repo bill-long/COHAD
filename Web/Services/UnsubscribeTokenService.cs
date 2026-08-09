@@ -33,33 +33,55 @@ namespace Web.Services
         private readonly byte[] _encryptionKey;
         private readonly DateTimeOffset? _legacyCutoverUtc;
 
+        /// <summary>The minimum usable key length, in UTF-8 bytes.</summary>
+        internal const int MinKeyBytes = 32;
+
+        /// <summary>
+        /// The one definition of which configured key validates legacy tokens: LegacySigningKey
+        /// when it carries a value, SigningKey otherwise. The fallback is the point - without it,
+        /// deploying the cutover code ahead of the app-setting change would invalidate every
+        /// unsubscribe link currently sitting in an inbox.
+        /// <para>
+        /// Shared by this constructor and by the Startup registration gate, which has to answer
+        /// "is there a usable key" before this type is ever constructed. Two hand-written copies of
+        /// the precedence is how the two would drift - and a drift here surfaces as this
+        /// constructor throwing inside DI resolution, an unhandled 500 where a clean
+        /// NotConfigured rejection was intended.
+        /// </para>
+        /// </summary>
+        internal static (string KeyName, string Key) SelectSigningKey(UnsubscribeTokenOptions options)
+        {
+            return string.IsNullOrWhiteSpace(options.LegacySigningKey)
+                ? ("UnsubscribeToken:SigningKey", options.SigningKey)
+                : ("UnsubscribeToken:LegacySigningKey", options.LegacySigningKey);
+        }
+
+        /// <summary>Whether a selected key exists and meets <see cref="MinKeyBytes"/>.</summary>
+        internal static bool IsUsableKey(string key)
+        {
+            return !string.IsNullOrWhiteSpace(key) && Encoding.UTF8.GetByteCount(key) >= MinKeyBytes;
+        }
+
         public UnsubscribeTokenService(
             IOptions<UnsubscribeTokenOptions> options,
             ILogger<UnsubscribeTokenService> logger
         )
         {
-            // LegacySigningKey is where the key belongs after the cutover. SigningKey is the
-            // fallback, and the fallback is the point: without it, deploying this ahead of the
-            // app-setting change would invalidate every unsubscribe link currently sitting in an
-            // inbox. Making the deploy order not matter is worth one Warning.
             var opts = options.Value;
-            var key = opts.LegacySigningKey;
-            if (string.IsNullOrWhiteSpace(key))
+            var (keyName, key) = SelectSigningKey(opts);
+
+            if (keyName == "UnsubscribeToken:SigningKey" && !string.IsNullOrWhiteSpace(key))
             {
-                key = opts.SigningKey;
-                if (!string.IsNullOrWhiteSpace(key))
-                {
-                    logger.LogWarning(
-                        "UnsubscribeToken:LegacySigningKey is not set; falling back to UnsubscribeToken:SigningKey to validate legacy tokens. "
-                            + "Move the existing key to LegacySigningKey and rotate SigningKey - see docs/email-suppression-and-unsubscribe.md."
-                    );
-                }
+                logger.LogWarning(
+                    "UnsubscribeToken:LegacySigningKey is not set; falling back to UnsubscribeToken:SigningKey to validate legacy tokens. "
+                        + "Move the existing key to LegacySigningKey and rotate SigningKey - see docs/email-suppression-and-unsubscribe.md."
+                );
             }
 
-            if (string.IsNullOrWhiteSpace(key) || Encoding.UTF8.GetByteCount(key) < 32)
+            if (!IsUsableKey(key))
             {
                 throw new InvalidOperationException(
-                    "UnsubscribeToken:LegacySigningKey (or SigningKey) must be at least 32 UTF-8 bytes."
+                    $"UnsubscribeToken:LegacySigningKey (or SigningKey) must be at least {MinKeyBytes} UTF-8 bytes."
                 );
             }
 

@@ -317,6 +317,43 @@ namespace Web.UnitTests
             Assert.True(CreateLegacyService().ValidateToken(recent).IsValid);
         }
 
+        [Theory]
+        [InlineData("legacy-key", "signing-key", "UnsubscribeToken:LegacySigningKey", "legacy-key")]
+        [InlineData(null, "signing-key", "UnsubscribeToken:SigningKey", "signing-key")]
+        [InlineData("", "signing-key", "UnsubscribeToken:SigningKey", "signing-key")]
+        [InlineData("   ", "signing-key", "UnsubscribeToken:SigningKey", "signing-key")]
+        [InlineData(null, null, "UnsubscribeToken:SigningKey", null)]
+        public void SelectSigningKey_PrefersLegacyOnlyWhenItCarriesAValue(
+            string legacy,
+            string signing,
+            string expectedName,
+            string expectedKey
+        )
+        {
+            // The single definition of key precedence, shared by the service constructor and the
+            // Startup registration gate. Locked because the two call sites cannot drift as long as
+            // this is the only rule - and because inverting it, or "falling back" to SigningKey for
+            // an INVALID (rather than absent) LegacySigningKey, would break legacy-link validation
+            // after rotation while every other test stays green.
+            var (name, key) = UnsubscribeTokenService.SelectSigningKey(
+                new UnsubscribeTokenOptions { LegacySigningKey = legacy, SigningKey = signing }
+            );
+
+            Assert.Equal(expectedName, name);
+            Assert.Equal(expectedKey, key);
+        }
+
+        [Theory]
+        [InlineData(null, false)]
+        [InlineData("", false)]
+        [InlineData("   ", false)]
+        [InlineData("short", false)]
+        [InlineData("this-is-a-test-signing-key-32-bytes!", true)]
+        public void IsUsableKey_RequiresThirtyTwoUtf8Bytes(string key, bool expected)
+        {
+            Assert.Equal(expected, UnsubscribeTokenService.IsUsableKey(key));
+        }
+
         [Fact]
         public void Constructor_ThrowsForShortKey()
         {
