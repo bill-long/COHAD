@@ -92,6 +92,16 @@ namespace Web.Models
         /// </summary>
         public string? ProviderDiagnostic { get; set; }
 
+        /// <summary>
+        /// The dedup key of the most recent piece of evidence applied to this record - the
+        /// delivery event's deterministic id. What makes <c>RecordAsync</c> idempotent per
+        /// evidence: the delivery-event path is at-least-once (the event is marked processed only
+        /// after the suppression write), and without this key a replayed event increments
+        /// <see cref="ConsecutiveFailureCount"/> into a lie. Null for evidence with no natural key
+        /// (one-click, admin action), which is fine - those paths are not replayed mechanically.
+        /// </summary>
+        public string? LastEvidenceKey { get; set; }
+
         /// <summary>When the suppression was cleared, or null while it is in force.</summary>
         public DateTime? ClearedUtc { get; set; }
 

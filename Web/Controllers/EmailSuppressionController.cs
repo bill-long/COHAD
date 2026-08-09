@@ -72,14 +72,25 @@ namespace Web.Controllers
 
             var apiUser = await _currentUser.GetAsync(User);
 
-            var suppression = await _service.RecordAsync(
-                dto.Email,
-                SuppressionReason.AdminAction,
-                apiUser.UniqueId,
-                null,
-                null
-            );
+            SuppressionRecordOutcome outcome;
+            try
+            {
+                outcome = await _service.RecordAsync(
+                    dto.Email,
+                    SuppressionReason.AdminAction,
+                    apiUser.UniqueId,
+                    null,
+                    null
+                );
+            }
+            catch (ConcurrencyConflictException)
+            {
+                // Every retry lost its race - contention with a webhook or another admin, not a
+                // fault. 409 tells the UI "try again" without paging anyone.
+                return Conflict(new { error = "The record is being updated concurrently. Please try again." });
+            }
 
+            var suppression = outcome.Suppression;
             await _auditLogRepository.AddAsync(
                 new NewAuditLogEntry
                 {
@@ -100,25 +111,37 @@ namespace Web.Controllers
         /// Clears a suppression so mail can flow again. Idempotent: clearing an already-cleared
         /// record returns it unchanged with 200 - "make sure this is cleared" is satisfied either
         /// way, and a 409 would force the UI to special-case a no-op.
+        /// <para>
+        /// By document id, not by address, because this endpoint acts on a listed row: a
+        /// hand-authored document whose id does not match <c>MakeId</c> of its own Email is
+        /// unreachable through the address-keyed path and must still be clearable by the human
+        /// looking at it. The audit decision comes from the service's outcome - whether THIS call
+        /// performed the transition - not from a pre-read that a concurrent admin can make stale.
+        /// </para>
         /// </summary>
         [HttpPost("{id}/clear")]
         public async Task<IActionResult> Clear(string id)
         {
-            var existing = await _repository.GetByIdAsync(id);
-            if (existing == null)
-                return NotFound(new { error = "No suppression with this id." });
-
             var apiUser = await _currentUser.GetAsync(User);
 
-            var wasActive = existing.IsActive;
-            var cleared = wasActive
-                ? await _service.ClearAsync(existing.Email, apiUser.UniqueId)
-                : existing;
+            SuppressionClearOutcome outcome;
+            try
+            {
+                outcome = await _service.ClearByIdAsync(id, apiUser.UniqueId);
+            }
+            catch (ConcurrencyConflictException)
+            {
+                return Conflict(new { error = "The record is being updated concurrently. Please try again." });
+            }
+
+            if (outcome.Suppression == null)
+                return NotFound(new { error = "No suppression with this id." });
 
             // Audited only when this call did the clearing - an idempotent no-op recording "X
             // cleared the suppression" would attribute the action to someone who took none.
-            if (wasActive)
+            if (outcome.Cleared)
             {
+                var suppression = outcome.Suppression;
                 await _auditLogRepository.AddAsync(
                     new NewAuditLogEntry
                     {
@@ -126,14 +149,14 @@ namespace Web.Controllers
                         Time = DateTime.UtcNow,
                         UserId = apiUser.UniqueId,
                         UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
-                        SubjectId = EmailDeliveryActionService.RedactEmail(existing.Email),
-                        SubjectName = EmailDeliveryActionService.RedactEmail(existing.Email),
-                        Action = $"Cleared an email suppression (was {existing.Reason}, suppressed {existing.SuppressedUtc:u}).",
+                        SubjectId = EmailDeliveryActionService.RedactEmail(suppression.Email),
+                        SubjectName = EmailDeliveryActionService.RedactEmail(suppression.Email),
+                        Action = $"Cleared an email suppression (was {suppression.Reason}, suppressed {suppression.SuppressedUtc:u}).",
                     }
                 );
             }
 
-            return Ok(EmailSuppressionDto.FromModel(cleared));
+            return Ok(EmailSuppressionDto.FromModel(outcome.Suppression));
         }
     }
 }

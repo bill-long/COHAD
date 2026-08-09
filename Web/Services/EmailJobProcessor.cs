@@ -120,6 +120,49 @@ namespace Web.Services
         }
 
         /// <summary>
+        /// Reads the active suppressions and applies them to the job - the whole enforcement
+        /// sequence, in one place, called by BOTH the real send path and the mock path so the two
+        /// cannot drift (the divergence the repository conventions call a bug).
+        /// <para>
+        /// The map is built by looping rather than ToDictionary, keyed on the NORMALIZED stored
+        /// address: hand-authored or imported documents can carry case/whitespace variants of one
+        /// address (their ids differ, so the container accepts both), and ToDictionary would throw
+        /// on the duplicate key - failing every send job over one odd row, a far wider outage than
+        /// the fail-closed this read reserves for an unreadable container. Any variant means "do
+        /// not mail", so last-wins is correct.
+        /// </para>
+        /// <para>
+        /// One read per job run: a suppression written mid-run applies from the next run, which is
+        /// fine - suppression prevents future mail. A throwing read (missing container)
+        /// deliberately propagates and fails the job: never bulk-send when the do-not-mail list is
+        /// unreadable. The persist is best-effort, like the delivery-event one before it: the
+        /// statuses are already set in memory, so the pending filter excludes them either way, and
+        /// a conflict is reconciled by the next TryPersistJobAsync's merge.
+        /// </para>
+        /// </summary>
+        private async Task ApplyActiveSuppressionsAsync(
+            EmailJob job,
+            IEmailSuppressionRepository suppressionRepo,
+            IEmailJobRepository repo
+        )
+        {
+            var active = await suppressionRepo.GetActiveAsync();
+            var activeByAddress = new Dictionary<string, SuppressionReason>(StringComparer.OrdinalIgnoreCase);
+            foreach (var suppression in active)
+            {
+                var key = EmailSuppression.NormalizeAddress(suppression.Email);
+                if (key.Length > 0)
+                    activeByAddress[key] = suppression.Reason;
+            }
+
+            if (ApplySuppressions(job, activeByAddress))
+            {
+                await TryPersistJobAsync(repo, job);
+                await NotifyProgressAsync(job);
+            }
+        }
+
+        /// <summary>
         /// The one rule for a finished job's terminal status. Extracted because three call sites
         /// (the post-send close-out, the mock close-out, and the stall watchdog) carried their own
         /// copies, and a drifted copy is how an all-suppressed job would get labelled Failed.
@@ -960,23 +1003,8 @@ namespace Web.Services
                 await TryPersistJobAsync(repo, job);
 
             // The suppression list's enforcement point, above the shared filter so the grouped
-            // and per-recipient branches are both covered. One read per job run: a suppression
-            // written mid-run applies from the next run, which is fine - suppression prevents
-            // future mail. A throwing read (missing container) deliberately propagates and fails
-            // the job: never bulk-send when the do-not-mail list is unreadable.
-            var activeSuppressions = (await suppressionRepo.GetActiveAsync()).ToDictionary(
-                s => s.Email,
-                s => s.Reason,
-                StringComparer.OrdinalIgnoreCase
-            );
-            if (ApplySuppressions(job, activeSuppressions))
-            {
-                // Best-effort persist, like the delivery-event one above: the statuses are already
-                // set in memory, so the filter below excludes them either way, and a conflict is
-                // reconciled by the next TryPersistJobAsync's merge.
-                await TryPersistJobAsync(repo, job);
-                await NotifyProgressAsync(job);
-            }
+            // and per-recipient branches are both covered.
+            await ApplyActiveSuppressionsAsync(job, suppressionRepo, repo);
 
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
@@ -1008,9 +1036,6 @@ namespace Web.Services
                         attachmentData
                     );
 
-                    foreach (var r in pendingRecipients)
-                        message.To.Add(new MailboxAddress("", r.Email));
-
                     // Persist attempt start before sending so a crash during in-flight send
                     // doesn't result in the job being re-sent with AttemptCount still at 0.
                     var attemptStartedUtc = DateTime.UtcNow;
@@ -1027,39 +1052,63 @@ namespace Web.Services
                     }
                     else
                     {
-                        // Group sends use a sentinel correlation tag (a non-empty string so transports
-                        // emit a cohad_email tag distinct from a missing/empty value) so webhook handlers
-                        // can recognize that per-recipient correlation isn't available.
-                        const string groupedSendCorrelation = "__grouped_send__";
-                        // Grouped sends use the router's category-aware default transport
-                        // since per-recipient routing is not applicable when multiple
-                        // recipients share a single message.
-                        var result = await _transportRouter.GetDefaultTransport(job.Category).SendAsync(message, job.Id.ToString(), groupedSendCorrelation, job.Category, ct);
+                        // Re-checked AFTER the persist, whose conflict merge can adopt statuses
+                        // another instance already advanced - a Sent from a webhook promotion, or
+                        // a Suppressed written by the winner of a stall reclaim. The To list is
+                        // therefore built here and not before the persist: a recipient the merge
+                        // just flipped must not be mailed, and stamping below is limited to the
+                        // recipients that were actually in the message.
+                        var deliverable = pendingRecipients
+                            .Where(r =>
+                                r.Status == EmailJobRecipientStatus.Pending
+                                || r.Status == EmailJobRecipientStatus.Failed
+                            )
+                            .ToList();
 
-                        var now = DateTime.UtcNow;
-                        foreach (var r in pendingRecipients)
+                        if (deliverable.Count == 0)
                         {
-                            r.Provider = result.ProviderName;
-                            if (!string.IsNullOrEmpty(result.ProviderMessageId))
-                                r.ProviderMessageId = result.ProviderMessageId;
-                            if (result.Success)
-                            {
-                                r.Status = EmailJobRecipientStatus.Sent;
-                                r.SentUtc = now;
-                                r.Error = null;
-                            }
-                            else
-                            {
-                                r.Status = EmailJobRecipientStatus.Failed;
-                                r.Error = result.Error;
-                            }
-                        }
-                        job.LastProgressUtc = now;
-                        RecalculateCounts(job);
-                        if (!await TryPersistJobAsync(repo, job))
-                            stoppedEarly = true;
-                        else
+                            RecalculateCounts(job);
                             await NotifyProgressAsync(job);
+                        }
+                        else
+                        {
+                            foreach (var r in deliverable)
+                                message.To.Add(new MailboxAddress("", r.Email));
+
+                            // Group sends use a sentinel correlation tag (a non-empty string so transports
+                            // emit a cohad_email tag distinct from a missing/empty value) so webhook handlers
+                            // can recognize that per-recipient correlation isn't available.
+                            const string groupedSendCorrelation = "__grouped_send__";
+                            // Grouped sends use the router's category-aware default transport
+                            // since per-recipient routing is not applicable when multiple
+                            // recipients share a single message.
+                            var result = await _transportRouter.GetDefaultTransport(job.Category).SendAsync(message, job.Id.ToString(), groupedSendCorrelation, job.Category, ct);
+
+                            var now = DateTime.UtcNow;
+                            foreach (var r in deliverable)
+                            {
+                                r.Provider = result.ProviderName;
+                                if (!string.IsNullOrEmpty(result.ProviderMessageId))
+                                    r.ProviderMessageId = result.ProviderMessageId;
+                                if (result.Success)
+                                {
+                                    r.Status = EmailJobRecipientStatus.Sent;
+                                    r.SentUtc = now;
+                                    r.Error = null;
+                                }
+                                else
+                                {
+                                    r.Status = EmailJobRecipientStatus.Failed;
+                                    r.Error = result.Error;
+                                }
+                            }
+                            job.LastProgressUtc = now;
+                            RecalculateCounts(job);
+                            if (!await TryPersistJobAsync(repo, job))
+                                stoppedEarly = true;
+                            else
+                                await NotifyProgressAsync(job);
+                        }
                     }
                 }
                 else
@@ -1078,9 +1127,15 @@ namespace Web.Services
                             break;
                         }
 
-                        // After persist (which may have merged webhook updates on conflict),
-                        // skip this recipient if it was already sent by a previous attempt.
-                        if (recipient.Status == EmailJobRecipientStatus.Sent)
+                        // After persist (which may have merged webhook updates on conflict), skip
+                        // this recipient if it was already sent by a previous attempt - or
+                        // suppressed by another instance, which the merge adopts for exactly this
+                        // check: mailing a merged-in Suppressed and stamping it Sent would defeat
+                        // the enforcement point from a code path it never sees.
+                        if (
+                            recipient.Status == EmailJobRecipientStatus.Sent
+                            || recipient.Status == EmailJobRecipientStatus.Suppressed
+                        )
                         {
                             RecalculateCounts(job);
                             await NotifyProgressAsync(job);
@@ -1301,16 +1356,7 @@ namespace Web.Services
             // Same enforcement pass as the real send path, through the same helper, in the same
             // position relative to the filter - the mock path exists to exercise what production
             // does, and a divergence here is a bug by the repository conventions.
-            var activeSuppressions = (await suppressionRepo.GetActiveAsync()).ToDictionary(
-                s => s.Email,
-                s => s.Reason,
-                StringComparer.OrdinalIgnoreCase
-            );
-            if (ApplySuppressions(job, activeSuppressions))
-            {
-                await TryPersistJobAsync(repo, job);
-                await NotifyProgressAsync(job);
-            }
+            await ApplyActiveSuppressionsAsync(job, suppressionRepo, repo);
 
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
@@ -1352,6 +1398,17 @@ namespace Web.Services
                     var now = DateTime.UtcNow;
                     foreach (var r in pendingRecipients)
                     {
+                        // Same post-persist re-check as the real grouped branch: the attempt
+                        // persist's conflict merge can adopt a Sent or Suppressed another
+                        // instance wrote, and the simulated outcome must not overwrite it.
+                        if (
+                            r.Status == EmailJobRecipientStatus.Sent
+                            || r.Status == EmailJobRecipientStatus.Suppressed
+                        )
+                        {
+                            continue;
+                        }
+
                         if (mockFailed)
                         {
                             r.Status = EmailJobRecipientStatus.Failed;
@@ -1387,6 +1444,19 @@ namespace Web.Services
                     {
                         stoppedEarly = true;
                         break;
+                    }
+
+                    // Same post-persist re-check as the real per-recipient loop: a Sent or
+                    // Suppressed adopted by the persist's conflict merge must not be overwritten
+                    // by the simulated outcome.
+                    if (
+                        recipient.Status == EmailJobRecipientStatus.Sent
+                        || recipient.Status == EmailJobRecipientStatus.Suppressed
+                    )
+                    {
+                        RecalculateCounts(job);
+                        await NotifyProgressAsync(job);
+                        continue;
                     }
 
                     if (_mockDelayMilliseconds > 0)

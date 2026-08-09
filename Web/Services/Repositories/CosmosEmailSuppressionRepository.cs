@@ -90,10 +90,18 @@ namespace Web.Services.Repositories
                 );
                 suppression.ETag = response.Headers.ETag;
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+            catch (CosmosException ex)
+                when (ex.StatusCode == HttpStatusCode.PreconditionFailed
+                    || (ex.StatusCode == HttpStatusCode.NotFound && ex.SubStatusCode == 0)
+                )
             {
+                // 412 is a stale ETag; 404 (item sub-status only) is Replace on a document deleted
+                // since the read. Both mean the record this write was based on is gone - re-read
+                // and retry, which the Mock mirrors. A 404 with a non-zero sub-status (missing
+                // container) still escapes raw: retrying into a missing container converts a
+                // provisioning mistake into a silent-looking failure loop.
                 throw new ConcurrencyConflictException(
-                    "The suppression was modified by another writer; re-read and retry.",
+                    "The suppression was modified or removed by another writer; re-read and retry.",
                     ex
                 );
             }
@@ -192,6 +200,7 @@ namespace Web.Services.Repositories
                 SuppressedUtc = doc["SuppressedUtc"]?.ToObject<DateTime>() ?? DateTime.MinValue,
                 SuppressedBy = doc.Value<string>("SuppressedBy") ?? string.Empty,
                 ProviderDiagnostic = doc.Value<string>("ProviderDiagnostic"),
+                LastEvidenceKey = doc.Value<string>("LastEvidenceKey"),
                 ClearedUtc =
                     doc["ClearedUtc"] is { Type: not JTokenType.Null } cleared ? cleared.ToObject<DateTime>() : null,
                 ClearedBy = doc.Value<string>("ClearedBy"),
@@ -215,6 +224,7 @@ namespace Web.Services.Repositories
                 ["SuppressedUtc"] = JToken.FromObject(suppression.SuppressedUtc),
                 ["SuppressedBy"] = suppression.SuppressedBy,
                 ["ProviderDiagnostic"] = suppression.ProviderDiagnostic,
+                ["LastEvidenceKey"] = suppression.LastEvidenceKey,
                 // Explicit null while active, so the GetActiveAsync IS_NULL branch matches a
                 // written record rather than depending on the field's absence.
                 ["ClearedUtc"] = suppression.ClearedUtc is { } clearedUtc ? JToken.FromObject(clearedUtc) : JValue.CreateNull(),

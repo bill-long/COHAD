@@ -232,6 +232,35 @@ namespace Web.UnitTests
         }
 
         [Fact]
+        public async Task OneClickUnsubscribe_ExhaustedWriteRaces_Return409NotAServerError()
+        {
+            // The old WithOptimisticRetry contract: exhausted optimistic retries are contention,
+            // answered with 409 so monitoring does not page and the provider retries - not a 500.
+            var homeId = Guid.NewGuid();
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, "jane@example.com"));
+
+            var contended = new Mock<IEmailSuppressionService>();
+            contended
+                .Setup(s =>
+                    s.RecordAsync(
+                        It.IsAny<string>(),
+                        It.IsAny<SuppressionReason>(),
+                        It.IsAny<string>(),
+                        It.IsAny<Guid?>(),
+                        It.IsAny<string?>(),
+                        It.IsAny<string?>()
+                    )
+                )
+                .ThrowsAsync(new ConcurrencyConflictException("lost every race", new InvalidOperationException()));
+
+            var controller = CreateController(contended.Object);
+            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
+
+            Assert.IsType<ConflictObjectResult>(result);
+            Assert.Equal("concurrency-retries-exhausted", Recorded()?.Reason);
+        }
+
+        [Fact]
         public async Task OneClickUnsubscribe_WhenTheSuppressionWriteFails_DoesNotReportSuccess()
         {
             // A mailbox provider driving RFC 8058 records a 200 as honoured and stops offering the
@@ -248,6 +277,7 @@ namespace Web.UnitTests
                         It.IsAny<SuppressionReason>(),
                         It.IsAny<string>(),
                         It.IsAny<Guid?>(),
+                        It.IsAny<string?>(),
                         It.IsAny<string?>()
                     )
                 )

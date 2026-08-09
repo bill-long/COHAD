@@ -62,13 +62,23 @@ namespace Web.Services
             var reasonText = status == DeliveryStatus.Bounced ? "hard bounce" : "spam report";
             _logger.LogInformation("Suppressing email {Email} due to {Reason}.", email, reasonText);
 
-            var suppression = await _suppressionService.RecordAsync(
+            // The event's deduplicated id is the evidence key. This method is called at-least-once
+            // per event - marking the event processed happens after this call and can fail - and
+            // without the key each replay would count as fresh evidence and re-audit.
+            var outcome = await _suppressionService.RecordAsync(
                 email,
                 reason,
                 EmailSuppression.SystemDeliveryEvent,
                 deliveryEvent.JobId == Guid.Empty ? null : deliveryEvent.JobId,
-                deliveryEvent.ProviderDiagnostic
+                deliveryEvent.ProviderDiagnostic,
+                evidenceKey: deliveryEvent.Id
             );
+
+            // A replayed event changed nothing, so there is nothing to audit - a second
+            // "Suppressed all email due to hard bounce" line for one bounce would misstate how
+            // often the address failed.
+            if (!outcome.Applied)
+                return;
 
             // The suppression record is the durable state; the audit entry is the episode history
             // that survives the record being updated by later evidence or cleared. Redacted like
@@ -85,7 +95,7 @@ namespace Web.Services
                     SubjectName = redacted,
                     Action =
                         $"Suppressed all email due to {reasonText}{(category != null ? $" (category: {category})" : "")}."
-                        + $" Evidence count {suppression.ConsecutiveFailureCount}. Opt-in preferences were not changed.",
+                        + $" Evidence count {outcome.Suppression.ConsecutiveFailureCount}. Opt-in preferences were not changed.",
                 }
             );
         }

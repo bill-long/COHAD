@@ -9,9 +9,9 @@ using Web.Services.Repositories;
 namespace Web.UnitTests
 {
     /// <summary>
-    /// The suppression record lifecycle: first evidence, repeat evidence, clear, and
-    /// re-suppression, plus the lost-race retry. One document per address; the rules live in
-    /// <see cref="EmailSuppressionService"/> and nowhere else.
+    /// The suppression record lifecycle: first evidence, repeat evidence, replayed evidence,
+    /// clear, and re-suppression, plus the lost-race retry. One document per address; the rules
+    /// live in <see cref="EmailSuppressionService"/> and nowhere else.
     /// </summary>
     public class EmailSuppressionServiceTests
     {
@@ -28,14 +28,17 @@ namespace Web.UnitTests
             var service = CreateService();
             var jobId = Guid.NewGuid();
 
-            var result = await service.RecordAsync(
+            var outcome = await service.RecordAsync(
                 "Jane@Example.com ",
                 SuppressionReason.HardBounce,
                 EmailSuppression.SystemDeliveryEvent,
                 jobId,
-                "HardBounce: mailbox does not exist"
+                "HardBounce: mailbox does not exist",
+                evidenceKey: "evt-1"
             );
 
+            Assert.True(outcome.Applied);
+            var result = outcome.Suppression;
             Assert.Equal("jane@example.com", result.Email);
             Assert.Equal(EmailSuppression.MakeId("jane@example.com"), result.Id);
             Assert.Equal(SuppressionReason.HardBounce, result.Reason);
@@ -46,6 +49,7 @@ namespace Web.UnitTests
             Assert.Equal(jobId, result.CausingJobId);
             Assert.Equal(EmailSuppression.SystemDeliveryEvent, result.SuppressedBy);
             Assert.Equal("HardBounce: mailbox does not exist", result.ProviderDiagnostic);
+            Assert.Equal("evt-1", result.LastEvidenceKey);
             Assert.True(result.IsActive);
 
             Assert.NotNull(await _repo.GetByEmailAsync("jane@example.com"));
@@ -63,19 +67,23 @@ namespace Web.UnitTests
                 SuppressionReason.SpamComplaint,
                 EmailSuppression.SystemDeliveryEvent,
                 firstJob,
-                "SpamComplaint: marked as spam"
+                "SpamComplaint: marked as spam",
+                evidenceKey: "evt-1"
             );
 
             _time.Advance(TimeSpan.FromDays(2));
             var secondJob = Guid.NewGuid();
-            var result = await service.RecordAsync(
+            var outcome = await service.RecordAsync(
                 "jane@example.com",
                 SuppressionReason.HardBounce,
                 "ShortLink",
                 secondJob,
-                "HardBounce: mailbox full"
+                "HardBounce: mailbox full",
+                evidenceKey: "evt-2"
             );
 
+            Assert.True(outcome.Applied);
+            var result = outcome.Suppression;
             Assert.Equal(2, result.ConsecutiveFailureCount);
             Assert.Equal(Now.UtcDateTime, result.FirstSeenUtc);
             Assert.Equal(Now.UtcDateTime.AddDays(2), result.LastSeenUtc);
@@ -89,6 +97,69 @@ namespace Web.UnitTests
         }
 
         [Fact]
+        public async Task ReplayedEvidence_ChangesNothingAndReportsNotApplied()
+        {
+            // The delivery-event path is at-least-once: the event is marked processed only AFTER
+            // the suppression write, so a transient failure there replays the same event on the
+            // next run. Counting the replay would turn one bounce into "Evidence count 3" on the
+            // page an admin reads to decide typo-vs-dead-mailbox.
+            var service = CreateService();
+            await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.HardBounce,
+                EmailSuppression.SystemDeliveryEvent,
+                null,
+                "HardBounce: mailbox does not exist",
+                evidenceKey: "evt-1"
+            );
+
+            _time.Advance(TimeSpan.FromMinutes(5));
+            var replay = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.HardBounce,
+                EmailSuppression.SystemDeliveryEvent,
+                null,
+                "HardBounce: mailbox does not exist",
+                evidenceKey: "evt-1"
+            );
+
+            Assert.False(replay.Applied);
+            Assert.Equal(1, replay.Suppression.ConsecutiveFailureCount);
+            Assert.Equal(Now.UtcDateTime, replay.Suppression.LastSeenUtc);
+
+            // A DIFFERENT event for the same address still counts.
+            var fresh = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.HardBounce,
+                EmailSuppression.SystemDeliveryEvent,
+                null,
+                null,
+                evidenceKey: "evt-2"
+            );
+            Assert.True(fresh.Applied);
+            Assert.Equal(2, fresh.Suppression.ConsecutiveFailureCount);
+        }
+
+        [Fact]
+        public async Task KeylessEvidence_AlwaysCounts()
+        {
+            // One-click and admin action carry no natural dedup key and are not replayed
+            // mechanically; two clicks are genuinely two pieces of evidence.
+            var service = CreateService();
+            await service.RecordAsync("jane@example.com", SuppressionReason.ResidentRequest, "ShortLink", null, null);
+            var second = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ResidentRequest,
+                "ShortLink",
+                null,
+                null
+            );
+
+            Assert.True(second.Applied);
+            Assert.Equal(2, second.Suppression.ConsecutiveFailureCount);
+        }
+
+        [Fact]
         public async Task RepeatEvidence_WithoutADiagnosticKeepsTheStoredOne()
         {
             // A one-click arriving after a bounce carries no provider text; blanking the stored
@@ -99,10 +170,11 @@ namespace Web.UnitTests
                 SuppressionReason.HardBounce,
                 EmailSuppression.SystemDeliveryEvent,
                 Guid.NewGuid(),
-                "HardBounce: mailbox does not exist"
+                "HardBounce: mailbox does not exist",
+                evidenceKey: "evt-1"
             );
 
-            var result = await service.RecordAsync(
+            var outcome = await service.RecordAsync(
                 "jane@example.com",
                 SuppressionReason.ResidentRequest,
                 "ShortLink",
@@ -110,7 +182,7 @@ namespace Web.UnitTests
                 null
             );
 
-            Assert.Equal("HardBounce: mailbox does not exist", result.ProviderDiagnostic);
+            Assert.Equal("HardBounce: mailbox does not exist", outcome.Suppression.ProviderDiagnostic);
         }
 
         [Fact]
@@ -126,8 +198,10 @@ namespace Web.UnitTests
             );
 
             _time.Advance(TimeSpan.FromHours(1));
-            var cleared = await service.ClearAsync("JANE@example.com", "admin-user");
+            var outcome = await service.ClearAsync("JANE@example.com", "admin-user");
 
+            Assert.True(outcome.Cleared);
+            var cleared = outcome.Suppression;
             Assert.NotNull(cleared);
             Assert.False(cleared!.IsActive);
             Assert.Equal(Now.UtcDateTime.AddHours(1), cleared.ClearedUtc);
@@ -138,7 +212,7 @@ namespace Web.UnitTests
         }
 
         [Fact]
-        public async Task Clear_IsIdempotentAndKeepsTheOriginalClearStamps()
+        public async Task Clear_IsIdempotentAndReportsTheNoOp()
         {
             var service = CreateService();
             await service.RecordAsync(
@@ -150,23 +224,116 @@ namespace Web.UnitTests
             );
 
             _time.Advance(TimeSpan.FromHours(1));
-            await service.ClearAsync("jane@example.com", "first-admin");
+            var first = await service.ClearAsync("jane@example.com", "first-admin");
+            Assert.True(first.Cleared);
 
             _time.Advance(TimeSpan.FromHours(1));
             var second = await service.ClearAsync("jane@example.com", "second-admin");
 
             // The original clear's stamps are the truthful ones - the second call found nothing
-            // to do and must not rewrite who did the clearing.
-            Assert.Equal(Now.UtcDateTime.AddHours(1), second!.ClearedUtc);
-            Assert.Equal("first-admin", second.ClearedBy);
+            // to do, must not rewrite who did the clearing, and must SAY it did nothing so the
+            // caller's audit entry cannot attribute an action nobody took.
+            Assert.False(second.Cleared);
+            Assert.Equal(Now.UtcDateTime.AddHours(1), second.Suppression!.ClearedUtc);
+            Assert.Equal("first-admin", second.Suppression.ClearedBy);
         }
 
         [Fact]
-        public async Task Clear_ReturnsNullWhenNoRecordExists()
+        public async Task Clear_ReturnsNoRecordWhenNoneExists()
         {
             var service = CreateService();
 
-            Assert.Null(await service.ClearAsync("nobody@example.com", "admin-user"));
+            var outcome = await service.ClearAsync("nobody@example.com", "admin-user");
+
+            Assert.Null(outcome.Suppression);
+            Assert.False(outcome.Cleared);
+        }
+
+        [Fact]
+        public async Task Clear_WithOnlyIfReason_RefusesADifferentReasonAtWriteTime()
+        {
+            // The guard lives inside the write cycle, not on a caller's earlier read - between
+            // that read and this write the record can be cleared and re-suppressed for a reason
+            // the caller is not allowed to lift.
+            var service = CreateService();
+            await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.HardBounce,
+                EmailSuppression.SystemDeliveryEvent,
+                null,
+                null
+            );
+
+            var outcome = await service.ClearAsync(
+                "jane@example.com",
+                "resident:ShortLink",
+                onlyIfReason: SuppressionReason.ResidentRequest
+            );
+
+            Assert.False(outcome.Cleared);
+            Assert.NotNull(outcome.Suppression);
+            Assert.True(outcome.Suppression!.IsActive);
+            Assert.True((await _repo.GetByEmailAsync("jane@example.com"))!.IsActive);
+        }
+
+        [Fact]
+        public async Task Clear_WithOnlyIfReason_ClearsAMatchingReason()
+        {
+            var service = CreateService();
+            await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ResidentRequest,
+                "ShortLink",
+                null,
+                null
+            );
+
+            var outcome = await service.ClearAsync(
+                "jane@example.com",
+                "resident:ShortLink",
+                onlyIfReason: SuppressionReason.ResidentRequest
+            );
+
+            Assert.True(outcome.Cleared);
+            Assert.False(outcome.Suppression!.IsActive);
+        }
+
+        [Fact]
+        public async Task ClearById_ClearsARecordWhoseIdDoesNotMatchItsOwnAddress()
+        {
+            // A hand-authored document (arbitrary id, or an Email edited in the portal) is
+            // unreachable through the address-keyed path - MakeId of its Email points elsewhere -
+            // but the admin surface lists it and the human looking at it must be able to clear it.
+            var handAuthored = new EmailSuppression
+            {
+                Id = "hand-authored-row",
+                Email = "jane@example.com",
+                Reason = SuppressionReason.AdminAction,
+                ConsecutiveFailureCount = 1,
+                FirstSeenUtc = Now.UtcDateTime,
+                LastSeenUtc = Now.UtcDateTime,
+                SuppressedUtc = Now.UtcDateTime,
+                SuppressedBy = "someone",
+            };
+            await _repo.AddAsync(handAuthored);
+
+            var service = CreateService();
+            var outcome = await service.ClearByIdAsync("hand-authored-row", "admin-user");
+
+            Assert.True(outcome.Cleared);
+            Assert.Equal("admin-user", outcome.Suppression!.ClearedBy);
+            Assert.False((await _repo.GetByIdAsync("hand-authored-row"))!.IsActive);
+        }
+
+        [Fact]
+        public async Task ClearById_ReturnsNoRecordForAnUnknownId()
+        {
+            var service = CreateService();
+
+            var outcome = await service.ClearByIdAsync("no-such-id", "admin-user");
+
+            Assert.Null(outcome.Suppression);
+            Assert.False(outcome.Cleared);
         }
 
         [Fact]
@@ -179,13 +346,14 @@ namespace Web.UnitTests
                 SuppressionReason.HardBounce,
                 EmailSuppression.SystemDeliveryEvent,
                 firstJob,
-                "HardBounce: mailbox does not exist"
+                "HardBounce: mailbox does not exist",
+                evidenceKey: "evt-1"
             );
             _time.Advance(TimeSpan.FromDays(1));
             await service.ClearAsync("jane@example.com", "admin-user");
 
             _time.Advance(TimeSpan.FromDays(1));
-            var result = await service.RecordAsync(
+            var outcome = await service.RecordAsync(
                 "jane@example.com",
                 SuppressionReason.ResidentRequest,
                 "ShortLink",
@@ -194,6 +362,8 @@ namespace Web.UnitTests
             );
 
             // A new episode: the why fields describe what put the suppression back in force...
+            Assert.True(outcome.Applied);
+            var result = outcome.Suppression;
             Assert.True(result.IsActive);
             Assert.Equal(SuppressionReason.ResidentRequest, result.Reason);
             Assert.Equal("ShortLink", result.SuppressedBy);
@@ -205,6 +375,37 @@ namespace Web.UnitTests
             // ...while the record still reads as a history.
             Assert.Equal(Now.UtcDateTime, result.FirstSeenUtc);
             Assert.Equal(2, result.ConsecutiveFailureCount);
+        }
+
+        [Fact]
+        public async Task ReplayedEvidence_AfterAClear_StillResuppresses()
+        {
+            // The evidence-key no-op applies only while the record is ACTIVE. A cleared record
+            // seeing its own last event again means the clear raced the replay - and a replay of
+            // real bounce evidence should still stop the mail; idempotence must not become a
+            // loophole that leaves the address deliverable.
+            var service = CreateService();
+            await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.HardBounce,
+                EmailSuppression.SystemDeliveryEvent,
+                null,
+                null,
+                evidenceKey: "evt-1"
+            );
+            await service.ClearAsync("jane@example.com", "admin-user");
+
+            var replay = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.HardBounce,
+                EmailSuppression.SystemDeliveryEvent,
+                null,
+                null,
+                evidenceKey: "evt-1"
+            );
+
+            Assert.True(replay.Applied);
+            Assert.True(replay.Suppression.IsActive);
         }
 
         [Fact]
@@ -236,7 +437,7 @@ namespace Web.UnitTests
             repo.Setup(r => r.UpdateAsync(It.IsAny<EmailSuppression>())).Returns(Task.CompletedTask);
 
             var service = new EmailSuppressionService(repo.Object, _time);
-            var result = await service.RecordAsync(
+            var outcome = await service.RecordAsync(
                 "jane@example.com",
                 SuppressionReason.ResidentRequest,
                 "ShortLink",
@@ -244,15 +445,17 @@ namespace Web.UnitTests
                 null
             );
 
-            Assert.Equal(2, result.ConsecutiveFailureCount);
+            Assert.True(outcome.Applied);
+            Assert.Equal(2, outcome.Suppression.ConsecutiveFailureCount);
             repo.Verify(r => r.UpdateAsync(It.IsAny<EmailSuppression>()), Times.Once);
         }
 
         [Fact]
-        public async Task Record_GivesUpAfterRepeatedLostRaces()
+        public async Task Record_SurfacesExhaustedRacesAsAConcurrencyConflict()
         {
-            // The bound exists so a pathological interleaving surfaces as a failure rather than a
-            // loop; the last conflict rides along as the inner exception.
+            // The same type the repository throws, not a wrapper: "the write kept losing races"
+            // is still a concurrency conflict, and request-path callers answer it with 409 -
+            // the old WithOptimisticRetry contract - rather than a 500 that pages someone.
             var repo = new Mock<IEmailSuppressionRepository>();
             repo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync((EmailSuppression)null);
             repo.Setup(r => r.AddAsync(It.IsAny<EmailSuppression>()))
@@ -260,7 +463,7 @@ namespace Web.UnitTests
 
             var service = new EmailSuppressionService(repo.Object, _time);
 
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<ConcurrencyConflictException>(
                 () =>
                     service.RecordAsync(
                         "jane@example.com",
@@ -270,7 +473,6 @@ namespace Web.UnitTests
                         null
                     )
             );
-            Assert.IsType<ConcurrencyConflictException>(ex.InnerException);
         }
 
         [Theory]

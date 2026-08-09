@@ -71,21 +71,31 @@ namespace Web.UnitTests
                 _fail = fail;
             }
 
-            public Task<EmailSuppression> RecordAsync(
+            public Task<SuppressionRecordOutcome> RecordAsync(
                 string email,
                 SuppressionReason reason,
                 string suppressedBy,
                 Guid? causingJobId,
-                string? providerDiagnostic
+                string? providerDiagnostic,
+                string? evidenceKey = null
             ) =>
                 _fail()
                     ? throw new InvalidOperationException("Cosmos is unavailable.")
-                    : _inner.RecordAsync(email, reason, suppressedBy, causingJobId, providerDiagnostic);
+                    : _inner.RecordAsync(email, reason, suppressedBy, causingJobId, providerDiagnostic, evidenceKey);
 
-            public Task<EmailSuppression?> ClearAsync(string email, string clearedBy) =>
+            public Task<SuppressionClearOutcome> ClearAsync(
+                string email,
+                string clearedBy,
+                SuppressionReason? onlyIfReason = null
+            ) =>
                 _fail()
                     ? throw new InvalidOperationException("Cosmos is unavailable.")
-                    : _inner.ClearAsync(email, clearedBy);
+                    : _inner.ClearAsync(email, clearedBy, onlyIfReason);
+
+            public Task<SuppressionClearOutcome> ClearByIdAsync(string id, string clearedBy) =>
+                _fail()
+                    ? throw new InvalidOperationException("Cosmos is unavailable.")
+                    : _inner.ClearByIdAsync(id, clearedBy);
         }
         private readonly IHost _host;
         private readonly HttpClient _client;

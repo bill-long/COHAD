@@ -73,16 +73,17 @@ namespace Web.UnitTests
             };
         }
 
-        private Task<EmailSuppression> SeedAsync(string email, SuppressionReason reason, DateTimeOffset when)
+        private async Task<EmailSuppression> SeedAsync(string email, SuppressionReason reason, DateTimeOffset when)
         {
             var clock = new TestClock(when);
-            return new EmailSuppressionService(_suppressions, clock).RecordAsync(
+            var outcome = await new EmailSuppressionService(_suppressions, clock).RecordAsync(
                 email,
                 reason,
                 reason == SuppressionReason.AdminAction ? "some-admin" : EmailSuppression.SystemDeliveryEvent,
                 null,
                 null
             );
+            return outcome.Suppression;
         }
 
         [Fact]

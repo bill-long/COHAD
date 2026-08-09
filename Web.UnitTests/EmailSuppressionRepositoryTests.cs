@@ -36,6 +36,7 @@ namespace Web.UnitTests
                 SuppressedUtc = Now,
                 SuppressedBy = EmailSuppression.SystemDeliveryEvent,
                 ProviderDiagnostic = "HardBounce: The server was unable to deliver your message",
+                LastEvidenceKey = "evt-1",
             };
         }
 
@@ -90,6 +91,7 @@ namespace Web.UnitTests
             Assert.Equal(suppression.SuppressedUtc, read.SuppressedUtc);
             Assert.Equal(suppression.SuppressedBy, read.SuppressedBy);
             Assert.Equal(suppression.ProviderDiagnostic, read.ProviderDiagnostic);
+            Assert.Equal(suppression.LastEvidenceKey, read.LastEvidenceKey);
             Assert.Equal(suppression.ClearedUtc, read.ClearedUtc);
             Assert.Equal(suppression.ClearedBy, read.ClearedBy);
         }

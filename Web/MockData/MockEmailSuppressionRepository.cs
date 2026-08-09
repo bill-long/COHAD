@@ -96,10 +96,12 @@ namespace Web.MockData
             {
                 if (!_items.TryGetValue(suppression.Id, out var stored) || stored.ETag != suppression.ETag)
                 {
-                    // Mirrors the Cosmos 412 on a missing item or a stale ETag alike: Replace with
-                    // IfMatch cannot succeed either way, and both mean "re-read and retry".
+                    // Mirrors the Cosmos mapping exactly: Replace on a stale ETag is a 412 and on
+                    // a deleted document a 404 (item sub-status), and the Cosmos implementation
+                    // converts BOTH to this exception - either way the record this write was
+                    // based on is gone, and the fix is re-read and retry.
                     throw new ConcurrencyConflictException(
-                        "The suppression was modified by another writer; re-read and retry.",
+                        "The suppression was modified or removed by another writer; re-read and retry.",
                         new InvalidOperationException("ETag mismatch in MockEmailSuppressionRepository.")
                     );
                 }
@@ -167,6 +169,7 @@ namespace Web.MockData
                 SuppressedUtc = s.SuppressedUtc,
                 SuppressedBy = s.SuppressedBy,
                 ProviderDiagnostic = s.ProviderDiagnostic,
+                LastEvidenceKey = s.LastEvidenceKey,
                 ClearedUtc = s.ClearedUtc,
                 ClearedBy = s.ClearedBy,
                 ETag = s.ETag,

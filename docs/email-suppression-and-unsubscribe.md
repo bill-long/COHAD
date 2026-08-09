@@ -591,6 +591,36 @@ made in the writing, each where the doc above was silent:
   design, and the job detail's in-place explanation is the mitigation for the surprised admin.
 - One-click no longer emits `home-not-found` / `email-not-on-home` rejections (no home walk);
   both remain on the preferences GET/PUT.
+- **Accepted, not fixed (review round): one-click writes the suppression without checking the
+  directory.** The old path 404'd when the credential's home was gone or the address no longer on
+  it; the new one suppresses any address a resolvable credential names. That is the design, not
+  an oversight: possession of mail sent to the mailbox is the authority (RFC 8058 semantics -
+  Postmark's own suppression works the same way), a suppression for an address no longer in the
+  directory is a harmless no-op at the enforcement point, and the narrow residual - the same
+  address string later attached to a *different* resident - is admin-recoverable and surfaced by
+  3b's admin page. Re-adding a directory walk would re-couple the writer to the home model the
+  whole part exists to decouple from.
+- **From the same review round**, four hazards were closed before merge rather than shipped:
+  - The **conflict merge adopts a server-side `Suppressed`**, and both send branches now re-check
+    AFTER the attempt persist (the grouped branch builds its To list there too) - without that, an
+    instance that learned of a suppression only via the merge would mail the address anyway and
+    stamp it Sent, defeating the enforcement point from a path it never sees.
+  - **Evidence idempotence** (`LastEvidenceKey` = the delivery event's deduplicated id): the
+    delivery-action path is at-least-once (the event is marked processed only after the write),
+    and without the key a replayed event inflates `ConsecutiveFailureCount` and duplicates audit
+    entries - lying to the exact typo-vs-dead-mailbox decision the record exists to inform.
+  - **Exhausted write races surface as `ConcurrencyConflictException` → 409**, preserving the old
+    `WithOptimisticRetry` contract on one-click (and resume/admin), instead of a 500 that pages
+    someone for expected contention. The Cosmos repository also maps Replace-on-deleted (404,
+    item sub-status only) to the same exception, matching the Mock.
+  - The enforcement map is built by **looping over normalized stored addresses, not
+    `ToDictionary`** - hand-authored case-variant rows would otherwise throw on the duplicate key
+    and fail every send job; and the resident resume's "only ResidentRequest may be lifted" rule
+    moved **inside the service's write cycle** (`onlyIfReason`), because a controller-side check
+    races the window between page load and click. The admin clear acts by document id
+    (`ClearByIdAsync`) so a hand-authored row whose id doesn't match its own address is still
+    clearable, and its audit entry is gated on the service reporting that THIS call performed the
+    transition.
 
 **Left to PR-3b:** the forwarding deliverable-address preference and moderator notification
 (including a `NotificationService.ReopenAsync` so a re-suppression after a clear re-alerts and

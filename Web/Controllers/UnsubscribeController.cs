@@ -119,6 +119,14 @@ namespace Web.Controllers
                     null
                 );
             }
+            catch (ConcurrencyConflictException)
+            {
+                // Every retry lost its race - contention, not a fault. 409 preserves the old
+                // WithOptimisticRetry contract: monitoring does not page for it, and a provider
+                // driving RFC 8058 retries a non-2xx, which is exactly what this state needs.
+                RecordPostCredentialRejection("concurrency-retries-exhausted");
+                return Conflict(new { error = "Unable to save due to concurrent updates. Please try again." });
+            }
             catch (Exception ex)
             {
                 // Rethrown - a failed write must never answer 200. A mailbox provider driving RFC
@@ -204,29 +212,41 @@ namespace Web.Controllers
             if (credential == null)
                 return BadRequest(new { error = "Invalid or missing credential." });
 
-            var suppression = await _suppressionRepository.GetByEmailAsync(credential.Payload.Email);
-            if (suppression == null || !suppression.IsActive)
-                return Ok(new { message = "This address is already set to receive email." });
-
-            if (suppression.Reason != Models.SuppressionReason.ResidentRequest)
+            // One call, no pre-read: the resident-clearable-only rule is enforced by the service
+            // inside its own write cycle (onlyIfReason), so a bounce suppression that replaced a
+            // ResidentRequest one between a page load and the click cannot be lifted here - a
+            // check on this controller's earlier read would race exactly that window. ClearedBy
+            // carries both who (a resident, self-service) and how (which credential shape proved
+            // control of the address) - the same provenance rule as SuppressedBy.
+            SuppressionClearOutcome outcome;
+            try
             {
-                // Recorded so a run of these is visible: the SPA only offers the button when the
-                // GET said CanResume, so hitting this branch means a stale page or a hand-built
-                // request - either way worth a classification, never the reason value itself
-                // (it is not attacker-controlled, but the log needs no second copy of the record).
+                outcome = await _suppressionService.ClearAsync(
+                    credential.Payload.Email,
+                    $"resident:{credential.CredentialType}",
+                    onlyIfReason: Models.SuppressionReason.ResidentRequest
+                );
+            }
+            catch (ConcurrencyConflictException)
+            {
+                RecordPostCredentialRejection("concurrency-retries-exhausted");
+                return Conflict(new { error = "Unable to save due to concurrent updates. Please try again." });
+            }
+
+            // Still active after the call means the service refused: the in-force suppression is
+            // not resident-clearable. Recorded so a run of these is visible - the SPA only offers
+            // the button when the GET said CanResume, so this is a stale page or a hand-built
+            // request; the reason value itself is never echoed.
+            if (outcome.Suppression != null && outcome.Suppression.IsActive)
+            {
                 RecordPostCredentialRejection("suppression-not-resident-clearable");
                 return BadRequest(
                     new { error = "Delivery to this address was stopped for a reason only an administrator can clear. Please contact board@cohad.org." }
                 );
             }
 
-            // ClearedBy carries both who (a resident, self-service) and how (which credential
-            // shape proved control of the address) - the same provenance rule as SuppressedBy.
-            await _suppressionService.ClearAsync(
-                credential.Payload.Email,
-                $"resident:{credential.CredentialType}"
-            );
-
+            // Cleared by this call, cleared earlier, or never suppressed - all the same truthful
+            // answer to "make sure this address receives mail".
             return Ok(new { message = "You will receive Canyon Oaks HOA email at this address again." });
         }
 
