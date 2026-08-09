@@ -25,6 +25,11 @@ namespace Web.UnitTests
         private readonly Mock<IResidentRepository> _residentRepository = new();
         private readonly Mock<ILogger<UnsubscribeController>> _logger = new();
 
+        // The real Mock repository and the real service over it, not Moq stubs: the suppression
+        // writer invariants these tests lock ("a suppression was written, the booleans were not")
+        // are about what actually lands in the store.
+        private readonly MockEmailSuppressionRepository _suppressions = new();
+
         private readonly DefaultHttpContext _httpContext = new();
 
         /// <summary>
@@ -33,12 +38,14 @@ namespace Web.UnitTests
         /// unchanged, and the precedence rule and the shared blank-address guard are exercised for
         /// real instead of being stubbed past - those are the parts most worth not mocking.
         /// </summary>
-        private UnsubscribeController CreateController()
+        private UnsubscribeController CreateController(IEmailSuppressionService? suppressionService = null)
         {
             return new UnsubscribeController(
                 new UnsubscribeCredentialResolver(_tokenService.Object, _linkRepository, TimeProvider.System),
                 _homeRepository.Object,
                 _residentRepository.Object,
+                suppressionService ?? new EmailSuppressionService(_suppressions, TimeProvider.System),
+                _suppressions,
                 _logger.Object
             )
             {
@@ -150,98 +157,139 @@ namespace Web.UnitTests
             Assert.IsType<BadRequestObjectResult>(result);
         }
 
-        [Fact]
-        public async Task OneClickUnsubscribe_HomeNotFound_Returns404()
-        {
-            var homeId = Guid.NewGuid();
-            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, "j@x.com"));
-            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync((Home?)null);
-
-            var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
-
-            Assert.IsType<NotFoundObjectResult>(result);
-        }
-
         [Theory]
         [InlineData("board")]
         [InlineData("welcome")]
         [InlineData("garden")]
         [InlineData("social")]
         [InlineData("sunshine")]
-        public async Task OneClickUnsubscribe_FlipsCategoryToFalse(string category)
+        public async Task OneClickUnsubscribe_WritesASuppressionAndLeavesEveryBooleanUntouched(string category)
         {
+            // The doc-mandated invariant lock for the one-click writer: an unsubscribe writes a
+            // suppression and leaves every opt-in boolean untouched. The suppression is all-mail,
+            // so every category route converges on the same record - and the home and resident
+            // repositories are never even consulted, which is the structural half of the lock.
             var homeId = Guid.NewGuid();
             var email = "jane@example.com";
-            var home = CreateTestHome(homeId, email, allOptedIn: true);
-            var resident = CreateTestResident(homeId, email, allOptedIn: true);
-
             _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
-            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
-            _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
-            SetupResidentForHome(homeId, resident);
 
             var controller = CreateController();
             var result = await controller.OneClickUnsubscribe(category, "tok", null, "One-Click");
 
             Assert.IsType<OkObjectResult>(result);
-            _homeRepository.Verify(r => r.UpsertAsync(home), Times.Once);
 
-            var addr = resident.EmailAddresses[0];
-            switch (category)
+            var suppression = await _suppressions.GetByEmailAsync(email);
+            Assert.NotNull(suppression);
+            Assert.True(suppression!.IsActive);
+            Assert.Equal(SuppressionReason.ResidentRequest, suppression.Reason);
+            Assert.Equal(UnsubscribeDiagnostics.LegacyTokenCredential, suppression.SuppressedBy);
+
+            _homeRepository.Verify(r => r.GetByIdAsync(It.IsAny<Guid>()), Times.Never);
+            _homeRepository.Verify(r => r.UpsertAsync(It.IsAny<Home>()), Times.Never);
+            _residentRepository.Verify(r => r.GetByHomeIdAsync(It.IsAny<Guid>()), Times.Never);
+            _residentRepository.Verify(r => r.UpsertAsync(It.IsAny<Resident>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task OneClickUnsubscribe_ViaShortLink_StampsTheShortLinkCredentialType()
+        {
+            // SuppressedBy is the provenance Part 4 audits, so it must name the credential shape
+            // that was actually presented - the resolver's answer, not a re-derivation.
+            var homeId = Guid.NewGuid();
+            var link = new UnsubscribeLink
             {
-                case "board":
-                    Assert.False(addr.BoardEmailOptedIn);
-                    break;
-                case "welcome":
-                    Assert.False(addr.WelcomeEmailOptedIn);
-                    break;
-                case "garden":
-                    Assert.False(addr.GardenClubEmailOptedIn);
-                    break;
-                case "social":
-                    Assert.False(addr.SocialCommitteeEmailOptedIn);
-                    break;
-                case "sunshine":
-                    Assert.False(addr.SunshineCommitteeEmailOptedIn);
-                    break;
-            }
-        }
-
-        [Fact]
-        public async Task OneClickUnsubscribe_EmailNotOnHome_Returns404()
-        {
-            var homeId = Guid.NewGuid();
-            var home = CreateTestHome(homeId, "other@example.com");
-            var resident = CreateTestResident(homeId, "other@example.com");
-
-            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, "missing@example.com"));
-            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
-            SetupResidentForHome(homeId, resident);
+                Id = UnsubscribeLink.NewId(),
+                HomeId = homeId,
+                Email = "jane@example.com",
+                IssuedUtc = DateTime.UtcNow,
+            };
+            await _linkRepository.AddAsync(link);
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
-
-            Assert.IsType<NotFoundObjectResult>(result);
-        }
-
-        [Fact]
-        public async Task OneClickUnsubscribe_CaseInsensitiveEmailMatch()
-        {
-            var homeId = Guid.NewGuid();
-            var home = CreateTestHome(homeId, "Jane@Example.COM");
-            var resident = CreateTestResident(homeId, "Jane@Example.COM");
-
-            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, "jane@example.com"));
-            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
-            _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
-            SetupResidentForHome(homeId, resident);
-
-            var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
+            var result = await controller.OneClickUnsubscribe("board", null!, link.Id, "One-Click");
 
             Assert.IsType<OkObjectResult>(result);
-            Assert.False(resident.EmailAddresses[0].BoardEmailOptedIn);
+            var suppression = await _suppressions.GetByEmailAsync("jane@example.com");
+            Assert.Equal(UnsubscribeDiagnostics.ShortLinkCredential, suppression!.SuppressedBy);
+        }
+
+        [Fact]
+        public async Task OneClickUnsubscribe_AlreadySuppressed_SucceedsAndCountsTheRepeat()
+        {
+            // Gmail retries one-click, and a resident can click twice. The second click is repeat
+            // evidence on the same record, never an error back to the provider.
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
+
+            var controller = CreateController();
+            Assert.IsType<OkObjectResult>(await controller.OneClickUnsubscribe("board", "tok", null, "One-Click"));
+            Assert.IsType<OkObjectResult>(await controller.OneClickUnsubscribe("garden", "tok", null, "One-Click"));
+
+            var suppression = await _suppressions.GetByEmailAsync(email);
+            Assert.Equal(2, suppression!.ConsecutiveFailureCount);
+            Assert.Single(await _suppressions.GetAllAsync());
+        }
+
+        [Fact]
+        public async Task OneClickUnsubscribe_ExhaustedWriteRaces_Return409NotAServerError()
+        {
+            // The old WithOptimisticRetry contract: exhausted optimistic retries are contention,
+            // answered with 409 so monitoring does not page and the provider retries - not a 500.
+            var homeId = Guid.NewGuid();
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, "jane@example.com"));
+
+            var contended = new Mock<IEmailSuppressionService>();
+            contended
+                .Setup(s =>
+                    s.RecordAsync(
+                        It.IsAny<string>(),
+                        It.IsAny<SuppressionReason>(),
+                        It.IsAny<string>(),
+                        It.IsAny<Guid?>(),
+                        It.IsAny<string?>(),
+                        It.IsAny<string?>()
+                    )
+                )
+                .ThrowsAsync(new ConcurrencyConflictException("lost every race", new InvalidOperationException()));
+
+            var controller = CreateController(contended.Object);
+            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
+
+            Assert.IsType<ConflictObjectResult>(result);
+            Assert.Equal("concurrency-retries-exhausted", Recorded()?.Reason);
+        }
+
+        [Fact]
+        public async Task OneClickUnsubscribe_WhenTheSuppressionWriteFails_DoesNotReportSuccess()
+        {
+            // A mailbox provider driving RFC 8058 records a 200 as honoured and stops offering the
+            // control - so a failed write must surface, not smile. Same honesty rule as the
+            // preferences save, new mechanism.
+            var homeId = Guid.NewGuid();
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, "jane@example.com"));
+
+            var failing = new Mock<IEmailSuppressionService>();
+            failing
+                .Setup(s =>
+                    s.RecordAsync(
+                        It.IsAny<string>(),
+                        It.IsAny<SuppressionReason>(),
+                        It.IsAny<string>(),
+                        It.IsAny<Guid?>(),
+                        It.IsAny<string?>(),
+                        It.IsAny<string?>()
+                    )
+                )
+                .ThrowsAsync(new InvalidOperationException("Cosmos is unavailable."));
+
+            var controller = CreateController(failing.Object);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => controller.OneClickUnsubscribe("board", "tok", null, "One-Click")
+            );
+
+            VerifyLogged(LogLevel.Error, m => !m.Contains("jane@example.com"));
         }
 
         // --- GetPreferences ---
@@ -281,6 +329,150 @@ namespace Web.UnitTests
             Assert.True(dto.GardenClubEmailOptedIn);
             Assert.True(dto.SocialCommitteeEmailOptedIn);
             Assert.True(dto.SunshineCommitteeEmailOptedIn);
+        }
+
+        [Fact]
+        public async Task GetPreferences_ReportsAnActiveSuppressionAndWhetherItIsResumable()
+        {
+            // Without these fields the page shows checkboxes whose changes silently have no
+            // effect while mail stays stopped - the same class of trap as a false success.
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(CreateTestHome(homeId, email));
+            SetupResidentForHome(homeId, CreateTestResident(homeId, email));
+
+            var controller = CreateController();
+            await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
+
+            var result = await controller.GetPreferences("tok", null) as OkObjectResult;
+            var dto = Assert.IsType<EmailPreferencesDto>(result!.Value);
+
+            Assert.True(dto.Suppressed);
+            Assert.NotNull(dto.SuppressedUtc);
+            Assert.Equal(nameof(SuppressionReason.ResidentRequest), dto.SuppressionReason);
+            Assert.True(dto.CanResume);
+            // The booleans still report the stored preferences underneath the suppression.
+            Assert.True(dto.BoardEmailOptedIn);
+        }
+
+        [Fact]
+        public async Task GetPreferences_ABounceSuppressionIsNotResumable()
+        {
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(CreateTestHome(homeId, email));
+            SetupResidentForHome(homeId, CreateTestResident(homeId, email));
+            await new EmailSuppressionService(_suppressions, TimeProvider.System).RecordAsync(
+                email,
+                SuppressionReason.HardBounce,
+                EmailSuppression.SystemDeliveryEvent,
+                null,
+                "HardBounce: mailbox does not exist"
+            );
+
+            var controller = CreateController();
+            var result = await controller.GetPreferences("tok", null) as OkObjectResult;
+            var dto = Assert.IsType<EmailPreferencesDto>(result!.Value);
+
+            Assert.True(dto.Suppressed);
+            Assert.Equal(nameof(SuppressionReason.HardBounce), dto.SuppressionReason);
+            Assert.False(dto.CanResume);
+        }
+
+        [Fact]
+        public async Task GetPreferences_AClearedSuppressionReadsAsNoSuppression()
+        {
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(CreateTestHome(homeId, email));
+            SetupResidentForHome(homeId, CreateTestResident(homeId, email));
+            var service = new EmailSuppressionService(_suppressions, TimeProvider.System);
+            await service.RecordAsync(email, SuppressionReason.ResidentRequest, "ShortLink", null, null);
+            await service.ClearAsync(email, "admin-user");
+
+            var controller = CreateController();
+            var result = await controller.GetPreferences("tok", null) as OkObjectResult;
+            var dto = Assert.IsType<EmailPreferencesDto>(result!.Value);
+
+            Assert.False(dto.Suppressed);
+            Assert.Null(dto.SuppressedUtc);
+            Assert.Null(dto.SuppressionReason);
+            Assert.False(dto.CanResume);
+        }
+
+        // --- ResumeReceiving ---
+
+        [Fact]
+        public async Task Resume_ClearsAResidentRequestSuppressionWithCredentialProvenance()
+        {
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
+
+            var controller = CreateController();
+            await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
+
+            var result = await controller.ResumeReceiving("tok", null);
+
+            Assert.IsType<OkObjectResult>(result);
+            var suppression = await _suppressions.GetByEmailAsync(email);
+            Assert.False(suppression!.IsActive);
+            // Who (a resident, self-service) and how (which credential shape proved control).
+            Assert.Equal("resident:LegacyToken", suppression.ClearedBy);
+        }
+
+        [Fact]
+        public async Task Resume_RefusesToClearABounceSuppressionAndRecordsTheRejection()
+        {
+            // Undoing your own unsubscribe is symmetrical with making it; lifting a
+            // deliverability record is an admin decision. The 400 is recorded so a run of them
+            // is visible in the diagnostics.
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
+            await new EmailSuppressionService(_suppressions, TimeProvider.System).RecordAsync(
+                email,
+                SuppressionReason.SpamComplaint,
+                EmailSuppression.SystemDeliveryEvent,
+                null,
+                null
+            );
+
+            var controller = CreateController();
+            var result = await controller.ResumeReceiving("tok", null);
+
+            Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("suppression-not-resident-clearable", Recorded()?.Reason);
+            Assert.True((await _suppressions.GetByEmailAsync(email))!.IsActive);
+        }
+
+        [Fact]
+        public async Task Resume_IsIdempotentWhenNothingIsSuppressed()
+        {
+            // A refresh-and-retry from the SPA must not turn into an error: "make sure this
+            // address receives mail" is satisfied by there being nothing to lift.
+            var homeId = Guid.NewGuid();
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, "jane@example.com"));
+
+            var controller = CreateController();
+
+            Assert.IsType<OkObjectResult>(await controller.ResumeReceiving("tok", null));
+            Assert.Null(Recorded());
+        }
+
+        [Fact]
+        public async Task Resume_InvalidCredential_Returns400()
+        {
+            _tokenService.Setup(s => s.ValidateToken("bad")).Returns(Rejected());
+
+            var controller = CreateController();
+            var result = await controller.ResumeReceiving("bad", null);
+
+            Assert.IsType<BadRequestObjectResult>(result);
+            Assert.NotNull(Recorded());
         }
 
         // --- UpdatePreferences ---
@@ -397,10 +589,37 @@ namespace Web.UnitTests
             Assert.False(home.EmailAddress.BoardEmailOptedIn);
         }
 
-        // --- Concurrency retry ---
+        [Fact]
+        public async Task UpdatePreferences_WritesBooleansOnlyAndNeverASuppression()
+        {
+            // The other half of the Part 3 invariant: only a human editing preferences writes the
+            // opt-in booleans - and that writer writes ONLY booleans. A preferences save that
+            // minted or cleared suppressions would collapse the two mechanisms back into one.
+            var homeId = Guid.NewGuid();
+            var email = "jane@example.com";
+            var home = CreateTestHome(homeId, email, allOptedIn: true);
+            var resident = CreateTestResident(homeId, email, allOptedIn: true);
+
+            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
+            _homeRepository.Setup(r => r.UpsertAsync(home)).ReturnsAsync(home);
+            SetupResidentForHome(homeId, resident);
+
+            var controller = CreateController();
+            var result = await controller.UpdatePreferences(
+                "tok",
+                null,
+                new UpdateEmailPreferencesDto { BoardEmailOptedIn = false }
+            );
+
+            Assert.IsType<OkObjectResult>(result);
+            Assert.Empty(await _suppressions.GetAllAsync());
+        }
+
+        // --- Concurrency retry (the preferences PUT is the remaining WithOptimisticRetry caller) ---
 
         [Fact]
-        public async Task OneClickUnsubscribe_RetriesOnConcurrencyConflict()
+        public async Task UpdatePreferences_RetriesOnConcurrencyConflict()
         {
             var homeId = Guid.NewGuid();
             var email = "jane@example.com";
@@ -433,7 +652,11 @@ namespace Web.UnitTests
                 });
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
+            var result = await controller.UpdatePreferences(
+                "tok",
+                null,
+                new UpdateEmailPreferencesDto { BoardEmailOptedIn = false }
+            );
 
             Assert.IsType<OkObjectResult>(result);
             // Should have been called twice (first attempt + retry)
@@ -441,31 +664,6 @@ namespace Web.UnitTests
             Assert.Equal(2, upsertCallCount);
             // The second resident object should have the preference flipped
             Assert.False(resident2.EmailAddresses[0].BoardEmailOptedIn);
-        }
-
-        [Fact]
-        public async Task OneClickUnsubscribe_WhenTheResidentSaveFails_DoesNotReportSuccess()
-        {
-            // The opt-in booleans live on the Resident document, so a swallowed failure here left
-            // the resident subscribed while telling Gmail the one-click had been honoured.
-            var homeId = Guid.NewGuid();
-            var email = "jane@example.com";
-
-            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
-            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(CreateTestHome(homeId, email));
-            _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync((Home h) => h);
-            _residentRepository
-                .Setup(r => r.GetByHomeIdAsync(homeId))
-                .ReturnsAsync(new List<Resident> { CreateTestResident(homeId, email) });
-            _residentRepository
-                .Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
-                .ThrowsAsync(new InvalidOperationException("Cosmos is unavailable."));
-
-            var controller = CreateController();
-
-            await Assert.ThrowsAsync<InvalidOperationException>(
-                () => controller.OneClickUnsubscribe("board", "tok", null, "One-Click")
-            );
         }
 
         [Fact]
@@ -493,7 +691,12 @@ namespace Web.UnitTests
             var controller = CreateController();
 
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => controller.OneClickUnsubscribe("board", "tok", null, "One-Click")
+                () =>
+                    controller.UpdatePreferences(
+                        "tok",
+                        null,
+                        new UpdateEmailPreferencesDto { BoardEmailOptedIn = false }
+                    )
             );
 
             VerifyLogged(
@@ -528,7 +731,7 @@ namespace Web.UnitTests
         }
 
         [Fact]
-        public async Task OneClickUnsubscribe_ReturnsConflictAfterMaxRetries()
+        public async Task UpdatePreferences_ReturnsConflictAfterMaxRetries()
         {
             var homeId = Guid.NewGuid();
             var email = "jane@example.com";
@@ -549,7 +752,11 @@ namespace Web.UnitTests
                 .ThrowsAsync(new ConcurrencyConflictException("conflict", new Exception()));
 
             var controller = CreateController();
-            var result = await controller.OneClickUnsubscribe("board", "tok", null, "One-Click");
+            var result = await controller.UpdatePreferences(
+                "tok",
+                null,
+                new UpdateEmailPreferencesDto { BoardEmailOptedIn = false }
+            );
 
             Assert.IsType<ConflictObjectResult>(result);
         }

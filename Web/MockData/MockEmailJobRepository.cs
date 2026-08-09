@@ -191,16 +191,22 @@ namespace Web.MockData
             var adminId = MockDataConstants.AdminUniqueId;
             const string displayName = "Mock Admin";
 
-            var definitions = new (Guid Id, string Subject, int DaysAgo, int Sent, int Failed)[]
+            // Seed3 (10 days ago) is the job whose bounce created the seeded suppression of
+            // taylor.old@cohad.local (see MockEmailSuppressionRepository.SeedSampleData, whose
+            // CausingJobId points at it); Seed5 onward post-date the suppression, and Seed5
+            // carries the resulting Suppressed recipient so the job detail page's in-place
+            // explanation is exercisable. Earlier jobs pre-date the address's failure and
+            // deliberately do not mention it.
+            var definitions = new (Guid Id, string Subject, int DaysAgo, int Sent, int Failed, int Suppressed)[]
             {
-                (MockDataConstants.SampleEmailJobSeed1, "[Mock] Annual HOA assessment reminder", 14, 2, 0),
-                (MockDataConstants.SampleEmailJobSeed2, "[Mock] Pool closure — maintenance week", 12, 2, 0),
-                (MockDataConstants.SampleEmailJobSeed3, "[Mock] Neighborhood garage sale", 10, 1, 1),
-                (MockDataConstants.SampleEmailJobSeed4, "[Mock] Board meeting minutes (March)", 8, 2, 0),
-                (MockDataConstants.SampleEmailJobSeed5, "[Mock] Garden club spring planting day", 6, 2, 0),
-                (MockDataConstants.SampleEmailJobSeed6, "[Mock] Trash pickup schedule change", 4, 2, 0),
-                (MockDataConstants.SampleEmailJobSeed7, "[Mock] Welcome new residents", 2, 2, 0),
-                (MockDataConstants.SampleEmailJobSeed8, "[Mock] Holiday lights contest", 1, 2, 0),
+                (MockDataConstants.SampleEmailJobSeed1, "[Mock] Annual HOA assessment reminder", 14, 2, 0, 0),
+                (MockDataConstants.SampleEmailJobSeed2, "[Mock] Pool closure — maintenance week", 12, 2, 0, 0),
+                (MockDataConstants.SampleEmailJobSeed3, "[Mock] Neighborhood garage sale", 10, 1, 1, 0),
+                (MockDataConstants.SampleEmailJobSeed4, "[Mock] Board meeting minutes (March)", 8, 2, 0, 0),
+                (MockDataConstants.SampleEmailJobSeed5, "[Mock] Garden club spring planting day", 6, 2, 0, 1),
+                (MockDataConstants.SampleEmailJobSeed6, "[Mock] Trash pickup schedule change", 4, 2, 0, 0),
+                (MockDataConstants.SampleEmailJobSeed7, "[Mock] Welcome new residents", 2, 2, 0, 0),
+                (MockDataConstants.SampleEmailJobSeed8, "[Mock] Holiday lights contest", 1, 2, 0, 0),
             };
 
             lock (_jobs)
@@ -212,7 +218,7 @@ namespace Web.MockData
                     var started = created.AddMinutes(2);
                     var completed = started.AddMinutes(5);
 
-                    var recipients = BuildSeedRecipients(d.Sent, d.Failed, completed);
+                    var recipients = BuildSeedRecipients(d.Sent, d.Failed, d.Suppressed, completed);
 
                     var job = new EmailJob
                     {
@@ -239,6 +245,7 @@ namespace Web.MockData
                         TotalRecipients = recipients.Count,
                         SentCount = d.Sent,
                         FailedCount = d.Failed,
+                        SuppressedCount = d.Suppressed,
                         LastError = null,
                         Recipients = recipients,
                         ETag = Interlocked.Increment(ref _versionCounter).ToString(),
@@ -319,7 +326,12 @@ namespace Web.MockData
             return job;
         }
 
-        private static List<EmailJobRecipient> BuildSeedRecipients(int sent, int failed, DateTime completedUtc)
+        private static List<EmailJobRecipient> BuildSeedRecipients(
+            int sent,
+            int failed,
+            int suppressed,
+            DateTime completedUtc
+        )
         {
             var list = new List<EmailJobRecipient>();
             var emails = new[]
@@ -363,6 +375,23 @@ namespace Web.MockData
                 );
             }
 
+            for (var i = 0; i < suppressed; i++)
+            {
+                // The shape the enforcement point produces: no attempt consumed, no error text,
+                // the when and why stamped on the recipient (see EmailJobProcessor.ApplySuppressions).
+                list.Add(
+                    new EmailJobRecipient
+                    {
+                        Email = "taylor.old@cohad.local",
+                        HomeId = MockDataConstants.SecondSampleHomeId,
+                        Status = EmailJobRecipientStatus.Suppressed,
+                        AttemptCount = 0,
+                        SuppressedUtc = completedUtc.AddSeconds(-35),
+                        SuppressionReason = SuppressionReason.HardBounce,
+                    }
+                );
+            }
+
             return list;
         }
 
@@ -390,6 +419,7 @@ namespace Web.MockData
                 TotalRecipients = job.TotalRecipients,
                 SentCount = job.SentCount,
                 FailedCount = job.FailedCount,
+                SuppressedCount = job.SuppressedCount,
                 LastError = job.LastError,
                 GroupRecipients = job.GroupRecipients,
                 InternetMessageId = job.InternetMessageId,
@@ -416,6 +446,19 @@ namespace Web.MockData
                             LastAttemptUtc = r.LastAttemptUtc,
                             Error = r.Error,
                             SentUtc = r.SentUtc,
+                            // Every field, matching what the Cosmos mapper round-trips. This clone
+                            // previously dropped the delivery-event fields and UnsubscribeLinkId,
+                            // which mock mode happened never to read back - the suppression stamps
+                            // ARE read back (the job detail page renders them), so the gap stopped
+                            // being latent and the whole set is aligned rather than just the new
+                            // two.
+                            DeliveryStatus = r.DeliveryStatus,
+                            DeliveryStatusUpdatedUtc = r.DeliveryStatusUpdatedUtc,
+                            ProviderMessageId = r.ProviderMessageId,
+                            Provider = r.Provider,
+                            UnsubscribeLinkId = r.UnsubscribeLinkId,
+                            SuppressedUtc = r.SuppressedUtc,
+                            SuppressionReason = r.SuppressionReason,
                         })
                         .ToList()
                     ?? new List<EmailJobRecipient>(),

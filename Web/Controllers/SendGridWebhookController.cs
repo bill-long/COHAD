@@ -235,9 +235,28 @@ namespace Web.Controllers
                 Provider = "SendGrid",
                 ReceivedUtc = DateTime.UtcNow,
                 ProviderPayloadJson = evt.GetRawText(),
+                ProviderDiagnostic = ExtractDiagnostic(eventType, evt),
             };
 
             await _deliveryEventRepository.AddAsync(deliveryEvent);
+        }
+
+        /// <summary>
+        /// Composes the provider's explanation of a failure for the suppression record - e.g.
+        /// "bounce: 550 5.1.1 The email account does not exist". Failure events only; a delivery
+        /// needs no explaining. Mirrors <c>PostmarkWebhookController.ExtractDiagnostic</c>.
+        /// </summary>
+        internal static string? ExtractDiagnostic(string eventType, JsonElement evt)
+        {
+            var status = MapEventToDeliveryStatus(eventType);
+            if (status is not (DeliveryStatus.Bounced or DeliveryStatus.SpamReport or DeliveryStatus.Rejected))
+                return null;
+
+            var reason = evt.TryGetProperty("reason", out var reasonProp) ? reasonProp.GetString() : null;
+            if (string.IsNullOrWhiteSpace(reason))
+                reason = evt.TryGetProperty("status", out var statusProp) ? statusProp.GetString() : null;
+
+            return string.IsNullOrWhiteSpace(reason) ? eventType : $"{eventType}: {reason}";
         }
 
         internal static DeliveryStatus MapEventToDeliveryStatus(string eventType)

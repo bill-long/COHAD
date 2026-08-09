@@ -30,6 +30,14 @@ public sealed class EmailJobProcessorTests
     private readonly Mock<IClientProxy> _clientProxy = new();
     private readonly EmailJobQueue _queue = new();
 
+    // The real Mock repository rather than a Moq stub, so tests seed suppressions the same way
+    // the MockData environment does and get the same active-only filtering.
+    private readonly MockEmailSuppressionRepository _suppressions = new();
+
+    // When set, CreateProcessor's scope hands this out instead of _suppressions - the fail-closed
+    // test swaps in a repository whose read throws.
+    private IEmailSuppressionRepository? _suppressionRepoOverride;
+
     public EmailJobProcessorTests()
     {
         // Default: TryClaimAsync succeeds (single-instance tests)
@@ -63,6 +71,11 @@ public sealed class EmailJobProcessorTests
         serviceProvider
             .Setup(sp => sp.GetService(typeof(IEmailDeliveryActionService)))
             .Returns(_deliveryActionService.Object);
+        // Deferred so a test can swap in a throwing repository (the fail-closed path) after the
+        // processor is constructed.
+        serviceProvider
+            .Setup(sp => sp.GetService(typeof(IEmailSuppressionRepository)))
+            .Returns(() => _suppressionRepoOverride ?? _suppressions);
         scope.Setup(s => s.ServiceProvider).Returns(serviceProvider.Object);
         scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
 
@@ -470,6 +483,7 @@ public sealed class EmailJobProcessorTests
         serviceProvider
             .Setup(sp => sp.GetService(typeof(IEmailDeliveryActionService)))
             .Returns(_deliveryActionService.Object);
+        serviceProvider.Setup(sp => sp.GetService(typeof(IEmailSuppressionRepository))).Returns(_suppressions);
         scope.Setup(s => s.ServiceProvider).Returns(serviceProvider.Object);
         scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
 
@@ -603,6 +617,7 @@ public sealed class EmailJobProcessorTests
         serviceProvider
             .Setup(sp => sp.GetService(typeof(IEmailDeliveryActionService)))
             .Returns(_deliveryActionService.Object);
+        serviceProvider.Setup(sp => sp.GetService(typeof(IEmailSuppressionRepository))).Returns(_suppressions);
         scope.Setup(s => s.ServiceProvider).Returns(serviceProvider.Object);
         scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
 
@@ -2390,7 +2405,13 @@ public sealed class EmailJobProcessorTests
 
         Assert.Equal(DeliveryStatus.Bounced, job.Recipients[0].DeliveryStatus);
         mockAction.Verify(
-            a => a.ProcessDeliveryEventAsync("bounced@test.com", DeliveryStatus.Bounced, "board"),
+            a =>
+                a.ProcessDeliveryEventAsync(
+                    It.Is<EmailDeliveryEvent>(e =>
+                        e.Email == "bounced@test.com" && e.DeliveryStatus == DeliveryStatus.Bounced && e.JobId == jobId
+                    ),
+                    "board"
+                ),
             Times.Once
         );
     }
@@ -2438,7 +2459,7 @@ public sealed class EmailJobProcessorTests
 
         // Delivery action should not be called again
         mockAction.Verify(
-            a => a.ProcessDeliveryEventAsync(It.IsAny<string>(), It.IsAny<DeliveryStatus>(), It.IsAny<string?>()),
+            a => a.ProcessDeliveryEventAsync(It.IsAny<EmailDeliveryEvent>(), It.IsAny<string?>()),
             Times.Never
         );
     }
@@ -2634,7 +2655,13 @@ public sealed class EmailJobProcessorTests
         await processor.SweepCompletedJobDeliveryEventsAsync(CancellationToken.None);
 
         _deliveryActionService.Verify(
-            s => s.ProcessDeliveryEventAsync("bounced@test.com", DeliveryStatus.Bounced, "social"),
+            s =>
+                s.ProcessDeliveryEventAsync(
+                    It.Is<EmailDeliveryEvent>(e =>
+                        e.Email == "bounced@test.com" && e.DeliveryStatus == DeliveryStatus.Bounced
+                    ),
+                    "social"
+                ),
             Times.Once
         );
     }
@@ -2845,4 +2872,544 @@ public sealed class EmailJobProcessorTests
         // Only one attempt — gave up after seeing Cancelled
         _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Once);
     }
+
+    // ───────────────────────────────────────────────────
+    // Suppression enforcement (docs/email-suppression-and-unsubscribe.md, Part 3)
+    // ───────────────────────────────────────────────────
+
+    private Task SeedSuppressionAsync(string email, SuppressionReason reason = SuppressionReason.HardBounce)
+    {
+        var now = DateTime.UtcNow;
+        return _suppressions.AddAsync(
+            new EmailSuppression
+            {
+                Id = EmailSuppression.MakeId(email),
+                Email = EmailSuppression.NormalizeAddress(email),
+                Reason = reason,
+                ConsecutiveFailureCount = 1,
+                FirstSeenUtc = now,
+                LastSeenUtc = now,
+                SuppressedUtc = now,
+                SuppressedBy = EmailSuppression.SystemDeliveryEvent,
+            }
+        );
+    }
+
+    private EmailJob NewQueuedJob(Guid jobId, bool grouped, params string[] emails)
+    {
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Suppression test",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            GroupRecipients = grouped,
+            TotalRecipients = emails.Length,
+            Recipients = emails
+                .Select(e => new EmailJobRecipient
+                {
+                    Email = e,
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Pending,
+                })
+                .ToList(),
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+        _fileStore
+            .Setup(f => f.DownloadAsync(job.ContentBlobPath))
+            .ReturnsAsync(
+                new DocumentFileResult { Stream = new MemoryStream("<p>x</p>"u8.ToArray()), ContentType = "text/html" }
+            );
+
+        return job;
+    }
+
+    private static Mock<IEmailTransport> CreateCapturingTransport(List<MimeKit.MimeMessage> captured)
+    {
+        var mockSmtp = new Mock<IEmailTransport>();
+        mockSmtp.Setup(t => t.ProviderName).Returns("SendGrid");
+        mockSmtp
+            .Setup(t =>
+                t.SendAsync(
+                    It.IsAny<MimeKit.MimeMessage>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .Callback<MimeKit.MimeMessage, string, string, string, CancellationToken>((msg, _, _, _, _) => captured.Add(msg))
+            .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
+        return mockSmtp;
+    }
+
+    [Fact]
+    public async Task RealSend_PerRecipient_SkipsSuppressedRecipientAndStampsWhy()
+    {
+        var jobId = Guid.NewGuid();
+        var job = NewQueuedJob(jobId, grouped: false, "ok@test.com", "suppressed@test.com");
+        await SeedSuppressionAsync("suppressed@test.com");
+
+        var captured = new List<MimeKit.MimeMessage>();
+        var processor = CreateRealSendProcessor(CreateCapturingTransport(captured));
+
+        await RunProcessorForSingleJob(processor, jobId);
+
+        // The transport saw exactly one message, to the deliverable recipient.
+        var to = Assert.Single(captured).To.Mailboxes.Single().Address;
+        Assert.Equal("ok@test.com", to);
+
+        var suppressed = job.Recipients.Single(r => r.Email == "suppressed@test.com");
+        Assert.Equal(EmailJobRecipientStatus.Suppressed, suppressed.Status);
+        Assert.NotNull(suppressed.SuppressedUtc);
+        Assert.Equal(SuppressionReason.HardBounce, suppressed.SuppressionReason);
+        // No attempt happened, and the budget must say so - a suppressed skip that consumed
+        // attempts would count against the recipient if the suppression is later cleared.
+        Assert.Equal(0, suppressed.AttemptCount);
+        Assert.Null(suppressed.Error);
+
+        Assert.Equal(EmailJobStatus.Completed, job.Status);
+        Assert.Equal(1, job.SentCount);
+        Assert.Equal(0, job.FailedCount);
+        Assert.Equal(1, job.SuppressedCount);
+    }
+
+    [Fact]
+    public async Task RealSend_Grouped_ExcludesSuppressedAddressFromTheSingleMessage()
+    {
+        // The doc's test-list item: suppression is enforced for grouped sends, not only
+        // per-recipient sends - the grouped branch is committee forwards and escalation digests,
+        // the mail types that had no unsubscribe mechanism at all.
+        var jobId = Guid.NewGuid();
+        var job = NewQueuedJob(jobId, grouped: true, "admin1@test.com", "admin2@test.com", "admin3@test.com");
+        // Seeded with different casing and whitespace than the recipient carries, so this also
+        // locks that enforcement matches on the normalized address.
+        await SeedSuppressionAsync("  Admin2@TEST.com ");
+
+        var captured = new List<MimeKit.MimeMessage>();
+        var processor = CreateRealSendProcessor(CreateCapturingTransport(captured));
+
+        await RunProcessorForSingleJob(processor, jobId);
+
+        var toAddresses = Assert.Single(captured).To.Mailboxes.Select(m => m.Address).OrderBy(a => a).ToList();
+        Assert.Equal(new List<string> { "admin1@test.com", "admin3@test.com" }, toAddresses);
+
+        var suppressed = job.Recipients.Single(r => r.Email == "admin2@test.com");
+        Assert.Equal(EmailJobRecipientStatus.Suppressed, suppressed.Status);
+        Assert.Equal(0, suppressed.AttemptCount);
+
+        Assert.Equal(EmailJobStatus.Completed, job.Status);
+        Assert.Equal(2, job.SentCount);
+        Assert.Equal(1, job.SuppressedCount);
+    }
+
+    [Fact]
+    public async Task MockMode_AppliesTheSameSuppressionPass()
+    {
+        // Mock-path parity: the MockData environment must enforce suppression identically or it
+        // stops exercising what production does (and the seeded MockData suppression would be
+        // decorative). Same helper, same position relative to the filter - this locks it.
+        var jobId = Guid.NewGuid();
+        var job = NewQueuedJob(jobId, grouped: false, "ok@test.com", "suppressed@test.com");
+        await SeedSuppressionAsync("suppressed@test.com", SuppressionReason.SpamComplaint);
+
+        var processor = CreateProcessor();
+        await RunProcessorForSingleJob(processor, jobId);
+
+        var suppressed = job.Recipients.Single(r => r.Email == "suppressed@test.com");
+        Assert.Equal(EmailJobRecipientStatus.Suppressed, suppressed.Status);
+        Assert.Equal(SuppressionReason.SpamComplaint, suppressed.SuppressionReason);
+        Assert.Equal(EmailJobRecipientStatus.Sent, job.Recipients.Single(r => r.Email == "ok@test.com").Status);
+        Assert.Equal(EmailJobStatus.Completed, job.Status);
+        Assert.Equal(1, job.SuppressedCount);
+    }
+
+    [Fact]
+    public async Task AllRecipientsSuppressed_JobCompletesWithZeroSentZeroFailed()
+    {
+        // Nothing failed and nothing remains to do: suppression did its job, and SuppressedCount
+        // is what explains "Completed, sent 0" on the detail page.
+        var jobId = Guid.NewGuid();
+        var job = NewQueuedJob(jobId, grouped: false, "a@test.com", "b@test.com");
+        await SeedSuppressionAsync("a@test.com");
+        await SeedSuppressionAsync("b@test.com");
+
+        var processor = CreateProcessor();
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.Equal(EmailJobStatus.Completed, job.Status);
+        Assert.Equal(0, job.SentCount);
+        Assert.Equal(0, job.FailedCount);
+        Assert.Equal(2, job.SuppressedCount);
+        Assert.All(job.Recipients, r => Assert.Equal(EmailJobRecipientStatus.Suppressed, r.Status));
+    }
+
+    [Fact]
+    public async Task RealSend_PerRecipient_SkipsASuppressionAdoptedByTheConflictMerge()
+    {
+        // The enforcement point runs once, up front - but another instance (a stall reclaim) can
+        // mark a recipient Suppressed AFTER that, and this instance learns of it only through the
+        // attempt persist's conflict merge. The post-persist re-check must honour the adopted
+        // status: mailing it and stamping Sent would defeat the enforcement point from a code
+        // path it never sees.
+        var jobId = Guid.NewGuid();
+        var job = NewQueuedJob(jobId, grouped: false, "suppressed-elsewhere@test.com");
+
+        var serverCopy = NewQueuedJob(jobId, grouped: false, "suppressed-elsewhere@test.com");
+        serverCopy.Status = EmailJobStatus.InProgress;
+        serverCopy.ETag = "server-etag";
+        serverCopy.Recipients[0].Status = EmailJobRecipientStatus.Suppressed;
+        serverCopy.Recipients[0].SuppressedUtc = DateTime.UtcNow.AddMinutes(-1);
+        serverCopy.Recipients[0].SuppressionReason = SuppressionReason.HardBounce;
+
+        var getCalls = 0;
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(() => getCalls++ == 0 ? job : serverCopy);
+
+        var updateCalls = 0;
+        _jobRepo
+            .Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
+            .Returns<EmailJob>(_ =>
+            {
+                if (updateCalls++ == 0)
+                    throw new EmailJobConcurrencyException();
+                return Task.CompletedTask;
+            });
+
+        var captured = new List<MimeKit.MimeMessage>();
+        var transport = CreateCapturingTransport(captured);
+        var processor = CreateRealSendProcessor(transport);
+
+        await RunProcessorForSingleJob(processor, jobId);
+
+        // Never mailed, and the adopted suppression survived the close-out.
+        Assert.Empty(captured);
+        var recipient = job.Recipients.Single();
+        Assert.Equal(EmailJobRecipientStatus.Suppressed, recipient.Status);
+        Assert.Equal(SuppressionReason.HardBounce, recipient.SuppressionReason);
+        Assert.Equal(EmailJobStatus.Completed, job.Status);
+        Assert.Equal(1, job.SuppressedCount);
+    }
+
+    [Fact]
+    public async Task RealSend_Grouped_ExcludesASuppressionAdoptedByTheConflictMerge()
+    {
+        // Same race, grouped branch: the To list must be built AFTER the attempt persist whose
+        // merge can adopt the other instance's Suppressed, and the post-send stamping must not
+        // overwrite it with Sent.
+        var jobId = Guid.NewGuid();
+        var job = NewQueuedJob(jobId, grouped: true, "admin1@test.com", "admin2@test.com");
+
+        var serverCopy = NewQueuedJob(jobId, grouped: true, "admin1@test.com", "admin2@test.com");
+        serverCopy.Status = EmailJobStatus.InProgress;
+        serverCopy.ETag = "server-etag";
+        var serverSuppressed = serverCopy.Recipients.Single(r => r.Email == "admin2@test.com");
+        serverSuppressed.Status = EmailJobRecipientStatus.Suppressed;
+        serverSuppressed.SuppressedUtc = DateTime.UtcNow.AddMinutes(-1);
+        serverSuppressed.SuppressionReason = SuppressionReason.SpamComplaint;
+
+        var getCalls = 0;
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(() => getCalls++ == 0 ? job : serverCopy);
+
+        var updateCalls = 0;
+        _jobRepo
+            .Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
+            .Returns<EmailJob>(_ =>
+            {
+                if (updateCalls++ == 0)
+                    throw new EmailJobConcurrencyException();
+                return Task.CompletedTask;
+            });
+
+        var captured = new List<MimeKit.MimeMessage>();
+        var processor = CreateRealSendProcessor(CreateCapturingTransport(captured));
+
+        await RunProcessorForSingleJob(processor, jobId);
+
+        var to = Assert.Single(captured).To.Mailboxes.Select(m => m.Address).ToList();
+        Assert.Equal(new List<string> { "admin1@test.com" }, to);
+
+        var suppressed = job.Recipients.Single(r => r.Email == "admin2@test.com");
+        Assert.Equal(EmailJobRecipientStatus.Suppressed, suppressed.Status);
+        Assert.Equal(EmailJobRecipientStatus.Sent, job.Recipients.Single(r => r.Email == "admin1@test.com").Status);
+        Assert.Equal(EmailJobStatus.Completed, job.Status);
+        Assert.Equal(1, job.SentCount);
+        Assert.Equal(1, job.SuppressedCount);
+    }
+
+    [Fact]
+    public async Task CaseVariantSuppressionRows_DoNotHaltTheJob()
+    {
+        // Hand-authored or imported documents can carry case/whitespace variants of one address
+        // (their ids differ, so the container accepts both). A naive ToDictionary would throw on
+        // the duplicate key and fail EVERY send job over one odd row - a total outbound-mail halt
+        // far broader than the intended fail-closed. Any variant means "do not mail".
+        await SeedSuppressionAsync("dup@test.com");
+        await _suppressions.AddAsync(
+            new EmailSuppression
+            {
+                Id = "hand-authored-variant",
+                Email = "  DUP@Test.com ",
+                Reason = SuppressionReason.AdminAction,
+                ConsecutiveFailureCount = 1,
+                FirstSeenUtc = DateTime.UtcNow,
+                LastSeenUtc = DateTime.UtcNow,
+                SuppressedUtc = DateTime.UtcNow,
+                SuppressedBy = "someone",
+            }
+        );
+
+        var jobId = Guid.NewGuid();
+        var job = NewQueuedJob(jobId, grouped: false, "dup@test.com", "ok@test.com");
+
+        var processor = CreateProcessor();
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.Equal(EmailJobStatus.Completed, job.Status);
+        Assert.Equal(EmailJobRecipientStatus.Suppressed, job.Recipients.Single(r => r.Email == "dup@test.com").Status);
+        Assert.Equal(EmailJobRecipientStatus.Sent, job.Recipients.Single(r => r.Email == "ok@test.com").Status);
+    }
+
+    [Fact]
+    public async Task SuppressionReadFailure_FailsTheJobInsteadOfSendingUnfiltered()
+    {
+        // Fail-closed: a missing container (or any read fault) must never mean "send to
+        // everyone". The exception propagates, the job is marked Failed, and no recipient is
+        // touched - clicking Send again after fixing the container is the whole recovery,
+        // exactly like the UnsubscribeLink container gate at job creation.
+        var throwingRepo = new Mock<IEmailSuppressionRepository>();
+        throwingRepo
+            .Setup(r => r.GetActiveAsync())
+            .ThrowsAsync(new InvalidOperationException("container missing"));
+        _suppressionRepoOverride = throwingRepo.Object;
+
+        var jobId = Guid.NewGuid();
+        var job = NewQueuedJob(jobId, grouped: false, "a@test.com");
+
+        var processor = CreateProcessor();
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.Equal(EmailJobStatus.Failed, job.Status);
+        Assert.Equal(EmailJobRecipientStatus.Pending, job.Recipients.Single().Status);
+        Assert.Equal(0, job.Recipients.Single().AttemptCount);
+    }
+
+    [Fact]
+    public async Task Resume_StalledInProgressJob_WithSuppressedRemainder_MarksCompletedNotFailed()
+    {
+        // The watchdog's old inline terminal rule required every recipient to be Sent for
+        // Completed. Under that rule this job - one sent, one suppressed - would close as
+        // PartiallyCompleted, reading as if something went wrong. DeriveTerminalStatus is the
+        // shared rule; this locks the watchdog to it.
+        var jobId = Guid.NewGuid();
+        var stalled = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.InProgress,
+            Category = "board",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            CreatedUtc = DateTime.UtcNow.AddHours(-2),
+            StartedUtc = DateTime.UtcNow.AddHours(-2),
+            LastProgressUtc = DateTime.UtcNow.AddMinutes(-10),
+            TotalRecipients = 2,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "done@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Sent,
+                    SentUtc = DateTime.UtcNow.AddMinutes(-30),
+                },
+                new EmailJobRecipient
+                {
+                    Email = "suppressed@test.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Suppressed,
+                    SuppressedUtc = DateTime.UtcNow.AddMinutes(-30),
+                    SuppressionReason = SuppressionReason.HardBounce,
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob> { stalled });
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var processor = CreateProcessor(
+            configOverrides: new Dictionary<string, string?> { ["EmailJobs:StallAfterMinutes"] = "1" }
+        );
+
+        using var cts = new CancellationTokenSource();
+        await processor.StartAsync(cts.Token);
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+            if (stalled.Status != EmailJobStatus.InProgress)
+                break;
+        }
+
+        cts.Cancel();
+        try
+        {
+            await processor.StopAsync(CancellationToken.None);
+        }
+        catch (OperationCanceledException) { }
+
+        Assert.Equal(EmailJobStatus.Completed, stalled.Status);
+        Assert.Equal(1, stalled.SentCount);
+        Assert.Equal(0, stalled.FailedCount);
+        Assert.Equal(1, stalled.SuppressedCount);
+        // The suppressed recipient was not disturbed by the close-out.
+        Assert.Equal(
+            EmailJobRecipientStatus.Suppressed,
+            stalled.Recipients.Single(r => r.Email == "suppressed@test.com").Status
+        );
+    }
+
+    // ─── The static helpers, driven directly ───
+
+    [Fact]
+    public void ApplySuppressions_LeavesRecipientsWithKnownDeliveryOutcomesAlone()
+    {
+        // A proven delivery outranks a skip: NormalizePendingDelivered promotes these to Sent,
+        // which is the truthful record of what happened.
+        var job = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "delivered@test.com",
+                    Status = EmailJobRecipientStatus.Pending,
+                    DeliveryStatus = DeliveryStatus.Delivered,
+                },
+                new() { Email = "sent@test.com", Status = EmailJobRecipientStatus.Sent },
+            },
+        };
+        var active = new Dictionary<string, SuppressionReason>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["delivered@test.com"] = SuppressionReason.HardBounce,
+            ["sent@test.com"] = SuppressionReason.HardBounce,
+        };
+
+        Assert.False(EmailJobProcessor.ApplySuppressions(job, active));
+        Assert.Equal(EmailJobRecipientStatus.Pending, job.Recipients[0].Status);
+        Assert.Equal(EmailJobRecipientStatus.Sent, job.Recipients[1].Status);
+    }
+
+    [Fact]
+    public void ApplySuppressions_ReclassifiesFailedRecipientsAndClearsStaleErrorText()
+    {
+        // A previously-Failed recipient whose address is now suppressed reads as Suppressed, not
+        // Failed-with-an-error: the skip is deliberate, and the old transport error would
+        // misdescribe it on the detail page.
+        var job = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = "failed@test.com",
+                    Status = EmailJobRecipientStatus.Failed,
+                    Error = "SMTP timeout",
+                    AttemptCount = 2,
+                },
+            },
+        };
+        var active = new Dictionary<string, SuppressionReason>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["failed@test.com"] = SuppressionReason.SpamComplaint,
+        };
+
+        Assert.True(EmailJobProcessor.ApplySuppressions(job, active));
+        var r = job.Recipients.Single();
+        Assert.Equal(EmailJobRecipientStatus.Suppressed, r.Status);
+        Assert.Null(r.Error);
+        // The attempt history is real and stays.
+        Assert.Equal(2, r.AttemptCount);
+        Assert.Equal(1, job.SuppressedCount);
+        Assert.Equal(0, job.FailedCount);
+    }
+
+    [Theory]
+    [InlineData(0, 0, 2, EmailJobStatus.Completed)] // all suppressed: nothing failed, nothing to do
+    [InlineData(3, 0, 0, EmailJobStatus.Completed)]
+    [InlineData(2, 0, 1, EmailJobStatus.Completed)]
+    [InlineData(0, 2, 1, EmailJobStatus.Failed)]
+    [InlineData(1, 1, 1, EmailJobStatus.PartiallyCompleted)]
+    public void DeriveTerminalStatus_OneRuleForAllThreeCloseOuts(
+        int sent,
+        int failed,
+        int suppressed,
+        EmailJobStatus expected
+    )
+    {
+        var job = new EmailJob
+        {
+            SentCount = sent,
+            FailedCount = failed,
+            SuppressedCount = suppressed,
+        };
+
+        Assert.Equal(expected, EmailJobProcessor.DeriveTerminalStatus(job));
+    }
+
+    [Fact]
+    public void MergeJobFromServer_AdoptsServerSuppressed_ButSentStillWins()
+    {
+        var email = "a@test.com";
+        var local = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new() { Email = email, Status = EmailJobRecipientStatus.Pending },
+                new() { Email = "sent-locally@test.com", Status = EmailJobRecipientStatus.Sent, SentUtc = DateTime.UtcNow },
+            },
+        };
+        var suppressedUtc = DateTime.UtcNow.AddMinutes(-1);
+        var server = new EmailJob
+        {
+            Recipients = new List<EmailJobRecipient>
+            {
+                new()
+                {
+                    Email = email,
+                    Status = EmailJobRecipientStatus.Suppressed,
+                    SuppressedUtc = suppressedUtc,
+                    SuppressionReason = SuppressionReason.HardBounce,
+                },
+                new()
+                {
+                    Email = "sent-locally@test.com",
+                    Status = EmailJobRecipientStatus.Suppressed,
+                    SuppressedUtc = suppressedUtc,
+                    SuppressionReason = SuppressionReason.HardBounce,
+                },
+            },
+        };
+
+        EmailJobProcessor.MergeJobFromServer(local, server);
+
+        // The winner's Suppressed is adopted so a reclaimed stall cannot persist a stale Pending
+        // over it and strand a terminal job with a recipient that looks unsent...
+        var adopted = local.Recipients.Single(r => r.Email == email);
+        Assert.Equal(EmailJobRecipientStatus.Suppressed, adopted.Status);
+        Assert.Equal(suppressedUtc, adopted.SuppressedUtc);
+        Assert.Equal(SuppressionReason.HardBounce, adopted.SuppressionReason);
+
+        // ...but a local Sent is the truthful record - the message actually went out - and is
+        // never demoted to Suppressed.
+        Assert.Equal(
+            EmailJobRecipientStatus.Sent,
+            local.Recipients.Single(r => r.Email == "sent-locally@test.com").Status
+        );
+    }
+
 }

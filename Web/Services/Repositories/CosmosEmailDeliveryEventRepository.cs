@@ -74,6 +74,13 @@ namespace Web.Services.Repositories
                 patchOps.Add(PatchOperation.Set("/providerPayloadJson", deliveryEvent.ProviderPayloadJson));
             }
 
+            // Webhook-owned like the payload: a retried webhook must not drop the diagnostic the
+            // suppression record exists to preserve.
+            if (!string.IsNullOrEmpty(deliveryEvent.ProviderDiagnostic))
+            {
+                patchOps.Add(PatchOperation.Set("/providerDiagnostic", deliveryEvent.ProviderDiagnostic));
+            }
+
             // Allow one-way transition: false→true only (processor marks processed)
             if (deliveryEvent.ActionProcessed)
             {
@@ -199,6 +206,7 @@ namespace Web.Services.Repositories
                 ["provider"] = e.Provider,
                 ["receivedUtc"] = e.ReceivedUtc,
                 ["providerPayloadJson"] = e.ProviderPayloadJson,
+                ["providerDiagnostic"] = e.ProviderDiagnostic,
                 ["actionProcessed"] = e.ActionProcessed,
                 ["ttl"] = DocumentTtlSeconds,
             };
@@ -218,6 +226,7 @@ namespace Web.Services.Repositories
                 Provider = doc.Value<string>("provider"),
                 ReceivedUtc = doc.Value<DateTime?>("receivedUtc") ?? DateTime.MinValue,
                 ProviderPayloadJson = doc.Value<string>("providerPayloadJson"),
+                ProviderDiagnostic = doc.Value<string>("providerDiagnostic"),
                 ActionProcessed = doc.Value<bool?>("actionProcessed") ?? false,
             };
     }
