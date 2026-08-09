@@ -260,27 +260,49 @@ namespace Web
             services.AddSingleton<IImageUploadHelper, ImageUploadHelper>();
             services.AddScoped<IEventSignupConversionService, EventSignupConversionService>();
 
-            // Legacy unsubscribe token validation — only registered when a key is configured.
-            // Without one, the UnsubscribeController still works: short links resolve through the
-            // credential resolver, and a legacy ?token= is rejected as NotConfigured, which the log
-            // distinguishes from a bad token.
+            // Legacy unsubscribe token validation — the real service only when a usable key is
+            // configured. Without one, the UnsubscribeController still works: short links resolve
+            // through the credential resolver, and a legacy ?token= is rejected as NotConfigured,
+            // which the log distinguishes from a bad token.
             //
-            // LegacySigningKey first, SigningKey as the fallback, matching UnsubscribeTokenService.
-            // The precedence lives in two places because this one decides whether to register the
-            // real service at all, so it has to answer "is there any key" before the service exists
-            // to ask; both are named here so the pair is visible as a pair.
-            var unsubSection = Configuration.GetSection("UnsubscribeToken");
-            var unsubKey = unsubSection["LegacySigningKey"];
-            if (string.IsNullOrWhiteSpace(unsubKey))
-                unsubKey = unsubSection["SigningKey"];
-            if (!string.IsNullOrWhiteSpace(unsubKey) && Encoding.UTF8.GetByteCount(unsubKey) >= 32)
+            // A factory rather than a conditional registration, so a key that is PRESENT but too
+            // short is loudly named. Registering the null service silently for that case left a
+            // misconfiguration - a truncated paste at cutover - indistinguishable from the
+            // deliberate no-key state. The tempting alternative, falling back to SigningKey when
+            // LegacySigningKey is invalid, is wrong after rotation: SigningKey then holds a fresh
+            // key that cannot validate any legacy link, so the fallback would only convert a clear
+            // NotConfigured into a misleading DecryptFailed. Selection stays blank-means-fallback,
+            // matching UnsubscribeTokenService; a present-but-broken key disables validation and
+            // says so, once, at first use.
+            services.AddSingleton<IUnsubscribeTokenService>(sp =>
             {
-                services.AddSingleton<IUnsubscribeTokenService, UnsubscribeTokenService>();
-            }
-            else
-            {
-                services.AddSingleton<IUnsubscribeTokenService, NullUnsubscribeTokenService>();
-            }
+                var section = Configuration.GetSection("UnsubscribeToken");
+                var keyName = "UnsubscribeToken:LegacySigningKey";
+                var key = section["LegacySigningKey"];
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    keyName = "UnsubscribeToken:SigningKey";
+                    key = section["SigningKey"];
+                }
+
+                if (string.IsNullOrWhiteSpace(key))
+                    return new NullUnsubscribeTokenService();
+
+                if (Encoding.UTF8.GetByteCount(key) < 32)
+                {
+                    sp.GetRequiredService<ILogger<Startup>>()
+                        .LogError(
+                            "{KeyName} is set but shorter than 32 UTF-8 bytes; legacy unsubscribe token validation is DISABLED and every legacy link will be rejected as NotConfigured until the key is fixed.",
+                            keyName
+                        );
+                    return new NullUnsubscribeTokenService();
+                }
+
+                return new UnsubscribeTokenService(
+                    sp.GetRequiredService<IOptions<UnsubscribeTokenOptions>>(),
+                    sp.GetRequiredService<ILogger<UnsubscribeTokenService>>()
+                );
+            });
 
             // Issues the short links that replace the long ?token= credential in outgoing mail.
             // Scoped, because it writes through the scoped link repository.
