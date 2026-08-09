@@ -211,13 +211,10 @@ namespace Web.Controllers
                 return BadRequest(new { error = $"Cannot retry a job with status '{job.Status}'." });
             }
 
-            // Reset failed recipients to Pending; leave Sent recipients alone
-            foreach (var r in (job.Recipients ?? new()).Where(r => r.Status == EmailJobRecipientStatus.Failed))
-            {
-                r.Status = EmailJobRecipientStatus.Pending;
-                r.Error = null;
-                r.SentUtc = null;
-            }
+            // Everything below this line may run twice - once against the copy read above, and
+            // again against a re-read copy if the write conflicts - so the status this admin
+            // actually saw and decided on is pinned here, before anything mutates.
+            var statusAdminSawWhenRetrying = job.Status;
 
             // Backfill unsubscribe links the recipients being resent may be missing. Links are
             // stamped at job creation and the processor only reads them, so a job created before
@@ -226,10 +223,11 @@ namespace Web.Controllers
             // backfill because it is the same seam as creation: a synchronous admin action where
             // failure is a visible error and no send happens.
             //
-            // Only Pending recipients - the ones this retry will actually mail. Sent recipients are
-            // never resent, so a link stamped on one is a live credential nobody ever receives, and
-            // stamping it would also falsify the record: the mail those recipients actually got
-            // carried no link. Grouped jobs are excluded because they never carry links.
+            // Only recipients this retry will actually mail (Failed ones become Pending below).
+            // Sent recipients are never resent, so a link stamped on one is a live credential
+            // nobody ever receives, and stamping it would also falsify the record: the mail those
+            // recipients actually got carried no link. Grouped jobs are excluded because they
+            // never carry links.
             //
             // Failing the retry when issuance fails is deliberate, not an oversight: the point of
             // this whole feature is that bulk mail does not go out without an unsubscribe
@@ -238,28 +236,73 @@ namespace Web.Controllers
             if (!job.GroupRecipients)
             {
                 var resendable = (job.Recipients ?? new())
-                    .Where(r => r.Status == EmailJobRecipientStatus.Pending)
+                    .Where(r =>
+                        r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed
+                    )
                     .ToList();
                 var issuanceFailure = await IssueUnsubscribeLinksOrErrorAsync(resendable);
                 if (issuanceFailure != null)
                     return issuanceFailure;
             }
 
-            job.FailedCount = 0;
-            job.Status = EmailJobStatus.Queued;
-            job.LastError = null;
-            job.CompletedUtc = null;
-            job.StartedUtc = null;
+            // The minted ids, keyed by home + address so they can be re-applied to a re-read copy
+            // of the job. Built with a loop rather than ToDictionary because a legacy job document
+            // - the exact population the backfill exists for - can carry duplicate recipient rows
+            // from before the current dedup existed, and ToDictionary would turn that admin's
+            // retry into an unhandled 500 over a key collision.
+            var stampedIds = new Dictionary<(Guid HomeId, string Email), string>();
+            foreach (var r in (job.Recipients ?? new()))
+            {
+                if (!string.IsNullOrEmpty(r.UnsubscribeLinkId))
+                    stampedIds[(r.HomeId, r.Email)] = r.UnsubscribeLinkId;
+            }
 
-            // The ids issued above are stamped on this in-memory job, so a concurrency conflict on
-            // the write must not simply tell the admin to try again: the persisted job would still
-            // carry null ids, and the re-run backfill would mint a fresh batch of orphan rows per
-            // conflict. Instead, re-read the winning copy, re-apply the retry mutation and the
-            // already-issued ids to it (matched by home + address), and write again - the minted
-            // batch is reused, so conflicts cost retries rather than credentials.
-            var stampedIds = (job.Recipients ?? new())
-                .Where(r => !string.IsNullOrEmpty(r.UnsubscribeLinkId))
-                .ToDictionary(r => (r.HomeId, r.Email), r => r.UnsubscribeLinkId);
+            // The whole retry mutation, defined once and applied to whichever copy of the job is
+            // about to be written. This was previously two hand-maintained copies - the main path
+            // and the conflict recovery - and they drifted twice in one commit: the recovery copy
+            // missed the Pending-only guard on stamping, and its status check quietly treated a
+            // concurrent cancel as something to retry over. One function is what makes the two
+            // paths incapable of disagreeing.
+            void ApplyRetryMutation(EmailJob target)
+            {
+                foreach (var r in (target.Recipients ?? new()))
+                {
+                    if (r.Status == EmailJobRecipientStatus.Failed)
+                    {
+                        r.Status = EmailJobRecipientStatus.Pending;
+                        r.Error = null;
+                        r.SentUtc = null;
+                    }
+
+                    // Pending only: in a re-read copy a recipient this request minted a link for
+                    // may have been promoted to Sent by the processor in the meantime, and
+                    // stamping it then would attach a credential to mail that never carried one.
+                    if (
+                        r.Status == EmailJobRecipientStatus.Pending
+                        && string.IsNullOrEmpty(r.UnsubscribeLinkId)
+                        && stampedIds.TryGetValue((r.HomeId, r.Email), out var issuedId)
+                    )
+                    {
+                        r.UnsubscribeLinkId = issuedId;
+                    }
+                }
+
+                target.FailedCount = 0;
+                target.Status = EmailJobStatus.Queued;
+                target.LastError = null;
+                target.CompletedUtc = null;
+                target.StartedUtc = null;
+            }
+
+            ApplyRetryMutation(job);
+
+            // A conflict on the write must not simply tell the admin to try again: the persisted
+            // job would still carry null ids, and the re-run backfill would mint a fresh batch of
+            // orphan rows per conflict. Instead, re-read the winning copy, re-apply the mutation
+            // (the minted batch is reused via stampedIds), and write again - unless the winning
+            // write was a competing *decision*.
+            IActionResult ConflictResponse() =>
+                Conflict(new { error = "The job was changed by another process. Refresh the page and try again." });
 
             const int maxWriteAttempts = 3;
             for (var attempt = 1; ; attempt++)
@@ -270,56 +313,27 @@ namespace Web.Controllers
                     await _emailJobQueue.EnqueueAsync(job.Id);
                     break;
                 }
-                catch (EmailJobConcurrencyException) when (attempt < maxWriteAttempts)
+                catch (EmailJobConcurrencyException)
                 {
+                    if (attempt >= maxWriteAttempts)
+                        return ConflictResponse();
+
                     var latest = await _emailJobRepository.GetByIdAsync(id);
                     if (latest == null)
                         return NotFound();
 
-                    // Someone else moved the job out of a retryable state (another admin's retry,
-                    // a cancel). Their action wins; this attempt's minted batch is orphaned, which
-                    // is bounded at one batch per losing admin and visible in this response.
-                    if (
-                        latest.Status != EmailJobStatus.Failed
-                        && latest.Status != EmailJobStatus.PartiallyCompleted
-                        && latest.Status != EmailJobStatus.Cancelled
-                    )
-                    {
-                        return Conflict(
-                            new { error = "The job was changed by another process. Refresh the page and try again." }
-                        );
-                    }
+                    // Any status change is a competing decision - another admin's cancel or retry -
+                    // and must surface as a conflict, never be silently overridden. An earlier
+                    // revision only checked that the new status was still *retryable*, which is a
+                    // different question: Cancelled is retryable, so a cancel that won the race was
+                    // being re-applied over and the cancelled mail sent anyway. Only an ETag bump
+                    // that left the status exactly as this admin saw it (a webhook sweep, the
+                    // cleanup service) is safe to write over.
+                    if (latest.Status != statusAdminSawWhenRetrying)
+                        return ConflictResponse();
 
-                    foreach (var r in (latest.Recipients ?? new()))
-                    {
-                        if (r.Status == EmailJobRecipientStatus.Failed)
-                        {
-                            r.Status = EmailJobRecipientStatus.Pending;
-                            r.Error = null;
-                            r.SentUtc = null;
-                        }
-
-                        if (
-                            string.IsNullOrEmpty(r.UnsubscribeLinkId)
-                            && stampedIds.TryGetValue((r.HomeId, r.Email), out var issuedId)
-                        )
-                        {
-                            r.UnsubscribeLinkId = issuedId;
-                        }
-                    }
-
-                    latest.FailedCount = 0;
-                    latest.Status = EmailJobStatus.Queued;
-                    latest.LastError = null;
-                    latest.CompletedUtc = null;
-                    latest.StartedUtc = null;
+                    ApplyRetryMutation(latest);
                     job = latest;
-                }
-                catch (EmailJobConcurrencyException)
-                {
-                    return Conflict(
-                        new { error = "The job was changed by another process. Refresh the page and try again." }
-                    );
                 }
             }
 

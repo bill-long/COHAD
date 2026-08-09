@@ -90,6 +90,20 @@ describe('unsubscribe credential capture', () => {
     expect(readCapturedUnsubscribeLinkId()).toBe('abc123');
   });
 
+  it('a stale stored id cannot shadow a fresh capture whose own write failed', () => {
+    // Link A was captured earlier and kept in storage after a failed load (refresh-recovery). The
+    // user then opens fresh link B, but by now storage rejects writes. B must win for this load -
+    // it is what the user is holding - and A must not resurface later, so it is cleared.
+    captureUnsubscribeCredentialFromUrl('/u/stale-old-id');
+    expect(readCapturedUnsubscribeLinkId()).toBe('stale-old-id');
+
+    spyOn(Storage.prototype, 'setItem').and.throwError('storage now disabled');
+    captureUnsubscribeCredentialFromUrl('/u/fresh-new-id');
+
+    expect(readCapturedUnsubscribeLinkId()).toBe('fresh-new-id');
+    expect(window.sessionStorage.getItem('cohad.unsubscribe-link-id')).toBeNull();
+  });
+
   it('ignores a trailing segment rather than folding it into the id', () => {
     captureUnsubscribeCredentialFromUrl('/u/abc123/extra');
 

@@ -111,10 +111,18 @@ let inMemoryLinkId: string | null = null;
  * that knows when that happened. Call {@link clearCapturedUnsubscribeLinkId} there.
  */
 export function readCapturedUnsubscribeLinkId(): string | null {
-  try {
-    return window.sessionStorage.getItem(STORAGE_KEY) ?? inMemoryLinkId;
-  } catch {
+  // Memory first: the in-memory copy is only ever set by THIS load's capture, while the stored one
+  // can be the remnant of an earlier failed visit kept for refresh-recovery. Reading storage first
+  // let that stale id shadow a fresh credential whose own write had failed - the user redeemed an
+  // old link while holding a valid new one.
+  if (inMemoryLinkId) {
     return inMemoryLinkId;
+  }
+
+  try {
+    return window.sessionStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
   }
 }
 
@@ -147,4 +155,14 @@ function writeStoredId(id: string): void {
   }
 
   inMemoryLinkId = id;
+
+  // A stale id from an earlier visit may still sit in storage (kept then for refresh-recovery)
+  // even though THIS write failed - quota, or policy that flipped mid-session. Clear it so it
+  // cannot resurface after this load, when the in-memory copy is gone; the memory-first read
+  // covers the current load either way.
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // If removal fails too, the memory-first read still shields the current load.
+  }
 }

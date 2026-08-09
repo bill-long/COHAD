@@ -44,27 +44,29 @@ export class EmailPreferencesComponent implements OnInit {
       return;
     }
 
-    // Strip the credential from the address bar to reduce leakage risk (browser history, referrer
-    // headers, copy/paste). Keep it in memory for the API calls.
+    // Strip whatever credential the URL still carries, before the first request. This covers the
+    // legacy ?token= case - the short link is removed before Angular even bootstraps (see
+    // unsubscribe-credential-capture), because this point is far too late for anything that reads
+    // location.pathname at startup. Stripping BEFORE the load, not on success, is deliberate and
+    // was reverted back to after one round the other way: a token left in the URL on a failed load
+    // sits in browser history and Referer headers for as long as the error page does, and the
+    // refresh-retry that late stripping bought exists only for the failure case of a declining
+    // legacy shape. Short links are unaffected either way - their refresh-recovery rides in
+    // sessionStorage, which no URL rewrite touches.
     //
+    // None of this keeps the credential out of this page's own API calls, where it goes out as a
+    // query value - the pre-existing browser-side gap documented in
+    // docs/email-suppression-and-unsubscribe.md.
+    this.location.replaceState('/email-preferences');
+
     this.prefsService.getPreferences(this.credential).subscribe({
       next: data => {
         this.prefs = data;
         this.loading = false;
-        // The load succeeded, so refresh-recovery is no longer needed: strip whatever credential
-        // the URL still carries and drop the stored capture, in that order of importance. The
-        // strip here covers the legacy ?token= case - the short link is removed before Angular
-        // bootstraps (see unsubscribe-credential-capture), because this point is far too late for
-        // anything that reads location.pathname at startup. It deliberately runs only on SUCCESS:
-        // stripping before the load ran meant a transient failure left the resident with no
-        // credential anywhere and nothing to refresh, so the URL keeps it until it has actually
-        // been redeemed. The clear is the shared-machine half: the credential must not outlive
-        // the visit that used it, and this component's own copy keeps serving the save calls.
-        //
-        // Neither keeps the credential out of this page's own API calls, where it goes out as a
-        // query value - the pre-existing browser-side gap documented in
-        // docs/email-suppression-and-unsubscribe.md.
-        this.location.replaceState('/email-preferences');
+        // The load succeeded, so refresh-recovery is no longer needed and the credential must not
+        // outlive the visit that used it on a shared machine. This component's own copy keeps
+        // serving the save calls. On a FAILED load the capture is deliberately kept, so a refresh
+        // can retry.
         clearCapturedUnsubscribeLinkId();
       },
       error: () => {
@@ -82,12 +84,13 @@ export class EmailPreferencesComponent implements OnInit {
    */
   private readCredential(): UnsubscribeCredential | null {
     // URL-carried credentials first, the stored capture last. The order matters: the capture is
-    // deliberately kept in sessionStorage after a FAILED load (so a refresh can retry), which means
-    // it can be stale - and a stale stored id must not shadow a fresh credential the user just
-    // arrived with. A `/u/:id` route param survives only when the pre-bootstrap capture could not
-    // store it (storage-blocked browsers), and a `?token=` is a different link opened on purpose;
-    // both are what the user is holding NOW. The stored id is only ever the memory of a previous
-    // arrival, so it goes last.
+    // deliberately kept in sessionStorage after a FAILED load (so a refresh can retry), which
+    // means it can be stale - and a stale stored id must not shadow a fresh credential the user
+    // just arrived with. A `?token=` is a different link opened on purpose, and the `/u/:id` route
+    // param is defence in depth for a navigation that reached this route without the
+    // pre-bootstrap capture running; both are what the user is holding NOW. The stored id is only
+    // ever the memory of an arrival, so it goes last - and the capture module orders its own two
+    // stores the same way, current load before stored past.
     const id = this.route.snapshot.paramMap.get('id');
     if (id) return { kind: 'shortLink', id };
 

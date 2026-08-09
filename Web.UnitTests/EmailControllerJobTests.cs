@@ -786,6 +786,100 @@ public sealed class EmailControllerJobTests
     }
 
     [Fact]
+    public async Task RetryJob_AConcurrentCancelWinsAndIsNotOverridden()
+    {
+        // Admin B cancels to stop a bad resend at the moment admin A clicks retry, and B's write
+        // lands first. A's retry must surface the conflict, not re-apply Queued over the cancel and
+        // send the mail B just stopped - any status change during the conflict window is a
+        // competing decision, and decisions are never silently overridden.
+        var jobId = Guid.NewGuid();
+        var failedJob = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Category = "board",
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "jane@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Failed,
+                },
+            },
+        };
+        var cancelledJob = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Cancelled,
+            Category = "board",
+            Recipients = new List<EmailJobRecipient>(),
+        };
+
+        var reads = 0;
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(() => ++reads == 1 ? failedJob : cancelledJob);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).ThrowsAsync(new EmailJobConcurrencyException());
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        Assert.Contains("changed by another process", conflict.Value!.ToString());
+        // Exactly one write attempt: the recovery saw the status change and stopped, rather than
+        // re-applying and writing over the cancel until the attempts ran out.
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RetryJob_JobDeletedDuringConflictRecovery_Returns404()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Category = "board",
+            Recipients = new List<EmailJobRecipient>(),
+        };
+
+        var reads = 0;
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(() => ++reads == 1 ? job : null);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).ThrowsAsync(new EmailJobConcurrencyException());
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task RetryJob_PersistentConflictsExhaustTheAttemptsAndReturn409()
+    {
+        // Same-status conflicts (an ETag bump from a benign writer) are retried, but not forever:
+        // the attempts cap turns a persistently contended document into a visible 409 rather than
+        // a spin. A fresh instance per read, as a real repository returns - reusing one object
+        // would hand the recovery its own mutated copy and test nothing.
+        var jobId = Guid.NewGuid();
+
+        _jobRepo
+            .Setup(r => r.GetByIdAsync(jobId))
+            .ReturnsAsync(() => new EmailJob
+            {
+                Id = jobId,
+                Status = EmailJobStatus.Failed,
+                Category = "board",
+                Recipients = new List<EmailJobRecipient>(),
+            });
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).ThrowsAsync(new EmailJobConcurrencyException());
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<ConflictObjectResult>(result);
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Exactly(3));
+    }
+
+    [Fact]
     public async Task RetryJob_GroupedJob_DoesNotIssueLinks()
     {
         // Grouped sends never carry links; the backfill must not start minting credentials for a
