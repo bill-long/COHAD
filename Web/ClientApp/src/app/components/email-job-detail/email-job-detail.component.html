@@ -160,9 +160,9 @@
                     <span
                       *ngIf="r.status === 'Suppressed'; else recipientError"
                       class="suppressed-note"
-                      [title]="'Suppressed ' + (r.suppressedUtc | date: 'medium') + ' - ' + suppressionReasonLabel(r.suppressionReason)"
+                      [title]="'Suppressed' + (r.suppressedUtc ? (' ' + (r.suppressedUtc | date: 'medium')) : '') + ' - ' + suppressionReasonLabel(r.suppressionReason)"
                     >
-                      Suppressed {{ r.suppressedUtc | date: 'mediumDate' }} - {{ suppressionReasonLabel(r.suppressionReason) }}
+                      Suppressed<ng-container *ngIf="r.suppressedUtc"> {{ r.suppressedUtc | date: 'mediumDate' }}</ng-container> - {{ suppressionReasonLabel(r.suppressionReason) }}
                     </span>
                     <ng-template #recipientError>
                       <span class="error-text">{{ r.error }}</span>
