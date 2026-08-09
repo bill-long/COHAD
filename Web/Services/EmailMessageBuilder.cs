@@ -129,12 +129,26 @@ namespace Web.Services
             return bodyBuilder.ToMessageBody();
         }
 
-        public static string BuildUnsubscribeFooter(string appBaseUrl, string categoryDisplayName, string token)
+        /// <summary>
+        /// Builds the unsubscribe footer, or an empty string when there is nothing to link to.
+        /// <para>
+        /// The link is the short <c>/u/{id}</c> form, around 35 characters against the ~190 of the
+        /// <c>?token=</c> form it replaces. Length is the reason this changed: a long URL is exposed
+        /// to quoted-printable soft line breaks at 76 characters and to gateway rewriting, both
+        /// documented causes of the truncated-credential failures behind
+        /// docs/email-suppression-and-unsubscribe.md. Keep it short.
+        /// </para>
+        /// </summary>
+        public static string BuildUnsubscribeFooter(
+            string appBaseUrl,
+            string categoryDisplayName,
+            string unsubscribeLinkId
+        )
         {
-            if (string.IsNullOrEmpty(appBaseUrl) || string.IsNullOrEmpty(token))
+            if (string.IsNullOrEmpty(appBaseUrl) || string.IsNullOrEmpty(unsubscribeLinkId))
                 return "";
 
-            var prefsUrl = $"{appBaseUrl}/email-preferences?token={Uri.EscapeDataString(token)}";
+            var prefsUrl = $"{appBaseUrl}/u/{Uri.EscapeDataString(unsubscribeLinkId)}";
 
             return "\n<hr style=\"margin-top:32px;border:none;border-top:1px solid #ddd\">"
                 + "<p style=\"font-size:12px;color:#888;font-family:sans-serif;\">"

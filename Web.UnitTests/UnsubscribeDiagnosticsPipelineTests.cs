@@ -15,8 +15,10 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Web.Controllers;
+using Web.MockData;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
@@ -49,6 +51,7 @@ namespace Web.UnitTests
     public class UnsubscribeDiagnosticsPipelineTests : IDisposable
     {
         private readonly Mock<IUnsubscribeTokenService> _tokenService = new();
+        private readonly MockUnsubscribeLinkRepository _linkRepository = new();
         private readonly Mock<IHomeRepository> _homeRepository = new();
         private readonly Mock<IResidentRepository> _residentRepository = new();
         private readonly RecordingLoggerProvider _logs = new();
@@ -75,6 +78,12 @@ namespace Web.UnitTests
                             services.AddSingleton(_residentRepository.Object);
                             services.AddSingleton(TimeProvider.System);
                             services.AddSingleton<IUnsubscribeWarningBudget, UnsubscribeWarningBudget>();
+
+                            // The real resolver, not a mock: this harness exists to observe what the
+                            // pipeline does to a request, and a stubbed resolver would decide the
+                            // credential type and failure reason that half these assertions are about.
+                            services.AddSingleton<IUnsubscribeLinkRepository>(_linkRepository);
+                            services.AddSingleton<IUnsubscribeCredentialResolver, UnsubscribeCredentialResolver>();
 
                             // Only this controller - the rest of the app's controllers would drag in
                             // dependencies irrelevant to the pipeline behaviour under test.
@@ -636,6 +645,63 @@ namespace Web.UnitTests
 
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
             Assert.Contains(Warnings, w => w.Message.Contains($"type {expected}"));
+        }
+
+        [Fact]
+        public async Task AShortLinkIsCountedAsItsOwnCredentialType()
+        {
+            // The retirement counter is a single query grouping by type, so the new shape has to be
+            // distinguishable from the legacy one rather than sharing its label.
+            var response = await _client.GetAsync("/api/email/preferences?u=no-such-link");
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains(Warnings, w => w.Message.Contains("type ShortLink"));
+            Assert.Contains(Warnings, w => w.Message.Contains("LinkNotFound"));
+        }
+
+        [Fact]
+        public async Task AnEmptyShortLinkIdIsStillLoggedAndBilledToTheCredentialStream()
+        {
+            // `?id=` binds to null exactly as `?token=` does, and under short links this is now the
+            // likeliest shape of a link stripped in transit - so it must be neither silent nor
+            // billed to the budget an anonymous flood can drain.
+            _tokenService
+                .Setup(s => s.ValidateToken(It.IsAny<string>()))
+                .Returns(Rejected(UnsubscribeTokenFailure.Missing));
+
+            var response = await _client.GetAsync("/api/email/preferences?u=");
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains(Warnings, w => w.Message.Contains(nameof(UnsubscribeWarningKind.TokenRejection)));
+        }
+
+        [Fact]
+        public async Task AShortLinkResolvesThroughTheRealPipeline()
+        {
+            // The end-to-end shape of the new credential: a stored link reaches the action and is
+            // accepted, with no legacy token involved anywhere.
+            var homeId = Guid.NewGuid();
+            var link = await new UnsubscribeLinkIssuer(
+                _linkRepository,
+                TimeProvider.System,
+                NullLogger<UnsubscribeLinkIssuer>.Instance
+            ).IssueAsync(homeId, "jane@example.com");
+
+            var home = new Home
+            {
+                Id = homeId,
+                StreetNumber = 123,
+                StreetName = "Oak Avenue",
+                EmailAddress = new EmailAddress { Address = "jane@example.com", BoardEmailOptedIn = true },
+            };
+            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
+            _residentRepository.Setup(r => r.GetByHomeIdAsync(homeId)).ReturnsAsync(new List<Resident>());
+
+            var response = await _client.GetAsync($"/api/email/preferences?u={link.Id}");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.DoesNotContain(Warnings, w => w.Message.Contains("rejected"));
+            _tokenService.Verify(s => s.ValidateToken(It.IsAny<string>()), Times.Never);
         }
 
         [Theory]

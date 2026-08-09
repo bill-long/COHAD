@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -38,6 +39,14 @@ namespace Web
         }
 
         public IConfiguration Configuration { get; }
+
+        /// <summary>
+        /// Configuration problems detected while registering services, logged as Errors the moment
+        /// the logging pipeline exists in <see cref="Configure"/>. ConfigureServices has no logger,
+        /// and deferring a message to a service's first resolution means the deploy-verification
+        /// log check shows nothing until a user has already hit the misconfiguration.
+        /// </summary>
+        private readonly List<string> _startupConfigurationErrors = new();
 
         public IWebHostEnvironment Environment { get; }
 
@@ -260,18 +269,49 @@ namespace Web
             services.AddSingleton<IImageUploadHelper, ImageUploadHelper>();
             services.AddScoped<IEventSignupConversionService, EventSignupConversionService>();
 
-            // Unsubscribe token service — only registered when a signing key is configured.
-            // Without a key, the UnsubscribeController still works (returns 400 for all tokens)
-            // and EmailJobProcessor sends emails without unsubscribe headers/footer.
-            var unsubKey = Configuration.GetSection("UnsubscribeToken")["SigningKey"];
-            if (!string.IsNullOrWhiteSpace(unsubKey) && Encoding.UTF8.GetByteCount(unsubKey) >= 32)
+            // Legacy unsubscribe token validation - the real service only when a usable key is
+            // configured. Without one, the UnsubscribeController still works: short links resolve
+            // through the credential resolver, and a legacy ?token= is rejected as NotConfigured,
+            // which the log distinguishes from a bad token.
+            //
+            // Key selection is UnsubscribeTokenService.SelectSigningKey - the same rule the
+            // service's own constructor applies - so the gate here and the constructor cannot
+            // drift, which would surface as the constructor throwing inside DI resolution. A key
+            // that is PRESENT but too short disables validation and is loudly named at startup
+            // (the message is stamped here and logged in Configure, where a logger exists); the
+            // silent alternative left a truncated paste at cutover indistinguishable from the
+            // deliberate no-key state. Falling back to SigningKey for an invalid LegacySigningKey
+            // was considered and rejected: after rotation SigningKey holds a fresh key that cannot
+            // validate any legacy link, so that fallback only converts a clear NotConfigured into
+            // a misleading DecryptFailed.
+            var unsubOptions =
+                Configuration.GetSection("UnsubscribeToken").Get<UnsubscribeTokenOptions>()
+                ?? new UnsubscribeTokenOptions();
+            var (unsubKeyName, unsubKey) = UnsubscribeTokenService.SelectSigningKey(unsubOptions);
+            if (UnsubscribeTokenService.IsUsableKey(unsubKey))
             {
                 services.AddSingleton<IUnsubscribeTokenService, UnsubscribeTokenService>();
             }
             else
             {
+                if (!string.IsNullOrWhiteSpace(unsubKey))
+                {
+                    _startupConfigurationErrors.Add(
+                        $"{unsubKeyName} is set but shorter than {UnsubscribeTokenService.MinKeyBytes} UTF-8 bytes; "
+                            + "legacy unsubscribe token validation is DISABLED and every legacy link will be rejected as NotConfigured until the key is fixed."
+                    );
+                }
+
                 services.AddSingleton<IUnsubscribeTokenService, NullUnsubscribeTokenService>();
             }
+
+            // Issues the short links that replace the long ?token= credential in outgoing mail.
+            // Scoped, because it writes through the scoped link repository.
+            services.AddScoped<IUnsubscribeLinkIssuer, UnsubscribeLinkIssuer>();
+
+            // The single place that turns any presented credential shape into one payload. Scoped
+            // for the same reason - it reads through the scoped link repository.
+            services.AddScoped<IUnsubscribeCredentialResolver, UnsubscribeCredentialResolver>();
 
             // Bounds how many unsubscribe rejection warnings the [AllowAnonymous] endpoints can
             // write per fixed 24h window. Singleton because the count is shared across requests;
@@ -313,6 +353,7 @@ namespace Web
                 services.AddSingleton<INotificationRepository, MockNotificationRepository>();
                 services.AddSingleton<INotificationDigestStateRepository, MockNotificationDigestStateRepository>();
                 services.AddSingleton<IBackgroundJobStateRepository, MockBackgroundJobStateRepository>();
+                services.AddSingleton<IUnsubscribeLinkRepository, MockUnsubscribeLinkRepository>();
             }
             else
             {
@@ -409,6 +450,13 @@ namespace Web
 
                 services.AddScoped<IBackgroundJobStateRepository>(sp => new CosmosBackgroundJobStateRepository(
                     sp.GetRequiredService<CosmosClient>().GetContainer(db, "BackgroundJobState")
+                ));
+
+                // Provisioned out of band like every container here, with a ~400 day TTL. The link
+                // lifetime itself is enforced in code (UnsubscribeLink.MaxLinkAge) - the TTL only
+                // prunes.
+                services.AddScoped<IUnsubscribeLinkRepository>(sp => new CosmosUnsubscribeLinkRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "UnsubscribeLink")
                 ));
 
                 // Graph API for committee mailbox forwarding — registered only when credentials are configured.
@@ -608,6 +656,11 @@ namespace Web
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILogger<Startup> logger)
         {
+            // First, so a misconfiguration is in the log during the deploy-verification window
+            // rather than after the first affected request.
+            foreach (var error in _startupConfigurationErrors)
+                logger.LogError("Startup configuration problem: {Problem}", error);
+
             app.UseForwardedHeaders(
                 new ForwardedHeadersOptions
                 {

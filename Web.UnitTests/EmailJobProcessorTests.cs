@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Web.Configuration;
 using Web.Hubs;
+using Web.MockData;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
@@ -24,7 +25,6 @@ public sealed class EmailJobProcessorTests
 {
     private readonly Mock<IEmailJobRepository> _jobRepo = new();
     private readonly Mock<IDocumentFileStore> _fileStore = new();
-    private readonly Mock<IUnsubscribeTokenService> _tokenService = new();
     private readonly Mock<IEmailDeliveryEventRepository> _deliveryEventRepo = new();
     private readonly Mock<IEmailDeliveryActionService> _deliveryActionService = new();
     private readonly Mock<IClientProxy> _clientProxy = new();
@@ -110,7 +110,6 @@ public sealed class EmailJobProcessorTests
         return new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
-            _tokenService.Object,
             CreateRouterFromTransport(mockSmtp.Object),
             hubContext.Object,
             config,
@@ -337,6 +336,178 @@ public sealed class EmailJobProcessorTests
     }
 
     [Fact]
+    public async Task RealSend_PerRecipient_EmitsTheStampedShortLink()
+    {
+        // The processor never issues a credential - links are stamped on recipients at job creation
+        // (EmailController), and the send loop only reads. Issuance was twice placed inside this
+        // loop and broke a different invariant each time; the processor having no way to mint is
+        // what locks that. This asserts the read side: the stamped id reaches the footer as
+        // /u/{id} and the RFC 8058 header as ?u=, so one-click and the body link redeem the same
+        // credential, and no token appears anywhere.
+        var jobId = Guid.NewGuid();
+        var job = CreateSingleRecipientJob(jobId, Guid.NewGuid());
+        job.Recipients[0].UnsubscribeLinkId = "stamped-at-creation-id";
+
+        MimeKit.MimeMessage? captured = null;
+        var mockSmtp = new Mock<IEmailTransport>();
+        mockSmtp.Setup(t => t.ProviderName).Returns("SendGrid");
+        mockSmtp
+            .Setup(t =>
+                t.SendAsync(
+                    It.IsAny<MimeKit.MimeMessage>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .Callback<MimeKit.MimeMessage, string, string, string, CancellationToken>((m, _, _, _, _) => captured = m)
+            .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var processor = CreateRealSendProcessor(mockSmtp);
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.NotNull(captured);
+
+        var body = captured!.HtmlBody ?? captured.TextBody ?? "";
+        Assert.Contains("https://test.cohad.org/u/stamped-at-creation-id", body);
+        Assert.DoesNotContain("token=", body);
+
+        var listUnsubscribe = captured.Headers["List-Unsubscribe"];
+        Assert.Contains("u=stamped-at-creation-id", listUnsubscribe);
+        Assert.DoesNotContain("token=", listUnsubscribe);
+    }
+
+    [Fact]
+    public async Task RealSend_RecipientWithoutAStampedLink_SendsWithNoFooterOrHeader()
+    {
+        // Null means job creation had nothing to link to (no AppBaseUrl, or a recipient without a
+        // home). That is a configuration state, not a fault - the mail still goes, without the
+        // footer, exactly as the legacy no-signing-key path behaved.
+        var jobId = Guid.NewGuid();
+        var job = CreateSingleRecipientJob(jobId, Guid.NewGuid());
+        Assert.Null(job.Recipients[0].UnsubscribeLinkId);
+
+        MimeKit.MimeMessage? captured = null;
+        var mockSmtp = new Mock<IEmailTransport>();
+        mockSmtp.Setup(t => t.ProviderName).Returns("SendGrid");
+        mockSmtp
+            .Setup(t =>
+                t.SendAsync(
+                    It.IsAny<MimeKit.MimeMessage>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .Callback<MimeKit.MimeMessage, string, string, string, CancellationToken>((m, _, _, _, _) => captured = m)
+            .ReturnsAsync(new EmailSendResult { Success = true, ProviderName = "SendGrid" });
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.GetIncompleteJobsAsync()).ReturnsAsync(new List<EmailJob>());
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var processor = CreateRealSendProcessor(mockSmtp);
+        await RunProcessorForSingleJob(processor, jobId);
+
+        Assert.NotNull(captured);
+        Assert.Equal(EmailJobRecipientStatus.Sent, job.Recipients[0].Status);
+        Assert.Null(captured!.Headers["List-Unsubscribe"]);
+        Assert.DoesNotContain("/u/", captured.HtmlBody ?? captured.TextBody ?? "");
+    }
+
+    private EmailJob CreateSingleRecipientJob(Guid jobId, Guid homeId)
+    {
+        return new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Queued,
+            Category = "board",
+            FromEmail = "board@cohad.org",
+            FromDisplay = "COHAD Board",
+            Subject = "Annual Meeting",
+            ContentBlobPath = $"email-jobs/{jobId:D}.html",
+            TotalRecipients = 1,
+            MaxRecipientAttempts = 3,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "jane@example.com",
+                    HomeId = homeId,
+                    Status = EmailJobRecipientStatus.Pending,
+                },
+            },
+        };
+    }
+
+    /// <summary>Builds a processor on the real (non-mock-environment) send path.</summary>
+    private EmailJobProcessor CreateRealSendProcessor(Mock<IEmailTransport> transport)
+    {
+        _fileStore
+            .Setup(f => f.DownloadAsync(It.IsAny<string>()))
+            .ReturnsAsync(
+                new DocumentFileResult
+                {
+                    Stream = new MemoryStream("<p>Agenda</p>"u8.ToArray()),
+                    ContentType = "text/html",
+                }
+            );
+
+        var scopeFactory = new Mock<IServiceScopeFactory>();
+        var scope = new Mock<IServiceScope>();
+        var serviceProvider = new Mock<IServiceProvider>();
+        serviceProvider.Setup(sp => sp.GetService(typeof(IEmailJobRepository))).Returns(_jobRepo.Object);
+        serviceProvider.Setup(sp => sp.GetService(typeof(IDocumentFileStore))).Returns(_fileStore.Object);
+        serviceProvider
+            .Setup(sp => sp.GetService(typeof(IEmailDeliveryEventRepository)))
+            .Returns(_deliveryEventRepo.Object);
+        serviceProvider
+            .Setup(sp => sp.GetService(typeof(IEmailDeliveryActionService)))
+            .Returns(_deliveryActionService.Object);
+        scope.Setup(s => s.ServiceProvider).Returns(serviceProvider.Object);
+        scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
+
+        var hubContext = new Mock<IHubContext<EmailJobHub>>();
+        var mockClients = new Mock<IHubClients>();
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(_clientProxy.Object);
+        hubContext.Setup(h => h.Clients).Returns(mockClients.Object);
+
+        var env = new Mock<IWebHostEnvironment>();
+        env.Setup(e => e.EnvironmentName).Returns("Production");
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["SmtpHost"] = "localhost",
+                    ["SmtpUser"] = "user",
+                    ["SmtpPassword"] = "pass",
+                    ["AppBaseUrl"] = "https://test.cohad.org",
+                    ["EmailJobs:Enabled"] = "true",
+                    ["EmailJobs:DefaultMaxRecipientAttempts"] = "3",
+                    ["EmailJobs:StallAfterMinutes"] = "30",
+                }
+            )
+            .Build();
+
+        return new EmailJobProcessor(
+            _queue,
+            scopeFactory.Object,
+            CreateRouterFromTransport(transport.Object),
+            hubContext.Object,
+            config,
+            env.Object,
+            NullLogger<EmailJobProcessor>.Instance
+        );
+    }
+
+    [Fact]
     public async Task RealSend_GroupRecipients_CallsTransportOnce_MarksAllSent()
     {
         var jobId = Guid.NewGuid();
@@ -461,7 +632,6 @@ public sealed class EmailJobProcessorTests
         var processor = new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
-            _tokenService.Object,
             CreateRouterFromTransport(mockSmtp.Object),
             hubContext.Object,
             config,
@@ -785,7 +955,6 @@ public sealed class EmailJobProcessorTests
             var processor = new EmailJobProcessor(
                 queue,
                 scopeFactory.Object,
-                _tokenService.Object,
                 CreateRouterFromTransport(mockSmtp2.Object),
                 hubContext.Object,
                 config,

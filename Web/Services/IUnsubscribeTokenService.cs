@@ -9,14 +9,18 @@ using System;
 
 namespace Web.Services
 {
+    /// <summary>
+    /// Validates the legacy <c>?token=</c> credential.
+    /// <para>
+    /// Generation is deliberately absent from this interface. Short links replaced it, and removing
+    /// it here is what locks that: production code reaches this type only through the interface, so
+    /// there is no longer any way to mint a legacy token outside the tests that exercise validation.
+    /// A test asserting "nothing calls GenerateToken" would have to be maintained; a signature that
+    /// cannot express the call cannot drift.
+    /// </para>
+    /// </summary>
     public interface IUnsubscribeTokenService
     {
-        /// <summary>
-        /// Generates an opaque, AES-GCM-encrypted token for the given home and email.
-        /// The token is a base64url string containing nonce + ciphertext + authentication tag.
-        /// </summary>
-        string? GenerateToken(Guid homeId, string email);
-
         /// <summary>
         /// Decrypts and validates a token, extracting the home ID and email address.
         /// <para>
@@ -69,11 +73,31 @@ namespace Web.Services
         /// </summary>
         MalformedPayload,
 
-        /// <summary>Older than <see cref="UnsubscribeTokenService.MaxTokenAge"/>.</summary>
+        /// <summary>
+        /// Older than <see cref="UnsubscribeTokenService.MaxTokenAge"/>, or - for a short link -
+        /// than <see cref="Web.Models.UnsubscribeLink.MaxLinkAge"/>. Shared by both shapes because
+        /// the two ages are the same number and mean the same thing to whoever reads the log.
+        /// </summary>
         Expired,
 
         /// <summary>Issued more than five minutes in the future, which indicates clock skew.</summary>
         IssuedInFuture,
+
+        /// <summary>
+        /// A legacy token claiming an issue date after the cutover, when nothing was generating
+        /// them any more. Distinct from <see cref="IssuedInFuture"/> because the two point at
+        /// different things: that one is clock skew on a live scheme, this one is a token that
+        /// cannot have been issued by us at all.
+        /// </summary>
+        IssuedAfterLegacyCutover,
+
+        /// <summary>
+        /// A short link id that resolves to no stored record. Distinct from the token failures
+        /// above, and the distinction is the diagnosis: a token is self-contained, so it fails on
+        /// its own bytes, whereas this one says the bytes arrived intact and the record behind them
+        /// is gone. A run of these points at TTL pruning or a wrong container, not at a mangled link.
+        /// </summary>
+        LinkNotFound,
     }
 
     /// <summary>
@@ -111,15 +135,12 @@ namespace Web.Services
     }
 
     /// <summary>
-    /// No-op implementation used when no signing key is configured.
-    /// GenerateToken returns null; ValidateToken always fails with
+    /// No-op implementation used when no legacy key is configured. ValidateToken always fails with
     /// <see cref="UnsubscribeTokenFailure.NotConfigured"/>, which distinguishes a missing key from a
     /// bad token in the logs.
     /// </summary>
     public class NullUnsubscribeTokenService : IUnsubscribeTokenService
     {
-        public string? GenerateToken(Guid homeId, string email) => null;
-
         public UnsubscribeTokenResult ValidateToken(string? token) =>
             UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.NotConfigured);
     }

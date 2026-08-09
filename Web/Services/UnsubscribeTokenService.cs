@@ -6,6 +6,7 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Web.Configuration;
 
@@ -16,6 +17,12 @@ namespace Web.Services
         /// <summary>Maximum token age. Tokens older than this are rejected.</summary>
         internal static readonly TimeSpan MaxTokenAge = TimeSpan.FromDays(365);
 
+        /// <summary>
+        /// How far past the configured cutover a legacy token is still honoured, absorbing the gap
+        /// between an operator-chosen instant and the moment generation actually stopped.
+        /// </summary>
+        internal static readonly TimeSpan LegacyCutoverGrace = TimeSpan.FromHours(24);
+
         private const int NonceSize = 12; // AES-GCM standard nonce
         private const int TagSize = 16; // AES-GCM auth tag
 
@@ -24,24 +31,71 @@ namespace Web.Services
         private static readonly long MaxUnixSeconds = DateTimeOffset.MaxValue.ToUnixTimeSeconds();
 
         private readonly byte[] _encryptionKey;
+        private readonly DateTimeOffset? _legacyCutoverUtc;
 
-        public UnsubscribeTokenService(IOptions<UnsubscribeTokenOptions> options)
+        /// <summary>The minimum usable key length, in UTF-8 bytes.</summary>
+        internal const int MinKeyBytes = 32;
+
+        /// <summary>
+        /// The one definition of which configured key validates legacy tokens: LegacySigningKey
+        /// when it carries a value, SigningKey otherwise. The fallback is the point - without it,
+        /// deploying the cutover code ahead of the app-setting change would invalidate every
+        /// unsubscribe link currently sitting in an inbox.
+        /// <para>
+        /// Shared by this constructor and by the Startup registration gate, which has to answer
+        /// "is there a usable key" before this type is ever constructed. Two hand-written copies of
+        /// the precedence is how the two would drift - and a drift here surfaces as this
+        /// constructor throwing inside DI resolution, an unhandled 500 where a clean
+        /// NotConfigured rejection was intended.
+        /// </para>
+        /// </summary>
+        internal static (string KeyName, string Key) SelectSigningKey(UnsubscribeTokenOptions options)
         {
-            var key = options.Value.SigningKey;
-            if (string.IsNullOrWhiteSpace(key) || Encoding.UTF8.GetByteCount(key) < 32)
-                throw new InvalidOperationException("UnsubscribeToken:SigningKey must be at least 32 UTF-8 bytes.");
+            return string.IsNullOrWhiteSpace(options.LegacySigningKey)
+                ? ("UnsubscribeToken:SigningKey", options.SigningKey)
+                : ("UnsubscribeToken:LegacySigningKey", options.LegacySigningKey);
+        }
+
+        /// <summary>Whether a selected key exists and meets <see cref="MinKeyBytes"/>.</summary>
+        internal static bool IsUsableKey(string key)
+        {
+            return !string.IsNullOrWhiteSpace(key) && Encoding.UTF8.GetByteCount(key) >= MinKeyBytes;
+        }
+
+        public UnsubscribeTokenService(
+            IOptions<UnsubscribeTokenOptions> options,
+            ILogger<UnsubscribeTokenService> logger
+        )
+        {
+            var opts = options.Value;
+            var (keyName, key) = SelectSigningKey(opts);
+
+            if (keyName == "UnsubscribeToken:SigningKey" && !string.IsNullOrWhiteSpace(key))
+            {
+                logger.LogWarning(
+                    "UnsubscribeToken:LegacySigningKey is not set; falling back to UnsubscribeToken:SigningKey to validate legacy tokens. "
+                        + "Move the existing key to LegacySigningKey and rotate SigningKey - see docs/email-suppression-and-unsubscribe.md."
+                );
+            }
+
+            if (!IsUsableKey(key))
+            {
+                throw new InvalidOperationException(
+                    $"UnsubscribeToken:LegacySigningKey (or SigningKey) must be at least {MinKeyBytes} UTF-8 bytes."
+                );
+            }
 
             // Derive a fixed 256-bit encryption key from the configurable signing key
             _encryptionKey = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+            _legacyCutoverUtc = opts.LegacyCutoverUtc;
         }
 
-        // Non-nullable on purpose, though the interface declares `string?`. Returning a
-        // non-nullable value from a method that promises a nullable one is legal and strictly more
-        // precise: this implementation never returns null - it either produces a token or throws on
-        // a blank email - and only NullUnsubscribeTokenService returns null. Widening it here would
-        // make every caller of the concrete type null-check something that cannot be null. Locked by
-        // NullabilityContractIsDeliberate.
-        public string GenerateToken(Guid homeId, string email)
+        /// <summary>
+        /// Mints a legacy token. Internal, and absent from <see cref="IUnsubscribeTokenService"/>:
+        /// short links replaced generation, and production reaches this type only through the
+        /// interface, so this exists solely to let the tests exercise the validation paths it feeds.
+        /// </summary>
+        internal string GenerateToken(Guid homeId, string email)
         {
             return GenerateToken(homeId, email, DateTimeOffset.UtcNow);
         }
@@ -165,6 +219,21 @@ namespace Web.Services
 
             if (age > MaxTokenAge)
                 return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.Expired);
+
+            // Nothing has generated a legacy token since the cutover, so one claiming a later issue
+            // date did not come from us. Checked after the skew and expiry branches so those keep
+            // naming their own causes: a token both expired and post-cutover is far more likely to
+            // be an old link than a forgery, and the log should say so.
+            //
+            // The grace is not decoration. The configured instant is operator-supplied and nothing
+            // ties it to the moment the last token was actually minted: on a rolling deploy, or when
+            // the app setting lands before the slot swap, old instances keep issuing genuine tokens
+            // for minutes afterwards. Rejecting those would hand a resident "invalid or expired" and
+            // a mailbox provider a 400 on one-click - a false rejection of someone asking the mail
+            // to stop, which is the worst outcome this whole document is about. A forger sets the
+            // timestamp anyway, so a tight bound buys nothing against the only party it constrains.
+            if (_legacyCutoverUtc.HasValue && issued > _legacyCutoverUtc.Value + LegacyCutoverGrace)
+                return UnsubscribeTokenResult.Failed(UnsubscribeTokenFailure.IssuedAfterLegacyCutover);
 
             return UnsubscribeTokenResult.Success(
                 new UnsubscribeTokenPayload

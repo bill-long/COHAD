@@ -27,7 +27,6 @@ namespace Web.Services
     {
         private readonly EmailJobQueue _queue;
         private readonly IServiceScopeFactory _scopeFactory;
-        private readonly IUnsubscribeTokenService _tokenService;
         private readonly EmailTransportRouter _transportRouter;
         private readonly IHubContext<EmailJobHub> _hubContext;
         private readonly ILogger<EmailJobProcessor> _logger;
@@ -311,7 +310,6 @@ namespace Web.Services
         public EmailJobProcessor(
             EmailJobQueue queue,
             IServiceScopeFactory scopeFactory,
-            IUnsubscribeTokenService tokenService,
             EmailTransportRouter transportRouter,
             IHubContext<EmailJobHub> hubContext,
             IConfiguration config,
@@ -321,7 +319,6 @@ namespace Web.Services
         {
             _queue = queue;
             _scopeFactory = scopeFactory;
-            _tokenService = tokenService;
             _transportRouter = transportRouter;
             _hubContext = hubContext;
             _logger = logger;
@@ -978,15 +975,19 @@ namespace Web.Services
 
                         try
                         {
-                            var token =
-                                (recipient.HomeId != Guid.Empty && !string.IsNullOrEmpty(_appBaseUrl))
-                                    ? _tokenService.GenerateToken(recipient.HomeId, recipient.Email)
-                                    : null;
+                            // Stamped at job creation (EmailController), never here. The processor
+                            // deliberately cannot issue a credential: issuance inside this loop was
+                            // tried twice and broke a different invariant each time - the attempt
+                            // budget that bounds termination, then the already-Sent skip that
+                            // depends on the persist's webhook merge. This loop only reads. Null
+                            // means there was nothing to link to (no AppBaseUrl at creation, or a
+                            // recipient without a home), and the footer builder renders no footer.
+                            var unsubscribeLinkId = recipient.UnsubscribeLinkId;
 
                             var footer = EmailMessageBuilder.BuildUnsubscribeFooter(
                                 _appBaseUrl,
                                 categoryDisplayName,
-                                token
+                                unsubscribeLinkId
                             );
                             var htmlWithFooter = imageData.ProcessedHtml + footer;
 
@@ -1007,10 +1008,18 @@ namespace Web.Services
                                 attachmentData
                             );
 
-                            if (token != null && !string.IsNullOrEmpty(_appBaseUrl))
+                            if (unsubscribeLinkId != null && !string.IsNullOrEmpty(_appBaseUrl))
                             {
+                                // The id rides in a query parameter here, unlike the body link's path
+                                // segment. That is acceptable for this URL specifically: it is
+                                // fetched by the mailbox provider, never by our SPA, so the
+                                // Application Insights JS SDK never sees it, and the backend's
+                                // OpenTelemetry instrumentation redacts query values by default.
+                                // It says nothing about the SPA's own calls - see the note on
+                                // EmailPreferencesService, where the credential is still a query
+                                // value and still reaches browser telemetry.
                                 var unsubUrl =
-                                    $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?token={Uri.EscapeDataString(token)}";
+                                    $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?u={Uri.EscapeDataString(unsubscribeLinkId)}";
                                 message.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");
                                 message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
                             }
@@ -1086,7 +1095,7 @@ namespace Web.Services
                 }
 
                 _logger.LogWarning(
-                    "Email job {JobId} stopped early due to persistent concurrency conflicts (sent {Sent}/{Total}) — re-queuing after {Delay}s delay",
+                    "Email job {JobId} stopped early due to persistent concurrency conflicts (sent {Sent}/{Total}) - re-queuing after {Delay}s delay",
                     job.Id,
                     job.SentCount,
                     job.TotalRecipients,

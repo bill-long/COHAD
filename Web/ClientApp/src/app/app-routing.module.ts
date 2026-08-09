@@ -51,7 +51,11 @@ export class CohadTitleStrategy extends TitleStrategy {
   }
 }
 
-const routes: Routes = [
+// Exported so a test can assert that the short-link route and the prefix used to strip the
+// credential from the URL still agree. They live apart by necessity - one is a route, the other runs
+// before Angular bootstraps - and if they drift, the credential is silently published rather than
+// the page breaking.
+export const routes: Routes = [
   { path: '', component: HomeComponent, title: 'Home' },
   { path: 'privacy', component: PrivacyComponent, title: 'Privacy Policy' },
   { path: 'about', component: AboutComponent, title: 'About' },
@@ -217,6 +221,10 @@ const routes: Routes = [
     ],
   },
   { path: 'email-preferences', component: EmailPreferencesComponent, title: 'Email Preferences' },
+  // The short unsubscribe link. Deliberately terse - the whole point is a URL short enough to
+  // survive quoted-printable line wrapping and gateway rewriting, so this path must stay one
+  // character. See docs/email-suppression-and-unsubscribe.md.
+  { path: 'u/:id', component: EmailPreferencesComponent, title: 'Email Preferences' },
   { path: 'unauthorized', component: UnauthorizedComponent, title: 'Unauthorized' },
 ];
 

@@ -7,19 +7,9 @@ namespace Web.UnitTests
 {
     public class UnsubscribeWarningBudgetTests
     {
-        /// <summary>A TimeProvider whose clock only moves when a test moves it.</summary>
-        private sealed class FakeTimeProvider : TimeProvider
+        private static (UnsubscribeWarningBudget Budget, TestClock Clock) Create()
         {
-            private DateTimeOffset _now = new(2026, 8, 6, 12, 0, 0, TimeSpan.Zero);
-
-            public override DateTimeOffset GetUtcNow() => _now;
-
-            public void Advance(TimeSpan by) => _now = _now.Add(by);
-        }
-
-        private static (UnsubscribeWarningBudget Budget, FakeTimeProvider Clock) Create()
-        {
-            var clock = new FakeTimeProvider();
+            var clock = new TestClock();
             return (new UnsubscribeWarningBudget(clock), clock);
         }
 

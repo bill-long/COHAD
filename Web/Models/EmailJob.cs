@@ -228,6 +228,19 @@ namespace Web.Models
         public string? ProviderMessageId { get; set; }
 
         /// <summary>
+        /// The unsubscribe short link issued for this recipient, stamped on the first attempt and
+        /// reused by every later one.
+        /// <para>
+        /// Reuse is what makes issuance idempotent per recipient per job. Minting a fresh id on each
+        /// attempt would leave a recipient whose transport send failed twice holding three
+        /// simultaneously-valid credentials for the same address, only one of which was ever
+        /// delivered - indistinguishable from live ones, and resident in the container for the
+        /// credential's full lifetime.
+        /// </para>
+        /// </summary>
+        public string? UnsubscribeLinkId { get; set; }
+
+        /// <summary>
         /// Which email provider sent this message (e.g. "SendGrid").
         /// </summary>
         public string? Provider { get; set; }

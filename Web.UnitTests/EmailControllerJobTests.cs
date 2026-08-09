@@ -19,6 +19,7 @@ using Web.Authorization;
 using Web.Configuration;
 using Web.Controllers;
 using Web.Hubs;
+using Web.MockData;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -38,6 +39,7 @@ public sealed class EmailControllerJobTests
     private readonly Mock<IEmailJobRepository> _jobRepo = new();
     private readonly Mock<IDocumentFileStore> _fileStore = new();
     private readonly Mock<IEmailDeliveryEventRepository> _deliveryEventRepo = new();
+    private readonly MockUnsubscribeLinkRepository _linkRepository = new();
     private readonly EmailJobCleanupService _cleanup;
     private readonly EmailJobQueue _queue = new();
 
@@ -133,7 +135,6 @@ public sealed class EmailControllerJobTests
         return new EmailJobProcessor(
             _queue,
             scopeFactory.Object,
-            tokenService.Object,
             router,
             hubContext.Object,
             config,
@@ -142,9 +143,24 @@ public sealed class EmailControllerJobTests
         );
     }
 
-    private EmailController CreateController(EmailJobProcessor? processor = null)
+    private EmailController CreateController(
+        EmailJobProcessor? processor = null,
+        IUnsubscribeLinkIssuer? linkIssuer = null,
+        string appBaseUrl = "https://test.cohad.org"
+    )
     {
         processor ??= CreateProcessor();
+        // The real issuer over the Mock store by default: job creation is where links are minted
+        // now, so send tests exercise real issuance unless a test injects a failing issuer.
+        linkIssuer ??= new UnsubscribeLinkIssuer(
+            _linkRepository,
+            TimeProvider.System,
+            NullLogger<UnsubscribeLinkIssuer>.Instance
+        );
+
+        var controllerConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["AppBaseUrl"] = appBaseUrl })
+            .Build();
 
         var controller = new EmailController(
             new CurrentUserAccessor(_users.Object),
@@ -157,6 +173,8 @@ public sealed class EmailControllerJobTests
             processor,
             _cleanup,
             _deliveryEventRepo.Object,
+            linkIssuer,
+            controllerConfig,
             NullLogger<EmailController>.Instance
         )
         {
@@ -464,6 +482,503 @@ public sealed class EmailControllerJobTests
         );
 
         _audit.Verify(a => a.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_StampsAStoredUnsubscribeLinkOnEveryRecipient()
+    {
+        // Issuance lives here - at job creation, before the job exists - and never in the
+        // processor, which only reads the stamped id. Three review rounds established that
+        // issuance cannot sit safely inside the send loop; this locks the creation half of that
+        // contract: every recipient with a home carries an id, and each id resolves to a stored
+        // row for that recipient's home and address.
+        SetupMockUser();
+        SetupHomesWithRecipients(3);
+
+        EmailJob? persisted = null;
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo
+            .Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => persisted = j)
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(
+            new EmailInfo
+            {
+                Subject = "Newsletter",
+                HtmlBody = "<p>content</p>",
+                IsTestEmail = false,
+            }
+        );
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(persisted);
+
+        foreach (var recipient in persisted!.Recipients)
+        {
+            Assert.False(string.IsNullOrEmpty(recipient.UnsubscribeLinkId));
+
+            var stored = await _linkRepository.GetByIdAsync(recipient.UnsubscribeLinkId);
+            Assert.NotNull(stored);
+            Assert.Equal(recipient.HomeId, stored!.HomeId);
+            Assert.Equal(recipient.Email, stored.Email);
+        }
+
+        // Distinct per recipient - a shared credential would let one resident's link manage
+        // another's preferences.
+        Assert.Equal(
+            persisted.Recipients.Count,
+            persisted.Recipients.Select(r => r.UnsubscribeLinkId).Distinct(StringComparer.Ordinal).Count()
+        );
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_TestEmail_AlsoStampsAStoredUnsubscribeLink()
+    {
+        // Test sends go to real subscription addresses on the sender's own homes, so they carry the
+        // same footer and the same credential as a broadcast - a test that renders differently from
+        // the real thing tests nothing.
+        SetupMockUser();
+        SetupMockUserHomes("test@example.com");
+
+        EmailJob? persisted = null;
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo
+            .Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => persisted = j)
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(
+            new EmailInfo
+            {
+                Subject = "Test",
+                HtmlBody = "<p>hi</p>",
+                IsTestEmail = true,
+                TestRecipientEmails = new List<string> { "test@example.com" },
+            }
+        );
+
+        Assert.IsType<AcceptedResult>(result);
+        var recipient = Assert.Single(persisted!.Recipients);
+        Assert.False(string.IsNullOrEmpty(recipient.UnsubscribeLinkId));
+
+        var stored = await _linkRepository.GetByIdAsync(recipient.UnsubscribeLinkId);
+        Assert.Equal(TestHomeId, stored!.HomeId);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_TestEmail_HomelessAdminRecipientIsSkippedNotFailed()
+    {
+        // An Administrator with no home test-sends to their own account email; that recipient is
+        // built with HomeId = Guid.Empty and the comment there says unsubscribe headers should be
+        // suppressed for them. The eligibility filter's promise is the other half: an ineligible
+        // recipient is skipped, never a reason to fail the send.
+        _users
+            .Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>()))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "google.comu1",
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "admin@example.com",
+                    Roles = new List<User.Role> { User.Role.Board },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+
+        EmailJob? persisted = null;
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo
+            .Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => persisted = j)
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController();
+        var result = await controller.SendEmailFromBoard(
+            new EmailInfo
+            {
+                Subject = "Test",
+                HtmlBody = "<p>hi</p>",
+                IsTestEmail = true,
+                TestRecipientEmails = new List<string> { "admin@example.com" },
+            }
+        );
+
+        Assert.IsType<AcceptedResult>(result);
+        var recipient = Assert.Single(persisted!.Recipients);
+        Assert.Equal(Guid.Empty, recipient.HomeId);
+        Assert.Null(recipient.UnsubscribeLinkId);
+    }
+
+    [Fact]
+    public async Task RetryJob_BackfillsMissingUnsubscribeLinks()
+    {
+        // A job created before creation-time stamping existed - queued across the deploy, or failed
+        // and retried after it - carries null ids. Without this backfill it would resend with no
+        // unsubscribe mechanism at all. Retry is the same seam as creation: synchronous, admin
+        // visible, nothing sent on failure.
+        var jobId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Category = "board",
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "jane@example.com",
+                    HomeId = homeId,
+                    Status = EmailJobRecipientStatus.Failed,
+                },
+                new EmailJobRecipient
+                {
+                    Email = "kept@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Sent,
+                    UnsubscribeLinkId = "already-stamped",
+                },
+                new EmailJobRecipient
+                {
+                    Email = "delivered-linkless@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Sent,
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<OkObjectResult>(result);
+
+        // The missing id on the recipient being RESENT is backfilled with a stored link; the
+        // existing one is untouched, which is what keeps the backfill idempotent.
+        var backfilled = job.Recipients[0].UnsubscribeLinkId;
+        Assert.False(string.IsNullOrEmpty(backfilled));
+        Assert.NotNull(await _linkRepository.GetByIdAsync(backfilled));
+        Assert.Equal("already-stamped", job.Recipients[1].UnsubscribeLinkId);
+
+        // A Sent recipient is never resent, so stamping it would mint a live credential nobody
+        // ever receives and falsify the record of what their delivered mail contained.
+        Assert.Null(job.Recipients[2].UnsubscribeLinkId);
+    }
+
+    [Fact]
+    public async Task RetryJob_WhenLinkIssuanceFails_Returns500AndRequeuesNothing()
+    {
+        // A retry is not an exemption from the no-unsubscribable-mail rule. The failure must be the
+        // named 500, and the job must be left exactly as it was - not persisted, not enqueued - so
+        // fixing the container and clicking retry again is the whole recovery.
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Category = "board",
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "jane@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Failed,
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+
+        var issuer = new Mock<IUnsubscribeLinkIssuer>();
+        issuer
+            .Setup(i => i.IssueAsync(It.IsAny<Guid>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("container missing"));
+
+        var controller = CreateController(linkIssuer: issuer.Object);
+        var result = await controller.RetryJob(jobId);
+
+        var error = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, error.StatusCode);
+        Assert.Contains("UnsubscribeLink", error.Value!.ToString());
+
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RetryJob_ReusesTheMintedBatchWhenTheWriteConflicts()
+    {
+        // A concurrency conflict on the write must not orphan the just-issued batch: the retry
+        // re-reads the winning copy, re-applies the reset and the already-minted ids, and writes
+        // again. The bound this locks is one issuance per recipient per retry click, however many
+        // conflicts the write hits on the way through.
+        var jobId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+
+        EmailJob BuildJob() =>
+            new()
+            {
+                Id = jobId,
+                Status = EmailJobStatus.Failed,
+                Category = "board",
+                Recipients = new List<EmailJobRecipient>
+                {
+                    new EmailJobRecipient
+                    {
+                        Email = "jane@example.com",
+                        HomeId = homeId,
+                        Status = EmailJobRecipientStatus.Failed,
+                    },
+                },
+            };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(BuildJob);
+
+        var issueCount = 0;
+        var issuer = new Mock<IUnsubscribeLinkIssuer>();
+        issuer
+            .Setup(i => i.IssueAsync(homeId, "jane@example.com"))
+            .ReturnsAsync(() =>
+            {
+                issueCount++;
+                return new UnsubscribeLink
+                {
+                    Id = $"minted-{issueCount}",
+                    HomeId = homeId,
+                    Email = "jane@example.com",
+                };
+            });
+
+        EmailJob? persisted = null;
+        var updateCalls = 0;
+        _jobRepo
+            .Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j =>
+            {
+                updateCalls++;
+                if (updateCalls == 1)
+                    throw new EmailJobConcurrencyException();
+                persisted = j;
+            })
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController(linkIssuer: issuer.Object);
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(1, issueCount);
+        Assert.Equal(2, updateCalls);
+        Assert.Equal("minted-1", persisted!.Recipients[0].UnsubscribeLinkId);
+        Assert.Equal(EmailJobStatus.Queued, persisted.Status);
+        Assert.Equal(EmailJobRecipientStatus.Pending, persisted.Recipients[0].Status);
+    }
+
+    [Fact]
+    public async Task RetryJob_AConcurrentCancelWinsAndIsNotOverridden()
+    {
+        // Admin B cancels to stop a bad resend at the moment admin A clicks retry, and B's write
+        // lands first. A's retry must surface the conflict, not re-apply Queued over the cancel and
+        // send the mail B just stopped - any status change during the conflict window is a
+        // competing decision, and decisions are never silently overridden.
+        var jobId = Guid.NewGuid();
+        var failedJob = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Category = "board",
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "jane@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Failed,
+                },
+            },
+        };
+        var cancelledJob = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Cancelled,
+            Category = "board",
+            Recipients = new List<EmailJobRecipient>(),
+        };
+
+        var reads = 0;
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(() => ++reads == 1 ? failedJob : cancelledJob);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).ThrowsAsync(new EmailJobConcurrencyException());
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        Assert.Contains("changed by another process", conflict.Value!.ToString());
+        // Exactly one write attempt: the recovery saw the status change and stopped, rather than
+        // re-applying and writing over the cancel until the attempts ran out.
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RetryJob_JobDeletedDuringConflictRecovery_Returns404()
+    {
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Category = "board",
+            Recipients = new List<EmailJobRecipient>(),
+        };
+
+        var reads = 0;
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(() => ++reads == 1 ? job : null);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).ThrowsAsync(new EmailJobConcurrencyException());
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task RetryJob_PersistentConflictsExhaustTheAttemptsAndReturn409()
+    {
+        // Same-status conflicts (an ETag bump from a benign writer) are retried, but not forever:
+        // the attempts cap turns a persistently contended document into a visible 409 rather than
+        // a spin. A fresh instance per read, as a real repository returns - reusing one object
+        // would hand the recovery its own mutated copy and test nothing.
+        var jobId = Guid.NewGuid();
+
+        _jobRepo
+            .Setup(r => r.GetByIdAsync(jobId))
+            .ReturnsAsync(() => new EmailJob
+            {
+                Id = jobId,
+                Status = EmailJobStatus.Failed,
+                Category = "board",
+                Recipients = new List<EmailJobRecipient>(),
+            });
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).ThrowsAsync(new EmailJobConcurrencyException());
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<ConflictObjectResult>(result);
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Exactly(3));
+    }
+
+    [Fact]
+    public async Task RetryJob_GroupedJob_DoesNotIssueLinks()
+    {
+        // Grouped sends never carry links; the backfill must not start minting credentials for a
+        // job shape that has no way to emit them.
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Category = "registration",
+            GroupRecipients = true,
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "admin@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Failed,
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+        _jobRepo.Setup(r => r.UpdateAsync(It.IsAny<EmailJob>())).Returns(Task.CompletedTask);
+
+        var controller = CreateController();
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Null(job.Recipients[0].UnsubscribeLinkId);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_WhenLinkIssuanceFails_TheRequestFailsAndNoJobIsCreated()
+    {
+        // The whole point of creation-time issuance: failure is a synchronous error to the admin
+        // who clicked Send, with no job persisted, no partial send, and no background retry state.
+        // The recovery is a human clicking Send again.
+        SetupMockUser();
+        SetupHomesWithRecipients(2);
+
+        var issuer = new Mock<IUnsubscribeLinkIssuer>();
+        issuer
+            .Setup(i => i.IssueAsync(It.IsAny<Guid>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("container missing"));
+
+        var controller = CreateController(linkIssuer: issuer.Object);
+
+        var result = await controller.SendEmailFromBoard(
+            new EmailInfo
+            {
+                Subject = "Newsletter",
+                HtmlBody = "<p>content</p>",
+                IsTestEmail = false,
+            }
+        );
+
+        // A named 500, not an anonymous one: the admin reading a generic error retries blindly, and
+        // each blind retry orphans another batch of issued rows. The message points at the likely
+        // cause (the out-of-band container) instead.
+        var error = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, error.StatusCode);
+        Assert.Contains("UnsubscribeLink", error.Value!.ToString());
+
+        _jobRepo.Verify(r => r.AddAsync(It.IsAny<EmailJob>()), Times.Never);
+        _fileStore.Verify(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendEmailFromBoard_WithoutAppBaseUrl_CreatesTheJobWithNoLinks()
+    {
+        // No AppBaseUrl means no link can be emitted at all - a configuration state the operator
+        // chose. The send must proceed footerless rather than fail, matching the footer builder's
+        // own gate.
+        SetupMockUser();
+        SetupHomesWithRecipients(2);
+
+        EmailJob? persisted = null;
+        _fileStore
+            .Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), "text/html"))
+            .Returns(Task.CompletedTask);
+        _jobRepo
+            .Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => persisted = j)
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController(appBaseUrl: "");
+        var result = await controller.SendEmailFromBoard(
+            new EmailInfo
+            {
+                Subject = "Newsletter",
+                HtmlBody = "<p>content</p>",
+                IsTestEmail = false,
+            }
+        );
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(persisted);
+        Assert.All(persisted!.Recipients, r => Assert.Null(r.UnsubscribeLinkId));
     }
 
     [Fact]

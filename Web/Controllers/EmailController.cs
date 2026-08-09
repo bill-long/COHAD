@@ -5,7 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Web.Authorization;
 using Web.Models;
@@ -30,6 +32,8 @@ namespace Web.Controllers
         private readonly EmailJobProcessor _emailJobProcessor;
         private readonly EmailJobCleanupService _emailJobCleanup;
         private readonly IEmailDeliveryEventRepository _deliveryEventRepository;
+        private readonly IUnsubscribeLinkIssuer _unsubscribeLinkIssuer;
+        private readonly string _appBaseUrl;
         private readonly ILogger<EmailController> _logger;
 
         public EmailController(
@@ -43,6 +47,8 @@ namespace Web.Controllers
             EmailJobProcessor emailJobProcessor,
             EmailJobCleanupService emailJobCleanup,
             IEmailDeliveryEventRepository deliveryEventRepository,
+            IUnsubscribeLinkIssuer unsubscribeLinkIssuer,
+            IConfiguration config,
             ILogger<EmailController> logger
         )
         {
@@ -56,6 +62,8 @@ namespace Web.Controllers
             _emailJobProcessor = emailJobProcessor;
             _emailJobCleanup = emailJobCleanup;
             _deliveryEventRepository = deliveryEventRepository;
+            _unsubscribeLinkIssuer = unsubscribeLinkIssuer;
+            _appBaseUrl = (config["AppBaseUrl"] ?? "").TrimEnd('/');
             _logger = logger;
         }
 
@@ -203,29 +211,130 @@ namespace Web.Controllers
                 return BadRequest(new { error = $"Cannot retry a job with status '{job.Status}'." });
             }
 
-            // Reset failed recipients to Pending; leave Sent recipients alone
-            foreach (var r in (job.Recipients ?? new()).Where(r => r.Status == EmailJobRecipientStatus.Failed))
+            // Everything below this line may run twice - once against the copy read above, and
+            // again against a re-read copy if the write conflicts - so the status this admin
+            // actually saw and decided on is pinned here, before anything mutates.
+            var statusAdminSawWhenRetrying = job.Status;
+
+            // Backfill unsubscribe links the recipients being resent may be missing. Links are
+            // stamped at job creation and the processor only reads them, so a job created before
+            // that convention existed - or before AppBaseUrl was configured - would otherwise
+            // resend with no unsubscribe mechanism at all. Retry is the right place for the
+            // backfill because it is the same seam as creation: a synchronous admin action where
+            // failure is a visible error and no send happens.
+            //
+            // Only recipients this retry will actually mail (Failed ones become Pending below).
+            // Sent recipients are never resent, so a link stamped on one is a live credential
+            // nobody ever receives, and stamping it would also falsify the record: the mail those
+            // recipients actually got carried no link. Grouped jobs are excluded because they
+            // never carry links.
+            //
+            // Failing the retry when issuance fails is deliberate, not an oversight: the point of
+            // this whole feature is that bulk mail does not go out without an unsubscribe
+            // mechanism, and a retry is not an exemption from that. The 500 names the container so
+            // the fix is one provisioning step, after which the same button works.
+            if (!job.GroupRecipients)
             {
-                r.Status = EmailJobRecipientStatus.Pending;
-                r.Error = null;
-                r.SentUtc = null;
+                var resendable = (job.Recipients ?? new())
+                    .Where(r =>
+                        r.Status == EmailJobRecipientStatus.Pending || r.Status == EmailJobRecipientStatus.Failed
+                    )
+                    .ToList();
+                var issuanceFailure = await IssueUnsubscribeLinksOrErrorAsync(resendable);
+                if (issuanceFailure != null)
+                    return issuanceFailure;
             }
 
-            job.FailedCount = 0;
-            job.Status = EmailJobStatus.Queued;
-            job.LastError = null;
-            job.CompletedUtc = null;
-            job.StartedUtc = null;
-            try
+            // The minted ids, keyed by home + address so they can be re-applied to a re-read copy
+            // of the job. Built with a loop rather than ToDictionary because a legacy job document
+            // - the exact population the backfill exists for - can carry duplicate recipient rows
+            // from before the current dedup existed, and ToDictionary would turn that admin's
+            // retry into an unhandled 500 over a key collision.
+            var stampedIds = new Dictionary<(Guid HomeId, string Email), string>();
+            foreach (var r in (job.Recipients ?? new()))
             {
-                await _emailJobRepository.UpdateAsync(job);
-                await _emailJobQueue.EnqueueAsync(job.Id);
+                if (!string.IsNullOrEmpty(r.UnsubscribeLinkId))
+                    stampedIds[(r.HomeId, r.Email)] = r.UnsubscribeLinkId;
             }
-            catch (EmailJobConcurrencyException)
+
+            // The whole retry mutation, defined once and applied to whichever copy of the job is
+            // about to be written. This was previously two hand-maintained copies - the main path
+            // and the conflict recovery - and they drifted twice in one commit: the recovery copy
+            // missed the Pending-only guard on stamping, and its status check quietly treated a
+            // concurrent cancel as something to retry over. One function is what makes the two
+            // paths incapable of disagreeing.
+            void ApplyRetryMutation(EmailJob target)
             {
-                return Conflict(
-                    new { error = "The job was changed by another process. Refresh the page and try again." }
-                );
+                foreach (var r in (target.Recipients ?? new()))
+                {
+                    if (r.Status == EmailJobRecipientStatus.Failed)
+                    {
+                        r.Status = EmailJobRecipientStatus.Pending;
+                        r.Error = null;
+                        r.SentUtc = null;
+                    }
+
+                    // Pending only: in a re-read copy a recipient this request minted a link for
+                    // may have been promoted to Sent by the processor in the meantime, and
+                    // stamping it then would attach a credential to mail that never carried one.
+                    if (
+                        r.Status == EmailJobRecipientStatus.Pending
+                        && string.IsNullOrEmpty(r.UnsubscribeLinkId)
+                        && stampedIds.TryGetValue((r.HomeId, r.Email), out var issuedId)
+                    )
+                    {
+                        r.UnsubscribeLinkId = issuedId;
+                    }
+                }
+
+                target.FailedCount = 0;
+                target.Status = EmailJobStatus.Queued;
+                target.LastError = null;
+                target.CompletedUtc = null;
+                target.StartedUtc = null;
+            }
+
+            ApplyRetryMutation(job);
+
+            // A conflict on the write must not simply tell the admin to try again: the persisted
+            // job would still carry null ids, and the re-run backfill would mint a fresh batch of
+            // orphan rows per conflict. Instead, re-read the winning copy, re-apply the mutation
+            // (the minted batch is reused via stampedIds), and write again - unless the winning
+            // write was a competing *decision*.
+            IActionResult ConflictResponse() =>
+                Conflict(new { error = "The job was changed by another process. Refresh the page and try again." });
+
+            const int maxWriteAttempts = 3;
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await _emailJobRepository.UpdateAsync(job);
+                    await _emailJobQueue.EnqueueAsync(job.Id);
+                    break;
+                }
+                catch (EmailJobConcurrencyException)
+                {
+                    if (attempt >= maxWriteAttempts)
+                        return ConflictResponse();
+
+                    var latest = await _emailJobRepository.GetByIdAsync(id);
+                    if (latest == null)
+                        return NotFound();
+
+                    // Any status change is a competing decision - another admin's cancel or retry -
+                    // and must surface as a conflict, never be silently overridden. An earlier
+                    // revision only checked that the new status was still *retryable*, which is a
+                    // different question: Cancelled is retryable, so a cancel that won the race was
+                    // being re-applied over and the cancelled mail sent anyway. Only an ETag bump
+                    // that left the status exactly as this admin saw it (a webhook sweep, the
+                    // cleanup service) is safe to write over.
+                    if (latest.Status != statusAdminSawWhenRetrying)
+                        return ConflictResponse();
+
+                    ApplyRetryMutation(latest);
+                    job = latest;
+                }
             }
 
             return Ok(EmailJobSummary.FromJob(job));
@@ -357,6 +466,26 @@ namespace Web.Controllers
                 toDisplay = EmailAudience.ForCommitteeSend(committeeLabel);
             }
 
+            // Unsubscribe credentials, issued here - at job creation, synchronously, before the job
+            // exists - and never by the processor. This placement is the conclusion of three review
+            // rounds, so it is worth recording why:
+            //
+            // The send loop's ordering carries interlocking invariants (the per-recipient attempt
+            // budget bounds termination, the persist merges webhook state, the already-Sent skip
+            // depends on that merge), and issuance positioned anywhere inside it broke one of them
+            // per attempt - an infinite re-queue, then credentials minted for skipped recipients.
+            // Here, none of those exist. Failure is a plain error to the admin who clicked Send,
+            // with no job created, no partial send to account for, and a retry that is a visible
+            // human action rather than a background loop.
+            //
+            // What this placement costs, accepted knowingly: a failed submission leaves the
+            // already-issued rows orphaned (valid but undelivered) until the container TTL prunes
+            // them. That is bounded by one send's recipient count, visible to the admin who saw the
+            // error, and preferable to any background retry semantics.
+            var issuanceFailure = await IssueUnsubscribeLinksOrErrorAsync(recipients);
+            if (issuanceFailure != null)
+                return issuanceFailure;
+
             // Create job
             var job = new EmailJob
             {
@@ -436,6 +565,75 @@ namespace Web.Controllers
             }
 
             return Accepted(EmailJobSummary.FromJob(job));
+        }
+
+        /// <summary>
+        /// Issues an unsubscribe short link for every recipient that can carry one and does not
+        /// already have one, stamping the id on the recipient. The send path only ever reads the
+        /// stamped value - see the comment at the send call site for why issuance lives here and
+        /// nowhere else. Returns null on success, or the error response to send the caller.
+        /// <para>
+        /// Recipients with no home or a blank address are skipped, not failed: they have nothing to
+        /// link to, the footer builder renders no footer for a null id, and one bad directory record
+        /// must not block everyone else's mail. Recipients already carrying an id keep it, which is
+        /// what makes the retry-path backfill idempotent.
+        /// </para>
+        /// <para>
+        /// The failure response names the likely cause instead of letting the exception surface as
+        /// an anonymous 500 - an admin staring at a generic error retries blindly, and each blind
+        /// retry orphans another batch of issued rows. Saying "check the container" once is the
+        /// difference between one support step and a loop.
+        /// </para>
+        /// </summary>
+        private async Task<IActionResult> IssueUnsubscribeLinksOrErrorAsync(List<EmailJobRecipient> recipients)
+        {
+            // No AppBaseUrl means no link can be emitted at all - a configuration state the operator
+            // chose, matching the footer builder's own gate, not a fault worth failing a send over.
+            if (string.IsNullOrEmpty(_appBaseUrl))
+                return null;
+
+            var eligible = recipients
+                .Where(r =>
+                    r.HomeId != Guid.Empty
+                    && !string.IsNullOrWhiteSpace(r.Email)
+                    && string.IsNullOrEmpty(r.UnsubscribeLinkId)
+                )
+                .ToList();
+
+            try
+            {
+                // Parallel per the repo convention for independent I/O, but in bounded chunks: an
+                // association-wide send is a few hundred recipients, and firing every write at once
+                // against the shared-throughput container is a self-inflicted 429 burst that would
+                // fail the send at exactly the audience size the feature matters most for.
+                foreach (var chunk in eligible.Chunk(16))
+                {
+                    await Task.WhenAll(
+                        chunk.Select(async r =>
+                        {
+                            var link = await _unsubscribeLinkIssuer.IssueAsync(r.HomeId, r.Email);
+                            r.UnsubscribeLinkId = link.Id;
+                        })
+                    );
+                }
+
+                return null;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to issue unsubscribe links; the send was refused before any mail went out."
+                );
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new
+                    {
+                        error = "Could not issue unsubscribe links, so nothing was sent. "
+                            + "Check that the UnsubscribeLink Cosmos container exists, then try again.",
+                    }
+                );
+            }
         }
 
         private async Task<List<EmailJobRecipient>> GetAllEmailsMatchingFilter(Func<EmailAddress, bool> filter)
