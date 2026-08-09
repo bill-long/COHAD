@@ -29,6 +29,17 @@ export class EmailPreferencesService {
       params: toParams(credential),
     });
   }
+
+  /**
+   * Lifts the caller's own ResidentRequest suppression ("Resume receiving email"). Idempotent 200
+   * when nothing is suppressed; 400 when the suppression is not resident-clearable (bounce or
+   * complaint - admin only); 409 on write contention ("try again").
+   */
+  resume(credential: UnsubscribeCredential): Observable<unknown> {
+    return this.httpClient.post(`api/email/preferences/resume`, null, {
+      params: toParams(credential),
+    });
+  }
 }
 
 /**

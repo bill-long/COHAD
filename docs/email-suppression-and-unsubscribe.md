@@ -1,10 +1,10 @@
 # Email suppression, unsubscribe recovery, and short links
 
 Design doc. Status: **Part 1 implemented**; **Part 2a implemented** (short links, live in
-production 2026-08-09); **Part 2b skipped** by decision (see Part 2); **Part 3 backend
-implemented** (PR-3a - record, enforcement, both writers, resident resume, admin API), with
-forwarding preference, the moderator notification, and all frontend surfacing following in PR-3b;
-Parts 4-5 proposed.
+production 2026-08-09); **Part 2b skipped** by decision (see Part 2); **Part 3 implemented**
+(PR-3a - record, enforcement, both writers, resident resume, admin API; PR-3b - forwarding
+deliverable-address preference and all frontend surfacing; the moderator in-app notification is
+deferred by decision - see PR-3b notes); Parts 4-5 proposed.
 
 ## Problem
 
@@ -538,7 +538,11 @@ people asking for it.
   member only when all of theirs are suppressed.
 - When a forwarding member is suppressed, notify that committee's moderators.
   `INotificationRecipientResolver` already maps `committee:{id}` to exactly the people who can act.
-  A bounce nobody hears about is the original failure mode.
+  A bounce nobody hears about is the original failure mode. **Deferred out of PR-3b by decision
+  (2026-08-09)** - the notification's resolution lifecycle (it must clear when the condition clears
+  via paths unrelated to forwarding, while escalation fires on a timer) is a follow-up in its own
+  right; see the PR-3b implementation notes. Forwarding still correctly *stops* mail to a fully
+  suppressed member; only the proactive alert waits.
 - `EmailDeliveryActionService` writes a suppression instead of clearing all five opt-in booleans,
   so preferences survive and are restorable. Today they are destroyed with no record of their prior
   values - only counts reach the audit log.
@@ -622,13 +626,74 @@ made in the writing, each where the doc above was silent:
     clearable, and its audit entry is gated on the service reporting that THIS call performed the
     transition.
 
-**Left to PR-3b:** the forwarding deliverable-address preference and moderator notification
-(including a `NotificationService.ReopenAsync` so a re-suppression after a clear re-alerts and
-re-qualifies for the email digest), all frontend surfacing (job detail badge + explanation, the
-Manage > Suppressions page, read-only address badges, the preferences-page banner and resume
-button), and the `'Suppressed'` recipient-status value in the SPA's models. Until 3b merges, an
-old frontend renders the new status as plain unstyled text - acceptable for the gap between two
-adjacent PRs. `NotificationRecipientResolver.ResolveUserEmailsAsync`'s own First-non-blank address
+#### Implementation notes - PR-3b (forwarding preference + all frontend surfacing)
+
+The forwarding deliverable-address preference and all frontend surfacing (job detail badge +
+in-place explanation, the Manage > Suppressions page, read-only address chips, the
+preferences-page banner and resume button, the `'Suppressed'` recipient-status value in the SPA's
+models). Decisions made in the writing:
+
+- **Recipient selection is hoisted into `CommitteeForwardJob.SelectForwardRecipients`** (the
+  `ApplyOriginator` precedent), replacing the two character-identical LINQ copies in the poller and
+  `ApproveHeldMessage`. Per member: first non-blank address not on the suppression list (compared
+  via `EmailSuppression.NormalizeAddress`); all candidates suppressed → member excluded (their mail
+  is stopped); no addresses at all → skipped silently, as before. Dedup by address stays
+  case-insensitive-first-wins and runs *after* the per-member preference, so a member falling back
+  to a shared second address still collapses into one send. Empty result keeps the existing
+  handling: the poller logs and moves the message to Processed; the approve returns 400 ("no
+  forwarding recipients with deliverable email addresses"), refusing before the held message is
+  claimed so it stays retryable.
+- **The suppression set is read once per poll cycle / per approve** through the shared
+  `EmailSuppression.ActiveNormalizedAddressSet` helper (the same normalization/guard invariant the
+  enforcement point's `ActiveByNormalizedAddress` uses, so the three sites can't drift). A throwing
+  read fails closed rather than selecting with an empty set and silently preferring suppressed
+  addresses, but only for *forwarding* - the approve 500s before claiming the held message, and the
+  poller passes a `null` set through so that **holding of non-directory mail (spam/phishing
+  quarantine) and processed-folder cleanup still run**, while any message that would be forwarded is
+  left in its inbox for a later cycle. Only a committee that actually deferred a message that cycle
+  is stamped `LastPollStatus` = `Forwarding deferred` (a committee with an empty inbox, or one whose
+  mail was only held, still reads `Success`), so the management UI reflects the real per-committee
+  impact rather than a blanket failure. The deferred messages forward on the next cycle once the
+  store is readable.
+- **The job detail explains a suppressed recipient from the recipient-stamped fields** (no join to
+  the suppression record), so the explanation survives a later clear. The badge is muted, not
+  failed-red: the skip is the system working. Suppressed counts as handled in the progress math,
+  so an all-suppressed Completed job reads 100%, not stuck.
+- **The editors' suppressed chip is read-only and admin-fetched.** No Clear button inside
+  edit-resident or the home-contact dialog: they mutate a shared optimistic `homeCopy` with no
+  rollback (the documented data-loss trap), so clearing lives only on Manage > Suppressions. The
+  chip's data comes from a shared session cache (`SuppressedAddressesService`) that issues no
+  request at all for non-Administrators - the list endpoint is Administrator-only and both editors
+  are reachable via resident self-edit - and is refreshed after an admin create/clear so the chips
+  never disagree with the list within a session.
+- **Resume reloads rather than guessing:** the preferences page's Resume button POSTs and then
+  re-GETs, so the banner always reflects server truth; a 400 (state changed underneath - e.g.
+  cleared then re-suppressed by a bounce) also reloads, and a 409 reads as "try again".
+- **MockData seeds a held message** (`MockHeldMessageRepository.SeedSampleData`) because nothing
+  else in that environment can create one (only the Graph-backed poller holds mail). Taylor's
+  *primary, directory-visible* address is ordered first so every "first address" consumer (the
+  committee-member picker, the forwarding-status preview) surfaces the real address; the seeded
+  suppression sits on her hidden second address (`taylor.old@cohad.local`). The suppression demo
+  therefore lives in a Board *broadcast* (where the suppressed address is its own recipient and the
+  job detail marks it `Suppressed`); the deliverable-address forwarding preference is covered by
+  unit tests rather than by ordering a hidden address first in the seed.
+
+**Deferred by decision (2026-08-09): the moderator in-app notification.** The doc's "notify that
+committee's moderators when a forwarding member is suppressed" bullet is *not* in 3b. Two review
+rounds established that the notification's lifecycle is genuinely hard: it must resolve when the
+condition clears (address fixed, member removed from forwarding, resident deleted, suppression
+cleared) - all paths unrelated to committee forwarding - while `NotificationEscalationService`
+escalates aged unresolved notifications on a timer with no type filter. A forward-time
+reconciliation cannot own that (no forward may ever run; escalation can fire on a fixed-but-not-yet
+-reconciled record). Rather than ship a half-right escalating notification that can email a stale
+"member undeliverable" alert, the alerting is deferred to a follow-up designed with its full
+lifecycle in mind (options include excluding this type from email escalation, or having escalation
+re-check the live condition). The suppression itself remains visible on the Manage > Suppressions
+page and, once a member is dropped, the forward simply excludes them - so mail is correctly stopped;
+only the proactive moderator *alert* waits. This is the same "defer the piece with the hard
+lifecycle" precedent set below for `NotificationRecipientResolver`.
+
+`NotificationRecipientResolver.ResolveUserEmailsAsync`'s own First-non-blank address
 pick is a documented follow-up beyond 3b: enforcement already prevents any send to a suppressed
 digest recipient, so changing digest recipient *identity* is orthogonal.
 

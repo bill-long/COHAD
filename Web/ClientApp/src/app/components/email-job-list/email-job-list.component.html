@@ -46,6 +46,7 @@
                         <span class="progress-text">
                             <span class="sent-count">{{ job.sentCount }}</span>
                             <span *ngIf="job.failedCount > 0" class="failed-count"> / {{ job.failedCount }} failed</span>
+                            <span *ngIf="job.suppressedCount > 0" class="suppressed-count"> / {{ job.suppressedCount }} suppressed</span>
                             <span class="total-count"> of {{ job.totalRecipients }}</span>
                         </span>
                         <span class="job-entry-dot" aria-hidden="true">&middot;</span>
@@ -91,6 +92,7 @@
                             <span class="progress-text">
                                 <span class="sent-count">{{ job.sentCount }}</span>
                                 <span *ngIf="job.failedCount > 0" class="failed-count"> / {{ job.failedCount }} failed</span>
+                                <span *ngIf="job.suppressedCount > 0" class="suppressed-count"> / {{ job.suppressedCount }} suppressed</span>
                                 <span class="total-count"> of {{ job.totalRecipients }}</span>
                             </span>
                         </td>

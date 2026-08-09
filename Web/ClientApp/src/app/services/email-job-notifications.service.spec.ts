@@ -84,6 +84,7 @@ describe('EmailJobNotificationsService', () => {
       status: 'InProgress',
       sentCount: 5,
       failedCount: 0,
+      suppressedCount: 0,
       totalRecipients: 10,
     };
 
@@ -107,6 +108,7 @@ describe('EmailJobNotificationsService', () => {
       status: 'Completed',
       sentCount: 10,
       failedCount: 0,
+      suppressedCount: 0,
       totalRecipients: 10,
       lastError: null,
     };

@@ -1,12 +1,20 @@
 import { Component, Inject, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, Subscription } from 'rxjs';
-import { DeliveryStatus, EmailDeliveryEventDetail, EmailJobDetail, EmailJobStatus, EmailJobRecipientStatus } from 'src/app/models';
+import {
+  DeliveryStatus,
+  EmailDeliveryEventDetail,
+  EmailJobDetail,
+  EmailJobStatus,
+  EmailJobRecipientStatus,
+  SuppressionReason,
+} from 'src/app/models';
 import { EmailJobService } from 'src/app/services/email-job.service';
 import { EmailJobNotificationsService } from 'src/app/services/email-job-notifications.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
 import { EMPTY_EMAIL_JOB_PARTIES, EmailJobParties, emailJobParties } from 'src/app/utils/email-job-parties';
 import { EMAIL_JOBS_FOCUS_JOB_QUERY_PARAM, EMAIL_JOBS_SECTION_ANCHOR } from 'src/app/constants/email-jobs-send-page.constants';
+import { suppressionReasonLabel } from 'src/app/utils/suppression-reason-label';
 import { ApplicationState, applicationState } from 'src/app/state';
 
 @Component({
@@ -71,6 +79,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
             status: event.status,
             sentCount: event.sentCount,
             failedCount: event.failedCount,
+            suppressedCount: event.suppressedCount,
             totalRecipients: event.totalRecipients,
           };
         }
@@ -82,6 +91,7 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
             status: event.status,
             sentCount: event.sentCount,
             failedCount: event.failedCount,
+            suppressedCount: event.suppressedCount,
             totalRecipients: event.totalRecipients,
             lastError: event.lastError,
           };
@@ -146,12 +156,16 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
 
   get progressPercent(): number {
     if (!this.job || this.job.totalRecipients === 0) return 0;
-    return Math.round(((this.job.sentCount + this.job.failedCount) / this.job.totalRecipients) * 100);
+    // Suppressed recipients are handled (skipped deliberately), so they count toward progress -
+    // an all-suppressed Completed job reads 100%, not 0%.
+    return Math.round(
+      ((this.job.sentCount + this.job.failedCount + this.job.suppressedCount) / this.job.totalRecipients) * 100,
+    );
   }
 
   get pendingCount(): number {
     if (!this.job) return 0;
-    return this.job.totalRecipients - this.job.sentCount - this.job.failedCount;
+    return this.job.totalRecipients - this.job.sentCount - this.job.failedCount - this.job.suppressedCount;
   }
 
   get canRetry(): boolean {
@@ -263,9 +277,22 @@ export class EmailJobDetailComponent implements OnInit, OnDestroy {
         return 'status-failed';
       case 'Pending':
         return 'status-queued';
+      case 'Suppressed':
+        // Muted, deliberately not failed-red: nothing went wrong - the address is on the
+        // suppression list and the skip is the system doing its job.
+        return 'status-suppressed';
       default:
         return '';
     }
+  }
+
+  /**
+   * Human label for the reason stamped on a suppressed recipient. Rendered from the
+   * recipient-stamped fields (not a join to the suppression record) so the explanation survives a
+   * later clear of the suppression itself.
+   */
+  suppressionReasonLabel(reason: SuppressionReason | null): string {
+    return suppressionReasonLabel(reason);
   }
 
   deliveryStatusClass(status: DeliveryStatus): string {

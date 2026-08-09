@@ -62,6 +62,7 @@ import { NgxMaskModule } from 'ngx-mask';
 import { PhoneNumberInputComponent } from './components/phone-number-input/phone-number-input.component';
 import { SendEmailComponent } from './components/send-email/send-email.component';
 import { AuditLogComponent } from './components/audit-log/audit-log.component';
+import { ManageSuppressionsComponent } from './components/manage-suppressions/manage-suppressions.component';
 import { ManagePrintComponent } from './components/manage-print/manage-print.component';
 import { RenderedPrintableDirectoryComponent } from './components/rendered-printable-directory/rendered-printable-directory.component';
 import { MapComponent } from './components/map/map.component';
@@ -119,6 +120,7 @@ import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tip
     PhoneNumberInputComponent,
     SendEmailComponent,
     AuditLogComponent,
+    ManageSuppressionsComponent,
     ManagePrintComponent,
     RenderedPrintableDirectoryComponent,
     MapComponent,

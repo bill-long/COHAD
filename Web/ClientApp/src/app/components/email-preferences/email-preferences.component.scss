@@ -23,6 +23,32 @@
   }
 }
 
+.suppression-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 24px;
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+
+  mat-icon {
+    flex-shrink: 0;
+  }
+
+  .suppression-banner-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    button {
+      align-self: flex-start;
+    }
+  }
+}
+
 .categories {
   display: flex;
   flex-direction: column;

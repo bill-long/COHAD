@@ -28,6 +28,7 @@ const makeJob = (id: string, overrides: Partial<EmailJobSummary> = {}): EmailJob
   totalRecipients: 10,
   sentCount: 10,
   failedCount: 0,
+  suppressedCount: 0,
   lastError: null,
   ...overrides,
 });
@@ -109,17 +110,20 @@ describe('EmailJobListComponent', () => {
     emailJobServiceSpy.getRecentJobs.and.returnValue(of([job]));
     component.ngOnInit();
 
-    progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 5, failedCount: 0, totalRecipients: 10 });
+    progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 5, failedCount: 0, suppressedCount: 2, totalRecipients: 10 });
 
     expect(component.jobs[0].status).toBe('InProgress');
     expect(component.jobs[0].sentCount).toBe(5);
+    // suppressedCount must propagate so the list can show it (an all-suppressed Completed job
+    // otherwise reads as a silent '0 sent' with no explanation).
+    expect(component.jobs[0].suppressedCount).toBe(2);
   });
 
   it('ignores progress events for unknown job ids', () => {
     emailJobServiceSpy.getRecentJobs.and.returnValue(of([makeJob('j1')]));
     component.ngOnInit();
 
-    progressSubject.next({ jobId: 'unknown', status: 'InProgress', sentCount: 3, failedCount: 0, totalRecipients: 10 });
+    progressSubject.next({ jobId: 'unknown', status: 'InProgress', sentCount: 3, failedCount: 0, suppressedCount: 0, totalRecipients: 10 });
 
     expect(component.jobs.length).toBe(1);
     expect(component.jobs[0].id).toBe('j1');
@@ -130,10 +134,11 @@ describe('EmailJobListComponent', () => {
     emailJobServiceSpy.getRecentJobs.and.returnValue(of([job]));
     component.ngOnInit();
 
-    completedSubject.next({ jobId: 'j1', status: 'Completed', sentCount: 10, failedCount: 0, totalRecipients: 10, lastError: null });
+    completedSubject.next({ jobId: 'j1', status: 'Completed', sentCount: 7, failedCount: 0, suppressedCount: 3, totalRecipients: 10, lastError: null });
 
     expect(component.jobs[0].status).toBe('Completed');
-    expect(component.jobs[0].sentCount).toBe(10);
+    expect(component.jobs[0].sentCount).toBe(7);
+    expect(component.jobs[0].suppressedCount).toBe(3);
   });
 
   it('disconnects and unsubscribes on destroy', () => {
@@ -212,7 +217,7 @@ describe('EmailJobListComponent', () => {
     component.ngOnInit();
     expect(component.partiesFor(component.jobs[0]).to).toBe('10 recipients');
 
-    progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 1, failedCount: 0, totalRecipients: 12 });
+    progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 1, failedCount: 0, suppressedCount: 0, totalRecipients: 12 });
 
     expect(component.partiesFor(component.jobs[0]).to).toBe('12 recipients');
   });

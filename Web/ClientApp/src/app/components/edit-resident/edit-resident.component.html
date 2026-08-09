@@ -157,6 +157,16 @@
               </div>
 
               <div class="prefs">
+                <!-- Read-only, admin-only advisory. No Clear button here on purpose: this editor
+                     mutates an optimistic shared copy with no rollback, so clearing lives on
+                     Manage > Suppressions. -->
+                <div class="suppressedBanner" *ngIf="suppressedAddresses.isSuppressed(emailAddress.address)">
+                  <span class="suppressedChip">Suppressed</span>
+                  <span class="suppressedHint">
+                    All email to this address is currently stopped. The subscriptions below take effect
+                    again once the suppression is cleared under Manage &gt; Suppressions.
+                  </span>
+                </div>
                 <div class="prefGroup">
                   <div class="prefTitle">Directory</div>
                   <mat-checkbox [name]="'residentEmailVisible_' + i" [(ngModel)]="emailAddress.visibleInDirectory" [disabled]="!editEnabled">Show in directory</mat-checkbox>

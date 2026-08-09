@@ -97,6 +97,10 @@
   color: var(--error);
   font-weight: 600;
 }
+.count-suppressed {
+  color: var(--text-muted);
+  font-weight: 600;
+}
 .count-pending {
   color: var(--text-secondary);
 }
@@ -179,6 +183,12 @@
 .status-cancelled {
   background: var(--surface-subtle);
   color: var(--text-muted);
+}
+
+/* Muted on purpose - a suppressed recipient is the system working, not a failure. */
+.status-suppressed {
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
 }
 
 /* Delivery status badges */
@@ -307,6 +317,10 @@
   white-space: nowrap;
   color: var(--text-secondary);
   font-size: 0.9rem;
+}
+
+.suppressed-note {
+  color: var(--text-muted);
 }
 
 /* Delivery Events — inline per-recipient expand */

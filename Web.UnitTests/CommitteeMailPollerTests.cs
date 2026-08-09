@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Graph.Models;
 using Moq;
+using Web.MockData;
 using Web.Models;
 using Web.Services;
 using Web.Services.Repositories;
@@ -67,6 +68,7 @@ public sealed class CommitteeMailPollerTests
         services.AddScoped(_ => residentRepo.Object);
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new MockEmailSuppressionRepository());
         services.AddScoped(_ => notifications.Object);
         var provider = services.BuildServiceProvider();
 
@@ -256,6 +258,7 @@ public sealed class CommitteeMailPollerTests
         services.AddScoped(_ => residentRepo.Object);
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new MockEmailSuppressionRepository());
         services.AddScoped(_ => Mock.Of<INotificationService>());
         var provider = services.BuildServiceProvider();
 
@@ -344,6 +347,7 @@ public sealed class CommitteeMailPollerTests
         services.AddScoped(_ => Mock.Of<IResidentRepository>());
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new MockEmailSuppressionRepository());
         services.AddScoped(_ => notifications.Object);
         var provider = services.BuildServiceProvider();
 
@@ -422,6 +426,7 @@ public sealed class CommitteeMailPollerTests
         services.AddScoped(_ => Mock.Of<IResidentRepository>());
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new MockEmailSuppressionRepository());
         services.AddScoped(_ => notifications.Object);
         var provider = services.BuildServiceProvider();
 
@@ -498,6 +503,7 @@ public sealed class CommitteeMailPollerTests
         services.AddScoped(_ => Mock.Of<IResidentRepository>());
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new MockEmailSuppressionRepository());
         services.AddScoped(_ => notifications.Object);
         var provider = services.BuildServiceProvider();
 
@@ -567,6 +573,7 @@ public sealed class CommitteeMailPollerTests
         services.AddScoped(_ => Mock.Of<IResidentRepository>());
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new MockEmailSuppressionRepository());
         services.AddScoped(_ => notifications.Object);
         var provider = services.BuildServiceProvider();
 
@@ -624,6 +631,7 @@ public sealed class CommitteeMailPollerTests
         services.AddScoped(_ => Mock.Of<IResidentRepository>());
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new MockEmailSuppressionRepository());
         services.AddScoped(_ => notifications.Object);
         var provider = services.BuildServiceProvider();
 
@@ -688,6 +696,7 @@ public sealed class CommitteeMailPollerTests
         services.AddScoped(_ => Mock.Of<IResidentRepository>());
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new MockEmailSuppressionRepository());
         services.AddScoped(_ => notifications.Object);
         var provider = services.BuildServiceProvider();
 
@@ -767,6 +776,7 @@ public sealed class CommitteeMailPollerTests
         services.AddScoped(_ => residentRepo.Object);
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new MockEmailSuppressionRepository());
         services.AddScoped(_ => Mock.Of<INotificationService>());
         var provider = services.BuildServiceProvider();
 
@@ -804,6 +814,349 @@ public sealed class CommitteeMailPollerTests
         Assert.Equal("Jane Doe", created.OriginalSenderDisplay);
         Assert.Equal("jane@example.com", created.ReplyToEmail);
         Assert.Equal("Architectural Committee forwarding members", created.ToDisplay);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_forwards_to_second_address_when_first_is_suppressed()
+    {
+        var memberResidentId = Guid.NewGuid();
+        var member = new Resident
+        {
+            Id = memberResidentId,
+            HomeId = Guid.NewGuid(),
+            EmailAddresses = new List<Web.Models.EmailAddress>
+            {
+                new() { Address = "bounced@example.com" },
+                new() { Address = "backup@example.com" },
+            },
+        };
+
+        var (poller, emailJobRepo, _, _) = BuildForwardScenario(
+            member,
+            activeSuppressions: new[] { "bounced@example.com" });
+
+        EmailJob? created = null;
+        emailJobRepo.Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => created = j)
+            .Returns(Task.CompletedTask);
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        Assert.NotNull(created);
+        var recipient = Assert.Single(created!.Recipients);
+        Assert.Equal("backup@example.com", recipient.Email);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_when_every_member_is_suppressed_moves_to_processed_without_a_job()
+    {
+        var memberResidentId = Guid.NewGuid();
+        var member = new Resident
+        {
+            Id = memberResidentId,
+            HomeId = Guid.NewGuid(),
+            EmailAddresses = new List<Web.Models.EmailAddress> { new() { Address = "bounced@example.com" } },
+        };
+
+        var (poller, emailJobRepo, _, graph) = BuildForwardScenario(
+            member,
+            activeSuppressions: new[] { "bounced@example.com" });
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        // No deliverable recipients remain → no job created; the message still leaves the inbox
+        // (the existing empty-result handling that predates the suppression list).
+        emailJobRepo.Verify(r => r.AddAsync(It.IsAny<EmailJob>()), Times.Never);
+        graph.Verify(g => g.MoveMessageAsync("board@cohad.org", "graph-1", "processed-folder", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_when_suppression_read_throws_defers_forwarding_but_still_polls()
+    {
+        // A throwing suppression read must NOT abort the whole cycle: the inbox is still polled
+        // (holding/quarantine is independent of the suppression store), but a directory-sender
+        // message that would forward is deferred - left in the inbox, no job created - because
+        // forwarding with an unknown suppression state would risk mailing a suppressed address.
+        var memberResidentId = Guid.NewGuid();
+        var committee = new Committee
+        {
+            Id = "board",
+            DisplayName = "Board",
+            CommitteeEmail = "board@cohad.org",
+            ForwardingEnabled = true,
+            ForwardingSenderFilter = ForwardingSenderFilter.DirectoryOnly,
+            Members = new List<CommitteeMember> { new() { ResidentId = memberResidentId, ReceivesForwardedEmail = true } },
+        };
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
+        committeeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        (string? Status, string? Error) stamped = (null, null);
+        committeeRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>()))
+            .Callback<Committee>(c => stamped = (c.LastPollStatus, c.LastPollError))
+            .ReturnsAsync((Committee c) => c);
+
+        var emailJobRepo = new Mock<IEmailJobRepository>();
+        emailJobRepo.Setup(r => r.GetByInternetMessageIdAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((EmailJob?)null);
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetByInternetMessageIdAsync("board", It.IsAny<string>())).ReturnsAsync((HeldMessage?)null);
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage>());
+
+        // Sender is in the directory, so the message would forward (not be held).
+        var sender = new Resident
+        {
+            Id = Guid.NewGuid(),
+            HomeId = Guid.NewGuid(),
+            EmailAddresses = new List<Web.Models.EmailAddress> { new() { Address = "jane@example.com" } },
+        };
+        var member = new Resident
+        {
+            Id = memberResidentId,
+            HomeId = Guid.NewGuid(),
+            EmailAddresses = new List<Web.Models.EmailAddress> { new() { Address = "member@example.com" } },
+        };
+        var residentRepo = new Mock<IResidentRepository>();
+        residentRepo.Setup(r => r.GetByEmailAsync("jane@example.com")).ReturnsAsync(new List<Resident> { sender });
+        residentRepo.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>())).ReturnsAsync(new List<Resident> { member });
+
+        var suppressionRepo = new Mock<IEmailSuppressionRepository>();
+        suppressionRepo.Setup(r => r.GetActiveAsync())
+            .ThrowsAsync(new InvalidOperationException("Cosmos container 'EmailSuppression' not found."));
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => emailJobRepo.Object);
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => residentRepo.Object);
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => suppressionRepo.Object);
+        services.AddScoped(_ => Mock.Of<INotificationService>());
+        var provider = services.BuildServiceProvider();
+
+        var message = new Message
+        {
+            Id = "graph-1",
+            InternetMessageId = "<msg-1@example.com>",
+            Subject = "Hello",
+            ReceivedDateTime = DateTimeOffset.UtcNow,
+            From = new Recipient { EmailAddress = new Microsoft.Graph.Models.EmailAddress { Address = "jane@example.com", Name = "Jane Doe" } },
+        };
+        var graph = new Mock<IGraphMailReader>();
+        graph.Setup(g => g.GetInboxMessagesAsync("board@cohad.org", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Message> { message });
+        graph.Setup(g => g.GetOrCreateFolderAsync("board@cohad.org", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("processed-folder");
+
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            graph.Object,
+            new DisabledSpamClassifier(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        // The cycle still polled the inbox (holding/cleanup unaffected)...
+        graph.Verify(g => g.GetInboxMessagesAsync("board@cohad.org", It.IsAny<CancellationToken>()), Times.Once);
+        // ...but forwarding was deferred: no job, and the message is left in the inbox (not moved to
+        // Processed) so it retries next cycle.
+        emailJobRepo.Verify(r => r.AddAsync(It.IsAny<EmailJob>()), Times.Never);
+        graph.Verify(g => g.MoveMessageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        // ...and the deferral is surfaced on the committee's poll status, not a bare Success.
+        Assert.Equal("Forwarding deferred", stamped.Status);
+        Assert.Contains("Suppression list unavailable", stamped.Error);
+    }
+
+    [Fact]
+    public async Task PollAllCommittees_still_holds_unknown_sender_when_suppression_read_throws()
+    {
+        // The safety property: held-message quarantine of a non-directory sender does not depend on
+        // the suppression store, so a throwing suppression read must not stop new mail from being
+        // held.
+        var committee = new Committee
+        {
+            Id = "board",
+            DisplayName = "Board",
+            CommitteeEmail = "board@cohad.org",
+            ForwardingEnabled = true,
+            ForwardingSenderFilter = ForwardingSenderFilter.DirectoryOnly,
+            Members = new List<CommitteeMember> { new() { ResidentId = Guid.NewGuid(), ReceivesForwardedEmail = true } },
+        };
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
+        committeeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        (string? Status, string? Error) stamped = (null, null);
+        committeeRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>()))
+            .Callback<Committee>(c => stamped = (c.LastPollStatus, c.LastPollError))
+            .ReturnsAsync((Committee c) => c);
+
+        var emailJobRepo = new Mock<IEmailJobRepository>();
+        emailJobRepo.Setup(r => r.GetByInternetMessageIdAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((EmailJob?)null);
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetByInternetMessageIdAsync("board", It.IsAny<string>())).ReturnsAsync((HeldMessage?)null);
+        heldRepo.Setup(r => r.AddAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage>());
+
+        var residentRepo = new Mock<IResidentRepository>();
+        residentRepo.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>())).ReturnsAsync(new List<Resident>());
+        residentRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync(new List<Resident>()); // unknown sender → hold
+
+        var suppressionRepo = new Mock<IEmailSuppressionRepository>();
+        suppressionRepo.Setup(r => r.GetActiveAsync())
+            .ThrowsAsync(new InvalidOperationException("Cosmos container 'EmailSuppression' not found."));
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => emailJobRepo.Object);
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => residentRepo.Object);
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => suppressionRepo.Object);
+        services.AddScoped(_ => Mock.Of<INotificationService>());
+        var provider = services.BuildServiceProvider();
+
+        var message = new Message
+        {
+            Id = "graph-1",
+            InternetMessageId = "<msg-1@example.com>",
+            Subject = "Buy now",
+            ReceivedDateTime = DateTimeOffset.UtcNow,
+            From = new Recipient { EmailAddress = new Microsoft.Graph.Models.EmailAddress { Address = "stranger@example.com", Name = "Stranger" } },
+        };
+        var graph = new Mock<IGraphMailReader>();
+        graph.Setup(g => g.GetInboxMessagesAsync("board@cohad.org", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Message> { message });
+        graph.Setup(g => g.GetOrCreateFolderAsync("board@cohad.org", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("processed-folder");
+
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            graph.Object,
+            new DisabledSpamClassifier(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        await poller.PollAllCommitteesAsync(CancellationToken.None);
+
+        // The unknown-sender message is still held despite the suppression store being unreadable.
+        heldRepo.Verify(r => r.AddAsync(It.Is<HeldMessage>(m => m.NotifiedUtc == null)), Times.Once);
+        // Nothing was actually deferred (the message was held, not forwarded), so the poll status is
+        // not overstated as 'Forwarding deferred'.
+        Assert.Equal("Success", stamped.Status);
+        Assert.Null(stamped.Error);
+    }
+
+    /// <summary>
+    /// Builds a poll scenario with one directory-sender message forwarding to a single committee
+    /// member, with the given addresses active on the suppression list. Returns the poller plus the
+    /// email-job, notification-service, and graph mocks for per-test configuration and asserts.
+    /// </summary>
+    private static (CommitteeMailPoller poller, Mock<IEmailJobRepository> emailJobRepo, Mock<INotificationService> notifications, Mock<IGraphMailReader> graph)
+        BuildForwardScenario(Resident member, IReadOnlyList<string> activeSuppressions)
+    {
+        var committee = new Committee
+        {
+            Id = "board",
+            DisplayName = "Board",
+            CommitteeEmail = "board@cohad.org",
+            ForwardingEnabled = true,
+            ForwardingSenderFilter = ForwardingSenderFilter.DirectoryOnly,
+            Members = new List<CommitteeMember>
+            {
+                new CommitteeMember { ResidentId = member.Id, ReceivesForwardedEmail = true },
+            },
+        };
+
+        var committeeRepo = new Mock<ICommitteeRepository>();
+        committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee> { committee });
+        committeeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+        committeeRepo.Setup(r => r.UpsertAsync(It.IsAny<Committee>())).ReturnsAsync((Committee c) => c);
+
+        var emailJobRepo = new Mock<IEmailJobRepository>();
+        emailJobRepo.Setup(r => r.GetByInternetMessageIdAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((EmailJob?)null);
+
+        var heldRepo = new Mock<IHeldMessageRepository>();
+        heldRepo.Setup(r => r.GetByInternetMessageIdAsync("board", It.IsAny<string>())).ReturnsAsync((HeldMessage?)null);
+        heldRepo.Setup(r => r.GetAwaitingNotificationAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<HeldMessage>());
+
+        // The sender is in the directory, so the message forwards rather than being held.
+        var sender = new Resident
+        {
+            Id = Guid.NewGuid(),
+            HomeId = Guid.NewGuid(),
+            EmailAddresses = new List<Web.Models.EmailAddress> { new() { Address = "jane@example.com" } },
+        };
+        var residentRepo = new Mock<IResidentRepository>();
+        residentRepo.Setup(r => r.GetByEmailAsync("jane@example.com")).ReturnsAsync(new List<Resident> { sender });
+        residentRepo.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>())).ReturnsAsync(new List<Resident> { member });
+
+        var suppressionRepo = new Mock<IEmailSuppressionRepository>();
+        suppressionRepo.Setup(r => r.GetActiveAsync()).ReturnsAsync(
+            activeSuppressions.Select(a => new EmailSuppression
+            {
+                Id = EmailSuppression.MakeId(a),
+                Email = EmailSuppression.NormalizeAddress(a),
+                Reason = SuppressionReason.HardBounce,
+            }).ToList());
+
+        var notifications = new Mock<INotificationService>();
+        notifications
+            .Setup(s => s.RaiseAsync(
+                It.IsAny<NotificationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Notification());
+        notifications
+            .Setup(s => s.ResolveAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Notification?)null);
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => committeeRepo.Object);
+        services.AddScoped(_ => emailJobRepo.Object);
+        services.AddScoped(_ => heldRepo.Object);
+        services.AddScoped(_ => residentRepo.Object);
+        services.AddScoped(_ => Mock.Of<IUserRepository>());
+        services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped(_ => suppressionRepo.Object);
+        services.AddScoped(_ => notifications.Object);
+        var provider = services.BuildServiceProvider();
+
+        var message = new Message
+        {
+            Id = "graph-1",
+            InternetMessageId = "<msg-1@example.com>",
+            Subject = "Hello",
+            ReceivedDateTime = DateTimeOffset.UtcNow,
+            From = new Recipient { EmailAddress = new Microsoft.Graph.Models.EmailAddress { Address = "jane@example.com", Name = "Jane Doe" } },
+        };
+
+        var graphReader = new Mock<IGraphMailReader>();
+        graphReader.Setup(g => g.GetInboxMessagesAsync("board@cohad.org", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Message> { message });
+        graphReader.Setup(g => g.GetOrCreateFolderAsync("board@cohad.org", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("processed-folder");
+
+        var poller = new CommitteeMailPoller(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new EmailJobQueue(),
+            graphReader.Object,
+            new DisabledSpamClassifier(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<CommitteeMailPoller>.Instance
+        );
+
+        return (poller, emailJobRepo, notifications, graphReader);
     }
 
     /// <summary>

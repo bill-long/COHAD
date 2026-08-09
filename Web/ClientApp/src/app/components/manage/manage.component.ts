@@ -92,6 +92,7 @@ export class ManageComponent implements OnInit {
         label: 'Communications',
         items: [
           { label: 'Email', route: 'send-email', icon: 'mail', roles: rolePermissions.manageEmailRoles },
+          { label: 'Suppressions', route: 'suppressions', icon: 'unsubscribe', roles: rolePermissions.manageSuppressionsRoles },
           { label: 'News', route: 'blog', icon: 'article', roles: rolePermissions.manageBlogRoles, requireResident: true },
           { label: 'Events', route: 'events', icon: 'event', roles: rolePermissions.manageEventsRoles, requireResident: true },
           // Documents mirrors the old getter: gated by the manage-users (Administrator) role set.

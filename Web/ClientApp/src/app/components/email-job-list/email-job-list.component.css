@@ -155,6 +155,10 @@
   color: var(--error);
 }
 
+.suppressed-count {
+  color: var(--text-muted);
+}
+
 .total-count {
   color: var(--text-secondary);
 }

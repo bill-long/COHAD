@@ -70,6 +70,7 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
           status: event.status,
           sentCount: event.sentCount,
           failedCount: event.failedCount,
+          suppressedCount: event.suppressedCount,
           totalRecipients: event.totalRecipients,
         });
       }),
@@ -78,6 +79,7 @@ export class EmailJobListComponent implements OnInit, OnChanges, OnDestroy {
           status: event.status,
           sentCount: event.sentCount,
           failedCount: event.failedCount,
+          suppressedCount: event.suppressedCount,
           totalRecipients: event.totalRecipients,
           lastError: event.lastError,
         });

@@ -16,6 +16,31 @@
           at <strong>{{ prefs.homeName }}</strong>.
         </p>
 
+        <!-- The checkboxes below stay editable while suppressed - the preferences persist
+             underneath the suppression and take effect again when it lifts. -->
+        <div *ngIf="prefs.suppressed" class="suppression-banner" role="status">
+          <mat-icon>pause_circle</mat-icon>
+          <div class="suppression-banner-body">
+            <ng-container *ngIf="prefs.canResume; else notResumable">
+              <span>
+                You unsubscribed from all association email<ng-container *ngIf="prefs.suppressedUtc">
+                  on {{ prefs.suppressedUtc | date: 'longDate' }}</ng-container>. Your subscription choices below are
+                kept, but nothing will be delivered until you resume.
+              </span>
+              <button mat-stroked-button color="primary" (click)="resume()" [disabled]="resuming">
+                <span *ngIf="!resuming">Resume receiving email</span>
+                <span *ngIf="resuming">Resuming…</span>
+              </button>
+            </ng-container>
+            <ng-template #notResumable>
+              <span>
+                Delivery to this address is currently stopped. To start receiving email again, write to
+                <a href="mailto:board@cohad.org">board&#64;cohad.org</a>.
+              </span>
+            </ng-template>
+          </div>
+        </div>
+
         <div class="categories">
           <div *ngFor="let cat of categories" class="category-row">
             <mat-checkbox

@@ -1,5 +1,6 @@
 import { Component, OnInit, Input, Output, EventEmitter } from '@angular/core';
 import { Resident, PhoneNumber, EmailAddress } from 'src/app/models';
+import { SuppressedAddressesService } from 'src/app/services/suppressed-addresses.service';
 
 @Component({
   selector: 'app-edit-resident',
@@ -26,7 +27,13 @@ export class EditResidentComponent implements OnInit {
   confirmRemoveEmailIndex: number | null = null;
   confirmRemovePhoneIndex: number | null = null;
 
-  constructor() {}
+  /**
+   * The read-only suppression advisory chip is matched through the shared service (one matcher for
+   * every editor). There is deliberately no Clear action here: this editor mutates a shared
+   * optimistic copy with no rollback, so acting on server state from inside it is the documented
+   * data-loss trap - clearing lives on Manage > Suppressions.
+   */
+  constructor(protected readonly suppressedAddresses: SuppressedAddressesService) {}
 
   ngOnInit(): void {}
 

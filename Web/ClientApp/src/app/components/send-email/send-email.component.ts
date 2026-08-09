@@ -208,7 +208,9 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get jobProgressPercent(): number {
     if (!this.activeJob || this.activeJob.totalRecipients === 0) return 0;
-    const processed = this.activeJob.sentCount + this.activeJob.failedCount;
+    // Suppressed recipients are handled (skipped deliberately), so they count as processed - an
+    // all-suppressed Completed job reads 100%, not a permanently-stalled 0%.
+    const processed = this.activeJob.sentCount + this.activeJob.failedCount + this.activeJob.suppressedCount;
     return Math.round((processed / this.activeJob.totalRecipients) * 100);
   }
 
@@ -320,6 +322,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
             status: event.status,
             sentCount: event.sentCount,
             failedCount: event.failedCount,
+            suppressedCount: event.suppressedCount,
             totalRecipients: event.totalRecipients,
           };
         }
@@ -331,6 +334,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
             status: event.status,
             sentCount: event.sentCount,
             failedCount: event.failedCount,
+            suppressedCount: event.suppressedCount,
             totalRecipients: event.totalRecipients,
             lastError: event.lastError,
           };
@@ -351,6 +355,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
             status: event.status,
             sentCount: event.sentCount,
             failedCount: event.failedCount,
+            suppressedCount: event.suppressedCount,
             totalRecipients: event.totalRecipients,
           };
         }
@@ -362,6 +367,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
             status: event.status,
             sentCount: event.sentCount,
             failedCount: event.failedCount,
+            suppressedCount: event.suppressedCount,
             totalRecipients: event.totalRecipients,
             lastError: event.lastError,
           };
