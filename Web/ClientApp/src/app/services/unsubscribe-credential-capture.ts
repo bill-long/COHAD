@@ -144,22 +144,40 @@ export function clearCapturedUnsubscribeLinkId(): void {
 function writeStoredId(id: string): void {
   try {
     window.sessionStorage.setItem(STORAGE_KEY, id);
-    // Read-back rather than trusting a silent setItem: some browsers no-op instead of throwing
-    // when storage is disabled, and an unnoticed dropped write here costs the user their only
-    // remaining copy of the credential - the URL one is about to be stripped unconditionally.
-    if (window.sessionStorage.getItem(STORAGE_KEY) === id) {
-      return;
-    }
   } catch {
-    // Fall through to the in-memory copy.
+    // The write definitely did not land, so anything still in storage is a stale id from an
+    // earlier visit (kept then for refresh-recovery). Clear it so it cannot resurface after this
+    // load, when the in-memory copy is gone; the memory-first read covers the current load.
+    inMemoryLinkId = id;
+    tryRemoveStoredId();
+    return;
   }
 
-  inMemoryLinkId = id;
+  // Read-back rather than trusting a silent setItem: some browsers no-op instead of throwing when
+  // storage is disabled, and an unnoticed dropped write here costs the user their only remaining
+  // copy of the credential - the URL one is about to be stripped unconditionally.
+  let verifiedStored = false;
+  try {
+    verifiedStored = window.sessionStorage.getItem(STORAGE_KEY) === id;
+  } catch {
+    // The write itself did not throw, only the verification did. The value may well have landed,
+    // and destroying a possibly-landed fresh write costs refresh-recovery for nothing - so keep
+    // storage untouched and let the memory copy shield the current load. This branch is why the
+    // stale-clear does not simply share the setItem catch above: there, the write is known dead;
+    // here it is not.
+    inMemoryLinkId = id;
+    return;
+  }
 
-  // A stale id from an earlier visit may still sit in storage (kept then for refresh-recovery)
-  // even though THIS write failed - quota, or policy that flipped mid-session. Clear it so it
-  // cannot resurface after this load, when the in-memory copy is gone; the memory-first read
-  // covers the current load either way.
+  if (!verifiedStored) {
+    // setItem silently dropped the write, so whatever storage holds is not this id: stale, or
+    // nothing. Same reasoning as the throwing case.
+    inMemoryLinkId = id;
+    tryRemoveStoredId();
+  }
+}
+
+function tryRemoveStoredId(): void {
   try {
     window.sessionStorage.removeItem(STORAGE_KEY);
   } catch {

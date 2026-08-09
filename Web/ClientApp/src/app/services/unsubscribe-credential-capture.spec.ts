@@ -104,6 +104,19 @@ describe('unsubscribe credential capture', () => {
     expect(window.sessionStorage.getItem('cohad.unsubscribe-link-id')).toBeNull();
   });
 
+  it('does not destroy a possibly-landed write when only the read-back fails', () => {
+    // setItem succeeded and only the verification getItem threw. The value may well be in storage,
+    // and it is the fresh id - deleting it would trade refresh-recovery for nothing. Only a write
+    // that is KNOWN dead (setItem threw, or the read-back returned something else) clears storage.
+    const removeSpy = spyOn(Storage.prototype, 'removeItem');
+    spyOn(Storage.prototype, 'getItem').and.throwError('storage flapped');
+
+    captureUnsubscribeCredentialFromUrl('/u/abc123');
+
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(readCapturedUnsubscribeLinkId()).toBe('abc123');
+  });
+
   it('ignores a trailing segment rather than folding it into the id', () => {
     captureUnsubscribeCredentialFromUrl('/u/abc123/extra');
 
