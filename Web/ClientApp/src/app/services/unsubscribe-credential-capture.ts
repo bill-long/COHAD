@@ -18,13 +18,14 @@
  * `history` and `sessionStorage` - and it does so before any of them start. Whatever reads the URL
  * afterwards sees `/email-preferences`.
  *
- * The captured id lives in sessionStorage rather than a module variable, for two reasons found in
- * review. A module variable dies with the document, so a bootstrap or chunk-load failure after the
- * URL rewrite left the user with no way to recover by refreshing - the credential was gone from the
- * URL and from memory both. And it had no owner to clear it, so it stayed readable for the whole tab
- * session on a shared machine. sessionStorage survives a refresh (tab-scoped, gone when the tab
- * closes), and the preferences page deletes it the moment a load succeeds, which is the point at
- * which refresh-recovery stops being needed.
+ * The captured id lives primarily in sessionStorage, for two reasons found in review. A module
+ * variable dies with the document, so a bootstrap or chunk-load failure after the URL rewrite left
+ * the user with no way to recover by refreshing - the credential was gone from the URL and from
+ * memory both. And it had no owner to clear it, so it stayed readable for the whole tab session on
+ * a shared machine. sessionStorage survives a refresh (tab-scoped, gone when the tab closes), and
+ * the preferences page deletes it the moment a load succeeds, which is the point at which
+ * refresh-recovery stops being needed. A module-level copy remains only as the fallback for
+ * storage-blocked browsers, carrying the current load; both copies answer to the same clear call.
  *
  * This module MUST NOT throw: it runs above `bootstrapModule`, so an escaped exception is a blank
  * page on every route - and for exactly the mangled-link inputs this feature exists to survive.
@@ -71,16 +72,24 @@ export function captureUnsubscribeCredentialFromUrl(pathname?: string): void {
       // Keep the raw segment.
     }
 
-    // The rewrite happens only when there is nothing left to lose: either the id landed in storage,
-    // or there was no id to begin with (a stripped link, where leaving a bare `/u/` in the address
-    // bar serves nobody). If the storage write FAILED - storage disabled by policy, some privacy
-    // modes - the URL is deliberately left alone: it is then the only copy of the credential, and
-    // the `/u/:id` route param is the fallback that keeps the page working. The cost is that the
-    // credential stays observable in that browser's telemetry and history, which is the pre-capture
-    // status quo; destroying the only copy to prevent observation would be burning the letter to
-    // keep it private.
-    const stored = !id || writeStoredId(id);
-    if (stored && window.history && typeof window.history.replaceState === 'function') {
+    // Storage first, an in-memory fallback when storage is blocked (disabled by policy, some
+    // privacy modes - setItem can throw or silently no-op, hence the verified write). The fallback
+    // serves the current page load only; it dies with the document, so in a storage-blocked
+    // browser a refresh after a failed load is a dead end whose recovery is clicking the link in
+    // the email again - which still works, and which is exactly what the page's error message says
+    // to do.
+    //
+    // The URL rewrite is deliberately UNCONDITIONAL. An earlier revision kept the URL when the
+    // storage write failed, to preserve the `/u/:id` route param as a fallback - and review found
+    // it traded away the one invariant this module exists for (nothing may observe the credential
+    // in location.pathname; the telemetry SDK seeds its operation name from it) and did not even
+    // buy the availability it aimed for, because a case-mangled `/U/{id}` URL survives the capture
+    // but matches no case-sensitive Angular route, rendering a blank page. Stripping always, with
+    // the memory fallback carrying the current load, keeps both properties at once.
+    if (id) {
+      writeStoredId(id);
+    }
+    if (window.history && typeof window.history.replaceState === 'function') {
       window.history.replaceState(null, '', PREFERENCES_PATH);
     }
   } catch {
@@ -90,16 +99,22 @@ export function captureUnsubscribeCredentialFromUrl(pathname?: string): void {
 }
 
 /**
+ * In-memory fallback for storage-blocked browsers, carrying the credential for the current page
+ * load only. Never the primary store: it dies with the document, so it cannot serve
+ * refresh-recovery - but it is also unobservable from the URL, which is the invariant that matters.
+ */
+let inMemoryLinkId: string | null = null;
+
+/**
  * The captured credential, or null if the page was not opened from a short link. Does not clear -
  * the id must survive a refresh until a preferences load succeeds, so clearing belongs to the page
  * that knows when that happened. Call {@link clearCapturedUnsubscribeLinkId} there.
  */
 export function readCapturedUnsubscribeLinkId(): string | null {
   try {
-    return window.sessionStorage.getItem(STORAGE_KEY);
+    return window.sessionStorage.getItem(STORAGE_KEY) ?? inMemoryLinkId;
   } catch {
-    // Storage can be unavailable (privacy modes); behave as if nothing was captured.
-    return null;
+    return inMemoryLinkId;
   }
 }
 
@@ -109,21 +124,27 @@ export function readCapturedUnsubscribeLinkId(): string | null {
  * outlive the visit that used it.
  */
 export function clearCapturedUnsubscribeLinkId(): void {
+  inMemoryLinkId = null;
   try {
     window.sessionStorage.removeItem(STORAGE_KEY);
   } catch {
-    // Nothing to do - if storage is unavailable, nothing was stored.
+    // Nothing stored beyond the in-memory copy, which is already cleared.
   }
 }
 
-/** Returns whether the write actually landed - the caller must not destroy the URL copy if not. */
-function writeStoredId(id: string): boolean {
+/** Writes to sessionStorage, falling back to the in-memory copy when the write does not land. */
+function writeStoredId(id: string): void {
   try {
     window.sessionStorage.setItem(STORAGE_KEY, id);
     // Read-back rather than trusting a silent setItem: some browsers no-op instead of throwing
-    // when storage is disabled, and a false "stored" here costs the user their only credential.
-    return window.sessionStorage.getItem(STORAGE_KEY) === id;
+    // when storage is disabled, and an unnoticed dropped write here costs the user their only
+    // remaining copy of the credential - the URL one is about to be stripped unconditionally.
+    if (window.sessionStorage.getItem(STORAGE_KEY) === id) {
+      return;
+    }
   } catch {
-    return false;
+    // Fall through to the in-memory copy.
   }
+
+  inMemoryLinkId = id;
 }

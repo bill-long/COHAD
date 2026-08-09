@@ -64,25 +64,30 @@ describe('unsubscribe credential capture', () => {
     expect(replaceState).toHaveBeenCalledWith(null, '', '/email-preferences');
   });
 
-  it('keeps the URL when storage rejects the write, so the route param still works', () => {
-    // Storage disabled by policy or privacy mode. Rewriting anyway would destroy the only copy of
-    // the credential; leaving the URL intact keeps the /u/:id route param fallback alive.
+  it('still strips the URL and serves the id from memory when storage rejects the write', () => {
+    // Storage disabled by policy or privacy mode. The strip is unconditional - the URL is what
+    // telemetry observes, and an earlier revision that kept it traded the module's one invariant
+    // for a fallback that did not even work (a case-mangled /U/ URL matches no Angular route).
+    // The in-memory copy carries the current load instead.
     spyOn(Storage.prototype, 'setItem').and.throwError('storage disabled');
+    spyOn(Storage.prototype, 'getItem').and.returnValue(null);
 
     captureUnsubscribeCredentialFromUrl('/u/abc123');
 
-    expect(replaceState).not.toHaveBeenCalled();
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/email-preferences');
+    expect(readCapturedUnsubscribeLinkId()).toBe('abc123');
   });
 
-  it('keeps the URL when storage silently drops the write', () => {
+  it('detects a silently dropped write and serves the id from memory', () => {
     // Some browsers no-op instead of throwing when storage is disabled - the write "succeeds" and
-    // the value is simply not there. Trusting setItem would burn the credential just the same.
+    // the value is simply not there. Trusting setItem would lose the only remaining copy.
     spyOn(Storage.prototype, 'setItem').and.stub();
     spyOn(Storage.prototype, 'getItem').and.returnValue(null);
 
     captureUnsubscribeCredentialFromUrl('/u/abc123');
 
-    expect(replaceState).not.toHaveBeenCalled();
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/email-preferences');
+    expect(readCapturedUnsubscribeLinkId()).toBe('abc123');
   });
 
   it('ignores a trailing segment rather than folding it into the id', () => {

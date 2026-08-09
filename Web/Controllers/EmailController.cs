@@ -219,16 +219,28 @@ namespace Web.Controllers
                 r.SentUtc = null;
             }
 
-            // Backfill unsubscribe links a job may be missing. Links are stamped at job creation and
-            // the processor only reads them, so a job created before that convention existed - or
-            // before AppBaseUrl was configured - would otherwise resend with no unsubscribe
-            // mechanism at all. Retry is the right place for the backfill because it is the same
-            // seam as creation: a synchronous admin action where failure is a visible error and no
-            // send happens. Grouped jobs are excluded because they never carry links; recipients
-            // that already have one keep it.
+            // Backfill unsubscribe links the recipients being resent may be missing. Links are
+            // stamped at job creation and the processor only reads them, so a job created before
+            // that convention existed - or before AppBaseUrl was configured - would otherwise
+            // resend with no unsubscribe mechanism at all. Retry is the right place for the
+            // backfill because it is the same seam as creation: a synchronous admin action where
+            // failure is a visible error and no send happens.
+            //
+            // Only Pending recipients - the ones this retry will actually mail. Sent recipients are
+            // never resent, so a link stamped on one is a live credential nobody ever receives, and
+            // stamping it would also falsify the record: the mail those recipients actually got
+            // carried no link. Grouped jobs are excluded because they never carry links.
+            //
+            // Failing the retry when issuance fails is deliberate, not an oversight: the point of
+            // this whole feature is that bulk mail does not go out without an unsubscribe
+            // mechanism, and a retry is not an exemption from that. The 500 names the container so
+            // the fix is one provisioning step, after which the same button works.
             if (!job.GroupRecipients)
             {
-                var issuanceFailure = await IssueUnsubscribeLinksOrErrorAsync(job.Recipients ?? new());
+                var resendable = (job.Recipients ?? new())
+                    .Where(r => r.Status == EmailJobRecipientStatus.Pending)
+                    .ToList();
+                var issuanceFailure = await IssueUnsubscribeLinksOrErrorAsync(resendable);
                 if (issuanceFailure != null)
                     return issuanceFailure;
             }
@@ -238,16 +250,77 @@ namespace Web.Controllers
             job.LastError = null;
             job.CompletedUtc = null;
             job.StartedUtc = null;
-            try
+
+            // The ids issued above are stamped on this in-memory job, so a concurrency conflict on
+            // the write must not simply tell the admin to try again: the persisted job would still
+            // carry null ids, and the re-run backfill would mint a fresh batch of orphan rows per
+            // conflict. Instead, re-read the winning copy, re-apply the retry mutation and the
+            // already-issued ids to it (matched by home + address), and write again - the minted
+            // batch is reused, so conflicts cost retries rather than credentials.
+            var stampedIds = (job.Recipients ?? new())
+                .Where(r => !string.IsNullOrEmpty(r.UnsubscribeLinkId))
+                .ToDictionary(r => (r.HomeId, r.Email), r => r.UnsubscribeLinkId);
+
+            const int maxWriteAttempts = 3;
+            for (var attempt = 1; ; attempt++)
             {
-                await _emailJobRepository.UpdateAsync(job);
-                await _emailJobQueue.EnqueueAsync(job.Id);
-            }
-            catch (EmailJobConcurrencyException)
-            {
-                return Conflict(
-                    new { error = "The job was changed by another process. Refresh the page and try again." }
-                );
+                try
+                {
+                    await _emailJobRepository.UpdateAsync(job);
+                    await _emailJobQueue.EnqueueAsync(job.Id);
+                    break;
+                }
+                catch (EmailJobConcurrencyException) when (attempt < maxWriteAttempts)
+                {
+                    var latest = await _emailJobRepository.GetByIdAsync(id);
+                    if (latest == null)
+                        return NotFound();
+
+                    // Someone else moved the job out of a retryable state (another admin's retry,
+                    // a cancel). Their action wins; this attempt's minted batch is orphaned, which
+                    // is bounded at one batch per losing admin and visible in this response.
+                    if (
+                        latest.Status != EmailJobStatus.Failed
+                        && latest.Status != EmailJobStatus.PartiallyCompleted
+                        && latest.Status != EmailJobStatus.Cancelled
+                    )
+                    {
+                        return Conflict(
+                            new { error = "The job was changed by another process. Refresh the page and try again." }
+                        );
+                    }
+
+                    foreach (var r in (latest.Recipients ?? new()))
+                    {
+                        if (r.Status == EmailJobRecipientStatus.Failed)
+                        {
+                            r.Status = EmailJobRecipientStatus.Pending;
+                            r.Error = null;
+                            r.SentUtc = null;
+                        }
+
+                        if (
+                            string.IsNullOrEmpty(r.UnsubscribeLinkId)
+                            && stampedIds.TryGetValue((r.HomeId, r.Email), out var issuedId)
+                        )
+                        {
+                            r.UnsubscribeLinkId = issuedId;
+                        }
+                    }
+
+                    latest.FailedCount = 0;
+                    latest.Status = EmailJobStatus.Queued;
+                    latest.LastError = null;
+                    latest.CompletedUtc = null;
+                    latest.StartedUtc = null;
+                    job = latest;
+                }
+                catch (EmailJobConcurrencyException)
+                {
+                    return Conflict(
+                        new { error = "The job was changed by another process. Refresh the page and try again." }
+                    );
+                }
             }
 
             return Ok(EmailJobSummary.FromJob(job));

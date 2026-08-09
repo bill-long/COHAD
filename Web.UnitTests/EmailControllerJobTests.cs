@@ -648,6 +648,12 @@ public sealed class EmailControllerJobTests
                     Status = EmailJobRecipientStatus.Sent,
                     UnsubscribeLinkId = "already-stamped",
                 },
+                new EmailJobRecipient
+                {
+                    Email = "delivered-linkless@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Sent,
+                },
             },
         };
 
@@ -659,12 +665,124 @@ public sealed class EmailControllerJobTests
 
         Assert.IsType<OkObjectResult>(result);
 
-        // The missing id is backfilled with a stored link; the existing one is untouched, which is
-        // what keeps the backfill idempotent.
+        // The missing id on the recipient being RESENT is backfilled with a stored link; the
+        // existing one is untouched, which is what keeps the backfill idempotent.
         var backfilled = job.Recipients[0].UnsubscribeLinkId;
         Assert.False(string.IsNullOrEmpty(backfilled));
         Assert.NotNull(await _linkRepository.GetByIdAsync(backfilled));
         Assert.Equal("already-stamped", job.Recipients[1].UnsubscribeLinkId);
+
+        // A Sent recipient is never resent, so stamping it would mint a live credential nobody
+        // ever receives and falsify the record of what their delivered mail contained.
+        Assert.Null(job.Recipients[2].UnsubscribeLinkId);
+    }
+
+    [Fact]
+    public async Task RetryJob_WhenLinkIssuanceFails_Returns500AndRequeuesNothing()
+    {
+        // A retry is not an exemption from the no-unsubscribable-mail rule. The failure must be the
+        // named 500, and the job must be left exactly as it was - not persisted, not enqueued - so
+        // fixing the container and clicking retry again is the whole recovery.
+        var jobId = Guid.NewGuid();
+        var job = new EmailJob
+        {
+            Id = jobId,
+            Status = EmailJobStatus.Failed,
+            Category = "board",
+            Recipients = new List<EmailJobRecipient>
+            {
+                new EmailJobRecipient
+                {
+                    Email = "jane@example.com",
+                    HomeId = Guid.NewGuid(),
+                    Status = EmailJobRecipientStatus.Failed,
+                },
+            },
+        };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+
+        var issuer = new Mock<IUnsubscribeLinkIssuer>();
+        issuer
+            .Setup(i => i.IssueAsync(It.IsAny<Guid>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("container missing"));
+
+        var controller = CreateController(linkIssuer: issuer.Object);
+        var result = await controller.RetryJob(jobId);
+
+        var error = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, error.StatusCode);
+        Assert.Contains("UnsubscribeLink", error.Value!.ToString());
+
+        _jobRepo.Verify(r => r.UpdateAsync(It.IsAny<EmailJob>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RetryJob_ReusesTheMintedBatchWhenTheWriteConflicts()
+    {
+        // A concurrency conflict on the write must not orphan the just-issued batch: the retry
+        // re-reads the winning copy, re-applies the reset and the already-minted ids, and writes
+        // again. The bound this locks is one issuance per recipient per retry click, however many
+        // conflicts the write hits on the way through.
+        var jobId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+
+        EmailJob BuildJob() =>
+            new()
+            {
+                Id = jobId,
+                Status = EmailJobStatus.Failed,
+                Category = "board",
+                Recipients = new List<EmailJobRecipient>
+                {
+                    new EmailJobRecipient
+                    {
+                        Email = "jane@example.com",
+                        HomeId = homeId,
+                        Status = EmailJobRecipientStatus.Failed,
+                    },
+                },
+            };
+
+        _jobRepo.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(BuildJob);
+
+        var issueCount = 0;
+        var issuer = new Mock<IUnsubscribeLinkIssuer>();
+        issuer
+            .Setup(i => i.IssueAsync(homeId, "jane@example.com"))
+            .ReturnsAsync(() =>
+            {
+                issueCount++;
+                return new UnsubscribeLink
+                {
+                    Id = $"minted-{issueCount}",
+                    HomeId = homeId,
+                    Email = "jane@example.com",
+                };
+            });
+
+        EmailJob? persisted = null;
+        var updateCalls = 0;
+        _jobRepo
+            .Setup(r => r.UpdateAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j =>
+            {
+                updateCalls++;
+                if (updateCalls == 1)
+                    throw new EmailJobConcurrencyException();
+                persisted = j;
+            })
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController(linkIssuer: issuer.Object);
+        var result = await controller.RetryJob(jobId);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(1, issueCount);
+        Assert.Equal(2, updateCalls);
+        Assert.Equal("minted-1", persisted!.Recipients[0].UnsubscribeLinkId);
+        Assert.Equal(EmailJobStatus.Queued, persisted.Status);
+        Assert.Equal(EmailJobRecipientStatus.Pending, persisted.Recipients[0].Status);
     }
 
     [Fact]
