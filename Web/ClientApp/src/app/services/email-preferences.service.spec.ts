@@ -15,6 +15,10 @@ describe('EmailPreferencesService', () => {
     gardenClubEmailOptedIn: true,
     socialCommitteeEmailOptedIn: true,
     sunshineCommitteeEmailOptedIn: true,
+    suppressed: false,
+    suppressedUtc: null,
+    suppressionReason: null,
+    canResume: false,
   };
 
   beforeEach(() => {

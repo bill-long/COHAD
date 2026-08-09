@@ -1,6 +1,7 @@
 import { Component, Inject } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { EmailAddress, Home, PhoneNumber } from 'src/app/models';
+import { SuppressedAddressesService } from 'src/app/services/suppressed-addresses.service';
 
 export interface EditHomeContactDialogData {
   home: Home;
@@ -20,9 +21,13 @@ export interface EditHomeContactDialogResult {
 export class EditHomeContactDialogComponent {
   homeCopy: Home;
 
+  // The read-only suppression advisory chip is matched through the shared service (one matcher for
+  // every editor). No Clear action here on purpose: this dialog mutates an optimistic copy with no
+  // rollback (the documented data-loss trap), so clearing lives on Manage > Suppressions.
   constructor(
     public dialogRef: MatDialogRef<EditHomeContactDialogComponent, EditHomeContactDialogResult | null>,
     @Inject(MAT_DIALOG_DATA) public data: EditHomeContactDialogData,
+    protected readonly suppressedAddresses: SuppressedAddressesService,
   ) {
     this.homeCopy = JSON.parse(JSON.stringify(data.home));
   }

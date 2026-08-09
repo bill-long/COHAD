@@ -21,6 +21,8 @@ const makeRecipient = (overrides: Partial<EmailJobRecipientDetail> = {}): EmailJ
   deliveryStatus: 'Delivered',
   deliveryStatusUpdatedUtc: '2026-01-01T00:01:00Z',
   provider: 'SendGrid',
+  suppressedUtc: null,
+  suppressionReason: null,
   ...overrides,
 });
 
@@ -41,6 +43,7 @@ const makeDetail = (overrides: Partial<EmailJobDetail> = {}): EmailJobDetail => 
   totalRecipients: 10,
   sentCount: 10,
   failedCount: 0,
+  suppressedCount: 0,
   lastError: null,
   recipients: [],
   ...overrides,
@@ -146,7 +149,7 @@ describe('EmailJobDetailComponent', () => {
     const first = component.parties;
     expect(component.parties).toBe(first);
 
-    progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 5, failedCount: 0, totalRecipients: 12 });
+    progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 5, failedCount: 0, suppressedCount: 0, totalRecipients: 12 });
 
     expect(component.parties).not.toBe(first);
     expect(component.parties.to).toBe('Board opt-in residents');
@@ -163,14 +166,14 @@ describe('EmailJobDetailComponent', () => {
 
   it('updates job on progress event for matching id', () => {
     component.ngOnInit();
-    progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 5, failedCount: 0, totalRecipients: 10 });
+    progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 5, failedCount: 0, suppressedCount: 0, totalRecipients: 10 });
     expect(component.job?.status).toBe('InProgress');
     expect(component.job?.sentCount).toBe(5);
   });
 
   it('ignores progress events for non-matching ids', () => {
     component.ngOnInit();
-    progressSubject.next({ jobId: 'other', status: 'InProgress', sentCount: 5, failedCount: 0, totalRecipients: 10 });
+    progressSubject.next({ jobId: 'other', status: 'InProgress', sentCount: 5, failedCount: 0, suppressedCount: 0, totalRecipients: 10 });
     expect(component.job?.status).toBe('Completed');
   });
 
@@ -275,6 +278,7 @@ describe('EmailJobDetailComponent', () => {
         status: 'Completed',
         sentCount: 10,
         failedCount: 0,
+        suppressedCount: 0,
         totalRecipients: 10,
         lastError: null,
       });
@@ -292,6 +296,7 @@ describe('EmailJobDetailComponent', () => {
         status: 'Completed',
         sentCount: 10,
         failedCount: 0,
+        suppressedCount: 0,
         totalRecipients: 10,
         lastError: null,
       });
@@ -325,6 +330,7 @@ describe('EmailJobDetailComponent', () => {
         status: 'Completed',
         sentCount: 10,
         failedCount: 0,
+        suppressedCount: 0,
         totalRecipients: 10,
         lastError: null,
       });
@@ -410,6 +416,39 @@ describe('EmailJobDetailComponent', () => {
 
       expect(component.payloadsError).toBeNull();
       expect(component.deliveryEventsError).toBeNull();
+    });
+  });
+
+  describe('suppressed recipients', () => {
+    it('renders the Suppressed status with its own muted class, not failed-red', () => {
+      expect(component.recipientStatusClass('Suppressed')).toBe('status-suppressed');
+      expect(component.recipientStatusClass('Suppressed')).not.toBe(component.recipientStatusClass('Failed'));
+    });
+
+    it('labels each stamped suppression reason for the in-place explanation', () => {
+      expect(component.suppressionReasonLabel('HardBounce')).toBe('address hard-bounced');
+      expect(component.suppressionReasonLabel('SpamComplaint')).toBe('recipient reported spam');
+      expect(component.suppressionReasonLabel('ResidentRequest')).toBe('recipient unsubscribed');
+      expect(component.suppressionReasonLabel('AdminAction')).toBe('suppressed by an administrator');
+      // A stamped recipient whose reason predates the field still gets a sentence, not blank.
+      expect(component.suppressionReasonLabel(null)).toBeTruthy();
+    });
+
+    it('counts suppressed recipients as handled in pending and progress math', () => {
+      emailJobServiceSpy.getJob.and.returnValue(
+        of(makeDetail({ totalRecipients: 10, sentCount: 6, failedCount: 1, suppressedCount: 3 })),
+      );
+      component.ngOnInit();
+
+      // Without the suppressed term these would read 3 pending / 70% on a finished job.
+      expect(component.pendingCount).toBe(0);
+      expect(component.progressPercent).toBe(100);
+    });
+
+    it('carries suppressedCount through progress events', () => {
+      component.ngOnInit();
+      progressSubject.next({ jobId: 'j1', status: 'InProgress', sentCount: 5, failedCount: 0, suppressedCount: 2, totalRecipients: 10 });
+      expect(component.job?.suppressedCount).toBe(2);
     });
   });
 });

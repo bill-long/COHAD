@@ -55,6 +55,8 @@ export const rolePermissions = {
     'LandscapeCommittee',
   ],
   manageAuditLogRoles: ['Administrator'],
+  // Must match the backend "Administrator" policy on EmailSuppressionController.
+  manageSuppressionsRoles: ['Administrator'],
   printDirectoryRoles: ['Administrator'],
   sendEmailAsBoard: ['Board'],
   sendEmailAsWelcomeCommittee: ['WelcomeCommittee'],

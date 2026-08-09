@@ -1,0 +1,91 @@
+<div class="suppressions-page">
+  <h2 class="page-title">Email Suppressions</h2>
+  <p class="page-intro">
+    Addresses on this list receive no association email at all - broadcasts, committee forwards, or
+    notification digests - regardless of their opt-in preferences. Addresses are added automatically
+    on a hard bounce, a spam complaint, or an unsubscribe, and can be added here by hand.
+  </p>
+
+  <!-- Suppress by hand: the "resident phoned the board" path. -->
+  <form class="add-form" (ngSubmit)="create()">
+    <mat-form-field appearance="fill" class="add-email-field">
+      <mat-label>Email address to suppress</mat-label>
+      <input matInput type="email" name="newEmail" [(ngModel)]="newEmail" [disabled]="createInProgress" />
+    </mat-form-field>
+    <button mat-flat-button color="primary" type="submit" [disabled]="!canCreate">Suppress</button>
+  </form>
+
+  <div class="list-controls">
+    <mat-checkbox [checked]="includeCleared" (change)="onIncludeClearedChange($event.checked)" [disabled]="loading">
+      Show cleared suppressions
+    </mat-checkbox>
+  </div>
+
+  <div *ngIf="noticeText" class="cohad-inline-alert" role="status">{{ noticeText }}</div>
+  <div *ngIf="errorText" class="cohad-inline-alert cohad-inline-alert--error" role="alert">{{ errorText }}</div>
+
+  <div *ngIf="loading" class="loading-state">
+    <mat-spinner diameter="32"></mat-spinner>
+    <span>Loading suppressions…</span>
+  </div>
+
+  <ng-container *ngIf="!loading">
+    <div *ngIf="suppressions.length === 0" class="empty-state-text">
+      No {{ includeCleared ? '' : 'active ' }}suppressions.
+    </div>
+
+    <div *ngIf="suppressions.length > 0" class="table-scroll-wrapper">
+      <table class="suppressions-table">
+        <thead>
+          <tr>
+            <th class="col-email">Email</th>
+            <th class="col-status">Status</th>
+            <th class="col-reason">Reason</th>
+            <th class="col-when">Suppressed</th>
+            <th class="col-by">By</th>
+            <th class="col-count">Evidence</th>
+            <th class="col-actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <ng-container *ngFor="let s of suppressions">
+            <tr [class.row-cleared]="!s.isActive">
+              <td class="cell-truncate" [title]="s.email">{{ s.email }}</td>
+              <td>
+                <span class="status-badge" [ngClass]="s.isActive ? 'status-suppressed' : 'status-cleared'">
+                  {{ s.isActive ? 'Suppressed' : 'Cleared' }}
+                </span>
+              </td>
+              <td [title]="reasonLabel(s.reason)">{{ s.reason }}</td>
+              <td class="cell-date" [title]="s.suppressedUtc | date: 'medium'">{{ s.suppressedUtc | date: 'mediumDate' }}</td>
+              <td class="cell-truncate" [title]="s.suppressedBy">{{ s.suppressedBy }}</td>
+              <td class="cell-count">{{ s.consecutiveFailureCount }}</td>
+              <td class="cell-actions">
+                <button
+                  *ngIf="s.isActive"
+                  mat-stroked-button
+                  type="button"
+                  (click)="clear(s)"
+                  [disabled]="clearingIds.has(s.id)"
+                  matTooltip="Mail to this address resumes (subject to its opt-in preferences)."
+                >
+                  Clear
+                </button>
+              </td>
+            </tr>
+            <!-- The record explains itself: the provider's verbatim diagnostic is what tells an
+                 admin whether the address is a typo or a mailbox that has closed. -->
+            <tr *ngIf="s.providerDiagnostic || s.clearedUtc" class="detail-row" [class.row-cleared]="!s.isActive">
+              <td colspan="7">
+                <span *ngIf="s.providerDiagnostic" class="provider-diagnostic">{{ s.providerDiagnostic }}</span>
+                <span *ngIf="s.clearedUtc" class="cleared-note">
+                  Cleared {{ s.clearedUtc | date: 'mediumDate' }}<ng-container *ngIf="s.clearedBy"> by {{ s.clearedBy }}</ng-container>
+                </span>
+              </td>
+            </tr>
+          </ng-container>
+        </tbody>
+      </table>
+    </div>
+  </ng-container>
+</div>

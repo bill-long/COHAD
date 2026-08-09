@@ -43,6 +43,7 @@ namespace Web.Controllers
         private readonly EmailJobQueue _emailJobQueue;
         private readonly DocumentStorageOptions _storageOptions;
         private readonly INotificationService _notificationService;
+        private readonly IEmailSuppressionRepository _emailSuppressionRepository;
         private readonly ILogger<CommitteeController> _logger;
 
         public CommitteeController(
@@ -58,6 +59,7 @@ namespace Web.Controllers
             EmailJobQueue emailJobQueue,
             IOptions<DocumentStorageOptions> storageOptions,
             INotificationService notificationService,
+            IEmailSuppressionRepository emailSuppressionRepository,
             ILogger<CommitteeController> logger
         )
         {
@@ -73,6 +75,7 @@ namespace Web.Controllers
             _emailJobQueue = emailJobQueue;
             _storageOptions = storageOptions.Value;
             _notificationService = notificationService;
+            _emailSuppressionRepository = emailSuppressionRepository;
             _logger = logger;
         }
 
@@ -522,30 +525,45 @@ namespace Web.Controllers
 
             var residents = await ResolveResidentsForCommittees(new[] { committee });
 
+            // Suppression-aware, so the preview shows exactly who (and which address) a forward would
+            // deliver to - the same per-member rule as the send paths. A member whose every address
+            // is suppressed is excluded, because the send excludes them too. Unlike the send paths
+            // (which fail closed), this is a read-only informational panel: a suppression-store
+            // outage degrades to the pre-suppression view (every member's first address) rather than
+            // 500-ing the page, so an admin can still see the forwarding roster while the store is down.
+            HashSet<string> suppressedAddresses;
+            try
+            {
+                suppressedAddresses = EmailSuppression.ActiveNormalizedAddressSet(
+                    await _emailSuppressionRepository.GetActiveAsync());
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Suppression read failed while building the forwarding-status preview for committee {CommitteeId}; showing the roster without suppression awareness", key);
+                suppressedAddresses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var forwardingRecipients = (committee.Members ?? new List<CommitteeMember>())
+                .Where(m => m.ReceivesForwardedEmail)
+                .Select(m =>
+                {
+                    var r = residents.GetValueOrDefault(m.ResidentId);
+                    return new
+                    {
+                        DisplayName = PresentationModels.CommitteeMemberHelpers.ResidentDisplayName(r),
+                        Email = CommitteeForwardJob.FirstDeliverableAddress(r, suppressedAddresses),
+                    };
+                })
+                .Where(x => x.Email != null)
+                .ToList();
+
             return Ok(
                 new
                 {
                     committee.LastSyncedUtc,
                     committee.LastSyncStatus,
                     committee.LastSyncError,
-                    ForwardingRecipients = (committee.Members ?? new List<CommitteeMember>())
-                        .Where(m =>
-                            m.ReceivesForwardedEmail
-                            && residents.TryGetValue(m.ResidentId, out var r)
-                            && r.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true
-                        )
-                        .Select(m =>
-                        {
-                            var r = residents.GetValueOrDefault(m.ResidentId);
-                            return new
-                            {
-                                DisplayName = PresentationModels.CommitteeMemberHelpers.ResidentDisplayName(r),
-                                Email = r
-                                    ?.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e?.Address))
-                                    ?.Address,
-                            };
-                        })
-                        .ToList(),
+                    ForwardingRecipients = forwardingRecipients,
                 }
             );
         }
@@ -839,21 +857,26 @@ namespace Web.Controllers
                 .Where(m => m.ReceivesForwardedEmail)
                 .ToList();
 
-            var recipients = forwardingMembers
-                .Select(m => residents.GetValueOrDefault(m.ResidentId))
-                .Where(r => r?.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true)
-                .Select(r => new EmailJobRecipient
-                {
-                    Email = r.EmailAddresses.First(e => !string.IsNullOrWhiteSpace(e?.Address)).Address,
-                    HomeId = r.HomeId,
-                    Status = EmailJobRecipientStatus.Pending,
-                })
-                .GroupBy(r => r.Email, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.First())
-                .ToList();
+            // Short-circuit before the suppression read when there is no one to forward to at all -
+            // the read would be wasted work on a request that always ends in the same 400.
+            if (forwardingMembers.Count == 0)
+                return BadRequest(new { error = "No forwarding recipients with deliverable email addresses." });
+
+            // Selection prefers a deliverable (non-suppressed) address per member; a throwing
+            // suppression read deliberately fails the approve (500) rather than selecting with an
+            // empty set and silently preferring suppressed addresses. The held message is not yet
+            // claimed at this point, so the admin can simply retry.
+            var suppressedAddresses = EmailSuppression.ActiveNormalizedAddressSet(
+                await _emailSuppressionRepository.GetActiveAsync());
+
+            var recipients = CommitteeForwardJob.SelectForwardRecipients(
+                forwardingMembers,
+                residents,
+                suppressedAddresses
+            );
 
             if (recipients.Count == 0)
-                return BadRequest(new { error = "No forwarding recipients with valid email addresses." });
+                return BadRequest(new { error = "No forwarding recipients with deliverable email addresses." });
 
             // Claim the held message via optimistic concurrency BEFORE creating the job.
             // If two concurrent approvals race, only one will succeed — the loser gets 409.

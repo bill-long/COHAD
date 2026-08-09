@@ -147,6 +147,9 @@ namespace Web.MockData
                     ResidentType = Resident.Type.Homeowner,
                     EmailAddresses = new List<EmailAddress>
                     {
+                        // Taylor's primary, directory-visible address stays FIRST so every
+                        // "first address" consumer (the committee-member picker, the forwarding
+                        // status preview) surfaces the real address.
                         new EmailAddress
                         {
                             Address = "taylor@cohad.local",
@@ -157,11 +160,11 @@ namespace Web.MockData
                             SocialCommitteeEmailOptedIn = false,
                             SunshineCommitteeEmailOptedIn = false,
                         },
-                        // Suppressed by MockEmailSuppressionRepository.SeedSampleData - opted in,
-                        // so a mock board send selects it and the processor's enforcement point
-                        // visibly skips it, while taylor@cohad.local above stays deliverable for
-                        // every other flow. The opt-in surviving underneath the suppression is
-                        // itself the Part 3 invariant on display.
+                        // An old address that hard-bounced: suppressed by
+                        // MockEmailSuppressionRepository.SeedSampleData but still opted in, so a mock
+                        // board broadcast selects it as its own recipient and the enforcement point
+                        // visibly marks it Suppressed on the job detail - while the opt-in surviving
+                        // underneath the suppression is the Part 3 invariant on display.
                         new EmailAddress
                         {
                             Address = "taylor.old@cohad.local",

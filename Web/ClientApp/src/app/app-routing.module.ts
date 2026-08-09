@@ -15,6 +15,7 @@ import { ManageUsersComponent } from './components/manage-users/manage-users.com
 import { ManageHomesComponent } from './components/manage-homes/manage-homes.component';
 import { SendEmailComponent } from './components/send-email/send-email.component';
 import { AuditLogComponent } from './components/audit-log/audit-log.component';
+import { ManageSuppressionsComponent } from './components/manage-suppressions/manage-suppressions.component';
 import { rolePermissions } from './services/rolepermission.service';
 import { PrivacyComponent } from './components/privacy/privacy.component';
 import { ManagePrintComponent } from './components/manage-print/manage-print.component';
@@ -217,6 +218,13 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: { allowedRoles: rolePermissions.manageAuditLogRoles },
         title: 'Audit Log',
+      },
+      {
+        path: 'suppressions',
+        component: ManageSuppressionsComponent,
+        canActivate: [RoleGuard],
+        data: { allowedRoles: rolePermissions.manageSuppressionsRoles },
+        title: 'Email Suppressions',
       },
     ],
   },

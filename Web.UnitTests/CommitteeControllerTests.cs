@@ -99,7 +99,8 @@ public sealed class CommitteeControllerTests
         IEmailJobRepository? emailJobRepo = null,
         IServiceProvider? serviceProvider = null,
         ILogger<CommitteeController>? logger = null,
-        INotificationService? notificationService = null
+        INotificationService? notificationService = null,
+        IEmailSuppressionRepository? emailSuppressionRepo = null
     )
     {
         committeeRepo ??= Mock.Of<ICommitteeRepository>();
@@ -116,6 +117,7 @@ public sealed class CommitteeControllerTests
         cache ??= new CommitteeListCache(committeeRepo, new MemoryCache(new MemoryCacheOptions()), WebJsonOptions);
         heldMessageRepo ??= Mock.Of<IHeldMessageRepository>();
         emailJobRepo ??= Mock.Of<IEmailJobRepository>();
+        emailSuppressionRepo ??= new MockEmailSuppressionRepository();
 
         var c = new CommitteeController(
             committeeRepo,
@@ -130,6 +132,7 @@ public sealed class CommitteeControllerTests
             new EmailJobQueue(),
             Options.Create(new DocumentStorageOptions()),
             notificationService,
+            emailSuppressionRepo,
             logger ?? Mock.Of<ILogger<CommitteeController>>()
         );
 
@@ -1839,6 +1842,158 @@ public sealed class CommitteeControllerTests
         Assert.Equal("Jane Doe", created.OriginalSenderDisplay);
         Assert.Equal("jane@example.com", created.ReplyToEmail);
         Assert.Equal("Board forwarding members", created.ToDisplay);
+    }
+
+    [Fact]
+    public async Task ApproveHeldMessage_forwards_to_second_address_when_first_is_suppressed()
+    {
+        // Alice's primary address is suppressed; the approve must fall to her second address
+        // rather than dropping her (or mailing the suppressed one and stamping it Suppressed).
+        var committee = SampleCommittee("board");
+        committee.Members!.RemoveAll(m => m.ResidentId != AliceResidentId);
+        var alice = AliceResident();
+        alice.EmailAddresses.Add(new EmailAddress { Address = "alice.backup@example.com" });
+        var residentRepo = new Mock<IResidentRepository>();
+        residentRepo.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(new List<Resident> { alice });
+
+        var suppressionRepo = new MockEmailSuppressionRepository();
+        await suppressionRepo.AddAsync(new EmailSuppression
+        {
+            Id = EmailSuppression.MakeId("alice@example.com"),
+            Email = "alice@example.com",
+            Reason = SuppressionReason.HardBounce,
+        });
+
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            Subject = "Test",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Held,
+            ETag = "etag-1"
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+        mockHeldRepo.Setup(r => r.UpdateAsync(It.IsAny<HeldMessage>())).Returns(Task.CompletedTask);
+
+        var mockFileStore = new Mock<IDocumentFileStore>();
+        mockFileStore.Setup(f => f.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        EmailJob? created = null;
+        var mockEmailJobRepo = new Mock<IEmailJobRepository>();
+        mockEmailJobRepo.Setup(r => r.AddAsync(It.IsAny<EmailJob>()))
+            .Callback<EmailJob>(j => created = j)
+            .Returns(Task.CompletedTask);
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            residentRepo: residentRepo.Object,
+            fileStore: mockFileStore.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            emailJobRepo: mockEmailJobRepo.Object,
+            emailSuppressionRepo: suppressionRepo,
+            serviceProvider: new ServiceCollection().BuildServiceProvider()
+        );
+        var result = await c.ApproveHeldMessage("board", heldId);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(created);
+        var recipient = Assert.Single(created!.Recipients);
+        Assert.Equal("alice.backup@example.com", recipient.Email);
+    }
+
+    [Fact]
+    public async Task GetForwardingStatus_is_suppression_aware_matching_the_send_paths()
+    {
+        // The preview must show exactly who a forward would deliver to: Alice's only address is
+        // suppressed (she is excluded, as the send excludes her), and Bob's deliverable address is
+        // shown - not a suppressed first address.
+        var committee = SampleCommittee("board"); // Alice + Bob, both ReceivesForwardedEmail
+
+        var suppressionRepo = new MockEmailSuppressionRepository();
+        await suppressionRepo.AddAsync(new EmailSuppression
+        {
+            Id = EmailSuppression.MakeId("alice@example.com"),
+            Email = "alice@example.com",
+            Reason = SuppressionReason.HardBounce,
+        });
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            emailSuppressionRepo: suppressionRepo
+        );
+        var result = await c.GetForwardingStatus("board");
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value, WebJsonOptions);
+        // Bob's deliverable address is present; Alice (fully suppressed) and her address are absent.
+        Assert.Contains("bob@example.com", json);
+        Assert.DoesNotContain("alice@example.com", json);
+    }
+
+    [Fact]
+    public async Task ApproveHeldMessage_when_every_member_is_suppressed_returns_400_without_claiming_the_message()
+    {
+        var committee = SampleCommittee("board");
+        committee.Members!.RemoveAll(m => m.ResidentId != AliceResidentId);
+
+        var suppressionRepo = new MockEmailSuppressionRepository();
+        await suppressionRepo.AddAsync(new EmailSuppression
+        {
+            Id = EmailSuppression.MakeId("alice@example.com"),
+            Email = "alice@example.com",
+            Reason = SuppressionReason.HardBounce,
+        });
+
+        var heldId = Guid.NewGuid();
+        var held = new HeldMessage
+        {
+            Id = heldId,
+            CommitteeId = "board",
+            CommitteeEmail = "board@cohad.org",
+            InternetMessageId = "<test@example.com>",
+            SenderEmail = "sender@example.com",
+            Subject = "Test",
+            ReceivedUtc = DateTime.UtcNow,
+            HeldUtc = DateTime.UtcNow,
+            Status = HeldMessageStatus.Held,
+            ETag = "etag-1"
+        };
+
+        var mockCommitteeRepo = new Mock<ICommitteeRepository>();
+        mockCommitteeRepo.Setup(r => r.GetByIdAsync("board")).ReturnsAsync(committee);
+
+        var mockHeldRepo = new Mock<IHeldMessageRepository>();
+        mockHeldRepo.Setup(r => r.GetByIdAsync(heldId)).ReturnsAsync(held);
+
+        var c = CreateController(
+            committeeRepo: mockCommitteeRepo.Object,
+            heldMessageRepo: mockHeldRepo.Object,
+            emailSuppressionRepo: suppressionRepo
+        );
+        var result = await c.ApproveHeldMessage("board", heldId);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        var json = JsonSerializer.Serialize(bad.Value);
+        Assert.Contains("deliverable email addresses", json);
+        // The held message is refused before being claimed, so it stays actionable for a retry once
+        // the suppression is cleared.
+        mockHeldRepo.Verify(r => r.UpdateAsync(It.IsAny<HeldMessage>()), Times.Never);
     }
 
     [Fact]

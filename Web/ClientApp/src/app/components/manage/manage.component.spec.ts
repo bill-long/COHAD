@@ -71,7 +71,7 @@ describe('ManageComponent', () => {
     setupTestBed(makeState(['Administrator', 'Resident']));
     expect(visibleLabels()).toEqual([
       { group: 'Directory', items: ['Users', 'Homes', 'Print Directory'] },
-      { group: 'Communications', items: ['Email', 'News', 'Events', 'Documents'] },
+      { group: 'Communications', items: ['Email', 'Suppressions', 'News', 'Events', 'Documents'] },
       { group: 'Governance', items: ['Committees', 'Approvals', 'Audit Log'] },
     ]);
   });

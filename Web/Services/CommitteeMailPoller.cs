@@ -179,24 +179,50 @@ namespace Web.Services
                 return;
             }
 
+            // One suppression read per poll cycle, shared by every committee's recipient selection.
+            // Normalize the stored addresses rather than trusting them (a hand-authored row may not
+            // be normalized). Only committee FORWARDING depends on this set; holding new
+            // non-directory mail (spam/phishing quarantine) and processed-folder cleanup do not. So a
+            // throwing read does NOT abort the cycle - it defers only forwarding: a null set is
+            // passed through, and each message that would be forwarded is left in its inbox for a
+            // later cycle (fail-closed - never forward with an unknown suppression state) while
+            // holding still runs. This keeps the safety-critical quarantine independent of the
+            // suppression store.
+            var suppressionRepo = scope.ServiceProvider.GetRequiredService<IEmailSuppressionRepository>();
+            IReadOnlySet<string>? suppressedAddresses;
+            try
+            {
+                suppressedAddresses = EmailSuppression.ActiveNormalizedAddressSet(await suppressionRepo.GetActiveAsync());
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Failed to read the email suppression list; deferring committee forwarding this cycle (held-message quarantine and processed-folder cleanup still run)");
+                suppressedAddresses = null;
+            }
+
             foreach (var committee in enabled)
             {
                 string pollStatus;
                 string? pollError;
                 try
                 {
-                    await PollCommitteeAsync(
+                    var forwardingDeferred = await PollCommitteeAsync(
                         committee,
                         committeeRepo,
                         emailJobRepo,
                         heldMessageRepo,
                         residentRepo,
                         fileStore,
+                        suppressedAddresses,
                         ct
                     );
 
-                    pollStatus = "Success";
-                    pollError = null;
+                    // "Forwarding deferred" only when a message actually stayed in the inbox because
+                    // the suppression list was unreadable - not merely because the read failed this
+                    // cycle. A committee with an empty inbox, or one whose mail was only held, polled
+                    // cleanly and reads Success even during the outage.
+                    pollStatus = forwardingDeferred ? "Forwarding deferred" : "Success";
+                    pollError = forwardingDeferred ? "Suppression list unavailable; forwarding will retry next cycle." : null;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -205,32 +231,51 @@ namespace Web.Services
                     pollError = ex.Message;
                 }
 
-                // Reload the committee to avoid clobbering concurrent UI/API edits (last-write-wins).
-                // Only update the poll status fields.
-                var fresh = await committeeRepo.GetByIdAsync(committee.Id);
-                if (fresh != null)
-                {
-                    fresh.LastPollUtc = DateTime.UtcNow;
-                    fresh.LastPollStatus = pollStatus;
-                    fresh.LastPollError = pollError;
-                    await committeeRepo.UpsertAsync(fresh);
-                }
+                await StampPollStatusAsync(committeeRepo, committee.Id, pollStatus, pollError);
             }
         }
 
-        private async Task PollCommitteeAsync(
+        /// <summary>
+        /// Records the outcome of a poll attempt on the committee's status fields. Reloads the
+        /// committee first (last-write-wins) so a concurrent UI/API edit is not clobbered - only the
+        /// poll status fields are written.
+        /// </summary>
+        private static async Task StampPollStatusAsync(
+            ICommitteeRepository committeeRepo,
+            string committeeId,
+            string pollStatus,
+            string? pollError
+        )
+        {
+            var fresh = await committeeRepo.GetByIdAsync(committeeId);
+            if (fresh != null)
+            {
+                fresh.LastPollUtc = DateTime.UtcNow;
+                fresh.LastPollStatus = pollStatus;
+                fresh.LastPollError = pollError;
+                await committeeRepo.UpsertAsync(fresh);
+            }
+        }
+
+        /// <summary>
+        /// Polls one committee's inbox. Returns true if at least one message was left in the inbox
+        /// because forwarding was deferred (the suppression list could not be read this cycle), so
+        /// the caller can surface that on the committee's poll status only when it actually happened.
+        /// </summary>
+        private async Task<bool> PollCommitteeAsync(
             Committee committee,
             ICommitteeRepository committeeRepo,
             IEmailJobRepository emailJobRepo,
             IHeldMessageRepository heldMessageRepo,
             IResidentRepository residentRepo,
             IDocumentFileStore fileStore,
+            IReadOnlySet<string>? suppressedAddresses,
             CancellationToken ct
         )
         {
             var messages = await _graphMailReader.GetInboxMessagesAsync(committee.CommitteeEmail, ct);
             if (messages.Count == 0)
-                return;
+                return false;
 
             _logger.LogInformation(
                 "Found {Count} messages in {Mailbox} inbox",
@@ -257,6 +302,7 @@ namespace Web.Services
                 recipientResidents = residents.ToDictionary(r => r.Id);
             }
 
+            var forwardingDeferred = false;
             foreach (var message in messages)
             {
                 ct.ThrowIfCancellationRequested();
@@ -279,7 +325,7 @@ namespace Web.Services
 
                 try
                 {
-                    await ProcessMessageAsync(
+                    forwardingDeferred |= await ProcessMessageAsync(
                         committee,
                         message,
                         graphId,
@@ -291,6 +337,7 @@ namespace Web.Services
                         heldMessageRepo,
                         residentRepo,
                         fileStore,
+                        suppressedAddresses,
                         ct
                     );
                 }
@@ -305,9 +352,17 @@ namespace Web.Services
                     // Continue with next message
                 }
             }
+
+            return forwardingDeferred;
         }
 
-        private async Task ProcessMessageAsync(
+        /// <summary>
+        /// Processes one inbox message (idempotency skip, hold, or forward). Returns true only when
+        /// forwarding was deferred because the suppression list was unavailable this cycle - the
+        /// message is left in the inbox for a later cycle. Every other outcome (held, forwarded,
+        /// skipped, moved to Processed) returns false.
+        /// </summary>
+        private async Task<bool> ProcessMessageAsync(
             Committee committee,
             Microsoft.Graph.Models.Message message,
             string graphId,
@@ -319,6 +374,7 @@ namespace Web.Services
             IHeldMessageRepository heldMessageRepo,
             IResidentRepository residentRepo,
             IDocumentFileStore fileStore,
+            IReadOnlySet<string>? suppressedAddresses,
             CancellationToken ct
         )
         {
@@ -332,7 +388,7 @@ namespace Web.Services
                     existingJob.Id
                 );
                 await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
-                return;
+                return false;
             }
 
             // Also check if already held
@@ -341,7 +397,7 @@ namespace Web.Services
             {
                 _logger.LogDebug("Skipping message {InternetMessageId} — already held", internetMessageId);
                 await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
-                return;
+                return false;
             }
 
             var senderEmail = message.From?.EmailAddress?.Address;
@@ -374,7 +430,7 @@ namespace Web.Services
                             committee.CommitteeEmail
                         );
                         await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
-                        return;
+                        return false;
                     }
 
                     await HoldMessageAsync(
@@ -390,7 +446,7 @@ namespace Web.Services
                         heldMessageRepo,
                         ct
                     );
-                    return;
+                    return false;
                 }
             }
 
@@ -402,30 +458,37 @@ namespace Web.Services
                     committee.CommitteeEmail
                 );
                 await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
-                return;
+                return false;
             }
 
-            var recipients = forwardingMembers
-                .Select(m => recipientResidents.GetValueOrDefault(m.ResidentId))
-                .Where(r => r?.EmailAddresses?.Any(e => !string.IsNullOrWhiteSpace(e?.Address)) == true)
-                .Select(r => new EmailJobRecipient
-                {
-                    Email = r!.EmailAddresses.First(e => !string.IsNullOrWhiteSpace(e?.Address)).Address,
-                    HomeId = r.HomeId,
-                    Status = EmailJobRecipientStatus.Pending,
-                })
-                .GroupBy(r => r.Email, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.First())
-                .ToList();
+            // Fail closed for forwarding when the suppression list could not be read this cycle:
+            // leave the message in the inbox (do NOT move it to Processed) so it is retried on a
+            // later cycle rather than forwarded with an unknown suppression state. The hold path
+            // above already ran for non-directory senders, so quarantine is unaffected.
+            if (suppressedAddresses == null)
+            {
+                _logger.LogWarning(
+                    "Suppression list unavailable; deferring forward of {InternetMessageId} in {Mailbox} to a later cycle",
+                    internetMessageId,
+                    committee.CommitteeEmail
+                );
+                return true;
+            }
+
+            var recipients = CommitteeForwardJob.SelectForwardRecipients(
+                forwardingMembers,
+                recipientResidents,
+                suppressedAddresses
+            );
 
             if (recipients.Count == 0)
             {
                 _logger.LogWarning(
-                    "Committee {Committee} has forwarding members but none have valid email addresses",
+                    "Committee {Committee} has forwarding members but none have deliverable email addresses",
                     committee.Id
                 );
                 await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
-                return;
+                return false;
             }
 
             // Build the forwarding subject line
@@ -536,7 +599,7 @@ namespace Web.Services
                     internetMessageId
                 );
                 await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
-                return;
+                return false;
             }
 
             // Step 4: Enqueue for EmailJobProcessor
@@ -552,6 +615,7 @@ namespace Web.Services
 
             // Step 5: Move to processed (uses Graph API id, not InternetMessageId)
             await MoveToProcessedSafe(committee.CommitteeEmail, graphId, processedFolderId, ct);
+            return false;
         }
 
         private async Task HoldMessageAsync(

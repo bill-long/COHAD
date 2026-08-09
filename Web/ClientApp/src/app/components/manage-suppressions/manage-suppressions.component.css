@@ -1,0 +1,166 @@
+.suppressions-page {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.page-title {
+  margin: 0 0 0.5rem;
+  font-size: var(--heading-page);
+  font-weight: var(--heading-page-weight);
+  letter-spacing: var(--heading-page-tracking);
+}
+
+.page-intro {
+  margin: 0 0 1.25rem;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  max-width: 70ch;
+}
+
+.add-form {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.add-email-field {
+  flex: 1 1 280px;
+  max-width: 400px;
+}
+
+.list-controls {
+  margin-bottom: 0.75rem;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  padding: 1rem 0;
+}
+
+.empty-state-text {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 0.5rem 0;
+}
+
+.table-scroll-wrapper {
+  width: 100%;
+}
+
+.suppressions-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.suppressions-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--border-faint);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.suppressions-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-faint);
+  vertical-align: middle;
+}
+
+.row-cleared {
+  color: var(--text-muted);
+}
+
+.detail-row td {
+  padding-top: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.provider-diagnostic {
+  display: inline-block;
+  margin-right: 12px;
+}
+
+.cleared-note {
+  display: inline-block;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Muted on purpose, matching the job-detail recipient badge - a suppression is the system
+   working, not a failure. */
+.status-suppressed {
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+}
+
+.status-cleared {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.cell-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.cell-date {
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.cell-count {
+  text-align: center;
+}
+
+.cell-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.col-status {
+  width: 110px;
+}
+.col-reason {
+  width: 130px;
+}
+.col-when {
+  width: 130px;
+}
+.col-count {
+  width: 90px;
+}
+.col-actions {
+  width: 90px;
+}
+
+@media (max-width: 600px) {
+  .table-scroll-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .col-by,
+  .col-count,
+  .suppressions-table tr:not(.detail-row) td:nth-child(5),
+  .suppressions-table tr:not(.detail-row) td:nth-child(6) {
+    display: none;
+  }
+}

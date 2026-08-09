@@ -17,6 +17,48 @@ namespace Web.MockData
     {
         private readonly Dictionary<Guid, HeldMessage> _messages = new();
 
+        /// <summary>
+        /// Seeds one held (non-directory) message awaiting moderation in the Board committee's
+        /// Approvals inbox, so the approve flow - including the suppression-aware recipient selection
+        /// it triggers - is exercisable in MockData. Nothing else in this environment can create a
+        /// held message: only the mail poller holds mail, and it requires Graph credentials. Already
+        /// notified (<see cref="HeldMessage.NotifiedUtc"/> set) so it renders as an ordinary
+        /// actionable item rather than one still in the antispam quarantine window. Called from the
+        /// Startup registration rather than the constructor so unit tests get an empty store.
+        /// <para>
+        /// The suppression-specific demo lives in a Board <em>broadcast</em>, where Taylor's
+        /// seeded-suppressed <c>taylor.old@cohad.local</c> is its own recipient and the enforcement
+        /// point marks it Suppressed on the job detail; the deliverable-address forwarding preference
+        /// is covered by unit tests rather than by ordering a hidden address first in this seed.
+        /// </para>
+        /// </summary>
+        public MockHeldMessageRepository SeedSampleData()
+        {
+            var heldUtc = DateTime.UtcNow.AddHours(-3);
+            var held = new HeldMessage
+            {
+                Id = MockDataConstants.SampleHeldMessageId,
+                CommitteeId = "board",
+                CommitteeEmail = "board@cohad.org",
+                InternetMessageId = "<mock-held-1@example.com>",
+                SenderEmail = "vendor@example.com",
+                SenderName = "Outside Vendor",
+                Subject = "Quote for common-area landscaping",
+                ReceivedUtc = heldUtc,
+                HeldUtc = heldUtc,
+                NotifiedUtc = heldUtc.AddHours(1),
+                Status = HeldMessageStatus.Held,
+            };
+
+            lock (_messages)
+            {
+                held.ETag = Guid.NewGuid().ToString();
+                _messages[held.Id] = held;
+            }
+
+            return this;
+        }
+
         public Task AddAsync(HeldMessage message)
         {
             lock (_messages)

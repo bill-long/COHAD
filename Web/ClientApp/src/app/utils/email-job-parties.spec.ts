@@ -18,6 +18,7 @@ const makeJob = (overrides: Partial<EmailJobSummary> = {}): EmailJobSummary => (
   totalRecipients: 10,
   sentCount: 10,
   failedCount: 0,
+  suppressedCount: 0,
   lastError: null,
   ...overrides,
 });

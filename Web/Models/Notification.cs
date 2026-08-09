@@ -114,7 +114,7 @@ namespace Web.Models
         /// <summary>
         /// True for notification types whose only resolution is an explicit acknowledge/dismiss because
         /// they have no underlying moderation action (registrations). Types backed by a domain action
-        /// (vendor flags, held emails) must be resolved by that action — acknowledging them directly
+        /// (vendor flags, held emails) must be resolved by that action - acknowledging them directly
         /// would hide still-pending work and defeat escalation, so callers must reject them.
         /// </summary>
         public static bool IsAcknowledgeable(NotificationType type) => type == NotificationType.Registration;

@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -138,6 +139,37 @@ namespace Web.Models
             var normalized = NormalizeAddress(email);
             var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
             return Convert.ToHexString(hash).ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Projects a set of suppression records into a normalized-address → reason lookup - the one
+        /// place the "active suppressions as a lookup keyed on the normalized address" invariant is
+        /// defined, so the enforcement point and the forwarding selection can't drift on comparer or
+        /// on the empty-key guard. Case-insensitive and blank-key-skipping: a hand-authored row that
+        /// isn't normalized, or has a blank address, must not throw on a duplicate key or match a
+        /// blank candidate address at a call site.
+        /// </summary>
+        public static Dictionary<string, SuppressionReason> ActiveByNormalizedAddress(IEnumerable<EmailSuppression> active)
+        {
+            ArgumentNullException.ThrowIfNull(active);
+            var map = new Dictionary<string, SuppressionReason>(StringComparer.OrdinalIgnoreCase);
+            foreach (var suppression in active)
+            {
+                var key = NormalizeAddress(suppression.Email);
+                if (key.Length > 0)
+                    map[key] = suppression.Reason;
+            }
+            return map;
+        }
+
+        /// <summary>
+        /// The membership half of <see cref="ActiveByNormalizedAddress"/>, for callers that only
+        /// need "is this address suppressed" (the forwarding recipient selection). Derived from the
+        /// same builder so the normalization and the guard live in exactly one place.
+        /// </summary>
+        public static HashSet<string> ActiveNormalizedAddressSet(IEnumerable<EmailSuppression> active)
+        {
+            return new HashSet<string>(ActiveByNormalizedAddress(active).Keys, StringComparer.OrdinalIgnoreCase);
         }
     }
 }

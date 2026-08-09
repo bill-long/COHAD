@@ -117,6 +117,17 @@ export interface EmailPreferences {
   gardenClubEmailOptedIn: boolean;
   socialCommitteeEmailOptedIn: boolean;
   sunshineCommitteeEmailOptedIn: boolean;
+  /**
+   * Whether an all-mail suppression is currently in force for this address. The booleans above
+   * stay editable underneath it - without this flag the page would show checkboxes whose changes
+   * silently have no effect on whether mail arrives.
+   */
+  suppressed: boolean;
+  suppressedUtc: string | null;
+  /** Why, as the SuppressionReason enum name. Null when no suppression is in force. */
+  suppressionReason: string | null;
+  /** True only for a ResidentRequest suppression, which the resident can lift themselves. */
+  canResume: boolean;
 }
 
 export interface AuditLogEntry {
@@ -149,8 +160,9 @@ export interface TestRecipientOption {
 // Email job queue types
 
 export type EmailJobStatus = 'Queued' | 'InProgress' | 'Completed' | 'PartiallyCompleted' | 'Failed' | 'Cancelled';
-export type EmailJobRecipientStatus = 'Pending' | 'Sent' | 'Failed';
+export type EmailJobRecipientStatus = 'Pending' | 'Sent' | 'Failed' | 'Suppressed';
 export type DeliveryStatus = 'Unknown' | 'Delivered' | 'Bounced' | 'Deferred' | 'SpamReport' | 'Rejected';
+export type SuppressionReason = 'HardBounce' | 'SpamComplaint' | 'ResidentRequest' | 'AdminAction';
 
 export interface EmailJobSummary {
   id: string;
@@ -179,6 +191,8 @@ export interface EmailJobSummary {
   totalRecipients: number;
   sentCount: number;
   failedCount: number;
+  /** Recipients skipped by the suppression list - what explains "Completed, sent 0". */
+  suppressedCount: number;
   lastError: string | null;
 }
 
@@ -194,6 +208,12 @@ export interface EmailJobRecipientDetail {
   deliveryStatus: DeliveryStatus;
   deliveryStatusUpdatedUtc: string | null;
   provider: string | null;
+  /**
+   * Stamped on the recipient when enforcement skipped it, so the job detail explains the skip
+   * without joining to the suppression record - and the explanation survives a later clear.
+   */
+  suppressedUtc: string | null;
+  suppressionReason: SuppressionReason | null;
 }
 
 export interface EmailDeliveryEventDetail {
@@ -212,6 +232,7 @@ export interface EmailJobProgress {
   status: EmailJobStatus;
   sentCount: number;
   failedCount: number;
+  suppressedCount: number;
   totalRecipients: number;
 }
 
@@ -220,8 +241,29 @@ export interface EmailJobCompleted {
   status: EmailJobStatus;
   sentCount: number;
   failedCount: number;
+  suppressedCount: number;
   totalRecipients: number;
   lastError: string | null;
+}
+
+/**
+ * A do-not-mail record for one address (GET api/email-suppressions, Administrator-only).
+ * All-mail and category-free; active while clearedUtc is null.
+ */
+export interface EmailSuppression {
+  id: string;
+  email: string;
+  reason: SuppressionReason;
+  consecutiveFailureCount: number;
+  firstSeenUtc: string;
+  lastSeenUtc: string;
+  causingJobId: string | null;
+  suppressedUtc: string;
+  suppressedBy: string;
+  providerDiagnostic: string | null;
+  clearedUtc: string | null;
+  clearedBy: string | null;
+  isActive: boolean;
 }
 
 /** Returned by GET/POST api/payment. Omits raw PayPal payloads and internal payer linkage. */

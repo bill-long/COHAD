@@ -354,7 +354,11 @@ namespace Web
                     sp.GetRequiredService<IDocumentFileStore>()
                 ));
                 services.AddSingleton<IEmailDeliveryEventRepository, MockEmailDeliveryEventRepository>();
-                services.AddSingleton<IHeldMessageRepository, MockHeldMessageRepository>();
+                // Seeded with a held message so the Approvals inbox and the approve flow's
+                // suppression-aware recipient selection are exercisable; see SeedSampleData.
+                services.AddSingleton<IHeldMessageRepository>(
+                    new MockHeldMessageRepository().SeedSampleData()
+                );
                 services.AddSingleton<INotificationRepository, MockNotificationRepository>();
                 services.AddSingleton<INotificationDigestStateRepository, MockNotificationDigestStateRepository>();
                 services.AddSingleton<IBackgroundJobStateRepository, MockBackgroundJobStateRepository>();

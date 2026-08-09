@@ -72,3 +72,28 @@
     width: 100%;
   }
 }
+
+/* Read-only suppression advisory (Administrators only). */
+.suppressedBanner {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.suppressedChip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+}
+
+.suppressedHint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}

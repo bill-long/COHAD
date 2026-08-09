@@ -383,6 +383,7 @@ public sealed class SpamClassificationTests
         services.AddScoped(_ => Mock.Of<IResidentRepository>());
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new Web.MockData.MockEmailSuppressionRepository());
         services.AddScoped(_ => notifications.Object);
         var provider = services.BuildServiceProvider();
 
@@ -442,6 +443,7 @@ public sealed class SpamClassificationTests
         services.AddScoped(_ => residentRepo.Object);
         services.AddScoped(_ => Mock.Of<IUserRepository>());
         services.AddScoped(_ => Mock.Of<IDocumentFileStore>());
+        services.AddScoped<IEmailSuppressionRepository>(_ => new Web.MockData.MockEmailSuppressionRepository());
         services.AddScoped(_ => notifications.Object);
         var provider = services.BuildServiceProvider();
 

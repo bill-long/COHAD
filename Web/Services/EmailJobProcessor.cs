@@ -147,13 +147,7 @@ namespace Web.Services
         )
         {
             var active = await suppressionRepo.GetActiveAsync();
-            var activeByAddress = new Dictionary<string, SuppressionReason>(StringComparer.OrdinalIgnoreCase);
-            foreach (var suppression in active)
-            {
-                var key = EmailSuppression.NormalizeAddress(suppression.Email);
-                if (key.Length > 0)
-                    activeByAddress[key] = suppression.Reason;
-            }
+            var activeByAddress = EmailSuppression.ActiveByNormalizedAddress(active);
 
             if (ApplySuppressions(job, activeByAddress))
             {

@@ -84,6 +84,10 @@
   color: var(--error);
   font-weight: 600;
 }
+.count-suppressed {
+  color: var(--text-muted);
+  font-weight: 600;
+}
 
 .job-final-status {
   margin-bottom: 0.5rem;

@@ -36,6 +36,9 @@ namespace Web.MockData
         public static readonly Guid SampleEmailJobSeed7 = Guid.Parse("33333333-3333-3333-3333-333333333307");
         public static readonly Guid SampleEmailJobSeed8 = Guid.Parse("33333333-3333-3333-3333-333333333308");
 
+        /// <summary>Stable id for the seeded held committee message (Approvals inbox testing).</summary>
+        public static readonly Guid SampleHeldMessageId = Guid.Parse("55555555-5555-5555-5555-555555555501");
+
         /// <summary>
         /// A seeded committee-forwarding job - a resident's message forwarded to committee members.
         /// Kept separate from the ordinary seeds so the From/To distinction on the job pages is
