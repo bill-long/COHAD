@@ -1,7 +1,5 @@
 #nullable enable
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Web.Models;
@@ -12,125 +10,87 @@ namespace Web.Services
     public interface IEmailDeliveryActionService
     {
         /// <summary>
-        /// Processes a delivery event and takes automatic action (e.g. opt-out on bounce/spam).
+        /// Processes a delivery event and takes automatic action: a hard bounce or spam complaint
+        /// writes a suppression for the address. Takes the whole event because the suppression
+        /// record keeps the event's provenance - the causing job and the provider's own
+        /// diagnostic text.
         /// </summary>
-        Task ProcessDeliveryEventAsync(string email, DeliveryStatus status, string? category);
+        Task ProcessDeliveryEventAsync(EmailDeliveryEvent deliveryEvent, string? category);
     }
 
+    /// <summary>
+    /// The provider-feedback writer of the suppression list (the other writer is the one-click
+    /// endpoint in <c>UnsubscribeController</c>). Writes a suppression and NOTHING else - in
+    /// particular it never touches the five per-address opt-in booleans, which belong to the
+    /// resident. The previous behaviour cleared all five across every home carrying the address,
+    /// which destroyed stated preferences to record a fact that is not a preference and left
+    /// nothing to restore. See docs/email-suppression-and-unsubscribe.md, Part 3.
+    /// </summary>
     public class EmailDeliveryActionService : IEmailDeliveryActionService
     {
-        private readonly IHomeRepository _homeRepository;
-        private readonly IResidentRepository _residentRepository;
+        private readonly IEmailSuppressionService _suppressionService;
         private readonly IAuditLogRepository _auditLogRepository;
         private readonly ILogger<EmailDeliveryActionService> _logger;
 
         public EmailDeliveryActionService(
-            IHomeRepository homeRepository,
-            IResidentRepository residentRepository,
+            IEmailSuppressionService suppressionService,
             IAuditLogRepository auditLogRepository,
             ILogger<EmailDeliveryActionService> logger
         )
         {
-            _homeRepository = homeRepository;
-            _residentRepository = residentRepository;
+            _suppressionService = suppressionService;
             _auditLogRepository = auditLogRepository;
             _logger = logger;
         }
 
-        public async Task ProcessDeliveryEventAsync(string email, DeliveryStatus status, string? category)
+        public async Task ProcessDeliveryEventAsync(EmailDeliveryEvent deliveryEvent, string? category)
         {
+            var status = deliveryEvent.DeliveryStatus;
+            var email = deliveryEvent.Email;
+
+            // Soft bounces arrive as Deferred (the webhook controllers map Postmark's
+            // Transient/SoftBounce there), so they never reach the suppression below. A future
+            // N-soft-bounces-in-a-window rule would build on the record's
+            // ConsecutiveFailureCount; nothing acts on soft bounces today, deliberately.
             if (status != DeliveryStatus.Bounced && status != DeliveryStatus.SpamReport)
             {
                 _logger.LogDebug("Delivery event {Status} for {Email} — no auto-action required.", status, email);
                 return;
             }
 
-            var reason = status == DeliveryStatus.Bounced ? "hard bounce" : "spam report";
-            _logger.LogInformation("Auto-opting-out email {Email} due to {Reason}.", email, reason);
+            var reason = status == DeliveryStatus.Bounced ? SuppressionReason.HardBounce : SuppressionReason.SpamComplaint;
+            var reasonText = status == DeliveryStatus.Bounced ? "hard bounce" : "spam report";
+            _logger.LogInformation("Suppressing email {Email} due to {Reason}.", email, reasonText);
 
-            var matchingHomes = await _homeRepository.GetByEmailAsync(email);
-            var homesUpdated = 0;
+            var suppression = await _suppressionService.RecordAsync(
+                email,
+                reason,
+                EmailSuppression.SystemDeliveryEvent,
+                deliveryEvent.JobId == Guid.Empty ? null : deliveryEvent.JobId,
+                deliveryEvent.ProviderDiagnostic
+            );
 
-            foreach (var home in matchingHomes)
-            {
-                if (!IsAlreadyOptedOut(home.EmailAddress))
+            // The suppression record is the durable state; the audit entry is the episode history
+            // that survives the record being updated by later evidence or cleared. Redacted like
+            // every address in the audit log.
+            var redacted = RedactEmail(email);
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
                 {
-                    OptOutEmailAddress(home.EmailAddress);
-                    await _homeRepository.UpsertAsync(home);
-                    homesUpdated++;
-                    _logger.LogInformation("Opted-out home email for home {HomeId}.", home.Id);
+                    Id = Guid.NewGuid(),
+                    Time = DateTime.UtcNow,
+                    UserId = "system",
+                    UserDisplayName = "System (auto)",
+                    SubjectId = redacted,
+                    SubjectName = redacted,
+                    Action =
+                        $"Suppressed all email due to {reasonText}{(category != null ? $" (category: {category})" : "")}."
+                        + $" Evidence count {suppression.ConsecutiveFailureCount}. Opt-in preferences were not changed.",
                 }
-            }
-
-            var matchingResidents = await _residentRepository.GetByEmailAsync(email);
-            var residentsUpdated = 0;
-
-            foreach (var resident in matchingResidents)
-            {
-                var changed = false;
-                foreach (
-                    var ea in resident.EmailAddresses.Where(ea =>
-                        string.Equals(ea.Address?.Trim(), email, StringComparison.OrdinalIgnoreCase)
-                    )
-                )
-                {
-                    if (!IsAlreadyOptedOut(ea))
-                    {
-                        OptOutEmailAddress(ea);
-                        changed = true;
-                    }
-                }
-                if (changed)
-                {
-                    await _residentRepository.UpsertAsync(resident);
-                    residentsUpdated++;
-                    _logger.LogInformation(
-                        "Opted-out resident email for resident {ResidentId} on home {HomeId}.",
-                        resident.Id,
-                        resident.HomeId
-                    );
-                }
-            }
-
-            var totalOptOuts = homesUpdated + residentsUpdated;
-            if (totalOptOuts > 0)
-            {
-                // Redact email in audit log (show first 3 chars + domain)
-                var redacted = RedactEmail(email);
-                await _auditLogRepository.AddAsync(
-                    new NewAuditLogEntry
-                    {
-                        Id = Guid.NewGuid(),
-                        Time = DateTime.UtcNow,
-                        UserId = "system",
-                        UserDisplayName = "System (auto)",
-                        SubjectId = redacted,
-                        SubjectName = redacted,
-                        Action =
-                            $"Auto-opted-out due to {reason}{(category != null ? $" (category: {category})" : "")}. {totalOptOuts} record(s) updated ({homesUpdated} home(s), {residentsUpdated} resident(s)).",
-                    }
-                );
-            }
+            );
         }
 
-        private static bool IsAlreadyOptedOut(EmailAddress ea)
-        {
-            return !ea.BoardEmailOptedIn
-                && !ea.WelcomeEmailOptedIn
-                && !ea.GardenClubEmailOptedIn
-                && !ea.SocialCommitteeEmailOptedIn
-                && !ea.SunshineCommitteeEmailOptedIn;
-        }
-
-        private static void OptOutEmailAddress(EmailAddress ea)
-        {
-            ea.BoardEmailOptedIn = false;
-            ea.WelcomeEmailOptedIn = false;
-            ea.GardenClubEmailOptedIn = false;
-            ea.SocialCommitteeEmailOptedIn = false;
-            ea.SunshineCommitteeEmailOptedIn = false;
-        }
-
+        /// <summary>Redacts an address for the audit log (first 3 chars + domain).</summary>
         internal static string RedactEmail(string email)
         {
             var atIndex = email.IndexOf('@');

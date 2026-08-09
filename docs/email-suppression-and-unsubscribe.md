@@ -1,6 +1,10 @@
 # Email suppression, unsubscribe recovery, and short links
 
-Design doc. Status: **Part 1 implemented** (see below); Parts 2-5 proposed.
+Design doc. Status: **Part 1 implemented**; **Part 2a implemented** (short links, live in
+production 2026-08-09); **Part 2b skipped** by decision (see Part 2); **Part 3 backend
+implemented** (PR-3a - record, enforcement, both writers, resident resume, admin API), with
+forwarding preference, the moderator notification, and all frontend surfacing following in PR-3b;
+Parts 4-5 proposed.
 
 ## Problem
 
@@ -439,6 +443,18 @@ These ship together deliberately: a code with no page that accepts it is undisco
 inline code box in a release where no email carries a code is a worse dead end than the message it
 replaces.
 
+**Skipped, 2026-08-09 - not convinced it is needed.** The case that settled it: the typed code can
+only ever rescue emails that carry a code, which is sends after 2b ships - and those same sends
+carry the short link, the shape 2a built specifically to survive mangling. So the code insures the
+residual failure rate of the thing designed to eliminate the failure, and that rate is unobserved
+(2a went live the same day). The mangling-prone ~135-character legacy tokens still sitting in
+inboxes can never use the code page, because those emails carry no code line. Meanwhile 2b's most
+expensive piece - per-address/per-IP rate limiting with lockout, built from scratch on an anonymous
+endpoint - is also its most review-prone. Part 1's diagnostics guarantee that if short links do
+still fail it shows up in the logs (a stripped `?u=` or a `LinkNotFound` run at Warning); revisit
+on that evidence, not before. The open multi-home question for the code path is moot until then.
+The inline error state's mailto improvement was not commissioned either.
+
 **One guard that survives the change of mechanism.** Part 1 rejects a blank address inside
 `ValidateToken`, but the short-link and code acquirers never call it. The check belongs in the
 resolver, where all three shapes converge; the legacy copy stays where it is so a malformed payload
@@ -500,11 +516,18 @@ people asking for it.
   it once, keyed on the address, and the preferences survive underneath it intact. That the two
   writers converge on one mechanism is most of the value: a bounce and a click mean the same thing
   to the send path, and today they are two different mutations of the same five fields.
-- **Still to settle when this part starts:** whether saving the *preferences page* also stops
-  writing booleans. It is reached from the same email link, but it is a human deliberately choosing
-  granular settings, and an all-mail suppression cannot express "Garden Club yes, Board no" - so the
-  working assumption is that the page keeps editing the booleans and only the unsubscribe *action*
-  writes a suppression. Decide it explicitly rather than inheriting it.
+- **Settled (2026-08-09): the preferences page keeps writing the booleans**, and only the
+  unsubscribe *action* writes a suppression - a human deliberately choosing granular settings is
+  exactly the writer the invariant protects, and an all-mail suppression cannot express "Garden
+  Club yes, Board no". Two additions came with the decision:
+  - The preferences GET reports an active suppression (`Suppressed`, `SuppressedUtc`, `Reason`,
+    `CanResume`), because checkboxes whose changes silently have no effect while mail stays
+    stopped are the same class of trap as the false "Successfully unsubscribed" Part 1 removed.
+  - **Residents can lift their own `ResidentRequest` suppression** ("Resume receiving email",
+    `POST api/email/preferences/resume`, credential-authorised). Undoing your own unsubscribe is
+    symmetrical with making it - the same possession of the email authorises both - but a bounce
+    or complaint record is evidence about deliverability, and lifting that stays admin-only.
+    `ClearedBy` records `resident:{credentialType}`, the same provenance rule as `SuppressedBy`.
 - **Single enforcement point:** the `pendingRecipients` filter at
   `Web/Services/EmailJobProcessor.cs:870`. It sits above both the grouped and per-recipient
   branches, so one rule covers broadcasts, committee forwards, and escalation digests. Any design
@@ -521,7 +544,63 @@ people asking for it.
   values - only counts reach the audit log.
 - Suppress on hard bounce and spam complaint immediately. Soft bounces (Postmark `Transient` /
   `SoftBounce`, currently mapped to `Deferred`) may suppress after N in a window; that is what the
-  count field is for.
+  count field is for. **Settled: no soft-bounce rule ships until soft-bouncing addresses are an
+  observed problem** - the field the future rule needs exists (it counts every piece of hard
+  evidence), and nothing acts on the number today.
+
+#### Implementation notes - PR-3a (backend, implemented)
+
+The record, both writers, the enforcement point, the resident resume, and the admin API
+(`api/email-suppressions`: list / create-as-`AdminAction` / clear, Administrator-only). Decisions
+made in the writing, each where the doc above was silent:
+
+- **Document id is SHA-256 hex of the normalized address** (`EmailSuppression.MakeId`), address
+  kept as a field: email local parts may legally contain `/ \ ? #`, which Cosmos forbids in ids.
+  Normalization is defined once (`NormalizeAddress`, delegating to `UserEmailHelpers.NormalizeEmail`).
+- **One document per address, forever.** Repeat evidence on an active record: count++, `LastSeen`
+  advances, the diagnostic refreshes when the new evidence carries one, and the original
+  `Reason`/`SuppressedUtc`/`SuppressedBy` stay - "why is this suppressed" is still the first event.
+  Re-suppression after a clear: a new episode (`Reason`/`SuppressedBy`/`SuppressedUtc` describe the
+  new event, `Cleared*` reset) with `FirstSeenUtc` and the count preserved. Episode history beyond
+  that lives in the audit log.
+- **Enforcement is a marking pass, not a filter change**: `EmailJobProcessor.ApplySuppressions`
+  flips still-sendable recipients to `Suppressed` - stamping `SuppressedUtc` and the reason on the
+  recipient, so the job detail explains the skip with no join and the explanation survives a later
+  clear - BEFORE the untouched `pendingRecipients` filter, so the grouped and per-recipient
+  branches are covered by construction and the mock path runs the identical helper. One
+  `GetActiveAsync` read per job run; a suppression written mid-run applies from the next run.
+- **Fail-closed:** a throwing suppression read (a missing container) fails the job rather than
+  sending unfiltered - the same philosophy as the UnsubscribeLink gate at job creation.
+- **Terminal status is one rule** (`DeriveTerminalStatus`: no failures means Completed), replacing
+  three inline copies. An all-suppressed job closes as Completed with 0 sent / 0 failed - nothing
+  failed and nothing remained to do - and the new `SuppressedCount` on the job and its DTOs is
+  what explains "Completed, sent 0" on screen. The stall watchdog's old all-Sent rule would have
+  called that PartiallyCompleted.
+- **The provider diagnostic is captured at webhook-parse time** as
+  `EmailDeliveryEvent.ProviderDiagnostic` (Postmark `"{Type}: {Description}"`, SendGrid
+  `"{event}: {reason}"`), not re-parsed out of `ProviderPayloadJson` at suppression time -
+  provider shapes drift, and a parse failure then would silently lose the text the record exists
+  to keep. `ProcessDeliveryEventAsync` now takes the whole event for the same reason.
+- **One-click keeps its per-category route** (baked into every List-Unsubscribe header already in
+  inboxes) and still rejects an unknown category - the segment is part of a URL we emitted, so an
+  unrecognised value is mangling evidence. The response message is all-mail honest. The endpoint
+  reads no home or resident at all now, which is the structural half of the invariant lock; the
+  category-to-boolean setter (`TryGetCategorySetter`) is deleted outright, the `GenerateToken`
+  removal-by-shape precedent.
+- **Admin test-sends to a suppressed address are skipped too** - enforcement is blanket by
+  design, and the job detail's in-place explanation is the mitigation for the surprised admin.
+- One-click no longer emits `home-not-found` / `email-not-on-home` rejections (no home walk);
+  both remain on the preferences GET/PUT.
+
+**Left to PR-3b:** the forwarding deliverable-address preference and moderator notification
+(including a `NotificationService.ReopenAsync` so a re-suppression after a clear re-alerts and
+re-qualifies for the email digest), all frontend surfacing (job detail badge + explanation, the
+Manage > Suppressions page, read-only address badges, the preferences-page banner and resume
+button), and the `'Suppressed'` recipient-status value in the SPA's models. Until 3b merges, an
+old frontend renders the new status as plain unstyled text - acceptable for the gap between two
+adjacent PRs. `NotificationRecipientResolver.ResolveUserEmailsAsync`'s own First-non-blank address
+pick is a documented follow-up beyond 3b: enforcement already prevents any send to a suppressed
+digest recipient, so changing digest recipient *identity* is orthogonal.
 
 ### Part 4: Audit every subscription-state change
 
@@ -566,8 +645,12 @@ evidence-based. If they never reach zero, we find out before breaking someone.
 Two new Cosmos containers, provisioned out of band like every other container here
 (non-partitioned, `/NoPartitionKey`):
 
-- `EmailSuppression`
-- `UnsubscribeLink` (set container TTL ~400 days)
+- `EmailSuppression` - **no TTL**, deliberately: a suppression is permanent until a human clears
+  it, and a row that quietly expired would resume mail to an address that bounced or complained.
+  Must exist before deploying PR-3a; a missing container is loud by design (the enforcement point
+  fails the job rather than sending unfiltered, and the point read's sub-status narrowing keeps a
+  missing container from reading as "not suppressed").
+- `UnsubscribeLink` (set container TTL ~400 days) - **provisioned, live since 2026-08-09**
 
 Cut-over note: links are stamped on recipients **when a job is created**, so a job already queued
 when the new build deploys predates the convention and has no ids. The retry endpoint backfills
@@ -580,7 +663,9 @@ New configuration:
 - `UnsubscribeToken:LegacySigningKey` - the existing production key, validation only. It leaked into
   a transcript on 2026-08-06, so moving it here is a rotation and not a rename: `SigningKey` gets a
   fresh value at the same time. See Legacy compatibility for what the rotation does and does not buy.
-- A fresh key for the derived code.
+  **Done at the 2026-08-09 cutover.**
+- A fresh key for the derived code. **Not needed - 2b is skipped.** Part 3 adds no configuration
+  at all: the container name is hardcoded like every other, and there are no flags or intervals.
 
 Mock implementations must be behaviourally identical to the Cosmos ones, including 409 on duplicate
 id and ETag handling.

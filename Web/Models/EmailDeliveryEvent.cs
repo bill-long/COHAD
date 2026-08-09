@@ -50,6 +50,15 @@ namespace Web.Models
         /// </summary>
         public string? ProviderPayloadJson { get; set; }
 
+        /// <summary>
+        /// The provider's human-readable diagnostic for a failure - Postmark's bounce type and
+        /// description, SendGrid's event and reason. Extracted at webhook-parse time, where the
+        /// payload is already being read, rather than re-parsed out of
+        /// <see cref="ProviderPayloadJson"/> later: provider shapes drift, and a parse failure at
+        /// suppression time would silently lose the text the suppression record exists to keep.
+        /// </summary>
+        public string? ProviderDiagnostic { get; set; }
+
         /// <summary>Whether the delivery action (auto opt-out) has been processed.</summary>
         public bool ActionProcessed { get; set; }
 

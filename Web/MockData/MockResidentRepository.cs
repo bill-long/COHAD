@@ -157,6 +157,21 @@ namespace Web.MockData
                             SocialCommitteeEmailOptedIn = false,
                             SunshineCommitteeEmailOptedIn = false,
                         },
+                        // Suppressed by MockEmailSuppressionRepository.SeedSampleData - opted in,
+                        // so a mock board send selects it and the processor's enforcement point
+                        // visibly skips it, while taylor@cohad.local above stays deliverable for
+                        // every other flow. The opt-in surviving underneath the suppression is
+                        // itself the Part 3 invariant on display.
+                        new EmailAddress
+                        {
+                            Address = "taylor.old@cohad.local",
+                            VisibleInDirectory = false,
+                            BoardEmailOptedIn = true,
+                            WelcomeEmailOptedIn = false,
+                            GardenClubEmailOptedIn = false,
+                            SocialCommitteeEmailOptedIn = false,
+                            SunshineCommitteeEmailOptedIn = false,
+                        },
                     },
                     PhoneNumbers = new List<PhoneNumber>(),
                 },

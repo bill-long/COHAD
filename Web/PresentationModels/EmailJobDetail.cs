@@ -27,6 +27,8 @@ namespace Web.PresentationModels
                             DeliveryStatus = r.DeliveryStatus,
                             DeliveryStatusUpdatedUtc = r.DeliveryStatusUpdatedUtc,
                             Provider = r.Provider,
+                            SuppressedUtc = r.SuppressedUtc,
+                            SuppressionReason = r.SuppressionReason,
                         })
                         .ToList()
                     ?? new(),
@@ -52,5 +54,15 @@ namespace Web.PresentationModels
         public DateTime? DeliveryStatusUpdatedUtc { get; set; }
 
         public string? Provider { get; set; }
+
+        /// <summary>
+        /// When the suppression list skipped this recipient. Stamped on the recipient at skip
+        /// time, so the explanation is self-contained and survives the suppression later being
+        /// cleared - the detail page explains the skip in place with no extra reads.
+        /// </summary>
+        public DateTime? SuppressedUtc { get; set; }
+
+        /// <summary>Why the suppression list skipped this recipient.</summary>
+        public SuppressionReason? SuppressionReason { get; set; }
     }
 }

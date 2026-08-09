@@ -292,6 +292,72 @@ namespace Web.UnitTests
             Assert.Equal(expected, SendGridWebhookController.MapEventToDeliveryStatus(eventType));
         }
 
+        // ─── Provider diagnostic ───
+
+        [Theory]
+        [InlineData(
+            "bounce",
+            /*lang=json,strict*/ @"{""event"":""bounce"",""reason"":""550 5.1.1 The email account does not exist"",""status"":""5.1.1""}",
+            "bounce: 550 5.1.1 The email account does not exist"
+        )]
+        [InlineData(
+            "bounce",
+            /*lang=json,strict*/ @"{""event"":""bounce"",""status"":""5.1.1""}",
+            "bounce: 5.1.1"
+        )]
+        [InlineData("bounce", /*lang=json,strict*/ @"{""event"":""bounce""}", "bounce")]
+        [InlineData(
+            "dropped",
+            /*lang=json,strict*/ @"{""event"":""dropped"",""reason"":""Bounced Address""}",
+            "dropped: Bounced Address"
+        )]
+        [InlineData(
+            "spamreport",
+            /*lang=json,strict*/ @"{""event"":""spamreport""}",
+            "spamreport"
+        )]
+        public void ExtractDiagnostic_ComposesEventAndReasonForFailures(
+            string eventType,
+            string json,
+            string expected
+        )
+        {
+            // The diagnostic is what the suppression record shows an admin; reason is preferred,
+            // the SMTP status is the fallback, and the bare event name still names the failure.
+            var evt = JsonSerializer.Deserialize<JsonElement>(json);
+
+            Assert.Equal(expected, SendGridWebhookController.ExtractDiagnostic(eventType, evt));
+        }
+
+        [Theory]
+        [InlineData("delivered", /*lang=json,strict*/ @"{""event"":""delivered"",""reason"":""whatever""}")]
+        [InlineData("deferred", /*lang=json,strict*/ @"{""event"":""deferred"",""reason"":""throttled""}")]
+        public void ExtractDiagnostic_IsNullForNonFailureEvents(string eventType, string json)
+        {
+            // A delivery or deferral needs no explaining - a value here would end up presented as
+            // the "why" on a suppression record it has nothing to do with.
+            var evt = JsonSerializer.Deserialize<JsonElement>(json);
+
+            Assert.Null(SendGridWebhookController.ExtractDiagnostic(eventType, evt));
+        }
+
+        [Fact]
+        public async Task BounceEvent_StoresProviderDiagnostic()
+        {
+            SetupVerifierNotConfigured();
+
+            var body =
+                $@"[{{""event"":""bounce"",""reason"":""550 user unknown"",""cohad_job_id"":""{TestJobId}"",""cohad_email"":""user@example.com""}}]";
+            var controller = CreateController(body);
+
+            await controller.HandleEvents();
+
+            _deliveryEventRepo.Verify(
+                r => r.AddAsync(It.Is<EmailDeliveryEvent>(e => e.ProviderDiagnostic == "bounce: 550 user unknown")),
+                Times.Once
+            );
+        }
+
         // ─── Missing signature/timestamp headers ───
 
         [Fact]

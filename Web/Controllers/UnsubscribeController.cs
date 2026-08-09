@@ -22,24 +22,41 @@ namespace Web.Controllers
         private readonly IUnsubscribeCredentialResolver _credentialResolver;
         private readonly IHomeRepository _homeRepository;
         private readonly IResidentRepository _residentRepository;
+        private readonly IEmailSuppressionService _suppressionService;
+        private readonly IEmailSuppressionRepository _suppressionRepository;
         private readonly ILogger<UnsubscribeController> _logger;
 
         public UnsubscribeController(
             IUnsubscribeCredentialResolver credentialResolver,
             IHomeRepository homeRepository,
             IResidentRepository residentRepository,
+            IEmailSuppressionService suppressionService,
+            IEmailSuppressionRepository suppressionRepository,
             ILogger<UnsubscribeController> logger
         )
         {
             _credentialResolver = credentialResolver;
             _homeRepository = homeRepository;
             _residentRepository = residentRepository;
+            _suppressionService = suppressionService;
+            _suppressionRepository = suppressionRepository;
             _logger = logger;
         }
 
         /// <summary>
         /// One-click unsubscribe (RFC 8058). Gmail/Yahoo send POST with body
         /// "List-Unsubscribe=One-Click" to the URL from the List-Unsubscribe header.
+        /// <para>
+        /// Writes an all-mail suppression, not a category boolean. A recipient who clicks
+        /// Unsubscribe in Gmail is asking for the mail to stop; clearing one of five booleans
+        /// scattered the answer across every home carrying the address, destroyed stated
+        /// preferences to record a fact that is not a preference, and left nothing to restore.
+        /// The suppression is keyed on the address alone, so no home or resident is read or
+        /// written here at all - the preferences survive underneath it intact, and the send
+        /// path's single enforcement point is what makes the mail actually stop. The route keeps
+        /// its <c>{category}</c> segment because it is baked into every List-Unsubscribe header
+        /// already sitting in inboxes.
+        /// </para>
         /// </summary>
         [HttpPost("unsubscribe/{category}")]
         [Consumes("application/x-www-form-urlencoded")]
@@ -74,33 +91,56 @@ namespace Web.Controllers
                 return BadRequest(new { error = "Invalid or missing List-Unsubscribe confirmation." });
             }
 
-            var payload = await ResolveCredentialAsync(token, linkId);
-            if (payload == null)
+            var credential = await ResolveCredentialAsync(token, linkId);
+            if (credential == null)
                 return BadRequest(new { error = "Invalid or missing credential." });
 
-            if (!EmailSubscriptionCategories.TryGetCategorySetter(category, out var setter))
+            if (!EmailSubscriptionCategories.IsKnownCategory(category))
             {
-                // The category comes from the route, so it is attacker-controlled; only whether it
-                // was recognised is recorded, never the value.
+                // Still rejected even though the suppression is category-free: the segment is part
+                // of a URL we emitted, so an unrecognised value means the link was mangled in
+                // transit - exactly the evidence Part 1 exists to classify - or forged. The
+                // category comes from the route and is attacker-controlled; only whether it was
+                // recognised is recorded, never the value.
                 RecordPostCredentialRejection("unknown-category");
                 return BadRequest(new { error = $"Unknown category: {category}" });
             }
 
-            return await WithOptimisticRetry(
-                payload,
-                (home, matchingAddresses) =>
-                {
-                    foreach (var addr in matchingAddresses)
-                        setter(addr, false);
+            try
+            {
+                // SuppressedBy is the credential type: it is what Part 4 audits, and it keeps the
+                // provenance question ("did this come from a link click or a bounce?") answerable
+                // from the record alone.
+                await _suppressionService.RecordAsync(
+                    credential.Payload.Email,
+                    SuppressionReason.ResidentRequest,
+                    credential.CredentialType,
+                    null,
+                    null
+                );
+            }
+            catch (Exception ex)
+            {
+                // Rethrown - a failed write must never answer 200. A mailbox provider driving RFC
+                // 8058 records a success as honoured and stops offering the control, leaving the
+                // resident with no way to make the mail stop; the 400/500 path at least makes the
+                // provider retry. Named here first because the global handler's log carries no
+                // identifier (the credential rides in the query string and is never logged).
+                //
+                // Not filtered on OperationCanceledException, same reasoning as the preferences
+                // save below: this is a request path that rethrows either way, and the Cosmos
+                // cancellation subtype is a real failed write that must not be silent.
+                _logger.LogError(
+                    ex,
+                    "One-click unsubscribe failed to write a suppression for address {Email}",
+                    SanitizeAddressForLog(EmailDeliveryActionService.RedactEmail(credential.Payload.Email))
+                );
+                throw;
+            }
 
-                    return Ok(
-                        new
-                        {
-                            message = $"Successfully unsubscribed from {EmailSubscriptionCategories.DisplayNames.GetValueOrDefault(category, category)} emails.",
-                        }
-                    );
-                }
-            );
+            // All-mail honest: the old per-category message described a boolean this endpoint no
+            // longer writes.
+            return Ok(new { message = "This address will no longer receive Canyon Oaks HOA email." });
         }
 
         /// <summary>
@@ -109,13 +149,22 @@ namespace Web.Controllers
         [HttpGet("preferences")]
         public async Task<IActionResult> GetPreferences([FromQuery] string token, [FromQuery(Name = "u")] string linkId)
         {
-            var payload = await ResolveCredentialAsync(token, linkId);
-            if (payload == null)
+            var credential = await ResolveCredentialAsync(token, linkId);
+            if (credential == null)
                 return BadRequest(new { error = "Invalid or missing credential." });
+            var payload = credential.Payload;
 
             var (home, matchingAddresses, _, failure) = await LoadHomeAndMatchesAsync(payload);
             if (failure != null)
                 return failure;
+
+            // The suppression is what decides whether mail actually arrives, so the page has to
+            // know about it: checkboxes whose changes silently have no effect are the same class
+            // of trap as the false "Successfully unsubscribed" this controller already refuses to
+            // emit. Cleared records read as no suppression - the booleans below are the whole
+            // story again.
+            var suppression = await _suppressionRepository.GetByEmailAsync(payload.Email);
+            var suppressed = suppression != null && suppression.IsActive;
 
             // Aggregate preferences: show true if any matching address has it enabled
             var dto = new EmailPreferencesDto
@@ -127,9 +176,58 @@ namespace Web.Controllers
                 GardenClubEmailOptedIn = matchingAddresses.Any(a => a.GardenClubEmailOptedIn),
                 SocialCommitteeEmailOptedIn = matchingAddresses.Any(a => a.SocialCommitteeEmailOptedIn),
                 SunshineCommitteeEmailOptedIn = matchingAddresses.Any(a => a.SunshineCommitteeEmailOptedIn),
+                Suppressed = suppressed,
+                SuppressedUtc = suppressed ? suppression.SuppressedUtc : null,
+                SuppressionReason = suppressed ? suppression.Reason.ToString() : null,
+                CanResume = suppressed && suppression.Reason == Models.SuppressionReason.ResidentRequest,
             };
 
             return Ok(dto);
+        }
+
+        /// <summary>
+        /// Lifts a <see cref="SuppressionReason.ResidentRequest"/> suppression - the "resume
+        /// receiving email" action on the preferences page. Only that reason: undoing your own
+        /// unsubscribe is symmetrical with making it (the same possession of the email authorises
+        /// both), but a bounce or complaint record is evidence about deliverability, and lifting
+        /// that is an admin decision reached via the board mailto.
+        /// <para>
+        /// Idempotent for the not-suppressed case: "make sure this address receives mail" is
+        /// satisfied by there being nothing to lift, and a refresh-and-retry from the SPA must
+        /// not turn into an error.
+        /// </para>
+        /// </summary>
+        [HttpPost("preferences/resume")]
+        public async Task<IActionResult> ResumeReceiving([FromQuery] string token, [FromQuery(Name = "u")] string linkId)
+        {
+            var credential = await ResolveCredentialAsync(token, linkId);
+            if (credential == null)
+                return BadRequest(new { error = "Invalid or missing credential." });
+
+            var suppression = await _suppressionRepository.GetByEmailAsync(credential.Payload.Email);
+            if (suppression == null || !suppression.IsActive)
+                return Ok(new { message = "This address is already set to receive email." });
+
+            if (suppression.Reason != Models.SuppressionReason.ResidentRequest)
+            {
+                // Recorded so a run of these is visible: the SPA only offers the button when the
+                // GET said CanResume, so hitting this branch means a stale page or a hand-built
+                // request - either way worth a classification, never the reason value itself
+                // (it is not attacker-controlled, but the log needs no second copy of the record).
+                RecordPostCredentialRejection("suppression-not-resident-clearable");
+                return BadRequest(
+                    new { error = "Delivery to this address was stopped for a reason only an administrator can clear. Please contact board@cohad.org." }
+                );
+            }
+
+            // ClearedBy carries both who (a resident, self-service) and how (which credential
+            // shape proved control of the address) - the same provenance rule as SuppressedBy.
+            await _suppressionService.ClearAsync(
+                credential.Payload.Email,
+                $"resident:{credential.CredentialType}"
+            );
+
+            return Ok(new { message = "You will receive Canyon Oaks HOA email at this address again." });
         }
 
         /// <summary>
@@ -143,9 +241,10 @@ namespace Web.Controllers
             [FromBody] UpdateEmailPreferencesDto dto
         )
         {
-            var payload = await ResolveCredentialAsync(token, linkId);
-            if (payload == null)
+            var credential = await ResolveCredentialAsync(token, linkId);
+            if (credential == null)
                 return BadRequest(new { error = "Invalid or missing credential." });
+            var payload = credential.Payload;
 
             // Belt and braces. [ApiController] rejects an absent or unparseable body before this
             // action runs, so over HTTP this is unreachable and the middleware logs that case from
@@ -187,8 +286,10 @@ namespace Web.Controllers
         }
 
         /// <summary>
-        /// Resolves a presented credential to its payload, recording the outcome, and returns null
-        /// when it is rejected.
+        /// Resolves a presented credential, recording the outcome, and returns null when it is
+        /// rejected. Callers get the full resolver result rather than the bare payload because the
+        /// suppression writers stamp <c>CredentialType</c> as provenance (SuppressedBy/ClearedBy) -
+        /// re-deriving it from the query string would be a second copy of the precedence rule.
         /// <para>
         /// Acceptances log here, at Information, which <c>appsettings.json</c> raises for this
         /// category so legacy redemptions stay countable. Rejections are only <em>recorded</em>;
@@ -205,7 +306,7 @@ namespace Web.Controllers
         /// of evidence.
         /// </para>
         /// </summary>
-        private async Task<UnsubscribeTokenPayload> ResolveCredentialAsync(string token, string linkId)
+        private async Task<UnsubscribeCredentialResult> ResolveCredentialAsync(string token, string linkId)
         {
             var result = await _credentialResolver.ResolveAsync(token, linkId);
 
@@ -219,7 +320,7 @@ namespace Web.Controllers
                     UnsubscribeDiagnostics.DescribeEndpoint(HttpContext),
                     result.CredentialType
                 );
-                return result.Payload;
+                return result;
             }
 
             // The credential itself is a bearer credential and is never recorded - only its length

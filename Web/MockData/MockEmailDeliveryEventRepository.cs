@@ -29,6 +29,8 @@ namespace Web.MockData
                         deliveryEvent.ProviderEventId = existing.ProviderEventId;
                     if (string.IsNullOrEmpty(deliveryEvent.ProviderPayloadJson) && !string.IsNullOrEmpty(existing.ProviderPayloadJson))
                         deliveryEvent.ProviderPayloadJson = existing.ProviderPayloadJson;
+                    if (string.IsNullOrEmpty(deliveryEvent.ProviderDiagnostic) && !string.IsNullOrEmpty(existing.ProviderDiagnostic))
+                        deliveryEvent.ProviderDiagnostic = existing.ProviderDiagnostic;
                 }
 
                 _events[deliveryEvent.Id] = Clone(deliveryEvent);
@@ -75,6 +77,7 @@ namespace Web.MockData
                 Provider = e.Provider,
                 ReceivedUtc = e.ReceivedUtc,
                 ProviderPayloadJson = e.ProviderPayloadJson,
+                ProviderDiagnostic = e.ProviderDiagnostic,
                 ActionProcessed = e.ActionProcessed,
             };
     }

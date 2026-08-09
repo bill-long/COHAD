@@ -384,6 +384,7 @@ namespace Web.Services.Cosmos
                 TotalRecipients = doc.Value<int?>("TotalRecipients") ?? 0,
                 SentCount = doc.Value<int?>("SentCount") ?? 0,
                 FailedCount = doc.Value<int?>("FailedCount") ?? 0,
+                SuppressedCount = doc.Value<int?>("SuppressedCount") ?? 0,
                 LastError = doc.Value<string>("LastError"),
                 GroupRecipients = doc.Value<bool?>("GroupRecipients") ?? false,
                 InternetMessageId = doc.Value<string>("InternetMessageId"),
@@ -423,6 +424,10 @@ namespace Web.Services.Cosmos
                         ["Provider"] = r.Provider != null ? r.Provider : JValue.CreateNull(),
                         ["UnsubscribeLinkId"] =
                             r.UnsubscribeLinkId != null ? r.UnsubscribeLinkId : JValue.CreateNull(),
+                        ["SuppressedUtc"] =
+                            r.SuppressedUtc != null ? JToken.FromObject(r.SuppressedUtc) : JValue.CreateNull(),
+                        ["SuppressionReason"] =
+                            r.SuppressionReason != null ? r.SuppressionReason.ToString() : JValue.CreateNull(),
                     }
                 );
             }
@@ -450,6 +455,7 @@ namespace Web.Services.Cosmos
                 ["TotalRecipients"] = job.TotalRecipients,
                 ["SentCount"] = job.SentCount,
                 ["FailedCount"] = job.FailedCount,
+                ["SuppressedCount"] = job.SuppressedCount,
                 ["LastError"] = job.LastError != null ? job.LastError : JValue.CreateNull(),
                 ["GroupRecipients"] = job.GroupRecipients,
                 ["InternetMessageId"] = job.InternetMessageId,
@@ -497,6 +503,13 @@ namespace Web.Services.Cosmos
                         ProviderMessageId = r.Value<string>("ProviderMessageId"),
                         Provider = r.Value<string>("Provider"),
                         UnsubscribeLinkId = r.Value<string>("UnsubscribeLinkId"),
+                        SuppressedUtc = r["SuppressedUtc"]?.ToObject<DateTime?>(),
+                        SuppressionReason = Enum.TryParse<SuppressionReason>(
+                            r.Value<string>("SuppressionReason"),
+                            out var sr
+                        )
+                            ? sr
+                            : null,
                     })
                     .ToList();
             }

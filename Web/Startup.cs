@@ -313,6 +313,11 @@ namespace Web
             // for the same reason - it reads through the scoped link repository.
             services.AddScoped<IUnsubscribeCredentialResolver, UnsubscribeCredentialResolver>();
 
+            // The single place that mutates suppression records - both writers and the admin
+            // actions converge here so the record lifecycle is defined once. Scoped because it
+            // writes through the scoped suppression repository.
+            services.AddScoped<IEmailSuppressionService, EmailSuppressionService>();
+
             // Bounds how many unsubscribe rejection warnings the [AllowAnonymous] endpoints can
             // write per fixed 24h window. Singleton because the count is shared across requests;
             // in-memory and non-durable on purpose (see IUnsubscribeWarningBudget).
@@ -354,6 +359,11 @@ namespace Web
                 services.AddSingleton<INotificationDigestStateRepository, MockNotificationDigestStateRepository>();
                 services.AddSingleton<IBackgroundJobStateRepository, MockBackgroundJobStateRepository>();
                 services.AddSingleton<IUnsubscribeLinkRepository, MockUnsubscribeLinkRepository>();
+                // Seeded so the Suppressions page, the job-detail explanation, and the send-path
+                // skip are all exercisable in MockData; see SeedSampleData.
+                services.AddSingleton<IEmailSuppressionRepository>(
+                    new MockEmailSuppressionRepository().SeedSampleData()
+                );
             }
             else
             {
@@ -457,6 +467,14 @@ namespace Web
                 // prunes.
                 services.AddScoped<IUnsubscribeLinkRepository>(sp => new CosmosUnsubscribeLinkRepository(
                     sp.GetRequiredService<CosmosClient>().GetContainer(db, "UnsubscribeLink")
+                ));
+
+                // Provisioned out of band (non-partitioned, /NoPartitionKey) with NO TTL: a
+                // suppression is permanent until a human clears it, and a row that quietly expired
+                // would resume mail to an address that bounced or complained. If the container is
+                // missing, the enforcement point fails the job rather than sending unfiltered.
+                services.AddScoped<IEmailSuppressionRepository>(sp => new CosmosEmailSuppressionRepository(
+                    sp.GetRequiredService<CosmosClient>().GetContainer(db, "EmailSuppression")
                 ));
 
                 // Graph API for committee mailbox forwarding — registered only when credentials are configured.

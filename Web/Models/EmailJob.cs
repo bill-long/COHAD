@@ -21,6 +21,13 @@ namespace Web.Models
         Pending = 0,
         Sent = 1,
         Failed = 2,
+
+        /// <summary>
+        /// Skipped by the suppression list: the address is on a do-not-mail record, so no send
+        /// was attempted. Deliberately not <see cref="Failed"/> - nothing went wrong - and not
+        /// silently dropped, so the job detail page can show who was excluded and why.
+        /// </summary>
+        Suppressed = 3,
     }
 
     public class EmailJob
@@ -103,6 +110,13 @@ namespace Web.Models
         public int SentCount { get; set; }
 
         public int FailedCount { get; set; }
+
+        /// <summary>
+        /// Recipients skipped by the suppression list. Kept alongside Sent/Failed so
+        /// TotalRecipients still adds up on the job detail page - a Completed job with
+        /// "sent 3 of 5" and no explanation reads as data loss.
+        /// </summary>
+        public int SuppressedCount { get; set; }
 
         /// <summary>
         /// Last error message (from a fatal/connection-level failure, not per-recipient errors).
@@ -244,5 +258,16 @@ namespace Web.Models
         /// Which email provider sent this message (e.g. "SendGrid").
         /// </summary>
         public string? Provider { get; set; }
+
+        /// <summary>
+        /// When the suppression list skipped this recipient. Stamped at skip time, together with
+        /// <see cref="SuppressionReason"/>, rather than joined from the suppression record at
+        /// read time - the job detail stays self-contained, and the explanation survives the
+        /// suppression later being cleared.
+        /// </summary>
+        public DateTime? SuppressedUtc { get; set; }
+
+        /// <summary>Why the suppression list skipped this recipient.</summary>
+        public SuppressionReason? SuppressionReason { get; set; }
     }
 }

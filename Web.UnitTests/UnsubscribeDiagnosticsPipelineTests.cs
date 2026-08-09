@@ -54,7 +54,39 @@ namespace Web.UnitTests
         private readonly MockUnsubscribeLinkRepository _linkRepository = new();
         private readonly Mock<IHomeRepository> _homeRepository = new();
         private readonly Mock<IResidentRepository> _residentRepository = new();
+        private readonly MockEmailSuppressionRepository _suppressions = new();
         private readonly RecordingLoggerProvider _logs = new();
+
+        /// <summary>When true, every suppression write throws - the store-outage scenario.</summary>
+        private bool _failSuppressionWrites;
+
+        private sealed class FailableSuppressionService : IEmailSuppressionService
+        {
+            private readonly IEmailSuppressionService _inner;
+            private readonly Func<bool> _fail;
+
+            public FailableSuppressionService(IEmailSuppressionService inner, Func<bool> fail)
+            {
+                _inner = inner;
+                _fail = fail;
+            }
+
+            public Task<EmailSuppression> RecordAsync(
+                string email,
+                SuppressionReason reason,
+                string suppressedBy,
+                Guid? causingJobId,
+                string? providerDiagnostic
+            ) =>
+                _fail()
+                    ? throw new InvalidOperationException("Cosmos is unavailable.")
+                    : _inner.RecordAsync(email, reason, suppressedBy, causingJobId, providerDiagnostic);
+
+            public Task<EmailSuppression?> ClearAsync(string email, string clearedBy) =>
+                _fail()
+                    ? throw new InvalidOperationException("Cosmos is unavailable.")
+                    : _inner.ClearAsync(email, clearedBy);
+        }
         private readonly IHost _host;
         private readonly HttpClient _client;
 
@@ -84,6 +116,16 @@ namespace Web.UnitTests
                             // credential type and failure reason that half these assertions are about.
                             services.AddSingleton<IUnsubscribeLinkRepository>(_linkRepository);
                             services.AddSingleton<IUnsubscribeCredentialResolver, UnsubscribeCredentialResolver>();
+
+                            // The real suppression store and service, matching the resolver's
+                            // reasoning: the one-click writer under test is the suppression writer.
+                            // Wrapped so a test can flip _failSuppressionWrites to simulate the
+                            // store being down - the outage scenario the budget tests need.
+                            services.AddSingleton<IEmailSuppressionRepository>(_suppressions);
+                            services.AddSingleton<IEmailSuppressionService>(new FailableSuppressionService(
+                                new EmailSuppressionService(_suppressions, TimeProvider.System),
+                                () => _failSuppressionWrites
+                            ));
 
                             // Only this controller - the rest of the app's controllers would drag in
                             // dependencies irrelevant to the pipeline behaviour under test.
@@ -353,14 +395,14 @@ namespace Web.UnitTests
         // --- A save that did not persist must not be reported as a success ---
 
         [Fact]
-        public async Task OneClickUnsubscribe_WhenTheResidentSaveFails_TheCallerIsNotToldItSucceeded()
+        public async Task OneClickUnsubscribe_WhenTheSuppressionWriteFails_TheCallerIsNotToldItSucceeded()
         {
-            // The per-address opt-in booleans live on Resident documents, so a failed resident write
-            // means the opt-out was not stored. Reporting 200 for it is worse than reporting the
-            // failure: Gmail records a one-click as honoured and stops offering the control, so the
-            // resident is left with no way to make the mail stop and no sign that anything went
-            // wrong. Asserted end to end because the response text is the thing that lied.
-            var homeId = ArrangeAFailingResidentSave();
+            // A failed suppression write means the opt-out was not stored. Reporting 200 for it is
+            // worse than reporting the failure: Gmail records a one-click as honoured and stops
+            // offering the control, so the resident is left with no way to make the mail stop and
+            // no sign that anything went wrong. Asserted end to end because the response status is
+            // the thing that lied under the old boolean-clearing mechanism.
+            ArrangeAFailingSuppressionWrite();
 
             var response = await OneClickUnsubscribeAsync();
 
@@ -368,18 +410,17 @@ namespace Web.UnitTests
             // absence of the success text could not fail. The status is the whole contract.
             Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
 
-            // The home write already landed, so this request leaves a half-applied opt-out and the
-            // resident keeps receiving mail. Nothing else names the record: the middleware skips 5xx
-            // by design and the global handler logs only the method and path. Without this line the
-            // fix would trade a false success for an unrepairable one - so the home id and the
-            // redacted address are both asserted, since either alone leaves the operator guessing.
+            // Nothing else names the record: the middleware skips 5xx by design and the global
+            // handler logs only the method and path, which carries no identifier (the credential
+            // rides in the query string and is never logged). The redacted address is what tells
+            // an operator whose opt-out was dropped.
             Assert.Contains(
                 Ours,
-                e =>
-                    e.Level == LogLevel.Error
-                    && e.Message.Contains(homeId.ToString())
-                    && e.Message.Contains("jan***@example.com")
+                e => e.Level == LogLevel.Error && e.Message.Contains("jan***@example.com")
             );
+
+            // And nothing landed: no half-written suppression to reason about.
+            Assert.Empty(await _suppressions.GetAllAsync());
         }
 
         [Fact]
@@ -398,7 +439,7 @@ namespace Web.UnitTests
             // The loop is what makes that an assertion rather than a hope: checking only that the
             // faults logged no warning cannot tell an unspent budget from a suppressed one. Driving
             // a whole window's worth and then a genuine rejection can.
-            ArrangeAFailingResidentSave();
+            ArrangeAFailingSuppressionWrite();
 
             for (var i = 0; i < UnsubscribeWarningBudget.MaxWarningsPerWindow; i++)
             {
@@ -418,43 +459,17 @@ namespace Web.UnitTests
         }
 
         /// <summary>
-        /// Arranges the half-applied case: the address is on <b>both</b> the home and the resident,
-        /// and only the resident write fails. The home copy really is opted out and the resident
-        /// copy really is not, which is the split state the Error log exists to make repairable.
-        /// An earlier version gave the home a different address, so the home write persisted an
-        /// unchanged document and the opt-out was wholly unapplied rather than half-applied - the
-        /// fixture did not build the state its own comments described.
+        /// Arranges the store-down case for the one-click writer: the credential validates, and
+        /// the suppression write throws. One-click reads no home or resident, so there is no
+        /// half-applied state to build any more - the write either lands whole or not at all,
+        /// which is itself part of what Part 3 bought.
         /// </summary>
-        private Guid ArrangeAFailingResidentSave()
+        private void ArrangeAFailingSuppressionWrite()
         {
-            var homeId = Guid.NewGuid();
-            const string email = "jane@example.com";
-            var home = new Home
-            {
-                Id = homeId,
-                StreetNumber = 123,
-                StreetName = "Oak Avenue",
-                EmailAddress = new EmailAddress { Address = email, BoardEmailOptedIn = true },
-            };
-            var resident = new Resident
-            {
-                Id = Guid.NewGuid(),
-                HomeId = homeId,
-                EmailAddresses = new List<EmailAddress>
-                {
-                    new EmailAddress { Address = email, BoardEmailOptedIn = true },
-                },
-            };
-
-            _tokenService.Setup(s => s.ValidateToken("tok")).Returns(Valid(homeId, email));
-            _homeRepository.Setup(r => r.GetByIdAsync(homeId)).ReturnsAsync(home);
-            _homeRepository.Setup(r => r.UpsertAsync(It.IsAny<Home>())).ReturnsAsync(home);
-            _residentRepository.Setup(r => r.GetByHomeIdAsync(homeId)).ReturnsAsync(new List<Resident> { resident });
-            _residentRepository
-                .Setup(r => r.UpsertAsync(It.IsAny<Resident>()))
-                .ThrowsAsync(new InvalidOperationException("Cosmos is unavailable."));
-
-            return homeId;
+            _tokenService
+                .Setup(s => s.ValidateToken("tok"))
+                .Returns(Valid(Guid.NewGuid(), "jane@example.com"));
+            _failSuppressionWrites = true;
         }
 
         private Task<HttpResponseMessage> OneClickUnsubscribeAsync() =>

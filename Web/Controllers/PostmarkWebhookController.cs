@@ -181,6 +181,7 @@ namespace Web.Controllers
                 Provider = "Postmark",
                 ReceivedUtc = DateTime.UtcNow,
                 ProviderPayloadJson = rawBody,
+                ProviderDiagnostic = ExtractDiagnostic(recordType, evt),
             };
 
             await _deliveryEventRepository.AddAsync(deliveryEvent);
@@ -211,6 +212,28 @@ namespace Web.Controllers
                 "SoftBounce" => DeliveryStatus.Deferred,
                 _ => DeliveryStatus.Bounced,
             };
+        }
+
+        /// <summary>
+        /// Composes the provider's own explanation of a failure - "HardBounce: The server was
+        /// unable to deliver..." - for the suppression record. Verbatim provider text, because for
+        /// a bounce "why" IS the provider's text: it is what tells an admin whether the address is
+        /// a typo or a mailbox that has closed. Null for deliveries, which need no explaining.
+        /// </summary>
+        internal static string? ExtractDiagnostic(string recordType, JsonElement evt)
+        {
+            if (recordType is not ("Bounce" or "SpamComplaint"))
+                return null;
+
+            var type = evt.TryGetProperty("Type", out var typeProp) ? typeProp.GetString() : null;
+            var description = evt.TryGetProperty("Description", out var descProp) ? descProp.GetString() : null;
+            if (string.IsNullOrWhiteSpace(description))
+                description = evt.TryGetProperty("Details", out var detailsProp) ? detailsProp.GetString() : null;
+
+            if (string.IsNullOrWhiteSpace(type))
+                return string.IsNullOrWhiteSpace(description) ? null : description;
+
+            return string.IsNullOrWhiteSpace(description) ? type : $"{type}: {description}";
         }
 
         private static string? ExtractBounceId(JsonElement evt)

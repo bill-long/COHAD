@@ -64,6 +64,77 @@ namespace Web.Services
             var recipients = job.Recipients ?? new();
             job.SentCount = recipients.Count(r => r.Status == EmailJobRecipientStatus.Sent);
             job.FailedCount = recipients.Count(r => r.Status == EmailJobRecipientStatus.Failed);
+            job.SuppressedCount = recipients.Count(r => r.Status == EmailJobRecipientStatus.Suppressed);
+        }
+
+        /// <summary>
+        /// The suppression list's single enforcement point: flips every still-sendable recipient
+        /// whose address is actively suppressed to <see cref="EmailJobRecipientStatus.Suppressed"/>,
+        /// stamping when and why on the recipient so the job detail explains the skip without a
+        /// join - and so the explanation survives the suppression later being cleared.
+        /// <para>
+        /// A marking pass rather than a filter change, deliberately: it runs BEFORE the untouched
+        /// pendingRecipients filter, so the grouped and per-recipient branches are covered by
+        /// construction, and the same helper serves <c>ProcessJobSendAsync</c> and
+        /// <c>ProcessJobMockAsync</c> so the mock path cannot diverge. Recipients with a known
+        /// DeliveryStatus are left alone - a proven delivery outranks a skip, and
+        /// <c>NormalizePendingDelivered</c> will promote them to Sent.
+        /// </para>
+        /// <para>
+        /// Keys are normalized addresses (<see cref="EmailSuppression.NormalizeAddress"/>); the
+        /// dictionary must be built case-insensitively so a recipient stored with different casing
+        /// still matches.
+        /// </para>
+        /// </summary>
+        internal static bool ApplySuppressions(
+            EmailJob job,
+            IReadOnlyDictionary<string, SuppressionReason> activeSuppressionsByAddress
+        )
+        {
+            var changed = false;
+            var now = DateTime.UtcNow;
+
+            foreach (var r in job.Recipients ?? new())
+            {
+                if (r.Status != EmailJobRecipientStatus.Pending && r.Status != EmailJobRecipientStatus.Failed)
+                    continue;
+                if (r.DeliveryStatus != DeliveryStatus.Unknown)
+                    continue;
+                if (string.IsNullOrWhiteSpace(r.Email))
+                    continue;
+                if (!activeSuppressionsByAddress.TryGetValue(EmailSuppression.NormalizeAddress(r.Email), out var reason))
+                    continue;
+
+                r.Status = EmailJobRecipientStatus.Suppressed;
+                r.SuppressedUtc = now;
+                r.SuppressionReason = reason;
+                // Not a failure: any earlier attempt's error text would misdescribe the skip.
+                r.Error = null;
+                changed = true;
+            }
+
+            if (changed)
+                RecalculateCounts(job);
+
+            return changed;
+        }
+
+        /// <summary>
+        /// The one rule for a finished job's terminal status. Extracted because three call sites
+        /// (the post-send close-out, the mock close-out, and the stall watchdog) carried their own
+        /// copies, and a drifted copy is how an all-suppressed job would get labelled Failed.
+        /// <para>
+        /// FailedCount == 0 is Completed even when nothing was sent: an all-suppressed job did
+        /// exactly what it should - nothing failed and nothing remains to do - and
+        /// <see cref="EmailJob.SuppressedCount"/> is what explains "Completed, sent 0" on the
+        /// detail page.
+        /// </para>
+        /// </summary>
+        internal static EmailJobStatus DeriveTerminalStatus(EmailJob job)
+        {
+            if (job.FailedCount == 0)
+                return EmailJobStatus.Completed;
+            return job.SentCount == 0 ? EmailJobStatus.Failed : EmailJobStatus.PartiallyCompleted;
         }
 
         /// <summary>
@@ -162,6 +233,23 @@ namespace Web.Services
                     localRecipient.SentUtc = serverRecipient.SentUtc;
                     localRecipient.Error = serverRecipient.Error;
                     localRecipient.Provider = serverRecipient.Provider;
+                }
+
+                // Adopt a server-side Suppressed the same way: the processor is the only writer of
+                // this status, but a reclaimed stall can put two instances on one job, and the
+                // loser persisting a stale Pending over the winner's Suppressed would strand a
+                // terminal job with a recipient that looks unsent. Sent still wins - a message
+                // that actually went out is the truthful record.
+                if (
+                    localRecipient.Status != EmailJobRecipientStatus.Sent
+                    && localRecipient.Status != EmailJobRecipientStatus.Suppressed
+                    && serverRecipient.Status == EmailJobRecipientStatus.Suppressed
+                )
+                {
+                    localRecipient.Status = EmailJobRecipientStatus.Suppressed;
+                    localRecipient.SuppressedUtc = serverRecipient.SuppressedUtc;
+                    localRecipient.SuppressionReason = serverRecipient.SuppressionReason;
+                    localRecipient.Error = null;
                 }
 
                 // Adopt delivery progress from server to avoid overwriting with stale local values
@@ -276,7 +364,7 @@ namespace Web.Services
                     changed = true;
                 }
 
-                // Run delivery actions (auto opt-out) for unprocessed bounce/spam events
+                // Run delivery actions (suppression) for unprocessed bounce/spam events
                 if (
                     !evt.ActionProcessed
                     && (evt.DeliveryStatus == DeliveryStatus.Bounced || evt.DeliveryStatus == DeliveryStatus.SpamReport)
@@ -284,8 +372,9 @@ namespace Web.Services
                 {
                     try
                     {
-                        var category = job.Category;
-                        await deliveryActionService.ProcessDeliveryEventAsync(evt.Email, evt.DeliveryStatus, category);
+                        // The whole event, because the suppression record keeps its provenance -
+                        // the causing job id and the provider's own diagnostic text.
+                        await deliveryActionService.ProcessDeliveryEventAsync(evt, job.Category);
                         evt.ActionProcessed = true;
                         await deliveryEventRepo.AddAsync(evt); // upsert to mark processed
                     }
@@ -469,18 +558,16 @@ namespace Web.Services
 
                             MarkCappedRecipientsAsFailed(job);
                             RecalculateCounts(job);
-                            if (recipients.Count > 0 && recipients.All(r => r.Status == EmailJobRecipientStatus.Sent))
-                            {
-                                job.Status = EmailJobStatus.Completed;
-                            }
-                            else if (job.SentCount > 0)
-                            {
-                                job.Status = EmailJobStatus.PartiallyCompleted;
-                            }
-                            else
-                            {
-                                job.Status = EmailJobStatus.Failed;
-                            }
+                            // The shared rule, not a local copy: the watchdog's old inline version
+                            // required every recipient to be Sent for Completed, which would have
+                            // classified a stalled job whose remaining recipients were all
+                            // Suppressed as merely PartiallyCompleted - a drifted copy of exactly
+                            // the kind DeriveTerminalStatus exists to prevent. The empty-recipient
+                            // guard is the one piece kept local: a job that stalled with nobody to
+                            // send to is broken, not complete, and the shared rule cannot say so
+                            // because on the close-out paths an empty job legitimately completes.
+                            job.Status =
+                                recipients.Count == 0 ? EmailJobStatus.Failed : DeriveTerminalStatus(job);
 
                             job.LastError =
                                 $"Job stalled (no progress since {lastProgress:u}). Stopping to prevent repeated retries.";
@@ -757,9 +844,15 @@ namespace Web.Services
                     htmlBody = await reader.ReadToEndAsync(jobCts.Token);
                 }
 
+                // Both paths take the suppression repository: the mock path enforces suppression
+                // identically (via the same ApplySuppressions helper) or the MockData environment
+                // stops exercising what production does. If the read throws - a missing container,
+                // say - the exception surfaces through the catch below and the job is marked
+                // Failed: never bulk-send when the safety mechanism is unreadable.
+                var suppressionRepo = scope.ServiceProvider.GetRequiredService<IEmailSuppressionRepository>();
                 if (_isMockMode)
                 {
-                    await ProcessJobMockAsync(job, repo, jobCts.Token);
+                    await ProcessJobMockAsync(job, repo, suppressionRepo, jobCts.Token);
                 }
                 else
                 {
@@ -772,6 +865,7 @@ namespace Web.Services
                         fileStore,
                         deliveryEventRepo,
                         deliveryActionService,
+                        suppressionRepo,
                         jobCts.Token
                     );
                 }
@@ -804,6 +898,7 @@ namespace Web.Services
             IDocumentFileStore fileStore,
             IEmailDeliveryEventRepository deliveryEventRepo,
             IEmailDeliveryActionService deliveryActionService,
+            IEmailSuppressionRepository suppressionRepo,
             CancellationToken ct
         )
         {
@@ -863,6 +958,25 @@ namespace Web.Services
             // to Sent, so the filter below correctly excludes them and they are not re-sent.
             if (await ApplyDeliveryEventsAsync(job, deliveryEventRepo, deliveryActionService, _logger))
                 await TryPersistJobAsync(repo, job);
+
+            // The suppression list's enforcement point, above the shared filter so the grouped
+            // and per-recipient branches are both covered. One read per job run: a suppression
+            // written mid-run applies from the next run, which is fine - suppression prevents
+            // future mail. A throwing read (missing container) deliberately propagates and fails
+            // the job: never bulk-send when the do-not-mail list is unreadable.
+            var activeSuppressions = (await suppressionRepo.GetActiveAsync()).ToDictionary(
+                s => s.Email,
+                s => s.Reason,
+                StringComparer.OrdinalIgnoreCase
+            );
+            if (ApplySuppressions(job, activeSuppressions))
+            {
+                // Best-effort persist, like the delivery-event one above: the statuses are already
+                // set in memory, so the filter below excludes them either way, and a conflict is
+                // reconciled by the next TryPersistJobAsync's merge.
+                await TryPersistJobAsync(repo, job);
+                await NotifyProgressAsync(job);
+            }
 
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
@@ -1118,13 +1232,7 @@ namespace Web.Services
             // Derive final counts from recipient statuses (authoritative source of truth)
             RecalculateCounts(job);
 
-            if (job.FailedCount == 0)
-                job.Status = EmailJobStatus.Completed;
-            else if (job.SentCount == 0)
-                job.Status = EmailJobStatus.Failed;
-            else
-                job.Status = EmailJobStatus.PartiallyCompleted;
-
+            job.Status = DeriveTerminalStatus(job);
             job.CompletedUtc = DateTime.UtcNow;
             if (!await TryPersistJobAsync(repo, job))
             {
@@ -1148,7 +1256,12 @@ namespace Web.Services
         /// <summary>
         /// In MockData mode, simulate sends without actual SMTP.
         /// </summary>
-        private async Task ProcessJobMockAsync(EmailJob job, IEmailJobRepository repo, CancellationToken ct)
+        private async Task ProcessJobMockAsync(
+            EmailJob job,
+            IEmailJobRepository repo,
+            IEmailSuppressionRepository suppressionRepo,
+            CancellationToken ct
+        )
         {
             if (!string.IsNullOrWhiteSpace(_mockJobFatalError))
             {
@@ -1184,6 +1297,20 @@ namespace Web.Services
             // Promote Pending recipients that already have a delivery event to Sent.
             if (NormalizePendingDelivered(job))
                 await TryPersistJobAsync(repo, job);
+
+            // Same enforcement pass as the real send path, through the same helper, in the same
+            // position relative to the filter - the mock path exists to exercise what production
+            // does, and a divergence here is a bug by the repository conventions.
+            var activeSuppressions = (await suppressionRepo.GetActiveAsync()).ToDictionary(
+                s => s.Email,
+                s => s.Reason,
+                StringComparer.OrdinalIgnoreCase
+            );
+            if (ApplySuppressions(job, activeSuppressions))
+            {
+                await TryPersistJobAsync(repo, job);
+                await NotifyProgressAsync(job);
+            }
 
             var pendingRecipients = (job.Recipients ?? new())
                 .Where(r =>
@@ -1321,12 +1448,7 @@ namespace Web.Services
             MarkCappedRecipientsAsFailed(job);
 
             RecalculateCounts(job);
-            if (job.FailedCount == 0)
-                job.Status = EmailJobStatus.Completed;
-            else if (job.SentCount == 0)
-                job.Status = EmailJobStatus.Failed;
-            else
-                job.Status = EmailJobStatus.PartiallyCompleted;
+            job.Status = DeriveTerminalStatus(job);
             job.CompletedUtc = DateTime.UtcNow;
             if (!await TryPersistJobAsync(repo, job))
             {
@@ -1380,6 +1502,7 @@ namespace Web.Services
                             status = job.Status.ToString(),
                             sentCount = job.SentCount,
                             failedCount = job.FailedCount,
+                            suppressedCount = job.SuppressedCount,
                             totalRecipients = job.TotalRecipients,
                         }
                     );
@@ -1404,6 +1527,7 @@ namespace Web.Services
                             status = job.Status.ToString(),
                             sentCount = job.SentCount,
                             failedCount = job.FailedCount,
+                            suppressedCount = job.SuppressedCount,
                             totalRecipients = job.TotalRecipients,
                             lastError = job.LastError,
                         }

@@ -330,6 +330,117 @@ namespace Web.UnitTests
             Assert.Equal("complaint-99", stored.ProviderEventId);
         }
 
+        // ─── Provider diagnostic ───
+
+        [Fact]
+        public async Task BounceEvent_ComposesProviderDiagnosticFromTypeAndDescription()
+        {
+            // The diagnostic is the provider's own text, captured at parse time - it is what the
+            // suppression record shows an admin, so losing it here loses it everywhere.
+            SetupVerifierNotConfigured();
+
+            EmailDeliveryEvent? stored = null;
+            _deliveryEventRepo
+                .Setup(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()))
+                .Callback<EmailDeliveryEvent>(e => stored = e)
+                .Returns(Task.CompletedTask);
+
+            var payload = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["RecordType"] = "Bounce",
+                ["Type"] = "HardBounce",
+                ["Description"] = "The server was unable to deliver your message.",
+                ["Details"] = "smtp;550 5.1.1 user unknown",
+                ["Email"] = "user@example.com",
+                ["ID"] = 42L,
+                ["Metadata"] = new Dictionary<string, string> { ["cohad_job_id"] = TestJobId.ToString() },
+            });
+
+            var controller = CreateController(payload);
+            await controller.HandleEvent();
+
+            Assert.Equal(
+                "HardBounce: The server was unable to deliver your message.",
+                stored!.ProviderDiagnostic
+            );
+        }
+
+        [Fact]
+        public async Task BounceEvent_FallsBackToDetailsWhenDescriptionIsMissing()
+        {
+            SetupVerifierNotConfigured();
+
+            EmailDeliveryEvent? stored = null;
+            _deliveryEventRepo
+                .Setup(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()))
+                .Callback<EmailDeliveryEvent>(e => stored = e)
+                .Returns(Task.CompletedTask);
+
+            var payload = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["RecordType"] = "Bounce",
+                ["Type"] = "HardBounce",
+                ["Details"] = "smtp;550 5.1.1 user unknown",
+                ["Email"] = "user@example.com",
+                ["ID"] = 42L,
+                ["Metadata"] = new Dictionary<string, string> { ["cohad_job_id"] = TestJobId.ToString() },
+            });
+
+            var controller = CreateController(payload);
+            await controller.HandleEvent();
+
+            Assert.Equal("HardBounce: smtp;550 5.1.1 user unknown", stored!.ProviderDiagnostic);
+        }
+
+        [Fact]
+        public async Task SpamComplaint_ComposesProviderDiagnostic()
+        {
+            SetupVerifierNotConfigured();
+
+            EmailDeliveryEvent? stored = null;
+            _deliveryEventRepo
+                .Setup(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()))
+                .Callback<EmailDeliveryEvent>(e => stored = e)
+                .Returns(Task.CompletedTask);
+
+            var payload = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["RecordType"] = "SpamComplaint",
+                ["Type"] = "SpamComplaint",
+                ["Description"] = "The subscriber explicitly marked this message as spam.",
+                ["Email"] = "user@example.com",
+                ["ID"] = 99L,
+                ["Metadata"] = new Dictionary<string, string> { ["cohad_job_id"] = TestJobId.ToString() },
+            });
+
+            var controller = CreateController(payload);
+            await controller.HandleEvent();
+
+            Assert.Equal(
+                "SpamComplaint: The subscriber explicitly marked this message as spam.",
+                stored!.ProviderDiagnostic
+            );
+        }
+
+        [Fact]
+        public async Task DeliveryEvent_CarriesNoProviderDiagnostic()
+        {
+            // A delivery needs no explaining; a non-null value here would end up presented as the
+            // "why" on a suppression record it has nothing to do with.
+            SetupVerifierNotConfigured();
+
+            EmailDeliveryEvent? stored = null;
+            _deliveryEventRepo
+                .Setup(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()))
+                .Callback<EmailDeliveryEvent>(e => stored = e)
+                .Returns(Task.CompletedTask);
+
+            var controller = CreateController(BuildDeliveryPayload());
+            await controller.HandleEvent();
+
+            Assert.Null(stored!.ProviderDiagnostic);
+        }
+
         // ─── Correlation ───
 
         [Fact]

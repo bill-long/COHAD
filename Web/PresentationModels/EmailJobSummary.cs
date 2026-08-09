@@ -48,6 +48,12 @@ namespace Web.PresentationModels
 
         public int FailedCount { get; set; }
 
+        /// <summary>
+        /// Recipients skipped by the suppression list. Without this the list view shows
+        /// "Completed, sent 3 of 5" with no explanation, which reads as data loss.
+        /// </summary>
+        public int SuppressedCount { get; set; }
+
         public string LastError { get; set; }
 
         public static EmailJobSummary FromJob(EmailJob job)
@@ -81,6 +87,7 @@ namespace Web.PresentationModels
             dto.TotalRecipients = job.TotalRecipients;
             dto.SentCount = job.SentCount;
             dto.FailedCount = job.FailedCount;
+            dto.SuppressedCount = job.SuppressedCount;
             dto.LastError = job.LastError;
         }
     }
