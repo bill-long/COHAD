@@ -83,7 +83,7 @@ Test expectations:
 
 ### Review gate
 
-Non-trivial changes ship through a pull request, never a direct push to `master`. `master` is branch-protected: a PR is required and every review conversation must be resolved before merge. Protection is enforced for admins too, so an agent operating with admin credentials cannot bypass it.
+Non-trivial changes ship through a pull request, never a direct push to `main`. `main` is branch-protected: a PR is required and every review conversation must be resolved before merge. Protection is enforced for admins too, so an agent operating with admin credentials cannot bypass it.
 
 The review loop for a PR is mandatory. Run a local review (`/code-review` at high, or the review workflow), then request a Copilot review. The terminal condition is **"every review thread is resolved and required checks are green"** - it is NOT "the latest Copilot pass returned no new comments." A clean incremental Copilot pass does not mean the earlier, more thorough findings were all resolved; treat each finding as open until it is fixed or explicitly tracked.
 
