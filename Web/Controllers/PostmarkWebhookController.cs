@@ -1,6 +1,8 @@
 #nullable enable
 using System;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -264,10 +266,10 @@ namespace Web.Controllers
             }
 
             // Deterministic per change so a webhook retry is idempotent. MessageID and ChangedAt
-            // are both absent only on a malformed payload; a random key then keeps the write
-            // applicable rather than falsely deduping two distinct changes into one.
+            // are both absent only on a malformed payload; hashing the raw body then keeps a
+            // retried POST on the same key without falsely merging two distinct changes.
             var evidenceKey =
-                $"postmark:subscription-change:{messageId ?? changedAt ?? Guid.NewGuid().ToString("N")}";
+                $"postmark:subscription-change:{messageId ?? changedAt ?? ComputePayloadKey(rawBody)}";
 
             var action = await _deliveryActionService.ProcessSubscriptionChangeAsync(
                 email,
@@ -290,11 +292,7 @@ namespace Web.Controllers
 
             var deliveryEvent = new EmailDeliveryEvent
             {
-                Id = EmailDeliveryEvent.MakeId(
-                    jobId.Value,
-                    email,
-                    $"SubscriptionChange:{messageId ?? changedAt}"
-                ),
+                Id = EmailDeliveryEvent.MakeId(jobId.Value, email, evidenceKey),
                 JobId = jobId.Value,
                 Email = email,
                 DeliveryStatus = DeliveryStatus.Unknown,
@@ -312,6 +310,17 @@ namespace Web.Controllers
             };
 
             await _deliveryEventRepository.AddAsync(deliveryEvent);
+        }
+
+        /// <summary>
+        /// Deterministic fallback identity for a payload carrying neither MessageID nor
+        /// ChangedAt: a hash of the raw body, so a retried POST of the same bytes lands on the
+        /// same evidence key and distinct payloads never share one.
+        /// </summary>
+        private static string ComputePayloadKey(string rawBody)
+        {
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(rawBody));
+            return Convert.ToHexStringLower(hash);
         }
 
         internal static DeliveryStatus MapRecordTypeToDeliveryStatus(string recordType, JsonElement evt)

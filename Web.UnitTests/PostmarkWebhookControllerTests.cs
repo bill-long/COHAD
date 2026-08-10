@@ -721,12 +721,14 @@ namespace Web.UnitTests
             _deliveryEventRepo.Verify(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()), Times.Never);
         }
 
-        [Fact]
-        public async Task SubscriptionChange_MissingRecipient_IsANoOp()
+        [Theory]
+        [InlineData(null)]
+        [InlineData("   ")]
+        public async Task SubscriptionChange_MissingRecipient_IsANoOp(string? recipient)
         {
             SetupVerifierNotConfigured();
 
-            var controller = CreateController(BuildSubscriptionChangePayload(recipient: null));
+            var controller = CreateController(BuildSubscriptionChangePayload(recipient: recipient));
             var result = await controller.HandleEvent();
 
             Assert.IsType<OkResult>(result);
@@ -743,6 +745,46 @@ namespace Web.UnitTests
                     ),
                 Times.Never
             );
+        }
+
+        [Fact]
+        public async Task SubscriptionChange_InvalidJobIdMetadata_RecordsJoblessOffMessageId()
+        {
+            // An unparsable cohad_job_id is an absence, not a rejection: the suppression records
+            // without job correlation and the evidence key falls back to the MessageID.
+            SetupVerifierNotConfigured();
+
+            var payload = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["RecordType"] = "SubscriptionChange",
+                ["ChangedAt"] = "2026-07-15T18:30:00Z",
+                ["Recipient"] = "user@example.com",
+                ["Origin"] = "Recipient",
+                ["SuppressSending"] = true,
+                ["SuppressionReason"] = "ManualSuppression",
+                ["MessageStream"] = "broadcast",
+                ["MessageID"] = "msg-123",
+                ["Metadata"] = new Dictionary<string, string> { ["cohad_job_id"] = "not-a-guid" },
+            });
+
+            var controller = CreateController(payload);
+            var result = await controller.HandleEvent();
+
+            Assert.IsType<OkResult>(result);
+            _deliveryActionService.Verify(
+                s =>
+                    s.ProcessSubscriptionChangeAsync(
+                        "user@example.com",
+                        true,
+                        "Recipient",
+                        "ManualSuppression",
+                        "broadcast",
+                        null,
+                        "postmark:subscription-change:msg-123"
+                    ),
+                Times.Once
+            );
+            _deliveryEventRepo.Verify(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()), Times.Never);
         }
 
         [Fact]

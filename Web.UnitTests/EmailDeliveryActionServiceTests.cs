@@ -270,6 +270,17 @@ namespace Web.UnitTests
         [Fact]
         public async Task Reactivation_ClearsAProviderUnsubscribeSuppression()
         {
+            NewAuditLogEntry clearEntry = null;
+            var auditCount = 0;
+            _auditLog
+                .Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
+                .Callback<NewAuditLogEntry>(e =>
+                {
+                    auditCount++;
+                    clearEntry = e;
+                })
+                .Returns(Task.CompletedTask);
+
             var service = CreateService();
             await CallSubscriptionChange(service);
 
@@ -283,6 +294,36 @@ namespace Web.UnitTests
             var suppression = await _suppressions.GetByEmailAsync("unsub@example.com");
             Assert.False(suppression!.IsActive);
             Assert.Equal(EmailSuppression.PostmarkSubscriptionChange, suppression.ClearedBy);
+            // The clear is audited like the suppression was: redacted, and saying what happened.
+            Assert.Equal(2, auditCount);
+            Assert.NotNull(clearEntry);
+            Assert.Contains("reactivated", clearEntry!.Action);
+            Assert.Equal("uns***@example.com", clearEntry.SubjectId);
+            Assert.DoesNotContain("unsub@example.com", clearEntry.Action);
+        }
+
+        [Fact]
+        public async Task ReplayedReactivation_NeitherReclearsNorReaudits()
+        {
+            // ClearAsync's already-cleared guard makes the replay a no-op: the second
+            // reactivation of the same change must not write a second audit entry.
+            var service = CreateService();
+            await CallSubscriptionChange(service);
+            await CallSubscriptionChange(
+                service,
+                suppressSending: false,
+                postmarkReason: null,
+                evidenceKey: "postmark:subscription-change:msg-2"
+            );
+            await CallSubscriptionChange(
+                service,
+                suppressSending: false,
+                postmarkReason: null,
+                evidenceKey: "postmark:subscription-change:msg-2"
+            );
+
+            // Exactly two audits: one suppression, one clear.
+            _auditLog.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Exactly(2));
         }
 
         [Fact]

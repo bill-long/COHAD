@@ -162,7 +162,10 @@ namespace Web.Services
                 // provenance - recording ProviderUnsubscribe for them would lie about why.
                 // Everything else with SuppressSending true (ManualSuppression today, any
                 // future value) means "do not mail", which is the safe direction to record.
-                if (postmarkSuppressionReason is "HardBounce" or "SpamComplaint")
+                if (
+                    string.Equals(postmarkSuppressionReason, "HardBounce", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(postmarkSuppressionReason, "SpamComplaint", StringComparison.OrdinalIgnoreCase)
+                )
                 {
                     _logger.LogDebug(
                         "Postmark SubscriptionChange for {Email} has reason {Reason} - handled by the delivery-event path, skipping.",
