@@ -477,15 +477,16 @@ people asking for it.
 ### Part 3: Suppression list
 
 - `EmailSuppression` keyed on normalized address: reason (`HardBounce`, `SpamComplaint`,
-  `ResidentRequest`, `AdminAction`), consecutive failure count, first and last seen, causing job,
-  `ClearedUtc` / `ClearedBy`.
+  `ResidentRequest`, `AdminAction`, `ProviderUnsubscribe`), consecutive failure count, first and
+  last seen, causing job, `ClearedUtc` / `ClearedBy`.
 - **The record has to explain itself, because it is going on screen.** An admin looking at a
   suppressed address needs to know when it happened and why without reading logs, so the record
   carries the answer rather than leaving it to be reconstructed:
   - `SuppressedUtc` and the first/last-seen pair above, so "when" is unambiguous for both a
     one-off and a repeated failure.
   - `SuppressedBy` - who or what caused it: `system:delivery-event`, the credential type for a
-    link-driven unsubscribe (which is also what Part 4 audits), or the admin's user id.
+    link-driven unsubscribe (which is also what Part 4 audits), `postmark:subscription-change`
+    for a provider-layer unsubscribe, or the admin's user id.
   - The provider's own diagnostic for a bounce or complaint - Postmark's type and description -
     because "why" for a hard bounce is the provider's text, and paraphrasing it into one of four
     reason codes throws away the part that tells an admin whether the address is a typo or a
@@ -509,6 +510,14 @@ people asking for it.
     asking for the mail to stop, and making it stop is the entire subject of this document.
   - **provider feedback** - `EmailDeliveryActionService` writes a suppression on a hard bounce or a
     spam complaint rather than clearing all five booleans.
+  - **provider subscription changes** - Postmark's SubscriptionChange webhook (handled in
+    `PostmarkWebhookController`, mutation in the same `EmailDeliveryActionService`) writes a
+    `ProviderUnsubscribe` suppression when an address lands on a Postmark stream suppression
+    list through Postmark's own mechanisms - a mail client's native Unsubscribe button on the
+    broadcast stream's Postmark-managed List-Unsubscribe, or a manual suppression in the Postmark
+    dashboard. Bounce- and complaint-origin subscription changes are skipped here because the
+    Bounce/SpamComplaint webhooks own those reasons. A reactivation (`SuppressSending: false`)
+    clears only a `ProviderUnsubscribe` record, enforced at write time by `onlyIfReason`.
 
   Both do the same wrong thing now: they overwrite the resident's stated preferences in order to
   record a fact that is not a preference, scatter it across every home carrying the address, and
@@ -812,8 +821,16 @@ against a delivered message dump. Consequences:
 expertise protects sender reputation, their hosted unsubscribe works even when our site is down,
 and they satisfy the Gmail/Yahoo one-click requirement on the stream that carries bulk mail. The
 gap this creates - Postmark-layer unsubscribes invisible to COHAD - is closed by syncing their
-suppressions back into ours (SubscriptionChange webhook plus reconciliation against the
-suppression dump; tracked in a GitHub issue). This preserves the Part 3 invariant with one
+suppressions back into ours: the SubscriptionChange webhook writes a `ProviderUnsubscribe`
+suppression (implemented; issue #7), and periodic reconciliation against the suppression dump
+catches anything suppressed while the webhook trigger was not configured (follow-up issue #9).
+
+`ProviderUnsubscribe` is deliberately **not** resident-resumable, unlike `ResidentRequest`:
+lifting only COHAD's record would resume "successful" sends that Postmark still silently drops,
+because Postmark keeps its own suppression entry for the address. Clearing one is an admin
+action performed in BOTH systems - Manage > Suppressions here, and reactivating the address on
+the stream's suppression list in the Postmark dashboard (issue #9 tracks making that one action
+via Postmark's reactivation API). This preserves the Part 3 invariant with one
 refinement: `IEmailSuppressionService` remains the single writer of COHAD suppressions, and the
 Postmark sync becomes one more evidence source feeding it, exactly like bounce and complaint
 webhooks.

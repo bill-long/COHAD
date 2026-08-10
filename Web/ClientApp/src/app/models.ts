@@ -162,7 +162,7 @@ export interface TestRecipientOption {
 export type EmailJobStatus = 'Queued' | 'InProgress' | 'Completed' | 'PartiallyCompleted' | 'Failed' | 'Cancelled';
 export type EmailJobRecipientStatus = 'Pending' | 'Sent' | 'Failed' | 'Suppressed';
 export type DeliveryStatus = 'Unknown' | 'Delivered' | 'Bounced' | 'Deferred' | 'SpamReport' | 'Rejected';
-export type SuppressionReason = 'HardBounce' | 'SpamComplaint' | 'ResidentRequest' | 'AdminAction';
+export type SuppressionReason = 'HardBounce' | 'SpamComplaint' | 'ResidentRequest' | 'AdminAction' | 'ProviderUnsubscribe';
 
 export interface EmailJobSummary {
   id: string;
