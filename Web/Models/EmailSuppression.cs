@@ -137,6 +137,14 @@ namespace Web.Models
         public const string PostmarkSubscriptionChange = "postmark:subscription-change";
 
         /// <summary>
+        /// The <see cref="SuppressedBy"/> value for the periodic reconciliation against Postmark's
+        /// suppression dump (issue #9) - an address found on a stream suppression list that no
+        /// webhook ever told us about (typically suppressed while the SubscriptionChange trigger
+        /// was not configured).
+        /// </summary>
+        public const string PostmarkSuppressionDump = "postmark:suppression-dump";
+
+        /// <summary>
         /// The one normalization rule for suppression keys. Every consumer - the writers, the
         /// enforcement map, the forwarding compare, the preferences lookup - must go through this
         /// (or compare with <c>OrdinalIgnoreCase</c> on trimmed values, which is equivalent);
