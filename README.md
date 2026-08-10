@@ -38,7 +38,7 @@ For day-to-day AI/editor hints, see [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](A
 
 - **SPA**: In **Development** and **MockData**, the backend **proxies** browser requests to the Angular dev server (`http://127.0.0.1:4200` by default). In **production**, static files are served from `ClientApp/dist/cohad-app` after `npm run prodbuild`.
 
-- **Email**: Committee sends queue **email jobs** processed by a background service (`EmailJobProcessor`). Non-test sends use **SMTP** (MailKit) when not in MockData. **MockData** simulates sends in-process (no SMTP) and can be tuned for UI testing (see [Mock email jobs](#mock-email-jobs-mockdata-only)).
+- **Email**: Committee sends queue **email jobs** processed by a background service (`EmailJobProcessor`). Real sends are routed by `EmailTransportRouter`: when **Postmark** is enabled (`Postmark:Enabled` + `UsePostmarkAsDefault`), mail goes through Postmark's SMTP endpoints on a **broadcast** or **transactional** stream chosen by job category; otherwise the plain **SMTP** fallback (`SmtpHost`/`SmtpUser`/`SmtpPassword`, MailKit) is used. **MockData** simulates sends in-process (no SMTP) and can be tuned for UI testing (see [Mock email jobs](#mock-email-jobs-mockdata-only)).
 
 ---
 
@@ -147,9 +147,20 @@ ASP.NET Core merges `appsettings.json`, `appsettings.{Environment}.json`, enviro
 | `DocumentStorage:ContainerName` | Blob container (default in appsettings). |
 | `DocumentStorage:MaxUploadBytes` | Upload size limit (multipart limit is aligned in `Startup.cs`). |
 
-### SMTP (real email — not MockData)
+### Email transport (real email — not MockData)
 
-Used by synchronous email paths and by the **SMTP** branch of `EmailJobProcessor` (non-mock environments):
+**Postmark** is the primary transport. When `Postmark:Enabled` is `true` (it is `false` in [`Web/appsettings.json`](Web/appsettings.json) — enable per environment) and `UsePostmarkAsDefault` is `true`, all real sends go through Postmark; startup fails fast if `ServerToken` is missing in that configuration. Delivery events (bounces, spam complaints) arrive on the webhook at **`api/webhooks/postmark`**, verified against `WebhookToken` — these feed the email suppression list.
+
+| Setting | Description |
+|---------|-------------|
+| `Postmark:Enabled` | Master switch. `false` → all mail uses the SMTP fallback below. |
+| `Postmark:ServerToken` | Server API token (**`Postmark__ServerToken`** in env or user secrets). Used as the SMTP username. |
+| `Postmark:WebhookToken` | Shared secret checked against the `X-Postmark-Webhook-Token` header on webhook requests. |
+| `Postmark:UsePostmarkAsDefault` | `true` (default) sends via Postmark; `false` keeps the webhook receiver active while sending via the fallback. |
+| `Postmark:BroadcastStream` / `Postmark:TransactionalStream` | Message stream IDs (`broadcast` / `outbound`). |
+| `Postmark:TransactionalCategories` | Job categories routed to the transactional stream (`registration`, `committee-forward`, `notification-escalation`); everything else uses broadcast. |
+
+**SMTP fallback** — used by synchronous email paths and whenever Postmark is disabled:
 
 | Setting | Description |
 |---------|-------------|
@@ -226,7 +237,7 @@ There is **no** working `ng lint` target in this repo; use `ng build` for TypeSc
 
 1. **Build/publish** the `Web` project so the Angular `dist` output is included and the API is compiled.
 2. **Host** the published output on your platform (e.g. Azure App Service, container, IIS + Kestrel).
-3. **Configure** production settings via environment variables or Azure App Settings: **Cosmos**, **document storage**, **SMTP**, **`AppBaseUrl`**, **`UnsubscribeToken:LegacySigningKey`** (validation of legacy `?token=` links only), the **`UnsubscribeLink`** Cosmos container (short-link issuance — a missing container fails the admin's Send request), Application Insights, etc.
+3. **Configure** production settings via environment variables or Azure App Settings: **Cosmos**, **document storage**, **SMTP**, **`AppBaseUrl`**, **`UnsubscribeToken:LegacySigningKey`** (validation of legacy `?token=` links only), the **`UnsubscribeLink`** Cosmos container (short-link issuance — a missing container fails the admin's Send request), the **`EmailSuppression`** Cosmos container (non-partitioned, **no TTL** — a missing container fails every send job at the suppression enforcement point rather than sending unfiltered), Application Insights, etc.
 4. **Do not** run with `ASPNETCORE_ENVIRONMENT=MockData` in production — MockData is for local/testing only.
 5. **Scheduled jobs** (user purge, PayPal sync) run in-process as hosted services in the `Web` app - there is nothing separate to deploy. Both are off by default; enable via `UserPurge__Enabled` / `PayPal__SyncEnabled`. The PayPal sync requires a **`BackgroundJobState`** Cosmos container (non-partitioned, `/NoPartitionKey`), provisioned out-of-band like every other container, which is what paces it across restarts; the purge needs no state. **Always On** must be enabled on the host, or the app unloads when idle and the timers never fire.
 
@@ -258,9 +269,3 @@ Cut over in this order:
 | Browser warns on local HTTPS | Run **`dotnet dev-certs https --trust`**. Open **https://127.0.0.1:5001** (Development and MockData). |
 | APIs fail with Cosmos | Set **CosmosUri / CosmosKey / CosmosDatabase** (user secrets or env). |
 | Committee emails missing unsubscribe footer | **`AppBaseUrl`** set and the **`UnsubscribeLink`** Cosmos container exists (links are issued at Send; the signing key no longer gates the footer). Note: on blast mail the mail-client Unsubscribe *button* is Postmark's hosted unsubscribe, not ours — by design. |
-
----
-
-## License / contributing
-
-(Add your license and contribution guidelines here if applicable.)
