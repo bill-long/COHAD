@@ -368,6 +368,11 @@ namespace Web
                 services.AddSingleton<IEmailSuppressionRepository>(
                     new MockEmailSuppressionRepository().SeedSampleData()
                 );
+                // Seeded with one dumped address holding no COHAD suppression, so the suppression
+                // sync's first run records it end to end; see SeedSampleData.
+                services.AddSingleton<IPostmarkSuppressionDumpClient>(
+                    new MockPostmarkSuppressionDumpClient().SeedSampleData()
+                );
             }
             else
             {
@@ -534,6 +539,26 @@ namespace Web
             services.AddHttpClient<PayPalTransactionSearchClient>();
             services.AddScoped<IPayPalPaymentSyncRunner, PayPalPaymentSyncRunner>();
             services.AddScoped<PayPalSyncScheduler>();
+
+            // Periodic reconciliation against Postmark's stream suppression dumps (issue #9):
+            // catches addresses suppressed at the Postmark layer while the SubscriptionChange
+            // webhook trigger was not configured. Self-disables unless
+            // Postmark:SuppressionSync:Enabled is set; idempotent via deterministic evidence keys,
+            // so the interval is in-process pacing only, like the user purge. The dump client is
+            // an in-memory fake in MockData (registered above); the real one is the codebase's
+            // only Postmark HTTP client, scoped to the suppression-dump endpoint.
+            services.Configure<PostmarkSuppressionSyncOptions>(
+                Configuration.GetSection(PostmarkSuppressionSyncOptions.SectionName)
+            );
+            if (!useMockData)
+            {
+                // The default HttpClient timeout is 100s; a hung Postmark would otherwise stall
+                // the sequential two-stream loop that long per stream, every run.
+                services.AddHttpClient<IPostmarkSuppressionDumpClient, PostmarkSuppressionDumpClient>(
+                    client => client.Timeout = TimeSpan.FromSeconds(30)
+                );
+            }
+            services.AddScoped<PostmarkSuppressionSyncRunner>();
             // Registered only when their data layer can actually work. Without this the loops would run
             // and throw on every tick, contradicting the startup error logged in Configure that says they
             // are not running.
@@ -548,6 +573,7 @@ namespace Web
             {
                 services.AddHostedService<UserPurgeService>();
                 services.AddHostedService<PayPalSyncService>();
+                services.AddHostedService<PostmarkSuppressionSyncService>();
             }
 
             // Email job queue and background processor (shared across environments)

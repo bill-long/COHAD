@@ -823,17 +823,54 @@ and they satisfy the Gmail/Yahoo one-click requirement on the stream that carrie
 gap this creates - Postmark-layer unsubscribes invisible to COHAD - is closed by syncing their
 suppressions back into ours: the SubscriptionChange webhook writes a `ProviderUnsubscribe`
 suppression (implemented; issue #7), and periodic reconciliation against the suppression dump
-catches anything suppressed while the webhook trigger was not configured (follow-up issue #9).
+catches anything suppressed while the webhook trigger was not configured (issue #9,
+implemented - see below).
 
 `ProviderUnsubscribe` is deliberately **not** resident-resumable, unlike `ResidentRequest`:
 lifting only COHAD's record would resume "successful" sends that Postmark still silently drops,
 because Postmark keeps its own suppression entry for the address. Clearing one is an admin
 action performed in BOTH systems - Manage > Suppressions here, and reactivating the address on
-the stream's suppression list in the Postmark dashboard (issue #9 tracks making that one action
+the stream's suppression list in the Postmark dashboard (issue #11 tracks making that one action
 via Postmark's reactivation API). This preserves the Part 3 invariant with one
 refinement: `IEmailSuppressionService` remains the single writer of COHAD suppressions, and the
 Postmark sync becomes one more evidence source feeding it, exactly like bounce and complaint
 webhooks.
+
+#### Implementation notes - issue #9: periodic reconciliation against the suppression dump (implemented)
+
+`PostmarkSuppressionSyncService` (hosted, self-disabling, same shape as `UserPurgeService`) runs
+`PostmarkSuppressionSyncRunner` on an interval - daily by default, enabled in production via
+`Postmark:SuppressionSync:Enabled`. The runner reads both streams' suppression dumps through
+`PostmarkSuppressionDumpClient` (`GET /message-streams/{stream}/suppressions/dump`, the
+codebase's first Postmark HTTP client, authenticated with the same `Postmark:ServerToken` the
+SMTP transport uses) and records a COHAD suppression for any dumped address not already actively
+suppressed here. Decisions made in the writing:
+
+- **Additive only.** The runner never clears: a clear is a deliberate act, and an absent dump
+  entry can also mean a reactivation the webhook already mirrored.
+- **Idempotent per dumped address.** The evidence key is deterministic over (stream, normalized
+  address) - `postmark:suppression-dump:{stream}:{address}` - so a rerun against an unchanged
+  dump applies nothing: no count inflation, no duplicate audit entries, the same evidence-key
+  discipline as the webhook writers. One deliberate consequence: an address an admin cleared
+  ONLY in COHAD (without the Postmark-side reactivation the clear procedure requires) is
+  re-suppressed by the next run, because Postmark still silently drops its mail - the
+  re-suppression is the truthful state, and issue #11 exists to make that fight unnecessary.
+- **Reason mapping:** Postmark `ManualSuppression` -> `ProviderUnsubscribe`; `HardBounce` /
+  `SpamComplaint` -> the matching COHAD reason; anything unrecognized -> `ProviderUnsubscribe`
+  with a warning, because the address IS on Postmark's suppression list and "do not mail" is the
+  only safe reading (Postmark's own reason text is preserved on the record's diagnostic).
+- **Both streams, one record per address.** The broadcast and transactional dumps are both read;
+  an address on both is recorded once (the first sighting wins, the second counts as
+  already-suppressed). A failed dump read aborts the run for the next interval to retry; a
+  failed record write for one address is logged and skipped without losing the rest of the dump.
+- **No durable pacing state**, for the same reason as the user purge: the pass is idempotent and
+  additive, so over-running is free and under-running only defers the same records.
+- **MockData runs it end to end** against `MockPostmarkSuppressionDumpClient`, whose seeded dump
+  entry (`postmark.unsubscribed@cohad.local`, an address with no COHAD suppression) is recorded
+  by the first sync run, so the reconciler's provenance is exercisable on the Manage >
+  Suppressions page without a Postmark account.
+- The **reverse direction** - admin clear also reactivating the address in Postmark - is
+  deliberately NOT in this change; it is issue #11.
 
 **The header generation in `EmailJobProcessor` stays**, dormant on broadcast mail, because it is
 the only RFC 8058 compliance on the non-Postmark fallback transport and on any category ever
