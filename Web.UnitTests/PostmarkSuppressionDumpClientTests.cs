@@ -39,12 +39,14 @@ public sealed class PostmarkSuppressionDumpClientTests
 
         await client.GetSuppressionsAsync("broadcast", CancellationToken.None);
 
-        Assert.Equal(HttpMethod.Get, handler.Request.Method);
+        // The awaited call above guarantees the stub saw exactly one request.
+        var request = handler.Request!;
+        Assert.Equal(HttpMethod.Get, request.Method);
         Assert.Equal(
             "https://api.postmarkapp.com/message-streams/broadcast/suppressions/dump",
-            handler.Request.RequestUri?.ToString()
+            request.RequestUri?.ToString()
         );
-        Assert.Equal(Token, handler.Request.Headers.GetValues("X-Postmark-Server-Token").Single());
+        Assert.Equal(Token, request.Headers.GetValues("X-Postmark-Server-Token").Single());
     }
 
     [Fact]
@@ -175,7 +177,8 @@ public sealed class PostmarkSuppressionDumpClientTests
             _body = body;
         }
 
-        public HttpRequestMessage Request { get; private set; }
+        /// <summary>The most recent request, or null before the first one.</summary>
+        public HttpRequestMessage? Request { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
