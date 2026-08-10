@@ -2606,6 +2606,46 @@ public sealed class EmailJobProcessorTests
         _jobRepo.Verify(r => r.UpdateAsync(It.Is<EmailJob>(j => j.Id == jobId)), Times.Once);
     }
 
+    [Theory]
+    [InlineData(null, 72)] // default
+    [InlineData("6", 6)] // configured
+    [InlineData("2147483647", 720)] // absurd misconfiguration clamps to the 30-day ceiling instead of throwing
+    public async Task Sweep_lookback_window_follows_config_with_clamping(string? configValue, int expectedHours)
+    {
+        DateTime? capturedAfterUtc = null;
+        int? capturedLimit = null;
+        _jobRepo
+            .Setup(r => r.GetRecentlyCompletedJobsAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .Callback(
+                (DateTime afterUtc, int limit) =>
+                {
+                    capturedAfterUtc = afterUtc;
+                    capturedLimit = limit;
+                }
+            )
+            .ReturnsAsync(new List<EmailJob>());
+
+        var overrides = configValue == null
+            ? null
+            : new Dictionary<string, string?> { ["EmailJobs:LateDeliveryEventLookbackHours"] = configValue };
+
+        var beforeUtc = DateTime.UtcNow;
+        var processor = CreateProcessor(configOverrides: overrides);
+        await processor.SweepCompletedJobDeliveryEventsAsync(CancellationToken.None);
+        var afterUtc = DateTime.UtcNow;
+
+        Assert.NotNull(capturedAfterUtc);
+        Assert.InRange(
+            capturedAfterUtc.Value,
+            beforeUtc.AddHours(-expectedHours),
+            afterUtc.AddHours(-expectedHours)
+        );
+
+        // The sweep must request the repository ceiling: the query is newest-first, so a
+        // smaller limit would starve the oldest in-window jobs of their late events.
+        Assert.Equal(IEmailJobRepository.MaxRecentlyCompletedJobsLimit, capturedLimit);
+    }
+
     [Fact]
     public async Task Sweep_RunsDeliveryAction_ForUnprocessedBounce()
     {

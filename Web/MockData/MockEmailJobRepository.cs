@@ -151,7 +151,7 @@ namespace Web.MockData
         {
             lock (_jobs)
             {
-                var effectiveLimit = Math.Clamp(limit, 1, 250);
+                var effectiveLimit = Math.Clamp(limit, 1, IEmailJobRepository.MaxRecentlyCompletedJobsLimit);
                 var list = _jobs
                     .Values.Where(j =>
                         j.CompletedUtc >= completedAfterUtc

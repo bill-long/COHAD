@@ -174,7 +174,7 @@ namespace Web.Services.Repositories
 
         public async Task<List<EmailJob>> GetRecentlyCompletedJobsAsync(DateTime completedAfterUtc, int limit)
         {
-            var clampedLimit = Math.Clamp(limit, 1, 250);
+            var clampedLimit = Math.Clamp(limit, 1, IEmailJobRepository.MaxRecentlyCompletedJobsLimit);
 
             // Return terminal jobs (not Cancelled — those have no meaningful delivery events)
             // that completed within the given window, newest first so a bounded

@@ -37,6 +37,7 @@ namespace Web.Services
         private readonly int _stallAfterMinutes;
         private readonly int _stallWatchdogIntervalMinutes;
         private readonly int _reEnqueueDelaySeconds;
+        private readonly int _lateDeliveryEventLookbackHours;
 
         /// <summary>MockData only: per-recipient delay before marking Sent/Failed.</summary>
         private readonly int _mockDelayMilliseconds;
@@ -455,6 +456,24 @@ namespace Web.Services
             _stallAfterMinutes = config.GetValue("EmailJobs:StallAfterMinutes", 30);
             _stallWatchdogIntervalMinutes = Math.Max(1, config.GetValue("EmailJobs:StallWatchdogIntervalMinutes", 5));
             _reEnqueueDelaySeconds = Math.Max(0, config.GetValue("EmailJobs:ReEnqueueDelaySeconds", 10));
+            // Clamped locally rather than via JobInterval.WindowFromHours: this window is
+            // subtracted from DateTime.UtcNow, which throws long before TimeSpan overflows.
+            // The 30-day ceiling also keeps the window's job count far below the
+            // GetRecentlyCompletedJobsAsync limit, whose newest-first ordering would starve
+            // the oldest in-window jobs if more jobs than the limit ever completed inside
+            // the window. Providers stop retrying within ~72 hours, so nothing legitimate
+            // arrives a month late.
+            var configuredLookbackHours = config.GetValue("EmailJobs:LateDeliveryEventLookbackHours", 72);
+            _lateDeliveryEventLookbackHours = Math.Clamp(configuredLookbackHours, 1, 24 * 30);
+            if (_lateDeliveryEventLookbackHours != configuredLookbackHours)
+            {
+                _logger.LogWarning(
+                    "EmailJobs:LateDeliveryEventLookbackHours={Configured} is outside [1, {Max}] and was clamped to {Effective}",
+                    configuredLookbackHours,
+                    24 * 30,
+                    _lateDeliveryEventLookbackHours
+                );
+            }
 
             var mockDelayDefault = _isMockMode ? 250 : 50;
             _mockDelayMilliseconds = Math.Max(0, config.GetValue("EmailJobs:Mock:DelayMilliseconds", mockDelayDefault));
@@ -692,11 +711,28 @@ namespace Web.Services
                 var deliveryEventRepo = scope.ServiceProvider.GetRequiredService<IEmailDeliveryEventRepository>();
                 var deliveryActionService = scope.ServiceProvider.GetRequiredService<IEmailDeliveryActionService>();
 
-                // Look back 30 minutes — webhooks almost always arrive within a few minutes,
-                // but this gives a generous buffer. The watchdog runs every ~5 minutes, so
-                // each job is checked a handful of times before falling out of the window.
-                var completedAfterUtc = DateTime.UtcNow.AddMinutes(-30);
-                var jobs = await repo.GetRecentlyCompletedJobsAsync(completedAfterUtc, 50);
+                // Most webhooks arrive within minutes, but delivery confirmations for
+                // greylisted or slow-retrying mailboxes trail in hours later — Postmark
+                // retries for up to 72 hours before giving up, so the default lookback
+                // covers that whole cycle. Re-checking a settled job is cheap: an
+                // unchanged job is not persisted.
+                var completedAfterUtc = DateTime.UtcNow.AddHours(-_lateDeliveryEventLookbackHours);
+                // Ask for the repository ceiling: the query returns newest-first, so a lower
+                // limit would starve the oldest in-window jobs of their late events if more
+                // jobs than the limit completed inside the lookback.
+                var jobs = await repo.GetRecentlyCompletedJobsAsync(
+                    completedAfterUtc,
+                    IEmailJobRepository.MaxRecentlyCompletedJobsLimit
+                );
+                if (jobs.Count >= IEmailJobRepository.MaxRecentlyCompletedJobsLimit)
+                {
+                    _logger.LogWarning(
+                        "Late delivery-event sweep hit the {Limit}-job cap for the {LookbackHours}h window — "
+                            + "older in-window jobs may not receive late events",
+                        IEmailJobRepository.MaxRecentlyCompletedJobsLimit,
+                        _lateDeliveryEventLookbackHours
+                    );
+                }
 
                 foreach (var job in jobs)
                 {
@@ -1181,6 +1217,20 @@ namespace Web.Services
                                 // It says nothing about the SPA's own calls - see the note on
                                 // EmailPreferencesService, where the credential is still a query
                                 // value and still reaches browser telemetry.
+                                //
+                                // NOTE: on the Postmark broadcast stream these two headers never
+                                // reach recipients. That stream is configured with Postmark-managed
+                                // unsubscribe handling (UnsubscribeHandlingType "Postmark" - a
+                                // deliberate choice, 2026-08-10, for sender-reputation reasons), so
+                                // Postmark replaces List-Unsubscribe with its own hosted URL and
+                                // records unsubscribes on ITS suppression list, not ours - see the
+                                // GitHub issue on syncing those back. Editing this header therefore
+                                // changes nothing for blast mail. The headers stay because they are
+                                // the only RFC 8058 compliance on the non-Postmark fallback
+                                // transport (required by Gmail/Yahoo for bulk mail), and they come
+                                // back to life if a category is rerouted off the broadcast stream.
+                                // The body-footer short link below is the COHAD-owned unsubscribe
+                                // path on every transport.
                                 var unsubUrl =
                                     $"{_appBaseUrl}/api/email/unsubscribe/{job.Category}?u={Uri.EscapeDataString(unsubscribeLinkId)}";
                                 message.Headers.Add("List-Unsubscribe", $"<{unsubUrl}>");

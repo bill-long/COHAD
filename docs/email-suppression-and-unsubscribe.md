@@ -784,3 +784,42 @@ authorization, validation, and rate limiting. Plus:
   input, not a bare error.
 - Short-id collision on `Add` regenerates rather than throwing.
 - Suppression is enforced for grouped sends, not only per-recipient sends.
+
+## Addendum (2026-08-10): Postmark owns the List-Unsubscribe header on broadcast mail
+
+Investigation of a blast recipient with no delivery events revealed a fact the design above did
+not account for: the Postmark broadcast stream is configured with Postmark-managed unsubscribe
+handling (`UnsubscribeHandlingType: "Postmark"`). On every message sent through that stream -
+which is every blast category - Postmark **replaces** our `List-Unsubscribe` /
+`List-Unsubscribe-Post` headers with its own hosted URL (`subscriptions.pstmrk.it/...`), verified
+against a delivered message dump. Consequences:
+
+- A mail-client unsubscribe button (Gmail, Apple Mail) on blast mail drives **Postmark's**
+  suppression list, not ours. The address keeps its COHAD opt-in state, our send loop keeps
+  handing Postmark messages for it, Postmark accepts the SMTP transaction (250 OK, recipient
+  marked Sent) and silently drops the message: no delivery, no webhook, no Delivery indicator,
+  forever. One real recipient was found in this state (see the Postmark broadcast suppression
+  dump; deliberately not named here).
+- **Part 5's premise is invalid for broadcast mail.** `POST api/email/unsubscribe/{category}` is
+  not "the path Gmail's UI uses" for blasts and its zero production invocations are structural,
+  not suspicious: the one-click endpoint is reachable only from fallback-transport mail and from
+  pre-cutover headers still in old inboxes (the broadcast stream dates from 2026-04-30).
+- The "baked into every List-Unsubscribe header already in inboxes" rationale for keeping the
+  per-category one-click route now applies only to pre-cutover mail, though the route still
+  costs nothing to keep.
+
+**Decision: keep Postmark's unsubscribe handling** (not `Custom`). Postmark's deliverability
+expertise protects sender reputation, their hosted unsubscribe works even when our site is down,
+and they satisfy the Gmail/Yahoo one-click requirement on the stream that carries bulk mail. The
+gap this creates - Postmark-layer unsubscribes invisible to COHAD - is closed by syncing their
+suppressions back into ours (SubscriptionChange webhook plus reconciliation against the
+suppression dump; tracked in a GitHub issue). This preserves the Part 3 invariant with one
+refinement: `IEmailSuppressionService` remains the single writer of COHAD suppressions, and the
+Postmark sync becomes one more evidence source feeding it, exactly like bounce and complaint
+webhooks.
+
+**The header generation in `EmailJobProcessor` stays**, dormant on broadcast mail, because it is
+the only RFC 8058 compliance on the non-Postmark fallback transport and on any category ever
+rerouted off the broadcast stream. The body-footer short link is the COHAD-owned unsubscribe path
+on every transport and the only email-borne writer of COHAD's own suppression and preference
+records.

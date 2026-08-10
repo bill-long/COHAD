@@ -189,7 +189,7 @@ When `ASPNETCORE_ENVIRONMENT=MockData`, bulk sends are **simulated** (no SMTP). 
 | Setting | Notes |
 |---------|--------|
 | `MockJwt:SigningKey` | **≥32 UTF-8 bytes.** Required for mock HS256 tokens. Often set via **`MockJwt__SigningKey`**. [`appsettings.MockData.json`](Web/appsettings.MockData.json) leaves this empty on purpose — set in env or user secrets. |
-| `UnsubscribeToken:SigningKey` | **≥32 UTF-8 bytes** for AES-GCM unsubscribe tokens. **`UnsubscribeToken__SigningKey`** in env. If missing, mock runs but committee email footers/tokens degrade as in production. |
+| `UnsubscribeToken:SigningKey` | Fallback key (≥32 UTF-8 bytes, **`UnsubscribeToken__SigningKey`** in env) for validating **legacy** `?token=` unsubscribe links only — nothing generates tokens any more. Live emails carry short links (`{AppBaseUrl}/u/{id}`) instead, so this key does **not** gate footers or headers. |
 
 ### Azure AD B2C (non-MockData)
 
@@ -226,7 +226,7 @@ There is **no** working `ng lint` target in this repo; use `ng build` for TypeSc
 
 1. **Build/publish** the `Web` project so the Angular `dist` output is included and the API is compiled.
 2. **Host** the published output on your platform (e.g. Azure App Service, container, IIS + Kestrel).
-3. **Configure** production settings via environment variables or Azure App Settings: **Cosmos**, **document storage**, **SMTP**, **`AppBaseUrl`**, **`UnsubscribeToken:SigningKey`**, Application Insights, etc.
+3. **Configure** production settings via environment variables or Azure App Settings: **Cosmos**, **document storage**, **SMTP**, **`AppBaseUrl`**, **`UnsubscribeToken:LegacySigningKey`** (validation of legacy `?token=` links only), the **`UnsubscribeLink`** Cosmos container (short-link issuance — a missing container fails the admin's Send request), Application Insights, etc.
 4. **Do not** run with `ASPNETCORE_ENVIRONMENT=MockData` in production — MockData is for local/testing only.
 5. **Scheduled jobs** (user purge, PayPal sync) run in-process as hosted services in the `Web` app - there is nothing separate to deploy. Both are off by default; enable via `UserPurge__Enabled` / `PayPal__SyncEnabled`. The PayPal sync requires a **`BackgroundJobState`** Cosmos container (non-partitioned, `/NoPartitionKey`), provisioned out-of-band like every other container, which is what paces it across restarts; the purge needs no state. **Always On** must be enabled on the host, or the app unloads when idle and the timers never fire.
 
@@ -257,7 +257,7 @@ Cut over in this order:
 | MockData: 500 on mock-auth | **`MockJwt__SigningKey`** length ≥ 32 bytes. |
 | Browser warns on local HTTPS | Run **`dotnet dev-certs https --trust`**. Open **https://127.0.0.1:5001** (Development and MockData). |
 | APIs fail with Cosmos | Set **CosmosUri / CosmosKey / CosmosDatabase** (user secrets or env). |
-| Committee emails missing unsubscribe | **`UnsubscribeToken:SigningKey`** and **`AppBaseUrl`** in production. |
+| Committee emails missing unsubscribe footer | **`AppBaseUrl`** set and the **`UnsubscribeLink`** Cosmos container exists (links are issued at Send; the signing key no longer gates the footer). Note: on blast mail the mail-client Unsubscribe *button* is Postmark's hosted unsubscribe, not ours — by design. |
 
 ---
 
