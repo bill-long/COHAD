@@ -32,7 +32,7 @@ namespace Web.Services
         /// complaint, resident-request, or admin suppression.
         /// </para>
         /// </summary>
-        Task ProcessSubscriptionChangeAsync(
+        Task<SubscriptionChangeAction> ProcessSubscriptionChangeAsync(
             string email,
             bool suppressSending,
             string? origin,
@@ -41,6 +41,23 @@ namespace Web.Services
             Guid? causingJobId,
             string evidenceKey
         );
+    }
+
+    /// <summary>
+    /// What a <see cref="IEmailDeliveryActionService.ProcessSubscriptionChangeAsync"/> call did.
+    /// The webhook controller stores a delivery event only for <see cref="Suppressed"/>, so the
+    /// bounce/complaint skip rule lives in exactly one place (the service).
+    /// </summary>
+    public enum SubscriptionChangeAction
+    {
+        /// <summary>Nothing changed: a bounce/complaint-origin change, or a no-op reactivation.</summary>
+        None = 0,
+
+        /// <summary>A suppression is in force for the address (recorded or already recorded).</summary>
+        Suppressed = 1,
+
+        /// <summary>A ProviderUnsubscribe suppression was lifted by this call.</summary>
+        Cleared = 2,
     }
 
     /// <summary>
@@ -125,7 +142,7 @@ namespace Web.Services
             );
         }
 
-        public async Task ProcessSubscriptionChangeAsync(
+        public async Task<SubscriptionChangeAction> ProcessSubscriptionChangeAsync(
             string email,
             bool suppressSending,
             string? origin,
@@ -135,9 +152,7 @@ namespace Web.Services
             string evidenceKey
         )
         {
-            var diagnostic =
-                $"Postmark stream suppression ({messageStream ?? "unknown"} stream; "
-                + $"Origin: {origin ?? "unknown"}; SuppressionReason: {postmarkSuppressionReason ?? "unknown"})";
+            var diagnostic = BuildSubscriptionChangeDiagnostic(origin, postmarkSuppressionReason, messageStream);
 
             if (suppressSending)
             {
@@ -147,16 +162,14 @@ namespace Web.Services
                 // provenance - recording ProviderUnsubscribe for them would lie about why.
                 // Everything else with SuppressSending true (ManualSuppression today, any
                 // future value) means "do not mail", which is the safe direction to record.
-                if (
-                    postmarkSuppressionReason is "HardBounce" or "SpamComplaint"
-                )
+                if (postmarkSuppressionReason is "HardBounce" or "SpamComplaint")
                 {
                     _logger.LogDebug(
                         "Postmark SubscriptionChange for {Email} has reason {Reason} - handled by the delivery-event path, skipping.",
                         email,
                         postmarkSuppressionReason
                     );
-                    return;
+                    return SubscriptionChangeAction.None;
                 }
 
                 _logger.LogInformation(
@@ -176,8 +189,11 @@ namespace Web.Services
                     evidenceKey
                 );
 
+                // A replay changed nothing, so there is nothing to audit - but the suppression
+                // IS in force, so the caller still stores its delivery event (its first attempt
+                // may have crashed between the record write and the event store).
                 if (!outcome.Applied)
-                    return;
+                    return SubscriptionChangeAction.Suppressed;
 
                 var redacted = RedactEmail(email);
                 await _auditLogRepository.AddAsync(
@@ -195,7 +211,7 @@ namespace Web.Services
                             + " Opt-in preferences were not changed.",
                     }
                 );
-                return;
+                return SubscriptionChangeAction.Suppressed;
             }
 
             // Reactivation: someone removed the address from Postmark's suppression list. Mirror
@@ -209,7 +225,7 @@ namespace Web.Services
             );
 
             if (!clearOutcome.Cleared)
-                return;
+                return SubscriptionChangeAction.None;
 
             _logger.LogInformation(
                 "Cleared ProviderUnsubscribe suppression for {Email} after Postmark reactivation.",
@@ -231,6 +247,23 @@ namespace Web.Services
                         + $"({messageStream ?? "unknown"} stream).",
                 }
             );
+            return SubscriptionChangeAction.Cleared;
+        }
+
+        /// <summary>
+        /// The one composition of the provider-provenance diagnostic for a subscription change,
+        /// shared by the suppression record and the stored delivery event so the two can never
+        /// drift on wording.
+        /// </summary>
+        internal static string BuildSubscriptionChangeDiagnostic(
+            string? origin,
+            string? postmarkSuppressionReason,
+            string? messageStream
+        )
+        {
+            return
+                $"Postmark stream suppression ({messageStream ?? "unknown"} stream; "
+                + $"Origin: {origin ?? "unknown"}; SuppressionReason: {postmarkSuppressionReason ?? "unknown"})";
         }
 
         /// <summary>Redacts an address for the audit log (first 3 chars + domain).</summary>

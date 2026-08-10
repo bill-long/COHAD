@@ -276,3 +276,6 @@ vendor-import-output/
 
 # Git Bash / MSYS2 crash artifacts
 *.stackdump
+
+# Hermes - machine-local plans and state
+.hermes/

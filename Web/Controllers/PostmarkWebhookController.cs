@@ -21,18 +21,21 @@ namespace Web.Controllers
     {
         private readonly IPostmarkWebhookVerifier _verifier;
         private readonly IEmailDeliveryEventRepository _deliveryEventRepository;
+        private readonly IEmailDeliveryActionService _deliveryActionService;
         private readonly ILogger<PostmarkWebhookController> _logger;
         private readonly bool _isDevelopment;
 
         public PostmarkWebhookController(
             IPostmarkWebhookVerifier verifier,
             IEmailDeliveryEventRepository deliveryEventRepository,
+            IEmailDeliveryActionService deliveryActionService,
             IWebHostEnvironment env,
             ILogger<PostmarkWebhookController> logger
         )
         {
             _verifier = verifier;
             _deliveryEventRepository = deliveryEventRepository;
+            _deliveryActionService = deliveryActionService;
             _logger = logger;
             _isDevelopment = env.IsDevelopment() || env.IsEnvironment("MockData");
         }
@@ -110,6 +113,16 @@ namespace Web.Controllers
             if (string.IsNullOrEmpty(recordType))
                 return;
 
+            // SubscriptionChange is handled on its own path: job correlation is optional for it
+            // (manual suppressions and reactivations carry no MessageID/metadata), and the
+            // suppression write cannot wait on the per-job event sweep, which never sees
+            // jobless events.
+            if (recordType == "SubscriptionChange")
+            {
+                await ProcessSubscriptionChangeAsync(evt, rawBody);
+                return;
+            }
+
             // Extract recipient email — field name varies by event type
             string? email = recordType switch
             {
@@ -182,6 +195,120 @@ namespace Web.Controllers
                 ReceivedUtc = DateTime.UtcNow,
                 ProviderPayloadJson = rawBody,
                 ProviderDiagnostic = ExtractDiagnostic(recordType, evt),
+            };
+
+            await _deliveryEventRepository.AddAsync(deliveryEvent);
+        }
+
+        /// <summary>
+        /// Handles a Postmark SubscriptionChange event: an address was added to or removed from
+        /// a message stream's suppression list. The suppression mutation itself lives in
+        /// <see cref="IEmailDeliveryActionService"/> (the provider-feedback writer); this method
+        /// only extracts the payload and, when the change is a new suppression correlated to one
+        /// of our jobs, stores a delivery event so the job's delivery-events view shows the
+        /// unsubscribe. The event's <see cref="DeliveryStatus.Unknown"/> never overrides a
+        /// truthful Delivered on the recipient row - the message WAS delivered; the unsubscribe
+        /// happened afterwards, at the provider layer.
+        /// </summary>
+        private async Task ProcessSubscriptionChangeAsync(JsonElement evt, string rawBody)
+        {
+            var email = evt.TryGetProperty("Recipient", out var r) ? r.GetString() : null;
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                _logger.LogDebug("Postmark SubscriptionChange event missing Recipient - skipping.");
+                return;
+            }
+            email = email.Trim();
+
+            if (
+                !evt.TryGetProperty("SuppressSending", out var suppressProp)
+                || suppressProp.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            )
+            {
+                _logger.LogWarning(
+                    "Postmark SubscriptionChange event for {Email} missing SuppressSending - skipping.",
+                    email
+                );
+                return;
+            }
+            var suppressSending = suppressProp.GetBoolean();
+
+            string? origin = evt.TryGetProperty("Origin", out var o) ? o.GetString() : null;
+            string? postmarkReason = evt.TryGetProperty("SuppressionReason", out var sr) ? sr.GetString() : null;
+            string? messageStream = evt.TryGetProperty("MessageStream", out var ms) ? ms.GetString() : null;
+            string? messageId =
+                evt.TryGetProperty("MessageID", out var mid) && mid.ValueKind == JsonValueKind.String
+                    ? mid.GetString()
+                    : null;
+            string? changedAt = evt.TryGetProperty("ChangedAt", out var ca) ? ca.GetString() : null;
+
+            // Job correlation is optional: Postmark sends no MessageID (and empty Metadata) for
+            // manual suppressions and reactivations. A missing or unparsable id is an absence,
+            // not a rejection - unlike the delivery-event path above, which exists to correlate.
+            Guid? jobId = null;
+            if (
+                evt.TryGetProperty("Metadata", out var metadata)
+                && metadata.ValueKind == JsonValueKind.Object
+                && metadata.TryGetProperty("cohad_job_id", out var jobIdProp)
+            )
+            {
+                var jobIdStr = jobIdProp.GetString();
+                if (Guid.TryParse(jobIdStr, out var parsed))
+                {
+                    jobId = parsed;
+                }
+                else if (!string.IsNullOrEmpty(jobIdStr))
+                {
+                    _logger.LogWarning("Postmark SubscriptionChange has invalid cohad_job_id: {JobId}", jobIdStr);
+                }
+            }
+
+            // Deterministic per change so a webhook retry is idempotent. MessageID and ChangedAt
+            // are both absent only on a malformed payload; a random key then keeps the write
+            // applicable rather than falsely deduping two distinct changes into one.
+            var evidenceKey =
+                $"postmark:subscription-change:{messageId ?? changedAt ?? Guid.NewGuid().ToString("N")}";
+
+            var action = await _deliveryActionService.ProcessSubscriptionChangeAsync(
+                email,
+                suppressSending,
+                origin,
+                postmarkReason,
+                messageStream,
+                jobId,
+                evidenceKey
+            );
+
+            // Store a delivery event only when a suppression is in force AND the change names a
+            // job: the per-job sweep reads events by job id, so a jobless event is unreachable,
+            // and bounce/complaint-origin changes (SubscriptionChangeAction.None) already have
+            // their own Bounce/SpamComplaint events. ActionProcessed is set because the action
+            // was taken here, now - the sweep's gate would ignore an Unknown-status event
+            // anyway, but the flag keeps that true if the gate ever widens.
+            if (action != SubscriptionChangeAction.Suppressed || !jobId.HasValue)
+                return;
+
+            var deliveryEvent = new EmailDeliveryEvent
+            {
+                Id = EmailDeliveryEvent.MakeId(
+                    jobId.Value,
+                    email,
+                    $"SubscriptionChange:{messageId ?? changedAt}"
+                ),
+                JobId = jobId.Value,
+                Email = email,
+                DeliveryStatus = DeliveryStatus.Unknown,
+                ProviderEventType = "SubscriptionChange",
+                ProviderMessageId = messageId,
+                Provider = "Postmark",
+                ReceivedUtc = DateTime.UtcNow,
+                ProviderPayloadJson = rawBody,
+                ProviderDiagnostic = EmailDeliveryActionService.BuildSubscriptionChangeDiagnostic(
+                    origin,
+                    postmarkReason,
+                    messageStream
+                ),
+                ActionProcessed = true,
             };
 
             await _deliveryEventRepository.AddAsync(deliveryEvent);
