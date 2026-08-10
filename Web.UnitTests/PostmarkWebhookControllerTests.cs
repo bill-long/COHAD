@@ -818,6 +818,107 @@ namespace Web.UnitTests
             );
         }
 
+        [Fact]
+        public async Task SubscriptionChange_NonStringFields_ReadAsAbsentNotException()
+        {
+            // The payload is drift- and attacker-exposed: non-string values must read as absent
+            // (a 200 no-op or a record with "unknown" provenance), never a 500-and-retry loop.
+            SetupVerifierNotConfigured();
+
+            var payload = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["RecordType"] = "SubscriptionChange",
+                ["ChangedAt"] = "2026-07-15T18:30:00Z",
+                ["Recipient"] = "user@example.com",
+                ["Origin"] = 123,
+                ["SuppressSending"] = true,
+                ["SuppressionReason"] = 42,
+                ["MessageStream"] = true,
+                ["MessageID"] = 12345,
+            });
+
+            var controller = CreateController(payload);
+            var result = await controller.HandleEvent();
+
+            Assert.IsType<OkResult>(result);
+            _deliveryActionService.Verify(
+                s =>
+                    s.ProcessSubscriptionChangeAsync(
+                        "user@example.com",
+                        true,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "postmark:subscription-change:2026-07-15T18:30:00Z"
+                    ),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public async Task SubscriptionChange_BlankMessageIdAndChangedAt_FallsBackToPayloadHash()
+        {
+            // A blank string is absent: the evidence key must not collapse to an empty suffix,
+            // which would falsely dedup two distinct blank-keyed changes into one.
+            SetupVerifierNotConfigured();
+
+            string? capturedKey = null;
+            _deliveryActionService
+                .Setup(s =>
+                    s.ProcessSubscriptionChangeAsync(
+                        It.IsAny<string>(),
+                        It.IsAny<bool>(),
+                        It.IsAny<string?>(),
+                        It.IsAny<string?>(),
+                        It.IsAny<string?>(),
+                        It.IsAny<Guid?>(),
+                        It.IsAny<string>()
+                    )
+                )
+                .Callback<string, bool, string?, string?, string?, Guid?, string>(
+                    (_, _, _, _, _, _, key) => capturedKey = key
+                )
+                .ReturnsAsync(SubscriptionChangeAction.Suppressed);
+
+            var payload =
+                "{\"RecordType\":\"SubscriptionChange\",\"Recipient\":\"user@example.com\","
+                + "\"Origin\":\"Recipient\",\"SuppressSending\":true,\"SuppressionReason\":\"ManualSuppression\","
+                + "\"MessageStream\":\"broadcast\",\"MessageID\":\"  \",\"ChangedAt\":\"\"}";
+
+            var controller = CreateController(payload);
+            var result = await controller.HandleEvent();
+
+            Assert.IsType<OkResult>(result);
+            Assert.NotNull(capturedKey);
+            Assert.Matches(@"^postmark:subscription-change:[0-9a-f]{64}$", capturedKey);
+        }
+
+        [Fact]
+        public async Task DeliveryEvent_NonStringRecipient_IsANoOp()
+        {
+            // Same lenient-parse rule on the pre-existing path: a malformed payload gets a 200
+            // no-op rather than an unending 500-and-retry loop.
+            SetupVerifierNotConfigured();
+
+            var payload = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["RecordType"] = "Delivery",
+                ["Recipient"] = 12345,
+                ["MessageID"] = "test-msg-id",
+                ["Metadata"] = new Dictionary<string, string>
+                {
+                    ["cohad_job_id"] = TestJobId.ToString(),
+                },
+            });
+
+            var controller = CreateController(payload);
+            var result = await controller.HandleEvent();
+
+            Assert.IsType<OkResult>(result);
+            _deliveryEventRepo.Verify(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()), Times.Never);
+        }
+
         // ─── Status mapping static method ───
 
         [Theory]

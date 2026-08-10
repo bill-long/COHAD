@@ -128,9 +128,9 @@ namespace Web.Controllers
             // Extract recipient email — field name varies by event type
             string? email = recordType switch
             {
-                "Delivery" => evt.TryGetProperty("Recipient", out var r) ? r.GetString() : null,
-                "Bounce" => evt.TryGetProperty("Email", out var b) ? b.GetString() : null,
-                "SpamComplaint" => evt.TryGetProperty("Email", out var s) ? s.GetString() : null,
+                "Delivery" => GetOptionalString(evt, "Recipient"),
+                "Bounce" => GetOptionalString(evt, "Email"),
+                "SpamComplaint" => GetOptionalString(evt, "Email"),
                 _ => null,
             };
 
@@ -144,10 +144,9 @@ namespace Web.Controllers
 
             // Extract correlation metadata
             string? jobIdStr = null;
-            if (evt.TryGetProperty("Metadata", out var metadata))
+            if (evt.TryGetProperty("Metadata", out var metadata) && metadata.ValueKind == JsonValueKind.Object)
             {
-                if (metadata.TryGetProperty("cohad_job_id", out var jobIdProp))
-                    jobIdStr = jobIdProp.GetString();
+                jobIdStr = GetOptionalString(metadata, "cohad_job_id");
             }
 
             if (string.IsNullOrEmpty(jobIdStr))
@@ -170,9 +169,7 @@ namespace Web.Controllers
             var deliveryStatus = MapRecordTypeToDeliveryStatus(recordType, evt);
 
             // Extract MessageID for provider correlation
-            string? messageId = null;
-            if (evt.TryGetProperty("MessageID", out var msgIdProp))
-                messageId = msgIdProp.GetString();
+            string? messageId = GetOptionalString(evt, "MessageID");
 
             // Dedup key: use webhook event ID for bounces/complaints, MessageID-based key for deliveries
             string dedupKey = recordType switch
@@ -214,7 +211,7 @@ namespace Web.Controllers
         /// </summary>
         private async Task ProcessSubscriptionChangeAsync(JsonElement evt, string rawBody)
         {
-            var email = evt.TryGetProperty("Recipient", out var r) ? r.GetString() : null;
+            var email = GetOptionalString(evt, "Recipient");
             if (string.IsNullOrWhiteSpace(email))
             {
                 _logger.LogDebug("Postmark SubscriptionChange event missing Recipient - skipping.");
@@ -235,14 +232,11 @@ namespace Web.Controllers
             }
             var suppressSending = suppressProp.GetBoolean();
 
-            string? origin = evt.TryGetProperty("Origin", out var o) ? o.GetString() : null;
-            string? postmarkReason = evt.TryGetProperty("SuppressionReason", out var sr) ? sr.GetString() : null;
-            string? messageStream = evt.TryGetProperty("MessageStream", out var ms) ? ms.GetString() : null;
-            string? messageId =
-                evt.TryGetProperty("MessageID", out var mid) && mid.ValueKind == JsonValueKind.String
-                    ? mid.GetString()
-                    : null;
-            string? changedAt = evt.TryGetProperty("ChangedAt", out var ca) ? ca.GetString() : null;
+            string? origin = GetOptionalString(evt, "Origin");
+            string? postmarkReason = GetOptionalString(evt, "SuppressionReason");
+            string? messageStream = GetOptionalString(evt, "MessageStream");
+            string? messageId = GetOptionalString(evt, "MessageID");
+            string? changedAt = GetOptionalString(evt, "ChangedAt");
 
             // Job correlation is optional: Postmark sends no MessageID (and empty Metadata) for
             // manual suppressions and reactivations. A missing or unparsable id is an absence,
@@ -251,10 +245,9 @@ namespace Web.Controllers
             if (
                 evt.TryGetProperty("Metadata", out var metadata)
                 && metadata.ValueKind == JsonValueKind.Object
-                && metadata.TryGetProperty("cohad_job_id", out var jobIdProp)
             )
             {
-                var jobIdStr = jobIdProp.GetString();
+                var jobIdStr = GetOptionalString(metadata, "cohad_job_id");
                 if (Guid.TryParse(jobIdStr, out var parsed))
                 {
                     jobId = parsed;
@@ -336,10 +329,7 @@ namespace Web.Controllers
 
         private static DeliveryStatus MapBounceType(JsonElement evt)
         {
-            if (!evt.TryGetProperty("Type", out var typeProp))
-                return DeliveryStatus.Bounced;
-
-            var bounceType = typeProp.GetString() ?? "";
+            var bounceType = GetOptionalString(evt, "Type") ?? "";
 
             // Postmark bounce types: HardBounce, SoftBounce, Transient, etc.
             return bounceType switch
@@ -348,6 +338,20 @@ namespace Web.Controllers
                 "SoftBounce" => DeliveryStatus.Deferred,
                 _ => DeliveryStatus.Bounced,
             };
+        }
+
+        /// <summary>
+        /// Reads an optional string property from a webhook payload. Postmark's schema says these
+        /// fields are strings, but the payload is drift- and attacker-exposed: a non-string value
+        /// (or a blank one) reads as absent rather than throwing the request into a 500-and-retry
+        /// loop it can never escape.
+        /// </summary>
+        internal static string? GetOptionalString(JsonElement evt, string name)
+        {
+            if (!evt.TryGetProperty(name, out var prop) || prop.ValueKind != JsonValueKind.String)
+                return null;
+            var value = prop.GetString();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
         }
 
         /// <summary>
@@ -361,10 +365,10 @@ namespace Web.Controllers
             if (recordType is not ("Bounce" or "SpamComplaint"))
                 return null;
 
-            var type = evt.TryGetProperty("Type", out var typeProp) ? typeProp.GetString() : null;
-            var description = evt.TryGetProperty("Description", out var descProp) ? descProp.GetString() : null;
+            var type = GetOptionalString(evt, "Type");
+            var description = GetOptionalString(evt, "Description");
             if (string.IsNullOrWhiteSpace(description))
-                description = evt.TryGetProperty("Details", out var detailsProp) ? detailsProp.GetString() : null;
+                description = GetOptionalString(evt, "Details");
 
             if (string.IsNullOrWhiteSpace(type))
                 return string.IsNullOrWhiteSpace(description) ? null : description;
@@ -392,7 +396,7 @@ namespace Web.Controllers
             {
                 "Bounce" => ExtractBounceId(evt),
                 "SpamComplaint" => ExtractComplaintId(evt),
-                "Delivery" => evt.TryGetProperty("MessageID", out var m) ? m.GetString() : null,
+                "Delivery" => GetOptionalString(evt, "MessageID"),
                 _ => null,
             };
         }
