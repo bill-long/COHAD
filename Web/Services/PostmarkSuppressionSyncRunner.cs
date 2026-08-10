@@ -122,6 +122,40 @@ namespace Web.Services
                 _ => SuppressionReason.ProviderUnsubscribe,
             };
 
+        /// <summary>
+        /// Parses the dump entry's <c>CreatedAt</c> (ISO 8601 with offset, e.g.
+        /// "2019-12-17T08:58:33-05:00") so the record's <c>SuppressedUtc</c> can say when the
+        /// address actually stopped receiving mail. Lenient like the rest of the dump handling:
+        /// an absent or unparseable value is no timestamp at all, never a failed run - but a
+        /// NON-EMPTY unparseable value warns, so a provider payload format regression is
+        /// attributable rather than silently stamping the run time. Offset-less input is read
+        /// as UTC, deterministically, rather than as host-local time.
+        /// </summary>
+        internal DateTime? ParseCreatedAt(string? createdAt)
+        {
+            if (string.IsNullOrWhiteSpace(createdAt))
+                return null;
+
+            if (
+                DateTimeOffset.TryParse(
+                    createdAt,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal
+                        | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                    out var parsed
+                )
+            )
+            {
+                return parsed.UtcDateTime;
+            }
+
+            _logger.LogWarning(
+                "Postmark suppression dump entry has an unparseable CreatedAt {CreatedAt} - stamping the suppression with the run time.",
+                createdAt
+            );
+            return null;
+        }
+
         public async Task<PostmarkSuppressionSyncResult> RunAsync(CancellationToken cancellationToken)
         {
             var result = new PostmarkSuppressionSyncResult();
@@ -193,7 +227,8 @@ namespace Web.Services
                             EmailSuppression.PostmarkSuppressionDump,
                             null,
                             diagnostic,
-                            evidenceKey: MakeEvidenceKey(stream, normalized)
+                            evidenceKey: MakeEvidenceKey(stream, normalized),
+                            eventUtc: ParseCreatedAt(entry.CreatedAt)
                         );
 
                         // The record is in force either way; only a write THIS call performed is

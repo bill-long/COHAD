@@ -86,7 +86,12 @@ namespace Web.Models
         /// <summary>The email job whose delivery produced the evidence, when one is known.</summary>
         public Guid? CausingJobId { get; set; }
 
-        /// <summary>When the current suppression began. Reset by a re-suppression after a clear.</summary>
+        /// <summary>
+        /// When the current suppression began. Reset by a re-suppression after a clear. For
+        /// records reconciled from Postmark's suppression dump this is the provider's own
+        /// <c>CreatedAt</c> when the dump carries one - the address stopped receiving mail then,
+        /// not when the reconciliation noticed.
+        /// </summary>
         public DateTime SuppressedUtc { get; set; }
 
         /// <summary>
