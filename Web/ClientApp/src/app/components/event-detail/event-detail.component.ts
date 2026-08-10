@@ -108,6 +108,12 @@ export class EventDetailComponent implements OnInit {
     const mode = this.eventItem.signupMode ?? 'AdultsAndChildren';
     const sendChildren = mode !== 'AdultsOnly' && mode !== 'PeopleOnly' && mode !== 'HouseholdOnly';
     const sendAdults = mode !== 'ChildrenOnly' && mode !== 'HouseholdOnly';
+    // Zeroing out all visible counts on an existing signup means "remove my signup".
+    const removeRequested =
+      mode !== 'HouseholdOnly' &&
+      this.hasExistingSignup &&
+      (!sendAdults || this.adults === 0) &&
+      (!sendChildren || this.children === 0);
 
     this.eventsService
       .signUp(this.eventItem.publicSlug, {
@@ -116,14 +122,17 @@ export class EventDetailComponent implements OnInit {
         children: sendChildren ? this.children : 0,
         adultNames: sendAdults ? this.parseNames(this.adultNames) : [],
         childNames: sendChildren ? this.parseNames(this.childNames) : [],
+        remove: removeRequested,
       })
       .subscribe({
         next: updated => {
           this.eventItem = updated;
           this.saving = false;
-          this.success = 'Signup saved.';
+          this.success = removeRequested ? 'Signup removed.' : 'Signup saved.';
           this.applyExistingSignup(updated);
-          this.telemetry.trackEvent('EventSignupSubmitted', { eventSlug: this.eventItem.publicSlug });
+          this.telemetry.trackEvent(removeRequested ? 'EventSignupRemoved' : 'EventSignupSubmitted', {
+            eventSlug: this.eventItem.publicSlug,
+          });
         },
         error: err => {
           this.saving = false;

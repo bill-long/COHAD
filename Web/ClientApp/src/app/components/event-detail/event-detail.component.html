@@ -88,7 +88,7 @@
                   *ngIf="event.signupMode === 'PeopleOnly'"
                 >
                   <mat-label>People</mat-label>
-                  <input matInput id="signup-people" name="signupPeople" type="number" min="1" [(ngModel)]="adults" />
+                  <input matInput id="signup-people" name="signupPeople" type="number" min="0" [(ngModel)]="adults" />
                 </mat-form-field>
                 <mat-form-field
                   appearance="outline"

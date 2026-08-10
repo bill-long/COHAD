@@ -684,6 +684,638 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
+    public async Task SignUp_removes_existing_signup_when_remove_requested()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Resident",
+                    Emails = "mock@cohad.local",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>
+            {
+                new EventSignup
+                {
+                    HomeId = homeId,
+                    Adults = 2,
+                    Children = 1,
+                },
+            },
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Remove = true });
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Empty(stored.Signups);
+
+        mockAudit.Verify(
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e =>
+                        e.SubjectId == eventId.ToString("D") && e.Action == "Removed event signup. (2 adults, 1 children)"
+                    )
+                ),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task SignUp_zero_counts_with_existing_signup_returns_BadRequest_without_remove_flag()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>
+            {
+                new EventSignup
+                {
+                    HomeId = homeId,
+                    Adults = 2,
+                    Children = 1,
+                },
+            },
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>(), mockHomes.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 0, Children = 0 });
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("Please provide at least one attendee.", badRequest.Value);
+        Assert.Single(stored.Signups);
+        mockEvents.Verify(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SignUp_remove_succeeds_without_writing_when_no_signup_exists()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>(),
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Remove = true });
+
+        Assert.IsType<OkObjectResult>(result);
+        mockEvents.Verify(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()), Times.Never);
+        mockAudit.Verify(a => a.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SignUp_HouseholdOnly_zero_counts_updates_rather_than_removes()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Household Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            SignupMode = EventSignupMode.HouseholdOnly,
+            Signups = new List<EventSignup>
+            {
+                new EventSignup { HomeId = homeId },
+            },
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 0, Children = 0 });
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Single(stored.Signups);
+
+        mockAudit.Verify(
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e =>
+                        e.SubjectId == eventId.ToString("D") && e.Action == "Updated event signup."
+                    )
+                ),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task SignUp_HouseholdOnly_removes_signup_when_remove_requested()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Household Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            SignupMode = EventSignupMode.HouseholdOnly,
+            Signups = new List<EventSignup>
+            {
+                new EventSignup { HomeId = homeId },
+            },
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Remove = true });
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Empty(stored.Signups);
+
+        mockAudit.Verify(
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e =>
+                        e.SubjectId == eventId.ToString("D") && e.Action == "Removed event signup."
+                    )
+                ),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task SignUp_ChildrenOnly_removes_existing_signup_when_remove_requested()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Kids Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            SignupMode = EventSignupMode.ChildrenOnly,
+            Signups = new List<EventSignup>
+            {
+                new EventSignup
+                {
+                    HomeId = homeId,
+                    Adults = 0,
+                    Children = 3,
+                },
+            },
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Remove = true });
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Empty(stored.Signups);
+
+        mockAudit.Verify(
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e =>
+                        e.SubjectId == eventId.ToString("D") && e.Action == "Removed event signup. (3 children)"
+                    )
+                ),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task SignUp_remove_also_removes_orphaned_user_signup()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>
+            {
+                new EventSignup
+                {
+                    HomeId = homeId,
+                    Adults = 2,
+                    Children = 1,
+                },
+                // Orphaned user-based signup left over from before the user acquired a home.
+                new EventSignup
+                {
+                    HomeId = Guid.Empty,
+                    UserUniqueId = uniqueId,
+                    Adults = 1,
+                    Children = 0,
+                },
+            },
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Remove = true });
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Empty(stored.Signups);
+
+        mockAudit.Verify(
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e =>
+                        e.SubjectId == eventId.ToString("D") && e.Action == "Removed event signup. (3 adults, 1 children)"
+                    )
+                ),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task SignUp_returns_BadRequest_when_zero_counts_without_existing_signup()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Resident",
+                    Emails = "mock@cohad.local",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>(),
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), Mock.Of<IAuditLogRepository>(), mockHomes.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 0, Children = 0 });
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("Please provide at least one attendee.", badRequest.Value);
+        mockEvents.Verify(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SignUp_AdultsOnly_removes_existing_signup_when_remove_requested()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var homeId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Resident",
+                    Emails = "mock@cohad.local",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Adults Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            SignupMode = EventSignupMode.AdultsOnly,
+            Signups = new List<EventSignup>
+            {
+                new EventSignup
+                {
+                    HomeId = homeId,
+                    Adults = 2,
+                    Children = 0,
+                },
+            },
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object, mockHomes.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Remove = true });
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Empty(stored.Signups);
+
+        mockAudit.Verify(
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e =>
+                        e.SubjectId == eventId.ToString("D") && e.Action == "Removed event signup. (2 adults)"
+                    )
+                ),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task SignUp_removes_user_based_signup_when_remove_requested()
+    {
+        var uniqueId = UniqueId("u1");
+        var eventId = Guid.NewGuid();
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Mock",
+                    Surname = "Resident",
+                    Emails = "mock@cohad.local",
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+
+        var stored = new CommunityEvent
+        {
+            Id = eventId,
+            Title = "Open Event",
+            StartUtc = DateTime.UtcNow.AddDays(2),
+            AllowSignups = true,
+            Signups = new List<EventSignup>
+            {
+                new EventSignup
+                {
+                    HomeId = Guid.Empty,
+                    UserUniqueId = uniqueId,
+                    Adults = 1,
+                    Children = 0,
+                },
+            },
+        };
+
+        var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
+        mockEvents
+            .Setup(r => r.ReadAsync(eventId))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "\"e1\"" });
+        mockEvents
+            .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
+            .ReturnsAsync((CommunityEvent e, string _) => e);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(a => a.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, mockEvents.Object, Mock.Of<IDocumentFileStore>(), mockAudit.Object);
+        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { Remove = true });
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Empty(stored.Signups);
+
+        mockAudit.Verify(
+            a =>
+                a.AddAsync(
+                    It.Is<NewAuditLogEntry>(e =>
+                        e.SubjectId == eventId.ToString("D") && e.Action == "Removed event signup. (1 adults, 0 children)"
+                    )
+                ),
+            Times.Once
+        );
+    }
+
+    [Fact]
     public async Task SignUp_returns_NotFound_when_event_deleted_before_replace()
     {
         var uniqueId = UniqueId("u1");

@@ -56,6 +56,8 @@ export interface EventSignupPayload {
   children: number;
   adultNames: string[];
   childNames: string[];
+  /** When true, removes the existing signup instead of creating or updating one (counts are ignored). */
+  remove?: boolean;
 }
 
 export interface ManageEventsPayload {
