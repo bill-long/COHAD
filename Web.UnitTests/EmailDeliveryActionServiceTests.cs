@@ -176,6 +176,151 @@ namespace Web.UnitTests
             Assert.DoesNotContain("bounce@example.com", entry.Action);
         }
 
+        // ─── Postmark SubscriptionChange ───
+
+        private Task CallSubscriptionChange(
+            EmailDeliveryActionService service,
+            string email = "unsub@example.com",
+            bool suppressSending = true,
+            string origin = "Recipient",
+            string? postmarkReason = "ManualSuppression",
+            string stream = "broadcast",
+            Guid? jobId = null,
+            string evidenceKey = "postmark:subscription-change:msg-1"
+        )
+        {
+            return service.ProcessSubscriptionChangeAsync(
+                email,
+                suppressSending,
+                origin,
+                postmarkReason,
+                stream,
+                jobId,
+                evidenceKey
+            );
+        }
+
+        [Fact]
+        public async Task PostmarkUnsubscribe_WritesAProviderUnsubscribeSuppression()
+        {
+            var service = CreateService();
+            await CallSubscriptionChange(service, jobId: TestJobId);
+
+            var suppression = await _suppressions.GetByEmailAsync("unsub@example.com");
+            Assert.NotNull(suppression);
+            Assert.True(suppression!.IsActive);
+            Assert.Equal(SuppressionReason.ProviderUnsubscribe, suppression.Reason);
+            Assert.Equal(EmailSuppression.PostmarkSubscriptionChange, suppression.SuppressedBy);
+            Assert.Equal(TestJobId, suppression.CausingJobId);
+            Assert.Equal("postmark:subscription-change:msg-1", suppression.LastEvidenceKey);
+            Assert.Contains("broadcast", suppression.ProviderDiagnostic);
+            Assert.Contains("Recipient", suppression.ProviderDiagnostic);
+            Assert.Contains("ManualSuppression", suppression.ProviderDiagnostic);
+        }
+
+        [Theory]
+        [InlineData("HardBounce")]
+        [InlineData("SpamComplaint")]
+        public async Task BounceAndComplaintSubscriptionChanges_TakeNoAction(string postmarkReason)
+        {
+            // Postmark fires SubscriptionChange for bounces and complaints too - those are the
+            // delivery-event path's job, and recording ProviderUnsubscribe would lie about why.
+            var service = CreateService();
+            await CallSubscriptionChange(service, postmarkReason: postmarkReason);
+
+            Assert.Empty(await _suppressions.GetAllAsync());
+            _auditLog.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ReplayedPostmarkUnsubscribe_NeitherRecountsNorReaudits()
+        {
+            // Postmark retries webhooks that did not return 2xx, and may also deliver the same
+            // change twice; the evidence key keeps one unsubscribe from reading as many.
+            var service = CreateService();
+            await CallSubscriptionChange(service);
+            await CallSubscriptionChange(service);
+            await CallSubscriptionChange(service);
+
+            var suppression = await _suppressions.GetByEmailAsync("unsub@example.com");
+            Assert.Equal(1, suppression!.ConsecutiveFailureCount);
+            _auditLog.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task PostmarkUnsubscribe_AuditsWithRedactedAddress()
+        {
+            NewAuditLogEntry entry = null;
+            _auditLog
+                .Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
+                .Callback<NewAuditLogEntry>(e => entry = e)
+                .Returns(Task.CompletedTask);
+
+            var service = CreateService();
+            await CallSubscriptionChange(service);
+
+            Assert.NotNull(entry);
+            Assert.Equal("system", entry.UserId);
+            Assert.Equal("uns***@example.com", entry.SubjectId);
+            Assert.Contains("email provider", entry.Action);
+            Assert.Contains("preferences were not changed", entry.Action);
+            Assert.DoesNotContain("unsub@example.com", entry.Action);
+        }
+
+        [Fact]
+        public async Task Reactivation_ClearsAProviderUnsubscribeSuppression()
+        {
+            var service = CreateService();
+            await CallSubscriptionChange(service);
+
+            await CallSubscriptionChange(
+                service,
+                suppressSending: false,
+                postmarkReason: null,
+                evidenceKey: "postmark:subscription-change:msg-2"
+            );
+
+            var suppression = await _suppressions.GetByEmailAsync("unsub@example.com");
+            Assert.False(suppression!.IsActive);
+            Assert.Equal(EmailSuppression.PostmarkSubscriptionChange, suppression.ClearedBy);
+        }
+
+        [Fact]
+        public async Task Reactivation_NeverLiftsAnotherReasonsSuppression()
+        {
+            // A hard-bounce suppression must survive activity in the Postmark dashboard:
+            // onlyIfReason is the write-time guard that keeps a reactivation from lifting a
+            // record this path did not create.
+            var service = CreateService();
+            await service.ProcessDeliveryEventAsync(NewEvent("unsub@example.com"), null);
+
+            await CallSubscriptionChange(
+                service,
+                suppressSending: false,
+                postmarkReason: null,
+                evidenceKey: "postmark:subscription-change:msg-2"
+            );
+
+            var suppression = await _suppressions.GetByEmailAsync("unsub@example.com");
+            Assert.True(suppression!.IsActive);
+            Assert.Equal(SuppressionReason.HardBounce, suppression.Reason);
+        }
+
+        [Fact]
+        public async Task Reactivation_WithNoRecord_TakesNoAction()
+        {
+            var service = CreateService();
+            await CallSubscriptionChange(
+                service,
+                suppressSending: false,
+                postmarkReason: null,
+                evidenceKey: "postmark:subscription-change:msg-2"
+            );
+
+            Assert.Empty(await _suppressions.GetAllAsync());
+            _auditLog.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+        }
+
         // ─── Email redaction ───
 
         [Theory]

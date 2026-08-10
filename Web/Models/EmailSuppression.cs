@@ -26,6 +26,16 @@ namespace Web.Models
 
         /// <summary>An administrator suppressed the address by hand.</summary>
         AdminAction = 3,
+
+        /// <summary>
+        /// The recipient unsubscribed through a provider-managed mechanism - Postmark's
+        /// broadcast-stream suppression, typically a mail client's native Unsubscribe button
+        /// acting on the List-Unsubscribe header Postmark manages. Not resident-resumable:
+        /// the provider keeps its own suppression entry, so lifting only COHAD's record would
+        /// resume "successful" sends that the provider silently drops. Clearing is an admin
+        /// action performed in both systems.
+        /// </summary>
+        ProviderUnsubscribe = 4,
     }
 
     /// <summary>
@@ -118,6 +128,13 @@ namespace Web.Models
 
         /// <summary>The <see cref="SuppressedBy"/> value for the provider-feedback writer.</summary>
         public const string SystemDeliveryEvent = "system:delivery-event";
+
+        /// <summary>
+        /// The <see cref="SuppressedBy"/> value for the Postmark SubscriptionChange webhook
+        /// writer - an unsubscribe that happened at the provider layer rather than through
+        /// COHAD's own unsubscribe link.
+        /// </summary>
+        public const string PostmarkSubscriptionChange = "postmark:subscription-change";
 
         /// <summary>
         /// The one normalization rule for suppression keys. Every consumer - the writers, the

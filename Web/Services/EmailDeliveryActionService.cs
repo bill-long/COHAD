@@ -16,6 +16,31 @@ namespace Web.Services
         /// diagnostic text.
         /// </summary>
         Task ProcessDeliveryEventAsync(EmailDeliveryEvent deliveryEvent, string? category);
+
+        /// <summary>
+        /// Processes a Postmark SubscriptionChange webhook event: an address was added to or
+        /// removed from a Postmark message stream's suppression list. A recipient unsubscribe at
+        /// the Postmark layer (a mail client's native Unsubscribe button on the broadcast
+        /// stream's List-Unsubscribe) never touches COHAD's own unsubscribe link, so without
+        /// this writer the address keeps "successfully" mailing into Postmark's void.
+        /// <para>
+        /// Only Postmark's <c>ManualSuppression</c> reason records here - hard-bounce and
+        /// spam-complaint subscription changes also fire this webhook, but the Bounce and
+        /// SpamComplaint webhooks already write those suppressions with truthful provenance.
+        /// A reactivation (<paramref name="suppressSending"/> false) clears only a
+        /// <see cref="SuppressionReason.ProviderUnsubscribe"/> record - never a bounce,
+        /// complaint, resident-request, or admin suppression.
+        /// </para>
+        /// </summary>
+        Task ProcessSubscriptionChangeAsync(
+            string email,
+            bool suppressSending,
+            string? origin,
+            string? postmarkSuppressionReason,
+            string? messageStream,
+            Guid? causingJobId,
+            string evidenceKey
+        );
     }
 
     /// <summary>
@@ -96,6 +121,114 @@ namespace Web.Services
                     Action =
                         $"Suppressed all email due to {reasonText}{(category != null ? $" (category: {category})" : "")}."
                         + $" Evidence count {outcome.Suppression.ConsecutiveFailureCount}. Opt-in preferences were not changed.",
+                }
+            );
+        }
+
+        public async Task ProcessSubscriptionChangeAsync(
+            string email,
+            bool suppressSending,
+            string? origin,
+            string? postmarkSuppressionReason,
+            string? messageStream,
+            Guid? causingJobId,
+            string evidenceKey
+        )
+        {
+            var diagnostic =
+                $"Postmark stream suppression ({messageStream ?? "unknown"} stream; "
+                + $"Origin: {origin ?? "unknown"}; SuppressionReason: {postmarkSuppressionReason ?? "unknown"})";
+
+            if (suppressSending)
+            {
+                // Postmark fires SubscriptionChange for hard bounces and spam complaints too
+                // (they land on the same stream suppression list), but the Bounce and
+                // SpamComplaint webhooks already write those suppressions with truthful
+                // provenance - recording ProviderUnsubscribe for them would lie about why.
+                // Everything else with SuppressSending true (ManualSuppression today, any
+                // future value) means "do not mail", which is the safe direction to record.
+                if (
+                    postmarkSuppressionReason is "HardBounce" or "SpamComplaint"
+                )
+                {
+                    _logger.LogDebug(
+                        "Postmark SubscriptionChange for {Email} has reason {Reason} - handled by the delivery-event path, skipping.",
+                        email,
+                        postmarkSuppressionReason
+                    );
+                    return;
+                }
+
+                _logger.LogInformation(
+                    "Suppressing email {Email} due to Postmark-layer unsubscribe ({Diagnostic}).",
+                    email,
+                    diagnostic
+                );
+
+                // The evidence key dedups webhook retries: Postmark reposts the same payload,
+                // and without the key each retry would count as fresh evidence and re-audit.
+                var outcome = await _suppressionService.RecordAsync(
+                    email,
+                    SuppressionReason.ProviderUnsubscribe,
+                    EmailSuppression.PostmarkSubscriptionChange,
+                    causingJobId,
+                    diagnostic,
+                    evidenceKey
+                );
+
+                if (!outcome.Applied)
+                    return;
+
+                var redacted = RedactEmail(email);
+                await _auditLogRepository.AddAsync(
+                    new NewAuditLogEntry
+                    {
+                        Id = Guid.NewGuid(),
+                        Time = DateTime.UtcNow,
+                        UserId = "system",
+                        UserDisplayName = "System (auto)",
+                        SubjectId = redacted,
+                        SubjectName = redacted,
+                        Action =
+                            $"Suppressed all email due to unsubscribe via the email provider ({diagnostic})."
+                            + $" Evidence count {outcome.Suppression.ConsecutiveFailureCount}."
+                            + " Opt-in preferences were not changed.",
+                    }
+                );
+                return;
+            }
+
+            // Reactivation: someone removed the address from Postmark's suppression list. Mirror
+            // it, but only for records this same path created - onlyIfReason is enforced at the
+            // point of the write, so a bounce, resident-request, or admin suppression can never
+            // be lifted by activity in the Postmark dashboard.
+            var clearOutcome = await _suppressionService.ClearAsync(
+                email,
+                EmailSuppression.PostmarkSubscriptionChange,
+                onlyIfReason: SuppressionReason.ProviderUnsubscribe
+            );
+
+            if (!clearOutcome.Cleared)
+                return;
+
+            _logger.LogInformation(
+                "Cleared ProviderUnsubscribe suppression for {Email} after Postmark reactivation.",
+                email
+            );
+
+            var clearedRedacted = RedactEmail(email);
+            await _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    Time = DateTime.UtcNow,
+                    UserId = "system",
+                    UserDisplayName = "System (auto)",
+                    SubjectId = clearedRedacted,
+                    SubjectName = clearedRedacted,
+                    Action =
+                        $"Cleared suppression after the email provider reactivated the address "
+                        + $"({messageStream ?? "unknown"} stream).",
                 }
             );
         }
