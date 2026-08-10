@@ -73,6 +73,14 @@ export class EventDetailComponent implements OnInit {
     return this.apiUser$.pipe(map(u => u?.ownedHomes ?? []));
   }
 
+  /**
+   * Minimum for a count field the mode requires to be nonzero: 0 once a signup
+   * exists (zero means remove), otherwise 1 to match server-side validation.
+   */
+  get requiredCountMin(): number {
+    return this.hasExistingSignup ? 0 : 1;
+  }
+
   /** Whether the current user already has a signup for this event (home-based or user-based). */
   get hasExistingSignup(): boolean {
     if (this.eventItem == null) {
