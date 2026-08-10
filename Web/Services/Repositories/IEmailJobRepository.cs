@@ -44,10 +44,18 @@ namespace Web.Services.Repositories
         Task<List<EmailJob>> GetTerminalJobsOlderThanAsync(DateTime cutoffUtc, int limit);
 
         /// <summary>
+        /// The ceiling implementations clamp the <c>limit</c> of
+        /// <see cref="GetRecentlyCompletedJobsAsync"/> to. The one definition shared by both
+        /// implementations and the sweep caller - if this is raised, all three move together.
+        /// </summary>
+        public const int MaxRecentlyCompletedJobsLimit = 250;
+
+        /// <summary>
         /// Returns recently finished jobs with status Completed, PartiallyCompleted, or Failed
         /// (CompletedUtc &gt;= completedAfterUtc), ordered by CompletedUtc descending (newest first).
         /// Cancelled jobs are excluded. Used by the stall watchdog to apply late-arriving delivery
-        /// events to jobs that have already finished sending.
+        /// events to jobs that have already finished sending. The limit is clamped to
+        /// <see cref="MaxRecentlyCompletedJobsLimit"/>.
         /// </summary>
         Task<List<EmailJob>> GetRecentlyCompletedJobsAsync(DateTime completedAfterUtc, int limit);
 
