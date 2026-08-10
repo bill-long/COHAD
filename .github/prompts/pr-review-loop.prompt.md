@@ -8,13 +8,13 @@ Open a pull request for the current branch, request a code review from the Copil
 ## Step 1: Create the PR
 
 ```bash
-gh pr create --base master --head $(git branch --show-current) \
+gh pr create --base main --head $(git branch --show-current) \
   --title "<concise title>" \
   --body "<markdown body with ## Summary, ### Changes, ### Testing sections>"
 ```
 
-- Infer the title and body from the commits on the branch (use `git log master..HEAD --oneline`).
-- If the branch targets a different base than `master`, adjust `--base` accordingly.
+- Infer the title and body from the commits on the branch (use `git log main..HEAD --oneline`).
+- If the branch targets a different base than `main`, adjust `--base` accordingly.
 - Capture the PR number from the output.
 
 ## Step 2: Request Copilot review

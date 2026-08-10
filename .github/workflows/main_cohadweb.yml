@@ -6,7 +6,7 @@ name: Build and deploy ASP.Net Core app to Azure Web App - cohadweb
 on:
   push:
     branches:
-      - master
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -23,9 +23,9 @@ jobs:
       - name: Check if still latest commit
         id: latest-check
         run: |
-          git fetch origin master
-          if [ "${{ github.sha }}" != "$(git rev-parse origin/master)" ]; then
-            echo "Skipping — newer commit exists on master"
+          git fetch origin main
+          if [ "${{ github.sha }}" != "$(git rev-parse origin/main)" ]; then
+            echo "Skipping — newer commit exists on main"
             echo "is_latest=false" >> "$GITHUB_OUTPUT"
           else
             echo "is_latest=true" >> "$GITHUB_OUTPUT"
@@ -53,8 +53,8 @@ jobs:
         if: steps.latest-check.outputs.is_latest == 'true'
         id: pre-deploy-check
         run: |
-          git fetch origin master
-          if [ "${{ github.sha }}" != "$(git rev-parse origin/master)" ]; then
+          git fetch origin main
+          if [ "${{ github.sha }}" != "$(git rev-parse origin/main)" ]; then
             echo "Skipping deploy — newer commit landed during build"
             echo "is_latest=false" >> "$GITHUB_OUTPUT"
           else
