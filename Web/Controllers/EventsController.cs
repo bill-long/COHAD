@@ -546,7 +546,8 @@ namespace Web.Controllers
             return Ok();
         }
 
-        /// <summary>Creates or updates a signup for an event, keyed by home (if the user has one) or by user.</summary>
+        /// <summary>Creates or updates a signup for an event, keyed by home (if the user has one) or by user.
+        /// A request with <see cref="EventSignupRequest.Remove"/> set clears the signup instead (idempotent).</summary>
         /// <remarks>
         /// Uses Cosmos optimistic concurrency (If-Match ETag) with bounded retries so concurrent signups do not overwrite each other.
         /// </remarks>
@@ -606,9 +607,14 @@ namespace Web.Controllers
                 return BadRequest("Signups are not enabled for this event.");
             }
 
+            var isRemoval = request?.Remove == true;
+
             const int maxAttempts = 10;
             CommunityEvent saved = null;
             var isNewSignup = false;
+            var removedAdults = 0;
+            var removedChildren = 0;
+            var removalNoOp = false;
 
             for (var attempt = 0; attempt < maxAttempts; attempt++)
             {
@@ -623,14 +629,27 @@ namespace Web.Controllers
                     return BadRequest("Signups are not enabled for this event.");
                 }
 
-                var validationError = ValidateSignupRequest(request, read.Event.SignupMode);
-                if (validationError != null)
+                if (isRemoval)
                 {
-                    return BadRequest(validationError);
+                    if (!RemoveSignupMutation(read.Event, apiUser, signupHomeId, out removedAdults, out removedChildren))
+                    {
+                        // Nothing to remove (e.g. a concurrent request already removed it): succeed without writing.
+                        saved = read.Event;
+                        removalNoOp = true;
+                        break;
+                    }
                 }
+                else
+                {
+                    var validationError = ValidateSignupRequest(request, read.Event.SignupMode);
+                    if (validationError != null)
+                    {
+                        return BadRequest(validationError);
+                    }
 
-                isNewSignup = !FindExistingSignup(read.Event, signupHomeId, apiUser.UniqueId, out _);
-                ApplySignupMutation(read.Event, apiUser, request, signupHomeId, homeAddress);
+                    isNewSignup = !FindExistingSignup(read.Event, signupHomeId, apiUser.UniqueId, out _);
+                    ApplySignupMutation(read.Event, apiUser, request, signupHomeId, homeAddress);
+                }
 
                 try
                 {
@@ -661,27 +680,36 @@ namespace Web.Controllers
                 );
             }
 
-            var countDetail = saved.SignupMode switch
+            if (!removalNoOp)
             {
-                EventSignupMode.HouseholdOnly => string.Empty,
-                EventSignupMode.ChildrenOnly => $" ({request.Children} children)",
-                EventSignupMode.AdultsOnly => $" ({request.Adults} adults)",
-                EventSignupMode.PeopleOnly => $" ({request.Adults} {(request.Adults == 1 ? "person" : "people")})",
-                _ => $" ({request.Adults} adults, {request.Children} children)",
-            };
-            var actionPrefix = isNewSignup ? "Signed up for event." : "Updated event signup.";
-            await _auditLogRepository.AddAsync(
-                new NewAuditLogEntry
+                var auditAdults = isRemoval ? removedAdults : request.Adults;
+                var auditChildren = isRemoval ? removedChildren : request.Children;
+                var countDetail = saved.SignupMode switch
                 {
-                    Id = Guid.NewGuid(),
-                    SubjectId = saved.Id.ToString("D"),
-                    SubjectName = saved.Title,
-                    Action = actionPrefix + countDetail,
-                    Time = DateTime.UtcNow,
-                    UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
-                    UserId = apiUser.UniqueId,
-                }
-            );
+                    EventSignupMode.HouseholdOnly => string.Empty,
+                    EventSignupMode.ChildrenOnly => $" ({auditChildren} children)",
+                    EventSignupMode.AdultsOnly => $" ({auditAdults} adults)",
+                    EventSignupMode.PeopleOnly => $" ({auditAdults} {(auditAdults == 1 ? "person" : "people")})",
+                    _ => $" ({auditAdults} adults, {auditChildren} children)",
+                };
+                var actionPrefix = isRemoval
+                    ? "Removed event signup."
+                    : isNewSignup
+                        ? "Signed up for event."
+                        : "Updated event signup.";
+                await _auditLogRepository.AddAsync(
+                    new NewAuditLogEntry
+                    {
+                        Id = Guid.NewGuid(),
+                        SubjectId = saved.Id.ToString("D"),
+                        SubjectName = saved.Title,
+                        Action = actionPrefix + countDetail,
+                        Time = DateTime.UtcNow,
+                        UserDisplayName = $"{apiUser.GivenName ?? string.Empty} {apiUser.Surname ?? string.Empty}".Trim(),
+                        UserId = apiUser.UniqueId,
+                    }
+                );
+            }
 
             return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: false, currentUserHomeIds: apiUser.OwnedHomeIds, currentUserUniqueId: apiUser.UniqueId));
         }
@@ -775,6 +803,49 @@ namespace Web.Controllers
 
             stored.ModifiedByUniqueId = apiUser.UniqueId;
             stored.ModifiedUtc = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Removes the user's signup: the home-keyed signup (when the user has a home) plus any orphaned
+        /// user-based signup, mirroring ApplySignupMutation's cleanup. Returns false when there was nothing
+        /// to remove; the out counts sum the attendees on the removed signups (for the audit log).
+        /// </summary>
+        private static bool RemoveSignupMutation(
+            CommunityEvent stored,
+            Models.User apiUser,
+            Guid signupHomeId,
+            out int removedAdults,
+            out int removedChildren
+        )
+        {
+            removedAdults = 0;
+            removedChildren = 0;
+            if (stored.Signups == null)
+            {
+                return false;
+            }
+
+            var toRemove = stored
+                .Signups.Where(s =>
+                    (signupHomeId != Guid.Empty && s.HomeId == signupHomeId)
+                    || (s.HomeId == Guid.Empty && s.UserUniqueId == apiUser.UniqueId)
+                )
+                .ToList();
+            if (toRemove.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (var signup in toRemove)
+            {
+                removedAdults += signup.Adults;
+                removedChildren += signup.Children;
+                stored.Signups.Remove(signup);
+            }
+
+            stored.ModifiedByUniqueId = apiUser.UniqueId;
+            stored.ModifiedUtc = DateTime.UtcNow;
+            return true;
         }
 
         private static string ValidateSignupRequest(EventSignupRequest request, EventSignupMode mode)

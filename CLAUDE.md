@@ -112,7 +112,7 @@ When `appInsightsConnectionString` is empty, the service becomes a complete no-o
 - **Page views** — automatic on every Angular route navigation (`NavigationEnd` events)
 - **Authenticated user context** — user's Azure AD B2C `sub` claim (opaque identifier, no PII), set on login and cleared on logout
 - **Client-side exceptions** — all unhandled errors via `GlobalErrorHandler`
-- **Custom events** — `DocumentDownloaded`, `VendorDetailViewed`, `VendorReviewSubmitted`, `EmailSent`, `EventSignupSubmitted`, `DirectorySearched`
+- **Custom events** — `DocumentDownloaded`, `VendorDetailViewed`, `VendorReviewSubmitted`, `EmailSent`, `EventSignupSubmitted`, `EventSignupRemoved`, `DirectorySearched`
 
 **Changing the connection string:** If you need to point to a different Application Insights resource, update both:
 1. `appsettings.json` → `ApplicationInsights:ConnectionString` (backend)

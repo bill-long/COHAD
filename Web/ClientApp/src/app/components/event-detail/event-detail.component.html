@@ -88,7 +88,7 @@
                   *ngIf="event.signupMode === 'PeopleOnly'"
                 >
                   <mat-label>People</mat-label>
-                  <input matInput id="signup-people" name="signupPeople" type="number" min="1" [(ngModel)]="adults" />
+                  <input matInput id="signup-people" name="signupPeople" type="number" [min]="requiredCountMin" [(ngModel)]="adults" />
                 </mat-form-field>
                 <mat-form-field
                   appearance="outline"
@@ -97,7 +97,14 @@
                   *ngIf="event.signupMode !== 'ChildrenOnly' && event.signupMode !== 'PeopleOnly'"
                 >
                   <mat-label>Adults</mat-label>
-                  <input matInput id="signup-adults" name="signupAdults" type="number" min="0" [(ngModel)]="adults" />
+                  <input
+                    matInput
+                    id="signup-adults"
+                    name="signupAdults"
+                    type="number"
+                    [min]="event.signupMode === 'AdultsOnly' ? requiredCountMin : 0"
+                    [(ngModel)]="adults"
+                  />
                 </mat-form-field>
                 <mat-form-field
                   appearance="outline"
@@ -106,7 +113,14 @@
                   *ngIf="event.signupMode !== 'AdultsOnly' && event.signupMode !== 'PeopleOnly'"
                 >
                   <mat-label>Children</mat-label>
-                  <input matInput id="signup-children" name="signupChildren" type="number" min="0" [(ngModel)]="children" />
+                  <input
+                    matInput
+                    id="signup-children"
+                    name="signupChildren"
+                    type="number"
+                    [min]="event.signupMode === 'ChildrenOnly' ? requiredCountMin : 0"
+                    [(ngModel)]="children"
+                  />
                 </mat-form-field>
               </div>
               <mat-form-field
