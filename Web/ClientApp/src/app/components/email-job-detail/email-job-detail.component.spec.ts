@@ -430,6 +430,7 @@ describe('EmailJobDetailComponent', () => {
       expect(component.suppressionReasonLabel('SpamComplaint')).toBe('recipient reported spam');
       expect(component.suppressionReasonLabel('ResidentRequest')).toBe('recipient unsubscribed');
       expect(component.suppressionReasonLabel('AdminAction')).toBe('suppressed by an administrator');
+      expect(component.suppressionReasonLabel('ProviderUnsubscribe')).toBe('unsubscribed via email provider');
       // A stamped recipient whose reason predates the field still gets a sentence, not blank.
       expect(component.suppressionReasonLabel(null)).toBeTruthy();
     });

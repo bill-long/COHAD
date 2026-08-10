@@ -15,6 +15,8 @@ export function suppressionReasonLabel(reason: SuppressionReason | null | undefi
       return 'recipient unsubscribed';
     case 'AdminAction':
       return 'suppressed by an administrator';
+    case 'ProviderUnsubscribe':
+      return 'unsubscribed via email provider';
     default:
       return 'on the suppression list';
   }

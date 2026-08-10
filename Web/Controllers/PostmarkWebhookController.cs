@@ -1,6 +1,8 @@
 #nullable enable
 using System;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -21,18 +23,21 @@ namespace Web.Controllers
     {
         private readonly IPostmarkWebhookVerifier _verifier;
         private readonly IEmailDeliveryEventRepository _deliveryEventRepository;
+        private readonly IEmailDeliveryActionService _deliveryActionService;
         private readonly ILogger<PostmarkWebhookController> _logger;
         private readonly bool _isDevelopment;
 
         public PostmarkWebhookController(
             IPostmarkWebhookVerifier verifier,
             IEmailDeliveryEventRepository deliveryEventRepository,
+            IEmailDeliveryActionService deliveryActionService,
             IWebHostEnvironment env,
             ILogger<PostmarkWebhookController> logger
         )
         {
             _verifier = verifier;
             _deliveryEventRepository = deliveryEventRepository;
+            _deliveryActionService = deliveryActionService;
             _logger = logger;
             _isDevelopment = env.IsDevelopment() || env.IsEnvironment("MockData");
         }
@@ -103,19 +108,25 @@ namespace Web.Controllers
             if (evt.ValueKind != JsonValueKind.Object)
                 return;
 
-            if (!evt.TryGetProperty("RecordType", out var recordTypeProp))
-                return;
-
-            var recordType = recordTypeProp.GetString();
+            var recordType = GetOptionalString(evt, "RecordType");
             if (string.IsNullOrEmpty(recordType))
                 return;
+            // SubscriptionChange is handled on its own path: job correlation is optional for it
+            // (manual suppressions and reactivations carry no MessageID/metadata), and the
+            // suppression write cannot wait on the per-job event sweep, which never sees
+            // jobless events.
+            if (recordType == "SubscriptionChange")
+            {
+                await ProcessSubscriptionChangeAsync(evt, rawBody);
+                return;
+            }
 
             // Extract recipient email — field name varies by event type
             string? email = recordType switch
             {
-                "Delivery" => evt.TryGetProperty("Recipient", out var r) ? r.GetString() : null,
-                "Bounce" => evt.TryGetProperty("Email", out var b) ? b.GetString() : null,
-                "SpamComplaint" => evt.TryGetProperty("Email", out var s) ? s.GetString() : null,
+                "Delivery" => GetOptionalString(evt, "Recipient"),
+                "Bounce" => GetOptionalString(evt, "Email"),
+                "SpamComplaint" => GetOptionalString(evt, "Email"),
                 _ => null,
             };
 
@@ -129,10 +140,9 @@ namespace Web.Controllers
 
             // Extract correlation metadata
             string? jobIdStr = null;
-            if (evt.TryGetProperty("Metadata", out var metadata))
+            if (evt.TryGetProperty("Metadata", out var metadata) && metadata.ValueKind == JsonValueKind.Object)
             {
-                if (metadata.TryGetProperty("cohad_job_id", out var jobIdProp))
-                    jobIdStr = jobIdProp.GetString();
+                jobIdStr = GetOptionalString(metadata, "cohad_job_id");
             }
 
             if (string.IsNullOrEmpty(jobIdStr))
@@ -155,9 +165,7 @@ namespace Web.Controllers
             var deliveryStatus = MapRecordTypeToDeliveryStatus(recordType, evt);
 
             // Extract MessageID for provider correlation
-            string? messageId = null;
-            if (evt.TryGetProperty("MessageID", out var msgIdProp))
-                messageId = msgIdProp.GetString();
+            string? messageId = GetOptionalString(evt, "MessageID");
 
             // Dedup key: use webhook event ID for bounces/complaints, MessageID-based key for deliveries
             string dedupKey = recordType switch
@@ -187,6 +195,123 @@ namespace Web.Controllers
             await _deliveryEventRepository.AddAsync(deliveryEvent);
         }
 
+        /// <summary>
+        /// Handles a Postmark SubscriptionChange event: an address was added to or removed from
+        /// a message stream's suppression list. The suppression mutation itself lives in
+        /// <see cref="IEmailDeliveryActionService"/> (the provider-feedback writer); this method
+        /// only extracts the payload and, when the change is a new suppression correlated to one
+        /// of our jobs, stores a delivery event so the job's delivery-events view shows the
+        /// unsubscribe. The event's <see cref="DeliveryStatus.Unknown"/> never overrides a
+        /// truthful Delivered on the recipient row - the message WAS delivered; the unsubscribe
+        /// happened afterwards, at the provider layer.
+        /// </summary>
+        private async Task ProcessSubscriptionChangeAsync(JsonElement evt, string rawBody)
+        {
+            var email = GetOptionalString(evt, "Recipient");
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                _logger.LogDebug("Postmark SubscriptionChange event missing Recipient - skipping.");
+                return;
+            }
+            email = email.Trim();
+
+            if (
+                !evt.TryGetProperty("SuppressSending", out var suppressProp)
+                || suppressProp.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            )
+            {
+                _logger.LogWarning(
+                    "Postmark SubscriptionChange event for {Email} missing SuppressSending - skipping.",
+                    email
+                );
+                return;
+            }
+            var suppressSending = suppressProp.GetBoolean();
+
+            string? origin = GetOptionalString(evt, "Origin");
+            string? postmarkReason = GetOptionalString(evt, "SuppressionReason");
+            string? messageStream = GetOptionalString(evt, "MessageStream");
+            string? messageId = GetOptionalString(evt, "MessageID");
+            string? changedAt = GetOptionalString(evt, "ChangedAt");
+
+            // Job correlation is optional: Postmark sends no MessageID (and empty Metadata) for
+            // manual suppressions and reactivations. A missing or unparsable id is an absence,
+            // not a rejection - unlike the delivery-event path above, which exists to correlate.
+            Guid? jobId = null;
+            if (
+                evt.TryGetProperty("Metadata", out var metadata)
+                && metadata.ValueKind == JsonValueKind.Object
+            )
+            {
+                var jobIdStr = GetOptionalString(metadata, "cohad_job_id");
+                if (Guid.TryParse(jobIdStr, out var parsed))
+                {
+                    jobId = parsed;
+                }
+                else if (!string.IsNullOrEmpty(jobIdStr))
+                {
+                    _logger.LogWarning("Postmark SubscriptionChange has invalid cohad_job_id: {JobId}", jobIdStr);
+                }
+            }
+
+            // Deterministic per change so a webhook retry is idempotent. MessageID and ChangedAt
+            // are both absent only on a malformed payload; hashing the raw body then keeps a
+            // retried POST on the same key without falsely merging two distinct changes.
+            var evidenceKey =
+                $"postmark:subscription-change:{messageId ?? changedAt ?? ComputePayloadKey(rawBody)}";
+
+            var action = await _deliveryActionService.ProcessSubscriptionChangeAsync(
+                email,
+                suppressSending,
+                origin,
+                postmarkReason,
+                messageStream,
+                jobId,
+                evidenceKey
+            );
+
+            // Store a delivery event only when a suppression is in force AND the change names a
+            // job: the per-job sweep reads events by job id, so a jobless event is unreachable,
+            // and bounce/complaint-origin changes (SubscriptionChangeAction.None) already have
+            // their own Bounce/SpamComplaint events. ActionProcessed is set because the action
+            // was taken here, now - the sweep's gate would ignore an Unknown-status event
+            // anyway, but the flag keeps that true if the gate ever widens.
+            if (action != SubscriptionChangeAction.Suppressed || !jobId.HasValue)
+                return;
+
+            var deliveryEvent = new EmailDeliveryEvent
+            {
+                Id = EmailDeliveryEvent.MakeId(jobId.Value, email, evidenceKey),
+                JobId = jobId.Value,
+                Email = email,
+                DeliveryStatus = DeliveryStatus.Unknown,
+                ProviderEventType = "SubscriptionChange",
+                ProviderMessageId = messageId,
+                Provider = "Postmark",
+                ReceivedUtc = DateTime.UtcNow,
+                ProviderPayloadJson = rawBody,
+                ProviderDiagnostic = EmailDeliveryActionService.BuildSubscriptionChangeDiagnostic(
+                    origin,
+                    postmarkReason,
+                    messageStream
+                ),
+                ActionProcessed = true,
+            };
+
+            await _deliveryEventRepository.AddAsync(deliveryEvent);
+        }
+
+        /// <summary>
+        /// Deterministic fallback identity for a payload carrying neither MessageID nor
+        /// ChangedAt: a hash of the raw body, so a retried POST of the same bytes lands on the
+        /// same evidence key and distinct payloads never share one.
+        /// </summary>
+        private static string ComputePayloadKey(string rawBody)
+        {
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(rawBody));
+            return Convert.ToHexStringLower(hash);
+        }
+
         internal static DeliveryStatus MapRecordTypeToDeliveryStatus(string recordType, JsonElement evt)
         {
             return recordType switch
@@ -200,10 +325,7 @@ namespace Web.Controllers
 
         private static DeliveryStatus MapBounceType(JsonElement evt)
         {
-            if (!evt.TryGetProperty("Type", out var typeProp))
-                return DeliveryStatus.Bounced;
-
-            var bounceType = typeProp.GetString() ?? "";
+            var bounceType = GetOptionalString(evt, "Type") ?? "";
 
             // Postmark bounce types: HardBounce, SoftBounce, Transient, etc.
             return bounceType switch
@@ -212,6 +334,20 @@ namespace Web.Controllers
                 "SoftBounce" => DeliveryStatus.Deferred,
                 _ => DeliveryStatus.Bounced,
             };
+        }
+
+        /// <summary>
+        /// Reads an optional string property from a webhook payload. Postmark's schema says these
+        /// fields are strings, but the payload is drift- and attacker-exposed: a non-string value
+        /// (or a blank one) reads as absent rather than throwing the request into a 500-and-retry
+        /// loop it can never escape.
+        /// </summary>
+        internal static string? GetOptionalString(JsonElement evt, string name)
+        {
+            if (!evt.TryGetProperty(name, out var prop) || prop.ValueKind != JsonValueKind.String)
+                return null;
+            var value = prop.GetString();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
         }
 
         /// <summary>
@@ -225,10 +361,10 @@ namespace Web.Controllers
             if (recordType is not ("Bounce" or "SpamComplaint"))
                 return null;
 
-            var type = evt.TryGetProperty("Type", out var typeProp) ? typeProp.GetString() : null;
-            var description = evt.TryGetProperty("Description", out var descProp) ? descProp.GetString() : null;
+            var type = GetOptionalString(evt, "Type");
+            var description = GetOptionalString(evt, "Description");
             if (string.IsNullOrWhiteSpace(description))
-                description = evt.TryGetProperty("Details", out var detailsProp) ? detailsProp.GetString() : null;
+                description = GetOptionalString(evt, "Details");
 
             if (string.IsNullOrWhiteSpace(type))
                 return string.IsNullOrWhiteSpace(description) ? null : description;
@@ -256,7 +392,7 @@ namespace Web.Controllers
             {
                 "Bounce" => ExtractBounceId(evt),
                 "SpamComplaint" => ExtractComplaintId(evt),
-                "Delivery" => evt.TryGetProperty("MessageID", out var m) ? m.GetString() : null,
+                "Delivery" => GetOptionalString(evt, "MessageID"),
                 _ => null,
             };
         }
