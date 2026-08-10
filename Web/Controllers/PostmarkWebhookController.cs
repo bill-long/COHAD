@@ -108,13 +108,9 @@ namespace Web.Controllers
             if (evt.ValueKind != JsonValueKind.Object)
                 return;
 
-            if (!evt.TryGetProperty("RecordType", out var recordTypeProp))
-                return;
-
-            var recordType = recordTypeProp.GetString();
+            var recordType = GetOptionalString(evt, "RecordType");
             if (string.IsNullOrEmpty(recordType))
                 return;
-
             // SubscriptionChange is handled on its own path: job correlation is optional for it
             // (manual suppressions and reactivations carry no MessageID/metadata), and the
             // suppression write cannot wait on the per-job event sweep, which never sees

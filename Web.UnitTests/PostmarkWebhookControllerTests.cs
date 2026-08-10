@@ -919,6 +919,20 @@ namespace Web.UnitTests
             _deliveryEventRepo.Verify(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()), Times.Never);
         }
 
+        [Fact]
+        public async Task NonStringRecordType_IsANoOp()
+        {
+            // The discriminator itself is parsed leniently too: a non-string RecordType must not
+            // throw into the 500-and-retry loop.
+            SetupVerifierNotConfigured();
+
+            var controller = CreateController("{\"RecordType\":123,\"Recipient\":\"user@example.com\"}");
+            var result = await controller.HandleEvent();
+
+            Assert.IsType<OkResult>(result);
+            _deliveryEventRepo.Verify(r => r.AddAsync(It.IsAny<EmailDeliveryEvent>()), Times.Never);
+        }
+
         // ─── Status mapping static method ───
 
         [Theory]
