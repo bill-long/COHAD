@@ -876,10 +876,11 @@ suppressed here. Decisions made in the writing:
   dump).
 - **No durable pacing state**, for the same reason as the user purge: the pass is idempotent and
   additive, so over-running is free and under-running only defers the same records.
-- **MockData runs it end to end** against `MockPostmarkSuppressionDumpClient`, whose seeded dump
-  entry (`postmark.unsubscribed@cohad.local`, an address with no COHAD suppression) is recorded
-  by the first sync run, so the reconciler's provenance is exercisable on the Manage >
-  Suppressions page without a Postmark account.
+- **MockData runs it end to end** against `MockPostmarkSuppressionClient` (named
+  `MockPostmarkSuppressionDumpClient` until issue #11 taught it the delete endpoint), whose
+  seeded dump entry (`postmark.unsubscribed@cohad.local`, an address with no COHAD suppression)
+  is recorded by the first sync run, so the reconciler's provenance is exercisable on the
+  Manage > Suppressions page without a Postmark account.
 - The **reverse direction** - admin clear also reactivating the address in Postmark - was
   deliberately NOT in this change; it is issue #11, implemented below.
 
