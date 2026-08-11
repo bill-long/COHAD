@@ -295,9 +295,10 @@ namespace Web.Services
         /// Unspecified is read as already-Utc (provider timestamps carry no host-local meaning),
         /// Utc is identity. Mirrors <c>VendorReviewTimestamps</c>'s kind switch so the two can't
         /// drift. Deterministic across hosts, unlike <see cref="DateTime.ToUniversalTime"/>,
-        /// which reads Unspecified as host-local.
+        /// which reads Unspecified as host-local. Internal so the admin clear endpoint compares
+        /// its request-supplied episode stamp with the same rule.
         /// </summary>
-        private static DateTime AsUtc(DateTime value) =>
+        internal static DateTime AsUtc(DateTime value) =>
             value.Kind switch
             {
                 DateTimeKind.Utc => value,
@@ -350,8 +351,9 @@ namespace Web.Services
 
                 // Same write-time discipline for the episode guard: SuppressedUtc is reset by
                 // every re-suppression, so a mismatch means the caller is looking at an episode
-                // this record no longer describes.
-                if (onlyIfSuppressedUtc.HasValue && existing.SuppressedUtc != onlyIfSuppressedUtc.Value)
+                // this record no longer describes. AsUtc-normalized like every other timestamp
+                // input, so a caller-supplied kind cannot manufacture a false mismatch.
+                if (onlyIfSuppressedUtc.HasValue && existing.SuppressedUtc != AsUtc(onlyIfSuppressedUtc.Value))
                     return new SuppressionClearOutcome(existing, cleared: false);
 
                 existing.ClearedUtc = _timeProvider.GetUtcNow().UtcDateTime;

@@ -152,6 +152,32 @@ public sealed class PostmarkReactivationServiceTests
         Assert.Equal(0, result.StreamsAttempted);
     }
 
+    // --- PostmarkOptions.SuppressionApiConfigured (the one predicate behind the real-vs-noop
+    // registration; deliberately independent of UsePostmarkAsDefault so webhook-only mode keeps
+    // the real reactivation the reconciliation would otherwise fight) ---
+
+    [Theory]
+    [InlineData(true, "token", true)]
+    [InlineData(true, "  ", false)]
+    [InlineData(false, "token", false)]
+    [InlineData(false, "", false)]
+    public void Suppression_api_configured_requires_enabled_and_a_token(
+        bool enabled,
+        string serverToken,
+        bool expected
+    )
+    {
+        var options = new PostmarkOptions
+        {
+            Enabled = enabled,
+            ServerToken = serverToken,
+            // Webhook-only mode must NOT disable the suppression API.
+            UsePostmarkAsDefault = false,
+        };
+
+        Assert.Equal(expected, options.SuppressionApiConfigured);
+    }
+
     // --- MockPostmarkSuppressionClient parity (the MockData stand-in must close the same loop
     // the real provider closes: a reactivated address stops appearing in the dump) ---
 

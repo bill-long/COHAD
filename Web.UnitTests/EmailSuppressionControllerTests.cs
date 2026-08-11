@@ -287,7 +287,11 @@ namespace Web.UnitTests
             _reactivation
                 .Setup(r => r.ReactivateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(
-                    new PostmarkReactivationResult(2, new[] { "broadcast" }, "SpamComplaint suppressions cannot be deleted.")
+                    new PostmarkReactivationResult(
+                        2,
+                        new[] { "broadcast", "outbound" },
+                        "SpamComplaint suppressions cannot be deleted."
+                    )
                 );
 
             var controller = CreateController();
@@ -301,7 +305,37 @@ namespace Web.UnitTests
             Assert.Contains("SpamComplaint suppressions cannot be deleted", status.Value!.ToString());
             var record = await _suppressions.GetByIdAsync(seeded.Id);
             Assert.True(record!.IsActive);
+            // Every stream failed: nothing changed provider-side, so there is nothing to audit.
             _auditLog.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task Clear_PartialReactivationFailure_Returns502ButAuditsTheRealDeletions()
+        {
+            // One stream's entry WAS deleted before the other refused: that provider-side change
+            // is real, so it is audited even though the clear itself is refused - the audit log
+            // must be able to explain why one stream no longer suppresses an address COHAD
+            // still does.
+            var seeded = await SeedAsync("jane@example.com", SuppressionReason.ProviderUnsubscribe, new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
+            _reactivation
+                .Setup(r => r.ReactivateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PostmarkReactivationResult(2, new[] { "outbound" }, "boom"));
+
+            NewAuditLogEntry entry = null;
+            _auditLog
+                .Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
+                .Callback<NewAuditLogEntry>(e => entry = e)
+                .Returns(Task.CompletedTask);
+
+            var controller = CreateController();
+            var result = await controller.Clear(seeded.Id);
+
+            var status = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status502BadGateway, status.StatusCode);
+            Assert.True((await _suppressions.GetByIdAsync(seeded.Id))!.IsActive);
+            Assert.NotNull(entry);
+            Assert.Contains("1 of 2 streams", entry.Action);
+            Assert.Contains("NOT cleared", entry.Action);
         }
 
         [Fact]

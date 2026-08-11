@@ -951,14 +951,21 @@ procedure is one action. Decisions made in the writing:
   reasons (the record does not store which stream or why - issue #11's own prescription), so
   it can also lift a hard-bounce entry the other stream held, which the next bounce webhook
   re-suppresses.
-- **A deployment where Postmark does not carry the mail skips the provider call and clears
-  normally** (`NotConfiguredPostmarkReactivationService`, registered on the
-  `DisabledSpamClassifier` precedent when `Postmark:Enabled`, `UsePostmarkAsDefault`, or
-  `ServerToken` says the send path is not Postmark's): in webhook-only mode, with Postmark
-  disabled but a stale token left in settings, or with no Postmark at all, sends do not pass
-  through Postmark's suppression filter, so there is no provider-side entry dropping mail and
-  refusing the clear would block the admin over a false, unresolvable problem. MockData keeps
-  the real service over the in-memory client, which needs no token.
+- **The reactivation is registered exactly when the suppression API is usable**
+  (`PostmarkOptions.SuppressionApiConfigured` = `Enabled` + `ServerToken`, the one definition;
+  `NotConfiguredPostmarkReactivationService` otherwise, on the `DisabledSpamClassifier`
+  precedent). Deliberately NOT keyed on `UsePostmarkAsDefault`: webhook-only mode still lets
+  the reconciliation mirror Postmark's lists, so a clear that skipped reactivation there would
+  be re-suppressed by the next sync run - the exact fight this feature removes. With Postmark
+  disabled (even with a stale token left in settings) or tokenless, neither the send path nor
+  the reconciliation involves Postmark's lists, so the no-op keeps a dead integration from
+  blocking every clear. MockData keeps the real service over the in-memory client, which
+  needs no token.
+- **Provider-side changes are audited even when the clear is not.** A partial reactivation
+  (one stream deleted, the other refused), a local write that lost every race (409), and an
+  episode-guard refusal all really deleted provider entries; each writes an audit line through
+  one shared writer, so the audit log can always explain why Postmark no longer suppresses an
+  address COHAD still does.
 - **MockData closes the loop end to end:** `MockPostmarkSuppressionClient.ReactivateAsync`
   deletes the seeded dump entry, so clearing the reconciler-recorded suppression prevents the
   next sync run from re-suppressing it - the same fight-free behavior the real provider gives.

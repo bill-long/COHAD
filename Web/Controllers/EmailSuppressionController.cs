@@ -147,15 +147,31 @@ namespace Web.Controllers
         [HttpPost("{id}/clear")]
         public async Task<IActionResult> Clear(string id, [FromBody] ClearEmailSuppressionRequestDto request = null)
         {
-            var apiUser = await _currentUser.GetAsync(User);
+            // Independent reads (user store and suppression store), so the interactive request
+            // does not pay two round-trips in series before the provider call it already waits
+            // out.
+            var apiUserTask = _currentUser.GetAsync(User);
+            var existingTask = _repository.GetByIdAsync(id);
+            await Task.WhenAll(apiUserTask, existingTask);
+            var apiUser = apiUserTask.Result;
+            var existing = existingTask.Result;
 
-            var existing = await _repository.GetByIdAsync(id);
             if (existing == null)
-                return NotFound(new { error = "No suppression with this id." });
+                return NotFoundNoSuppression();
 
+            // Refused BEFORE the provider call: the admin's page showed a different episode, and
+            // provider entries must not be deleted on the strength of a row the admin never saw.
+            // Kind-normalized with the service's own rule so a caller-supplied kind cannot
+            // manufacture a false mismatch.
             var expectedEpisode = request?.SuppressedUtc;
-            if (expectedEpisode.HasValue && existing.IsActive && existing.SuppressedUtc != expectedEpisode.Value)
-                return Conflict(new { error = "The suppression changed since the page was loaded. Review the record and try again." });
+            if (
+                expectedEpisode.HasValue
+                && existing.IsActive
+                && existing.SuppressedUtc != EmailSuppressionService.AsUtc(expectedEpisode.Value)
+            )
+            {
+                return SuppressionChangedConflict();
+            }
 
             var reactivated = false;
             // The blank-Email guard keeps a hand-authored or corrupt row clearable: a blank
@@ -176,6 +192,20 @@ namespace Web.Controllers
                 {
                     if (!reactivation.Succeeded)
                     {
+                        // A PARTIAL failure still deleted real provider entries; that side
+                        // effect is audited even though the clear is refused, or the audit log
+                        // could not explain why one stream no longer suppresses an address
+                        // COHAD still does.
+                        if (reactivation.FailedStreams.Count < reactivation.StreamsAttempted)
+                        {
+                            await AuditProviderChangeWithoutClearAsync(
+                                apiUser,
+                                existing.Email,
+                                $"Reactivated the address at the email provider on {reactivation.StreamsAttempted - reactivation.FailedStreams.Count}"
+                                    + $" of {reactivation.StreamsAttempted} streams; the rest failed and the suppression was NOT cleared."
+                            );
+                        }
+
                         // 502: the upstream provider call failed, and without it the clear would
                         // resume "successful" sends the provider silently drops. The provider's
                         // own refusal text is included because it distinguishes a retryable
@@ -194,27 +224,44 @@ namespace Web.Controllers
                     }
                     reactivated = true;
                 }
-                // SkippedNotConfigured: no provider integration on the send path (webhook-only
-                // Postmark, or none at all), so there is nothing to reactivate and nothing
+                // SkippedNotConfigured: Postmark is disabled or has no server token, so its
+                // suppression lists are not in play (neither on the send path nor via the
+                // reconciliation, which needs the same token) - nothing to reactivate, nothing
                 // blocking the clear.
             }
 
             SuppressionClearOutcome outcome;
             try
             {
+                // The pre-read's episode, unconditionally - also when the pre-read saw the
+                // record as cleared: if it is re-suppressed between our read and the service's,
+                // the write-time guard must refuse rather than lift an episode nobody saw
+                // (the cleared pre-read's stamp can never match a NEW episode's).
                 outcome = await _service.ClearByIdAsync(
                     id,
                     apiUser.UniqueId,
-                    onlyIfSuppressedUtc: existing.IsActive ? existing.SuppressedUtc : null
+                    onlyIfSuppressedUtc: existing.SuppressedUtc
                 );
             }
             catch (ConcurrencyConflictException)
             {
+                // The provider-side deletions this request performed are real even though the
+                // local write kept losing races - same audit obligation as the refused-episode
+                // path below.
+                if (reactivated)
+                {
+                    await AuditProviderChangeWithoutClearAsync(
+                        apiUser,
+                        existing.Email,
+                        "Reactivated the address at the email provider, but the suppression record"
+                            + " was updated concurrently and was NOT cleared."
+                    );
+                }
                 return Conflict(new { error = "The record is being updated concurrently. Please try again." });
             }
 
             if (outcome.Suppression == null)
-                return NotFound(new { error = "No suppression with this id." });
+                return NotFoundNoSuppression();
 
             if (!outcome.Cleared && outcome.Suppression.IsActive)
             {
@@ -225,22 +272,14 @@ namespace Web.Controllers
                 // the provider no longer suppresses an address COHAD still does.
                 if (reactivated)
                 {
-                    await _auditLogRepository.AddAsync(
-                        new NewAuditLogEntry
-                        {
-                            Id = Guid.NewGuid(),
-                            Time = DateTime.UtcNow,
-                            UserId = apiUser.UniqueId,
-                            UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
-                            SubjectId = EmailDeliveryActionService.RedactEmail(outcome.Suppression.Email),
-                            SubjectName = EmailDeliveryActionService.RedactEmail(outcome.Suppression.Email),
-                            Action =
-                                "Reactivated the address at the email provider, but the suppression was"
-                                + " re-suppressed concurrently and was NOT cleared.",
-                        }
+                    await AuditProviderChangeWithoutClearAsync(
+                        apiUser,
+                        outcome.Suppression.Email,
+                        "Reactivated the address at the email provider, but the suppression was"
+                            + " re-suppressed concurrently and was NOT cleared."
                     );
                 }
-                return Conflict(new { error = "The suppression changed since the page was loaded. Review the record and try again." });
+                return SuppressionChangedConflict();
             }
 
             // Audited only when this call did the clearing - an idempotent no-op recording "X
@@ -265,6 +304,35 @@ namespace Web.Controllers
             }
 
             return Ok(EmailSuppressionDto.FromModel(outcome.Suppression));
+        }
+
+        private static NotFoundObjectResult NotFoundNoSuppression() =>
+            new(new { error = "No suppression with this id." });
+
+        private static ConflictObjectResult SuppressionChangedConflict() =>
+            new(new { error = "The suppression changed since the page was loaded. Review the record and try again." });
+
+        /// <summary>
+        /// The audit line for a request that changed provider-side state without clearing the
+        /// local record. One writer for the three ways that can happen (partial provider
+        /// failure, lost local write races, refused episode guard), so the wording cannot
+        /// drift between them.
+        /// </summary>
+        private Task AuditProviderChangeWithoutClearAsync(User apiUser, string email, string action)
+        {
+            var redacted = EmailDeliveryActionService.RedactEmail(email);
+            return _auditLogRepository.AddAsync(
+                new NewAuditLogEntry
+                {
+                    Id = Guid.NewGuid(),
+                    Time = DateTime.UtcNow,
+                    UserId = apiUser.UniqueId,
+                    UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                    SubjectId = redacted,
+                    SubjectName = redacted,
+                    Action = action,
+                }
+            );
         }
     }
 }

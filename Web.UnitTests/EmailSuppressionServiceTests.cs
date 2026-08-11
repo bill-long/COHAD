@@ -385,6 +385,34 @@ namespace Web.UnitTests
         }
 
         [Fact]
+        public async Task ClearById_EpisodeGuard_NormalizesTheCallersKind()
+        {
+            // The guard runs the same AsUtc rule as every other timestamp input: an
+            // Unspecified-kind stamp carrying the right instant (a round-tripped JSON value)
+            // must match, not manufacture a perpetual refusal.
+            var service = CreateService();
+            var outcome0 = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSubscriptionChange,
+                null,
+                null
+            );
+
+            var unspecifiedKind = DateTime.SpecifyKind(
+                outcome0.Suppression.SuppressedUtc,
+                DateTimeKind.Unspecified
+            );
+            var outcome = await service.ClearByIdAsync(
+                outcome0.Suppression.Id,
+                "admin-user",
+                onlyIfSuppressedUtc: unspecifiedKind
+            );
+
+            Assert.True(outcome.Cleared);
+        }
+
+        [Fact]
         public async Task Record_SnapshotEvidence_IgnoredWhenTheRecordWasClearedAfterTheSnapshot()
         {
             // The clear-vs-inflight-sync race: a suppression-dump snapshot fetched moments
