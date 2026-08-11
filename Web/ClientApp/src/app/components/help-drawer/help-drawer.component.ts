@@ -1,4 +1,5 @@
 import { Component, OnDestroy } from '@angular/core';
+import { BlockScrollStrategy, ScrollStrategyOptions } from '@angular/cdk/overlay';
 import { SafeHtml } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { EMPTY, Observable, Subject, Subscription } from 'rxjs';
@@ -34,13 +35,20 @@ export class HelpDrawerComponent implements OnDestroy {
   private readonly subscriptions = new Subscription();
   /** Doc requests; null cancels the in-flight load (switchMap drops stale responses on its own). */
   private readonly topicRequests = new Subject<HelpTopic | null>();
-  /** body overflow value captured when the drawer opened; null while closed (nothing to restore). */
-  private previousBodyOverflow: string | null = null;
+  /**
+   * CDK's scroll blocker - the same mechanism Material dialogs use - instead of hand-managed
+   * body inline styles. It composes with concurrent overlay locks by construction: enable() no-ops
+   * when another lock already holds the page, and disable() only releases this instance's own lock,
+   * so the drawer can neither freeze the page permanently nor release someone else's block.
+   */
+  private readonly scrollBlock: BlockScrollStrategy;
 
   constructor(
     private readonly helpService: HelpService,
     private readonly router: Router,
+    scrollStrategyOptions: ScrollStrategyOptions,
   ) {
+    this.scrollBlock = scrollStrategyOptions.block();
     this.open$ = helpService.open$;
     this.sections$ = helpService.visibleTopics$.pipe(map(groupBySection));
     this.subscriptions.add(
@@ -57,7 +65,7 @@ export class HelpDrawerComponent implements OnDestroy {
     this.subscriptions.add(
       helpService.open$.subscribe(open => {
         if (open) {
-          this.blockBodyScroll();
+          this.scrollBlock.enable();
           const contextual = helpService.currentTopic;
           if (contextual) {
             this.showTopic(contextual);
@@ -65,7 +73,7 @@ export class HelpDrawerComponent implements OnDestroy {
             this.showIndex();
           }
         } else {
-          this.restoreBodyScroll();
+          this.scrollBlock.disable();
           // Drop any in-flight doc load so a late response cannot mutate state behind a closed
           // drawer; reopening always issues a fresh request anyway.
           this.topicRequests.next(null);
@@ -76,23 +84,7 @@ export class HelpDrawerComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
-    this.restoreBodyScroll();
-  }
-
-  /** Blocks page scrolling behind the modal drawer, remembering the value to restore on close. */
-  private blockBodyScroll(): void {
-    if (this.previousBodyOverflow === null) {
-      this.previousBodyOverflow = document.body.style.overflow;
-    }
-    document.body.style.overflow = 'hidden';
-  }
-
-  /** Restores exactly the pre-open overflow value; a no-op while the drawer is already closed. */
-  private restoreBodyScroll(): void {
-    if (this.previousBodyOverflow !== null) {
-      document.body.style.overflow = this.previousBodyOverflow;
-      this.previousBodyOverflow = null;
-    }
+    this.scrollBlock.disable();
   }
 
   close(): void {

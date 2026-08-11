@@ -211,19 +211,56 @@ describe('HelpDrawerComponent', () => {
     expect(fixture.componentInstance.topicHtml).withContext('late response must not mutate closed-drawer state').toBeNull();
   });
 
-  it('blocks page scrolling while open and restores the pre-open value on close', () => {
-    document.body.style.overflow = 'scroll';
+  it('blocks page scrolling while open and releases the block on close', () => {
+    // CDK's BlockScrollStrategy only engages when the page actually scrolls, so give it something
+    // taller than the karma viewport for the duration of the test.
+    const tall = document.createElement('div');
+    tall.style.height = '10000px';
+    document.body.appendChild(tall);
     try {
       open$.next(true);
       fixture.detectChanges();
-      expect(document.body.style.overflow).toBe('hidden');
+      expect(document.documentElement.classList.contains('cdk-global-scrollblock'))
+        .withContext('open drawer should engage the CDK scroll block')
+        .toBeTrue();
 
       open$.next(false);
       fixture.detectChanges();
-      expect(document.body.style.overflow).withContext('pre-open overflow must be restored, not cleared').toBe('scroll');
+      expect(document.documentElement.classList.contains('cdk-global-scrollblock'))
+        .withContext('closing should release the CDK scroll block')
+        .toBeFalse();
     } finally {
-      document.body.style.overflow = '';
+      tall.remove();
     }
+  });
+
+  it('leaves a concurrent scroll lock in place across its own open/close cycle', () => {
+    // Another overlay's lock (simulated by the CDK class already being present) must survive the
+    // drawer opening and closing: enable() no-ops when the page is already blocked, and disable()
+    // only releases this component's own lock.
+    document.documentElement.classList.add('cdk-global-scrollblock');
+    try {
+      open$.next(true);
+      fixture.detectChanges();
+      open$.next(false);
+      fixture.detectChanges();
+      expect(document.documentElement.classList.contains('cdk-global-scrollblock'))
+        .withContext("the foreign lock must not be released by the drawer's close")
+        .toBeTrue();
+    } finally {
+      document.documentElement.classList.remove('cdk-global-scrollblock');
+    }
+  });
+
+  it('does not engage the scroll block while closed, including construction and destroy', () => {
+    // The app-shell drawer constructs at boot with open$ already false; that initial emission (and
+    // a destroy while closed) must not touch the page's scroll state.
+    fixture.destroy();
+    const fresh = TestBed.createComponent(HelpDrawerComponent);
+    fresh.detectChanges();
+    expect(document.documentElement.classList.contains('cdk-global-scrollblock')).toBeFalse();
+    fresh.destroy();
+    expect(document.documentElement.classList.contains('cdk-global-scrollblock')).toBeFalse();
   });
 
   it('shows the failure message when a doc cannot be loaded', () => {
