@@ -73,14 +73,17 @@ public sealed class PostmarkReactivationServiceTests
 
         Assert.False(result.Succeeded);
         Assert.Equal(new[] { "broadcast" }, result.FailedStreams);
+        // The provider's own refusal text reaches the caller: it is what distinguishes a
+        // retryable outage from a permanent refusal.
+        Assert.Contains("provider said no", result.FailureDetail);
         client.Verify(c => c.ReactivateAsync("outbound", "jane@example.com", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task No_configured_streams_is_not_a_success()
+    public async Task No_configured_streams_is_not_a_success_and_blames_configuration()
     {
-        // The provider side was not touched, which is exactly what the caller's warning exists
-        // to say.
+        // The provider side was not touched, and no retry can fix that - the detail must point
+        // at configuration, not reachability.
         var client = new Mock<IPostmarkSuppressionClient>();
         var service = Create(client.Object, broadcastStream: "", transactionalStream: " ");
 
@@ -88,6 +91,7 @@ public sealed class PostmarkReactivationServiceTests
 
         Assert.False(result.Succeeded);
         Assert.Equal(0, result.StreamsAttempted);
+        Assert.Contains("configured", result.FailureDetail);
         client.Verify(
             c => c.ReactivateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never
@@ -134,10 +138,11 @@ public sealed class PostmarkReactivationServiceTests
     }
 
     [Fact]
-    public async Task The_not_configured_service_skips_without_warning_material()
+    public async Task The_not_configured_service_skips_and_reports_not_configured()
     {
-        // The webhook-only / Postmark-less registration: nothing attempted, nothing to warn
-        // about - the caller branches on SkippedNotConfigured before Succeeded.
+        // The registration for deployments where Postmark does not carry the mail: nothing
+        // attempted, nothing that should refuse a clear - the caller branches on
+        // SkippedNotConfigured before Succeeded.
         var service = new NotConfiguredPostmarkReactivationService();
 
         var result = await service.ReactivateAsync("jane@example.com", CancellationToken.None);

@@ -61,11 +61,13 @@ describe('EmailSuppressionService', () => {
     req.flush(suppression);
   });
 
-  it('clears a suppression by document id', () => {
-    service.clearSuppression('abc').subscribe();
+  it('clears a suppression by document id, sending the displayed episode', () => {
+    service.clearSuppression('abc', '2026-08-01T00:00:00Z').subscribe();
 
     const req = httpMock.expectOne('api/email-suppressions/abc/clear');
     expect(req.request.method).toBe('POST');
+    // The episode guard: the server refuses with 409 if the record was re-suppressed since.
+    expect(req.request.body).toEqual({ suppressedUtc: '2026-08-01T00:00:00Z' });
     req.flush({ ...suppression, clearedUtc: '2026-08-09T00:00:00Z', isActive: false });
   });
 });

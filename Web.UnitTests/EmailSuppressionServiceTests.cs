@@ -337,16 +337,17 @@ namespace Web.UnitTests
         }
 
         [Fact]
-        public async Task ClearById_WithOnlyIfReason_RefusesAMismatchedReason()
+        public async Task ClearById_WithOnlyIfSuppressedUtc_RefusesADifferentEpisode()
         {
-            // The admin surface passes the reason it showed the admin, so a record re-suppressed
-            // for a different reason between page load and click is not lifted on stale
-            // information - same write-time guarantee as the address-keyed clear.
+            // The admin surface passes the episode it showed the admin (SuppressedUtc is reset
+            // by every re-suppression), so a record re-suppressed between page load and the
+            // write is not lifted on stale information - same write-time discipline as
+            // onlyIfReason on the address-keyed clear.
             var service = CreateService();
             var outcome0 = await service.RecordAsync(
                 "jane@example.com",
-                SuppressionReason.HardBounce,
-                EmailSuppression.SystemDeliveryEvent,
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSubscriptionChange,
                 null,
                 null
             );
@@ -354,11 +355,33 @@ namespace Web.UnitTests
             var outcome = await service.ClearByIdAsync(
                 outcome0.Suppression.Id,
                 "admin-user",
-                onlyIfReason: SuppressionReason.ProviderUnsubscribe
+                onlyIfSuppressedUtc: outcome0.Suppression.SuppressedUtc.AddMinutes(-5)
             );
 
             Assert.False(outcome.Cleared);
             Assert.True(outcome.Suppression!.IsActive);
+        }
+
+        [Fact]
+        public async Task ClearById_WithOnlyIfSuppressedUtc_ClearsTheMatchingEpisode()
+        {
+            var service = CreateService();
+            var outcome0 = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSubscriptionChange,
+                null,
+                null
+            );
+
+            var outcome = await service.ClearByIdAsync(
+                outcome0.Suppression.Id,
+                "admin-user",
+                onlyIfSuppressedUtc: outcome0.Suppression.SuppressedUtc
+            );
+
+            Assert.True(outcome.Cleared);
+            Assert.False(outcome.Suppression!.IsActive);
         }
 
         [Fact]

@@ -122,7 +122,7 @@ describe('ManageSuppressionsComponent', () => {
 
     component.clear(makeSuppression());
 
-    expect(serviceSpy.clearSuppression).toHaveBeenCalledWith('abc');
+    expect(serviceSpy.clearSuppression).toHaveBeenCalledWith('abc', '2026-08-01T00:00:00Z');
     expect(serviceSpy.getSuppressions).toHaveBeenCalledTimes(1);
     expect(suppressedAddressesSpy.refresh).toHaveBeenCalledTimes(1);
   });

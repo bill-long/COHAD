@@ -567,13 +567,20 @@ namespace Web
             services.AddScoped<PostmarkSuppressionSyncRunner>();
             // The other consumer of the Postmark suppression API: clearing a ProviderUnsubscribe
             // suppression also reactivates the address at the provider (issue #11), so the
-            // two-system clear is one action. Without a server token (webhook-only Postmark, or
-            // no Postmark at all) the real client cannot call the API and - more to the point -
-            // sends do not pass through Postmark's suppression filter, so a no-op implementation
-            // is registered instead of warning every clear about an unresolvable provider
-            // failure (the DisabledSpamClassifier precedent). MockData keeps the real service:
-            // its suppression client is the in-memory fake, which needs no token.
-            if (useMockData || !string.IsNullOrWhiteSpace(Configuration["Postmark:ServerToken"]))
+            // two-system clear is one action. The real service is registered only when Postmark
+            // actually carries the mail (Enabled + UsePostmarkAsDefault) AND the API is callable
+            // (ServerToken): in every other deployment - webhook-only mode, Postmark disabled
+            // with a stale token left in settings, no Postmark at all - sends do not pass
+            // through Postmark's suppression filter, so there is nothing to reactivate, and a
+            // failing provider call would block every clear over an integration that is not in
+            // use. A no-op implementation is registered instead (the DisabledSpamClassifier
+            // precedent). MockData keeps the real service: its suppression client is the
+            // in-memory fake, which needs no token.
+            var postmarkSendPathActive =
+                Configuration.GetValue<bool>("Postmark:Enabled")
+                && Configuration.GetValue("Postmark:UsePostmarkAsDefault", defaultValue: true)
+                && !string.IsNullOrWhiteSpace(Configuration["Postmark:ServerToken"]);
+            if (useMockData || postmarkSendPathActive)
             {
                 services.AddScoped<IPostmarkReactivationService, PostmarkReactivationService>();
             }

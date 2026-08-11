@@ -97,11 +97,11 @@ namespace Web.UnitTests
             public Task<SuppressionClearOutcome> ClearByIdAsync(
                 string id,
                 string clearedBy,
-                SuppressionReason? onlyIfReason = null
+                DateTime? onlyIfSuppressedUtc = null
             ) =>
                 _fail()
                     ? throw new InvalidOperationException("Cosmos is unavailable.")
-                    : _inner.ClearByIdAsync(id, clearedBy, onlyIfReason);
+                    : _inner.ClearByIdAsync(id, clearedBy, onlyIfSuppressedUtc);
         }
         private readonly IHost _host;
         private readonly HttpClient _client;

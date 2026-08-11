@@ -286,18 +286,91 @@ namespace Web.UnitTests
             var seeded = await SeedAsync("jane@example.com", SuppressionReason.ProviderUnsubscribe, new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
             _reactivation
                 .Setup(r => r.ReactivateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new PostmarkReactivationResult(2, new[] { "broadcast" }));
+                .ReturnsAsync(
+                    new PostmarkReactivationResult(2, new[] { "broadcast" }, "SpamComplaint suppressions cannot be deleted.")
+                );
 
             var controller = CreateController();
             var result = await controller.Clear(seeded.Id);
 
             var status = Assert.IsType<ObjectResult>(result);
             Assert.Equal(StatusCodes.Status502BadGateway, status.StatusCode);
-            // The error names the address, so the admin knows which record was refused.
+            // The error names the address and carries the provider's own refusal text - what
+            // distinguishes a retryable outage from a permanent refusal.
             Assert.Contains("jane@example.com", status.Value!.ToString());
+            Assert.Contains("SpamComplaint suppressions cannot be deleted", status.Value!.ToString());
             var record = await _suppressions.GetByIdAsync(seeded.Id);
             Assert.True(record!.IsActive);
             _auditLog.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task Clear_WithADifferentDisplayedEpisode_Returns409WithoutTouchingTheProvider()
+        {
+            // The admin's page showed an episode this record no longer describes (it was
+            // re-suppressed since): nothing is cleared and the provider is not called - the
+            // admin must see the new episode before mail resumes.
+            var seeded = await SeedAsync("jane@example.com", SuppressionReason.ProviderUnsubscribe, new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
+
+            var controller = CreateController();
+            var result = await controller.Clear(
+                seeded.Id,
+                new ClearEmailSuppressionRequestDto { SuppressedUtc = seeded.SuppressedUtc.AddMinutes(-5) }
+            );
+
+            Assert.IsType<ConflictObjectResult>(result);
+            Assert.True((await _suppressions.GetByIdAsync(seeded.Id))!.IsActive);
+            _reactivation.Verify(
+                r => r.ReactivateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+                Times.Never
+            );
+            _auditLog.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task Clear_MatchingDisplayedEpisode_Clears()
+        {
+            var seeded = await SeedAsync("jane@example.com", SuppressionReason.ProviderUnsubscribe, new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
+
+            var controller = CreateController();
+            var result = await controller.Clear(
+                seeded.Id,
+                new ClearEmailSuppressionRequestDto { SuppressedUtc = seeded.SuppressedUtc }
+            ) as OkObjectResult;
+
+            var dto = Assert.IsType<EmailSuppressionDto>(result!.Value);
+            Assert.False(dto.IsActive);
+        }
+
+        [Fact]
+        public async Task Clear_BlankEmailProviderUnsubscribeRow_ClearsWithoutAProviderCall()
+        {
+            // The by-id clear exists so any listed row is clearable, including a hand-authored
+            // or corrupt one. A blank address cannot be suppressed at the provider, so the
+            // provider is not asked about it - asking would only manufacture an unresolvable
+            // failure that leaves the row permanently stuck.
+            var handAuthored = new EmailSuppression
+            {
+                Id = "hand-authored-row",
+                Email = "   ",
+                Reason = SuppressionReason.ProviderUnsubscribe,
+                ConsecutiveFailureCount = 1,
+                FirstSeenUtc = DateTime.UtcNow,
+                LastSeenUtc = DateTime.UtcNow,
+                SuppressedUtc = DateTime.UtcNow,
+                SuppressedBy = "someone",
+            };
+            await _suppressions.AddAsync(handAuthored);
+
+            var controller = CreateController();
+            var result = await controller.Clear("hand-authored-row") as OkObjectResult;
+
+            var dto = Assert.IsType<EmailSuppressionDto>(result!.Value);
+            Assert.False(dto.IsActive);
+            _reactivation.Verify(
+                r => r.ReactivateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+                Times.Never
+            );
         }
 
         [Fact]

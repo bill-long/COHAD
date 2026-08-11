@@ -119,12 +119,18 @@ namespace Web.Services
         /// Clears the record with this document id. Exists for the admin surface, which acts on a
         /// listed row: a hand-authored document whose id does not match
         /// <see cref="EmailSuppression.MakeId"/> of its own Email is unreachable by address and
-        /// must still be clearable by the human looking at it. <paramref name="onlyIfReason"/>
-        /// carries the same write-time guarantee as on <see cref="ClearAsync"/> - the admin
-        /// surface passes the reason it showed the admin, so a record re-suppressed for a
-        /// different reason between page load and click is not lifted on stale information.
+        /// must still be clearable by the human looking at it.
+        /// <para>
+        /// <paramref name="onlyIfSuppressedUtc"/> identifies the suppression EPISODE being
+        /// cleared (<see cref="EmailSuppression.SuppressedUtc"/> is reset by every
+        /// re-suppression), enforced at write time like <c>onlyIfReason</c> on
+        /// <see cref="ClearAsync"/>: if the active record's episode differs, the record was
+        /// re-suppressed since the caller looked, and nothing is cleared - an admin must see
+        /// the new episode (a fresh bounce, a new unsubscribe) before mail resumes, not lift
+        /// it on stale information.
+        /// </para>
         /// </summary>
-        Task<SuppressionClearOutcome> ClearByIdAsync(string id, string clearedBy, SuppressionReason? onlyIfReason = null);
+        Task<SuppressionClearOutcome> ClearByIdAsync(string id, string clearedBy, DateTime? onlyIfSuppressedUtc = null);
     }
 
     public class EmailSuppressionService : IEmailSuppressionService
@@ -305,18 +311,19 @@ namespace Web.Services
             SuppressionReason? onlyIfReason = null
         )
         {
-            return ClearCoreAsync(() => _repository.GetByEmailAsync(email), clearedBy, onlyIfReason);
+            return ClearCoreAsync(() => _repository.GetByEmailAsync(email), clearedBy, onlyIfReason, null);
         }
 
-        public Task<SuppressionClearOutcome> ClearByIdAsync(string id, string clearedBy, SuppressionReason? onlyIfReason = null)
+        public Task<SuppressionClearOutcome> ClearByIdAsync(string id, string clearedBy, DateTime? onlyIfSuppressedUtc = null)
         {
-            return ClearCoreAsync(() => _repository.GetByIdAsync(id), clearedBy, onlyIfReason);
+            return ClearCoreAsync(() => _repository.GetByIdAsync(id), clearedBy, null, onlyIfSuppressedUtc);
         }
 
         private async Task<SuppressionClearOutcome> ClearCoreAsync(
             Func<Task<EmailSuppression?>> read,
             string clearedBy,
-            SuppressionReason? onlyIfReason
+            SuppressionReason? onlyIfReason,
+            DateTime? onlyIfSuppressedUtc
         )
         {
             if (string.IsNullOrWhiteSpace(clearedBy))
@@ -339,6 +346,12 @@ namespace Web.Services
                 // earlier read - between that read and this write the record can be cleared and
                 // re-suppressed for a reason the caller is not allowed to lift.
                 if (onlyIfReason.HasValue && existing.Reason != onlyIfReason.Value)
+                    return new SuppressionClearOutcome(existing, cleared: false);
+
+                // Same write-time discipline for the episode guard: SuppressedUtc is reset by
+                // every re-suppression, so a mismatch means the caller is looking at an episode
+                // this record no longer describes.
+                if (onlyIfSuppressedUtc.HasValue && existing.SuppressedUtc != onlyIfSuppressedUtc.Value)
                     return new SuppressionClearOutcome(existing, cleared: false);
 
                 existing.ClearedUtc = _timeProvider.GetUtcNow().UtcDateTime;

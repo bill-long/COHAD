@@ -853,9 +853,10 @@ suppressed here. Decisions made in the writing:
   address) - `postmark:suppression-dump:{stream}:{address}` - so a rerun against an unchanged
   dump applies nothing: no count inflation, no duplicate audit entries, the same evidence-key
   discipline as the webhook writers. One deliberate consequence: an address cleared in COHAD
-  while Postmark still holds its suppression entry (the clear's provider-side reactivation
-  failed and the warning went unactioned) is re-suppressed by the next run, because Postmark
-  still silently drops its mail - the re-suppression is the truthful state.
+  while Postmark still holds its suppression entry (a hard-bounce clear whose manual dashboard
+  step was skipped - a `ProviderUnsubscribe` clear reactivates provider-side BEFORE clearing,
+  so it cannot reach this state) is re-suppressed by the next run, because Postmark still
+  silently drops its mail - the re-suppression is the truthful state.
 - **Reason mapping:** Postmark `ManualSuppression` -> `ProviderUnsubscribe`; `HardBounce` /
   `SpamComplaint` -> the matching COHAD reason; anything unrecognized -> `ProviderUnsubscribe`
   with a warning, because the address IS on Postmark's suppression list and "do not mail" is the
@@ -910,10 +911,19 @@ procedure is one action. Decisions made in the writing:
   clicking Clear again is the whole retry - the UnsubscribeLink send-gate philosophy. The
   reverse divergence (provider reactivated, then the local write loses its race) is safe:
   mail stays suppressed here, and the retried clear's provider delete is a no-op.
-- **The clear acts on the reason the admin saw.** The endpoint passes its pre-read's reason
-  to `ClearByIdAsync` as `onlyIfReason` (the resident-resume write-time guard), so a record
-  re-suppressed for a different reason between page load and click is not lifted on stale
-  information.
+- **The clear acts on the episode the admin saw.** The UI sends the row's displayed
+  `SuppressedUtc` (reset by every re-suppression, so it identifies the episode), the endpoint
+  checks it against its own read, and `ClearByIdAsync` enforces it again at write time
+  (`onlyIfSuppressedUtc`, the resident-resume `onlyIfReason` discipline). A record
+  re-suppressed between page load and the write - whatever the new reason - answers 409
+  instead of being lifted on stale information. The one asymmetric edge: if the provider
+  delete succeeded but the write-time guard then refused, the provider-side change is real and
+  gets its own audit line, and mail stays suppressed here - the safe direction.
+- **A refused provider call names its cause.** The 502 carries the provider's own refusal
+  text: "SpamComplaint suppressions cannot be deleted" is permanent (Postmark lets only the
+  recipient lift a complaint entry - the COHAD record then rightly stays suppressed), and a
+  generic "try again later" would send the admin in circles on it. Zero configured streams
+  reports itself as a configuration problem for the same reason.
 - **A stale dump snapshot cannot undo the clear.** The reconciliation could have fetched a
   stream dump moments before the delete, and its add-only write would silently re-suppress
   the just-cleared record with nothing left to lift it. The runner stamps when each stream's
@@ -926,16 +936,26 @@ procedure is one action. Decisions made in the writing:
   from the dump: an ambiguous answer (no entry for the address, unparseable body) reads as
   failure, because a false "reactivated" leaves the admin believing mail flows while Postmark
   still silently drops it - a false failure only fails a retryable clear.
-- **Scope stays `ProviderUnsubscribe`.** Clearing a `HardBounce`/`SpamComplaint` suppression
-  does not touch the provider, so the manual procedure remains for those: after clearing here,
-  also reactivate the address on the stream's suppression list in the Postmark dashboard
-  (deleting a hard-bounce entry reactivates the bounce - a deliverability decision this change
-  deliberately keeps human), or the nightly sync re-suppresses the address on its next pass.
-  Spam-complaint entries cannot be deleted at Postmark at all, by API or dashboard - only the
-  recipient can undo one.
-- **A deployment with no `Postmark:ServerToken` skips the provider call and clears normally**
-  (`NotConfiguredPostmarkReactivationService`, registered on the `DisabledSpamClassifier`
-  precedent): in webhook-only Postmark mode - and with no Postmark at all - sends do not pass
+- **Scope stays `ProviderUnsubscribe`, keyed on the record's current Reason.** Clearing a
+  `HardBounce`/`SpamComplaint` suppression does not touch the provider, so the manual
+  procedure remains for those: after clearing here, also reactivate the address on the
+  stream's suppression list in the Postmark dashboard (deleting a hard-bounce entry
+  reactivates the bounce - a deliverability decision this change deliberately keeps human), or
+  the nightly sync re-suppresses the address on its next pass. Spam-complaint entries cannot
+  be deleted at Postmark at all, by API or dashboard - only the recipient can undo one. Two
+  accepted consequences of keying on Reason: an active record whose episode began under
+  another reason keeps that reason even if a provider unsubscribe later arrives as repeat
+  evidence (`RecordAsync` deliberately preserves the first event's "why"), so its clear does
+  not touch the provider and the nightly sync truthfully re-suppresses it; and conversely the
+  reactivation deletes the address's entry on BOTH streams whatever their provider-side
+  reasons (the record does not store which stream or why - issue #11's own prescription), so
+  it can also lift a hard-bounce entry the other stream held, which the next bounce webhook
+  re-suppresses.
+- **A deployment where Postmark does not carry the mail skips the provider call and clears
+  normally** (`NotConfiguredPostmarkReactivationService`, registered on the
+  `DisabledSpamClassifier` precedent when `Postmark:Enabled`, `UsePostmarkAsDefault`, or
+  `ServerToken` says the send path is not Postmark's): in webhook-only mode, with Postmark
+  disabled but a stale token left in settings, or with no Postmark at all, sends do not pass
   through Postmark's suppression filter, so there is no provider-side entry dropping mail and
   refusing the clear would block the admin over a false, unresolvable problem. MockData keeps
   the real service over the in-memory client, which needs no token.

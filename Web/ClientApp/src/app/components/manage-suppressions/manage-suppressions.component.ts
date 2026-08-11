@@ -106,7 +106,7 @@ export class ManageSuppressionsComponent implements OnInit {
     this.clearingIds.add(suppression.id);
     this.errorText = null;
     this.noticeText = null;
-    this.suppressionService.clearSuppression(suppression.id).subscribe({
+    this.suppressionService.clearSuppression(suppression.id, suppression.suppressedUtc).subscribe({
       next: () => {
         this.clearingIds.delete(suppression.id);
         this.suppressedAddresses.refresh();

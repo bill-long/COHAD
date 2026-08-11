@@ -137,13 +137,15 @@ namespace Web.Controllers
         /// direction - and the retried Clear's provider call is a no-op.
         /// </para>
         /// <para>
-        /// The clear itself passes the pre-read's reason as <c>onlyIfReason</c>, so a record
-        /// re-suppressed for a different reason between page load and click is not lifted on
-        /// stale information - the still-active record comes back and the UI's reload shows it.
+        /// The request body's <c>SuppressedUtc</c> is the episode the admin's page displayed
+        /// (every re-suppression resets it), checked against the pre-read here and enforced
+        /// again at write time by the service - a record re-suppressed between page load and
+        /// the write (a fresh bounce, a new unsubscribe) answers 409 instead of being lifted on
+        /// stale information, whatever its new reason.
         /// </para>
         /// </summary>
         [HttpPost("{id}/clear")]
-        public async Task<IActionResult> Clear(string id)
+        public async Task<IActionResult> Clear(string id, [FromBody] ClearEmailSuppressionRequestDto request = null)
         {
             var apiUser = await _currentUser.GetAsync(User);
 
@@ -151,8 +153,20 @@ namespace Web.Controllers
             if (existing == null)
                 return NotFound(new { error = "No suppression with this id." });
 
-            var providerAuditNote = "";
-            if (existing.IsActive && existing.Reason == SuppressionReason.ProviderUnsubscribe)
+            var expectedEpisode = request?.SuppressedUtc;
+            if (expectedEpisode.HasValue && existing.IsActive && existing.SuppressedUtc != expectedEpisode.Value)
+                return Conflict(new { error = "The suppression changed since the page was loaded. Review the record and try again." });
+
+            var reactivated = false;
+            // The blank-Email guard keeps a hand-authored or corrupt row clearable: a blank
+            // address can never be suppressed at the provider, and asking the provider about it
+            // would only manufacture an unresolvable failure for the one surface (by-id clear)
+            // that exists to act on any listed row.
+            if (
+                existing.IsActive
+                && existing.Reason == SuppressionReason.ProviderUnsubscribe
+                && !string.IsNullOrWhiteSpace(existing.Email)
+            )
             {
                 var reactivation = await _reactivationService.ReactivateAsync(
                     existing.Email,
@@ -163,19 +177,22 @@ namespace Web.Controllers
                     if (!reactivation.Succeeded)
                     {
                         // 502: the upstream provider call failed, and without it the clear would
-                        // resume "successful" sends the provider silently drops.
+                        // resume "successful" sends the provider silently drops. The provider's
+                        // own refusal text is included because it distinguishes a retryable
+                        // outage from a permanent refusal (a spam-complaint entry only the
+                        // recipient can lift) - "try again later" alone would send the admin in
+                        // circles on the latter.
                         return StatusCode(
                             StatusCodes.Status502BadGateway,
                             new
                             {
                                 error =
                                     $"Could not reactivate {existing.Email} at the email provider, so the"
-                                    + " suppression was not cleared. Mail to a provider-suppressed address"
-                                    + " is silently dropped; please try again later.",
+                                    + $" suppression was not cleared. {reactivation.FailureDetail}",
                             }
                         );
                     }
-                    providerAuditNote = " Also reactivated the address at the email provider.";
+                    reactivated = true;
                 }
                 // SkippedNotConfigured: no provider integration on the send path (webhook-only
                 // Postmark, or none at all), so there is nothing to reactivate and nothing
@@ -185,7 +202,11 @@ namespace Web.Controllers
             SuppressionClearOutcome outcome;
             try
             {
-                outcome = await _service.ClearByIdAsync(id, apiUser.UniqueId, onlyIfReason: existing.Reason);
+                outcome = await _service.ClearByIdAsync(
+                    id,
+                    apiUser.UniqueId,
+                    onlyIfSuppressedUtc: existing.IsActive ? existing.SuppressedUtc : null
+                );
             }
             catch (ConcurrencyConflictException)
             {
@@ -194,6 +215,33 @@ namespace Web.Controllers
 
             if (outcome.Suppression == null)
                 return NotFound(new { error = "No suppression with this id." });
+
+            if (!outcome.Cleared && outcome.Suppression.IsActive)
+            {
+                // The episode guard refused the write: the record was re-suppressed between our
+                // read and the service's. The admin must see the new episode before mail
+                // resumes. If this request already deleted provider entries, that side effect is
+                // real and gets its own audit line - the audit log must be able to explain why
+                // the provider no longer suppresses an address COHAD still does.
+                if (reactivated)
+                {
+                    await _auditLogRepository.AddAsync(
+                        new NewAuditLogEntry
+                        {
+                            Id = Guid.NewGuid(),
+                            Time = DateTime.UtcNow,
+                            UserId = apiUser.UniqueId,
+                            UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                            SubjectId = EmailDeliveryActionService.RedactEmail(outcome.Suppression.Email),
+                            SubjectName = EmailDeliveryActionService.RedactEmail(outcome.Suppression.Email),
+                            Action =
+                                "Reactivated the address at the email provider, but the suppression was"
+                                + " re-suppressed concurrently and was NOT cleared.",
+                        }
+                    );
+                }
+                return Conflict(new { error = "The suppression changed since the page was loaded. Review the record and try again." });
+            }
 
             // Audited only when this call did the clearing - an idempotent no-op recording "X
             // cleared the suppression" would attribute the action to someone who took none.
@@ -211,7 +259,7 @@ namespace Web.Controllers
                         SubjectName = EmailDeliveryActionService.RedactEmail(suppression.Email),
                         Action =
                             $"Cleared an email suppression (was {suppression.Reason}, suppressed {suppression.SuppressedUtc:u})."
-                            + providerAuditNote,
+                            + (reactivated ? " Also reactivated the address at the email provider." : ""),
                     }
                 );
             }

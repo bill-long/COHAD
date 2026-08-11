@@ -24,19 +24,25 @@ namespace Web.Services
         /// Postmark's suppression filter, so there is no provider-side entry dropping mail.
         /// </summary>
         public static readonly PostmarkReactivationResult NotConfigured =
-            new(0, Array.Empty<string>(), skippedNotConfigured: true);
+            new(0, Array.Empty<string>(), null, skippedNotConfigured: true);
 
-        public PostmarkReactivationResult(int streamsAttempted, IReadOnlyList<string> failedStreams)
-            : this(streamsAttempted, failedStreams, skippedNotConfigured: false) { }
+        public PostmarkReactivationResult(
+            int streamsAttempted,
+            IReadOnlyList<string> failedStreams,
+            string? failureDetail = null
+        )
+            : this(streamsAttempted, failedStreams, failureDetail, skippedNotConfigured: false) { }
 
         private PostmarkReactivationResult(
             int streamsAttempted,
             IReadOnlyList<string> failedStreams,
+            string? failureDetail,
             bool skippedNotConfigured
         )
         {
             StreamsAttempted = streamsAttempted;
             FailedStreams = failedStreams;
+            FailureDetail = failureDetail;
             SkippedNotConfigured = skippedNotConfigured;
         }
 
@@ -44,6 +50,14 @@ namespace Web.Services
 
         /// <summary>The streams whose delete call failed; empty on full success.</summary>
         public IReadOnlyList<string> FailedStreams { get; }
+
+        /// <summary>
+        /// Human-readable cause of the failure, for the caller's error message. The provider's
+        /// own refusal text matters: "SpamComplaint suppressions cannot be deleted" is a
+        /// permanent state only the recipient can lift, and telling the admin to simply retry
+        /// it would send them in circles. Null when <see cref="Succeeded"/>.
+        /// </summary>
+        public string? FailureDetail { get; }
 
         /// <summary>
         /// True when the attempt was skipped because no provider integration is configured -
@@ -108,17 +122,30 @@ namespace Web.Services
             // they run concurrently: with a hung provider, the caller waits out one timeout, not
             // one per stream.
             var streams = _options.GetConfiguredStreams();
+            if (streams.Count == 0)
+            {
+                // Nothing to blame on provider reachability - the caller's error must point at
+                // configuration, or the admin retries an operation no retry can fix.
+                return new PostmarkReactivationResult(
+                    0,
+                    Array.Empty<string>(),
+                    "No Postmark message streams are configured."
+                );
+            }
+
             var attempts = await Task.WhenAll(
                 streams.Select(stream => AttemptAsync(stream, email, cancellationToken))
             );
 
+            var failed = attempts.Where(a => a.Failure != null).ToList();
             return new PostmarkReactivationResult(
                 streams.Count,
-                attempts.Where(a => !a.Succeeded).Select(a => a.Stream).ToList()
+                failed.Select(a => a.Stream).ToList(),
+                failed.Count == 0 ? null : string.Join(" ", failed.Select(a => a.Failure))
             );
         }
 
-        private async Task<(string Stream, bool Succeeded)> AttemptAsync(
+        private async Task<(string Stream, string? Failure)> AttemptAsync(
             string stream,
             string email,
             CancellationToken cancellationToken
@@ -127,7 +154,7 @@ namespace Web.Services
             try
             {
                 await _client.ReactivateAsync(stream, email, cancellationToken);
-                return (stream, true);
+                return (stream, null);
             }
             catch (Exception ex)
                 when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -142,7 +169,7 @@ namespace Web.Services
                     email,
                     stream
                 );
-                return (stream, false);
+                return (stream, ex.Message);
             }
         }
     }
