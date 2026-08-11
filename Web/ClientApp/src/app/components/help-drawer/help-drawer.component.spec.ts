@@ -177,6 +177,16 @@ describe('HelpDrawerComponent', () => {
     expect(helpService.close).toHaveBeenCalled();
   });
 
+  it('blocks page scrolling while open and restores it on close', () => {
+    open$.next(true);
+    fixture.detectChanges();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    open$.next(false);
+    fixture.detectChanges();
+    expect(document.body.style.overflow).toBe('');
+  });
+
   it('shows the failure message when a doc cannot be loaded', () => {
     helpService.getTopicHtml.and.returnValue(of(null));
     helpService.currentTopic = TOPICS[1];

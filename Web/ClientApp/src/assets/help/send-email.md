@@ -18,7 +18,7 @@ Reaching this page and sending are different permissions. Sending is granted **p
 
 Delivery runs in the background; progress updates live on this page and in the jobs list below. Click any job for its [details](#topic:email-jobs), including per-recipient delivery status.
 
-Recipients on the [suppression list](#topic:suppressions) are skipped automatically and counted as "suppressed" - that is the system working as intended, not a failure. A recipient can also unsubscribe from a category of mail via the footer link in every message; those preferences are honored automatically.
+Recipients on the [suppression list](#topic:suppressions) are skipped automatically and counted as "suppressed" - that is the system working as intended, not a failure. Every neighborhood broadcast also carries an unsubscribe footer link, and the category preferences recorded there are honored automatically. Committee forwards carry no footer - for those, the suppression list is the only stop mechanism.
 
 ## Reading the jobs list
 

@@ -15,6 +15,8 @@ Save stays disabled until roles and homes are in a valid combination: an account
 
 An account missing a home, or missing roles, is deleted automatically 30 days after it lost (or never had) that attribute - this keeps abandoned sign-ups from accumulating. Each missing attribute runs its own clock, so an account is only safe once it has **both** a home and at least one role. The column shows the soonest deletion; a dash means no clock is running.
 
+**Exception: Administrator accounts are never purged automatically.** The countdown may still show for an Administrator without a home, but the purge skips them - when an administrator leaves, remove their role (and home) by hand.
+
 ## Roles
 
 - Adding or removing roles takes effect immediately.

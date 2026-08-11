@@ -114,6 +114,19 @@ describe('ManageComponent', () => {
       notificationsSubject.next([makeNotification('Registration'), makeNotification('VendorFlag')]);
       expect(latest(component.approvalsCount$)).toBe(0);
     });
+
+    it('grafts the badge stream onto the Approvals rail item', () => {
+      // The rail definition is a static exported const; the badge is attached per-instance by route
+      // name in the constructor. This locks the graft so a renamed Approvals entry cannot silently
+      // ship a rail without its held-message badge.
+      setupTestBed(makeState(['Administrator', 'Resident']));
+      let approvals;
+      for (const group of component.groups) {
+        approvals = group.items.find(item => item.label === 'Approvals') ?? approvals;
+      }
+      expect(approvals).withContext('Approvals rail item should exist').toBeDefined();
+      expect(approvals!.badgeCount$).toBe(component.approvalsCount$);
+    });
   });
 
   describe('default landing', () => {

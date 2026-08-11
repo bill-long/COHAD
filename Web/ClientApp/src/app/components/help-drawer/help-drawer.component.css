@@ -1,3 +1,7 @@
+/* Backdrop and drawer share z-index 1000 with the sticky navbar and the CDK overlay container.
+   Ties resolve by DOM order: both render after the navbar inside app-root (so they cover it), and
+   before the body-level .cdk-overlay-container (so Material tooltips, menus, and snackbars raised
+   while the drawer is open still paint on top). Do not raise these above 1000. */
 .help-backdrop {
   position: fixed;
   inset: 0;
@@ -17,7 +21,7 @@
   color: var(--text-primary);
   border-left: 1px solid var(--border-subtle);
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
-  z-index: 1001;
+  z-index: 1000;
   animation: help-drawer-slide-in 180ms ease-out;
 }
 

@@ -8,7 +8,7 @@ Access is granted by roles:
 
 - **Resident** - a verified neighbor. Unlocks the directory, documents, and the rest of the Residents area.
 - **Administrator** - full access to everything, including Users, Homes, Documents, Suppressions, and the Audit Log. Every Administrator is also a Resident.
-- **Committee roles** (Board, Welcome Committee, Garden Club, Social Committee, Sunshine Committee, Architectural Committee, Landscape Committee) - unlock the Communications and Governance tools for that committee: sending email from the committee mailbox, News, Events, Committees, and Approvals.
+- **Committee roles** (Board, Welcome Committee, Garden Club, Social Committee, Sunshine Committee, Architectural Committee, Landscape Committee) - unlock the Communications and Governance tools for that committee: News, Events, Committees, and Approvals. Committees with their own mailbox (Board, Welcome, Garden Club, Social, Sunshine) can also send neighborhood email from it; the Architectural and Landscape committees have no mailbox and cannot send.
 
 The Manage menu only shows the tools your roles allow, so your menu may look shorter than someone else's.
 

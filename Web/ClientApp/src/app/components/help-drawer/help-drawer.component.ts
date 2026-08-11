@@ -1,8 +1,8 @@
 import { Component, OnDestroy } from '@angular/core';
 import { SafeHtml } from '@angular/platform-browser';
 import { Router } from '@angular/router';
-import { Observable, Subscription } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { EMPTY, Observable, Subject, Subscription } from 'rxjs';
+import { map, switchMap } from 'rxjs/operators';
 import { HelpService } from 'src/app/services/help.service';
 import { HelpTopic, helpTopics } from 'src/app/help/help-topics';
 
@@ -32,7 +32,8 @@ export class HelpDrawerComponent implements OnDestroy {
   topicLoadFailed = false;
 
   private readonly subscriptions = new Subscription();
-  private docSubscription: Subscription | null = null;
+  /** Doc requests; null cancels the in-flight load (switchMap drops stale responses on its own). */
+  private readonly topicRequests = new Subject<HelpTopic | null>();
 
   constructor(
     private readonly helpService: HelpService,
@@ -40,9 +41,20 @@ export class HelpDrawerComponent implements OnDestroy {
   ) {
     this.open$ = helpService.open$;
     this.sections$ = helpService.visibleTopics$.pipe(map(groupBySection));
+    this.subscriptions.add(
+      this.topicRequests
+        .pipe(switchMap(topic => (topic === null ? EMPTY : this.helpService.getTopicHtml(topic.id))))
+        .subscribe(html => {
+          this.topicHtml = html;
+          this.topicLoadFailed = html === null;
+        }),
+    );
     // Each open starts from the current screen's topic; the previous session's view is stale context.
+    // While open, the drawer is modal (backdrop + focus trap), so the page behind it must not
+    // scroll out from under the contextual topic.
     this.subscriptions.add(
       helpService.open$.subscribe(open => {
+        document.body.style.overflow = open ? 'hidden' : '';
         if (open) {
           const contextual = helpService.currentTopic;
           if (contextual) {
@@ -57,7 +69,7 @@ export class HelpDrawerComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
-    this.docSubscription?.unsubscribe();
+    document.body.style.overflow = '';
   }
 
   close(): void {
@@ -69,8 +81,7 @@ export class HelpDrawerComponent implements OnDestroy {
     this.activeTopic = null;
     this.topicHtml = null;
     this.topicLoadFailed = false;
-    this.docSubscription?.unsubscribe();
-    this.docSubscription = null;
+    this.topicRequests.next(null);
   }
 
   showTopic(topic: HelpTopic): void {
@@ -78,15 +89,7 @@ export class HelpDrawerComponent implements OnDestroy {
     this.activeTopic = topic;
     this.topicHtml = null;
     this.topicLoadFailed = false;
-    this.docSubscription?.unsubscribe();
-    this.docSubscription = this.helpService.getTopicHtml(topic.id).subscribe(html => {
-      // A slow response for a topic the user already navigated away from must not clobber the
-      // current view; the unsubscribe above handles switches, this guards same-tick re-entry.
-      if (this.activeTopic?.id === topic.id) {
-        this.topicHtml = html;
-        this.topicLoadFailed = html === null;
-      }
-    });
+    this.topicRequests.next(topic);
   }
 
   /**

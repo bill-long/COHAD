@@ -66,6 +66,16 @@ describe('helpTopics registry', () => {
     const ids = helpTopics.map(t => t.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it("email-jobs inherits the Email rail entry's section and audience and sits next to it", () => {
+    // The job-detail page has no rail entry; it must follow Email wherever the rail moves it.
+    const emailIndex = helpTopics.findIndex(t => t.id === 'send-email');
+    const emailJobs = helpTopics[emailIndex + 1];
+    expect(emailJobs.id).toBe('email-jobs');
+    expect(emailJobs.section).toBe(helpTopics[emailIndex].section);
+    expect(emailJobs.roles).toBe(helpTopics[emailIndex].roles);
+    expect(emailJobs.requireResident).toBe(helpTopics[emailIndex].requireResident);
+  });
 });
 
 describe('topicForUrl', () => {

@@ -23,16 +23,6 @@ export interface HelpTopic {
   requireResident?: boolean;
 }
 
-// The email-job detail page is reached from the Email screen rather than the rail, so it has no
-// rail entry to derive from; it shares the Email tool's audience.
-const emailJobsTopic: HelpTopic = {
-  id: 'email-jobs',
-  title: 'Email Job Details',
-  section: 'Communications',
-  routePrefix: '/manage/email-jobs',
-  roles: rolePermissions.manageEmailRoles,
-};
-
 function buildHelpTopics(): HelpTopic[] {
   const topics: HelpTopic[] = [
     // '/manage' is the landing page, so the onboarding guide doubles as its contextual topic;
@@ -55,9 +45,18 @@ function buildHelpTopics(): HelpTopic[] {
         roles: item.roles,
         requireResident: item.requireResident,
       });
-      // Keep the job-detail topic next to Email in the index, matching how it is reached.
+      // The email-job detail page is reached from the Email screen rather than the rail, so it has
+      // no rail entry of its own; it inherits Email's section and audience and sits next to it in
+      // the index, matching how it is reached.
       if (item.route === 'send-email') {
-        topics.push(emailJobsTopic);
+        topics.push({
+          id: 'email-jobs',
+          title: 'Email Job Details',
+          section: group.label,
+          routePrefix: '/manage/email-jobs',
+          roles: item.roles,
+          requireResident: item.requireResident,
+        });
       }
     }
   }
