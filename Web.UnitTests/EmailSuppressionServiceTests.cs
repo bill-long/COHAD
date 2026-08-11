@@ -378,6 +378,199 @@ namespace Web.UnitTests
         }
 
         [Fact]
+        public async Task ProviderTimestamp_BecomesSuppressedUtcOnCreation_ButSeenStampsStayNow()
+        {
+            // The dump reconciler passes Postmark's CreatedAt: the address stopped receiving
+            // mail THEN, so that is "when the suppression began" - while first/last-seen stay
+            // honest about when the evidence arrived HERE.
+            var service = CreateService();
+            var providerDate = Now.UtcDateTime.AddDays(-30);
+
+            var outcome = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                evidenceKey: "dump-1",
+                eventUtc: providerDate
+            );
+
+            Assert.True(outcome.Applied);
+            var result = outcome.Suppression;
+            Assert.Equal(providerDate, result.SuppressedUtc);
+            Assert.Equal(Now.UtcDateTime, result.FirstSeenUtc);
+            Assert.Equal(Now.UtcDateTime, result.LastSeenUtc);
+        }
+
+        [Fact]
+        public async Task ProviderTimestamp_InTheFuture_FallsBackToNow()
+        {
+            // Provider clock skew must not order the record oddly on the admin list.
+            var service = CreateService();
+
+            var outcome = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                eventUtc: Now.UtcDateTime.AddDays(30)
+            );
+
+            Assert.Equal(Now.UtcDateTime, outcome.Suppression.SuppressedUtc);
+        }
+
+        [Fact]
+        public async Task ProviderTimestamp_WithUtcKind_IsUsedVerbatim()
+        {
+            var service = CreateService();
+            var providerDate = DateTime.SpecifyKind(Now.UtcDateTime.AddDays(-30), DateTimeKind.Utc);
+
+            var outcome = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                eventUtc: providerDate
+            );
+
+            Assert.Equal(providerDate, outcome.Suppression.SuppressedUtc);
+            Assert.Equal(DateTimeKind.Utc, outcome.Suppression.SuppressedUtc.Kind);
+        }
+
+        [Fact]
+        public async Task ProviderTimestamp_WithUnspecifiedKind_IsReadAsUtc()
+        {
+            // PostmarkSuppressionSyncRunner.ParseCreatedAt always hands over Kind Utc, but
+            // RecordAsync is a public contract any caller can hit with any kind. An Unspecified
+            // value carries no host-local meaning: the VendorReviewTimestamps convention reads
+            // it as already-UTC, deterministically across hosts (ToUniversalTime would read it
+            // as host-local).
+            var service = CreateService();
+            var providerDate = DateTime.SpecifyKind(
+                Now.UtcDateTime.AddDays(-30),
+                DateTimeKind.Unspecified
+            );
+
+            var outcome = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                eventUtc: providerDate
+            );
+
+            Assert.Equal(Now.UtcDateTime.AddDays(-30), outcome.Suppression.SuppressedUtc);
+            Assert.Equal(DateTimeKind.Utc, outcome.Suppression.SuppressedUtc.Kind);
+        }
+
+        [Fact]
+        public async Task ProviderTimestamp_WithLocalKind_IsConvertedToUtc()
+        {
+            var service = CreateService();
+            var providerDateUtc = Now.UtcDateTime.AddDays(-30);
+
+            var outcome = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                eventUtc: providerDateUtc.ToLocalTime()
+            );
+
+            Assert.Equal(DateTimeKind.Local, providerDateUtc.ToLocalTime().Kind);
+            Assert.Equal(providerDateUtc, outcome.Suppression.SuppressedUtc);
+            Assert.Equal(DateTimeKind.Utc, outcome.Suppression.SuppressedUtc.Kind);
+        }
+
+        [Fact]
+        public async Task FutureProviderTimestamp_WithLocalKind_StillFallsBackToNow()
+        {
+            // The clamp compares the CONVERTED value: a future local-time timestamp must not
+            // slip past it unconverted.
+            var service = CreateService();
+
+            var outcome = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                eventUtc: Now.UtcDateTime.AddDays(30).ToLocalTime()
+            );
+
+            Assert.Equal(Now.UtcDateTime, outcome.Suppression.SuppressedUtc);
+        }
+
+        [Fact]
+        public async Task ProviderTimestamp_OnRepeatEvidence_DoesNotMoveSuppressedUtc()
+        {
+            // Only a NEW episode adopts the provider date. Repeat evidence on an active record
+            // leaves "when it began" alone - the answer is still the first event.
+            var service = CreateService();
+            await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                evidenceKey: "dump-1",
+                eventUtc: Now.UtcDateTime.AddDays(-30)
+            );
+
+            _time.Advance(TimeSpan.FromDays(1));
+            var outcome = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                evidenceKey: "dump-2",
+                eventUtc: Now.UtcDateTime
+            );
+
+            Assert.True(outcome.Applied);
+            Assert.Equal(Now.UtcDateTime.AddDays(-30), outcome.Suppression.SuppressedUtc);
+            Assert.Equal(Now.UtcDateTime.AddDays(1), outcome.Suppression.LastSeenUtc);
+        }
+
+        [Fact]
+        public async Task ProviderTimestamp_OnResuppression_StampsTheNewEpisode()
+        {
+            var service = CreateService();
+            await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                eventUtc: Now.UtcDateTime.AddDays(-30)
+            );
+            await service.ClearAsync("jane@example.com", "admin-user");
+
+            _time.Advance(TimeSpan.FromDays(1));
+            var outcome = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                evidenceKey: "dump-2",
+                eventUtc: Now.UtcDateTime.AddDays(-30)
+            );
+
+            Assert.True(outcome.Applied);
+            Assert.True(outcome.Suppression.IsActive);
+            Assert.Equal(Now.UtcDateTime.AddDays(-30), outcome.Suppression.SuppressedUtc);
+            // First-seen still survives as the record's history.
+            Assert.Equal(Now.UtcDateTime, outcome.Suppression.FirstSeenUtc);
+        }
+
+        [Fact]
         public async Task ReplayedEvidence_AfterAClear_StillResuppresses()
         {
             // The evidence-key no-op applies only while the record is ACTIVE. A cleared record

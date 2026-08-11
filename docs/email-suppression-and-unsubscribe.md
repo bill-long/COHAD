@@ -863,6 +863,15 @@ suppressed here. Decisions made in the writing:
   an address on both is recorded once (the first sighting wins, the second counts as
   already-suppressed). A failed dump read aborts the run for the next interval to retry; a
   failed record write for one address is logged and skipped without losing the rest of the dump.
+- **The record's `SuppressedUtc` is Postmark's `CreatedAt` when the dump carries one, not the
+  run time.** The dump entry
+  carries when the address was actually suppressed provider-side, and `RecordAsync` takes it as
+  an optional `eventUtc` used only for a new episode's "when the suppression began" - the admin
+  reading SUPPRESSED on the Manage page learns when mail actually stopped, not when the
+  reconciliation happened to notice. First/last-seen keep their meaning (when the evidence
+  arrived here). Records written before this refinement keep their run-time stamp; the
+  evidence-key no-op deliberately does not rewrite them (a clear-and-resync re-stamps from the
+  dump).
 - **No durable pacing state**, for the same reason as the user purge: the pass is idempotent and
   additive, so over-running is free and under-running only defers the same records.
 - **MockData runs it end to end** against `MockPostmarkSuppressionDumpClient`, whose seeded dump

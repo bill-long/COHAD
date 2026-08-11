@@ -66,6 +66,14 @@ namespace Web.Services
         /// <c>ConsecutiveFailureCount</c> into a lie about how often the address failed.
         /// </para>
         /// <para>
+        /// <paramref name="eventUtc"/> is the provider's own timestamp for the event, when the
+        /// evidence carries one (the suppression dump's <c>CreatedAt</c>). It becomes
+        /// <c>SuppressedUtc</c> on a new episode: for a reconciled record, "when the suppression
+        /// began" is the provider's date - the address stopped receiving mail then, not when the
+        /// reconciliation happened to notice. First/last-seen keep their meaning (when the
+        /// evidence arrived HERE). A missing or future-dated value falls back to now.
+        /// </para>
+        /// <para>
         /// Throws <see cref="ArgumentException"/> for a blank address, and
         /// <see cref="ConcurrencyConflictException"/> when every retry of the write loses its
         /// race - callers on request paths surface that as 409, not 500.
@@ -77,7 +85,8 @@ namespace Web.Services
             string suppressedBy,
             Guid? causingJobId,
             string? providerDiagnostic,
-            string? evidenceKey = null
+            string? evidenceKey = null,
+            DateTime? eventUtc = null
         );
 
         /// <summary>
@@ -128,7 +137,8 @@ namespace Web.Services
             string suppressedBy,
             Guid? causingJobId,
             string? providerDiagnostic,
-            string? evidenceKey = null
+            string? evidenceKey = null,
+            DateTime? eventUtc = null
         )
         {
             // A blank address can never be mailed, so a suppression for one is not a safety
@@ -143,6 +153,14 @@ namespace Web.Services
             for (var attempt = 0; attempt < MaxAttempts; attempt++)
             {
                 var now = _timeProvider.GetUtcNow().UtcDateTime;
+                // The provider's "when it began" is only ever in the past; a future-dated value
+                // (provider clock skew) reads as now rather than ordering the record oddly.
+                // AsUtc is deterministic across hosts and kinds (the VendorReviewTimestamps
+                // convention): Local is converted, Unspecified is READ as Utc rather than as
+                // host-local time, and the clamp compares the converted value so a non-Utc
+                // kind can't slip a future timestamp past it.
+                var eventAsUtc = eventUtc.HasValue ? AsUtc(eventUtc.Value) : (DateTime?)null;
+                var suppressedSince = eventAsUtc.HasValue && eventAsUtc.Value < now ? eventAsUtc.Value : now;
                 var existing = await _repository.GetByEmailAsync(email);
 
                 try
@@ -158,7 +176,7 @@ namespace Web.Services
                             FirstSeenUtc = now,
                             LastSeenUtc = now,
                             CausingJobId = causingJobId,
-                            SuppressedUtc = now,
+                            SuppressedUtc = suppressedSince,
                             SuppressedBy = suppressedBy,
                             ProviderDiagnostic = providerDiagnostic,
                             LastEvidenceKey = evidenceKey,
@@ -203,7 +221,7 @@ namespace Web.Services
                         // event that put the suppression back in force, and the cleared stamps
                         // reset because the clear they describe has been overtaken.
                         existing.Reason = reason;
-                        existing.SuppressedUtc = now;
+                        existing.SuppressedUtc = suppressedSince;
                         existing.SuppressedBy = suppressedBy;
                         existing.ProviderDiagnostic = providerDiagnostic;
                         existing.CausingJobId = causingJobId;
@@ -232,6 +250,21 @@ namespace Web.Services
                 lastConflict!
             );
         }
+
+        /// <summary>
+        /// The one kind-normalization rule for provider timestamps: Local is converted,
+        /// Unspecified is read as already-Utc (provider timestamps carry no host-local meaning),
+        /// Utc is identity. Mirrors <c>VendorReviewTimestamps</c>'s kind switch so the two can't
+        /// drift. Deterministic across hosts, unlike <see cref="DateTime.ToUniversalTime"/>,
+        /// which reads Unspecified as host-local.
+        /// </summary>
+        private static DateTime AsUtc(DateTime value) =>
+            value.Kind switch
+            {
+                DateTimeKind.Utc => value,
+                DateTimeKind.Local => value.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+            };
 
         public Task<SuppressionClearOutcome> ClearAsync(
             string email,

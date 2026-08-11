@@ -77,11 +77,12 @@ namespace Web.UnitTests
                 string suppressedBy,
                 Guid? causingJobId,
                 string? providerDiagnostic,
-                string? evidenceKey = null
+                string? evidenceKey = null,
+                DateTime? eventUtc = null
             ) =>
                 _fail()
                     ? throw new InvalidOperationException("Cosmos is unavailable.")
-                    : _inner.RecordAsync(email, reason, suppressedBy, causingJobId, providerDiagnostic, evidenceKey);
+                    : _inner.RecordAsync(email, reason, suppressedBy, causingJobId, providerDiagnostic, evidenceKey, eventUtc);
 
             public Task<SuppressionClearOutcome> ClearAsync(
                 string email,

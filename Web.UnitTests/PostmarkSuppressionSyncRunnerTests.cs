@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -24,6 +25,7 @@ public sealed class PostmarkSuppressionSyncRunnerTests
         public TestClock Clock { get; } = new();
         public Mock<IAuditLogRepository> AuditLog { get; } = new();
         public StubDumpClient DumpClient { get; } = new();
+        public ListLogger<PostmarkSuppressionSyncRunner> Logs { get; } = new();
         public EmailSuppressionService SuppressionService { get; }
         public PostmarkSuppressionSyncRunner Runner { get; }
 
@@ -39,7 +41,7 @@ public sealed class PostmarkSuppressionSyncRunnerTests
                     postmarkOptions
                         ?? new PostmarkOptions { BroadcastStream = "broadcast", TransactionalStream = "outbound" }
                 ),
-                NullLogger<PostmarkSuppressionSyncRunner>.Instance
+                Logs
             );
         }
 
@@ -47,6 +49,43 @@ public sealed class PostmarkSuppressionSyncRunnerTests
             AuditLog.Invocations.Select(i => (NewAuditLogEntry)i.Arguments[0]).ToList();
 
         public Task<EmailSuppression?> GetAsync(string email) => Repository.GetByEmailAsync(email);
+    }
+
+    /// <summary>Captures log entries for assertions the NullLogger can't support.</summary>
+    private sealed class ListLogger<T> : ILogger<T>
+    {
+        private readonly object _gate = new();
+        private readonly List<(LogLevel Level, string Message)> _entries = new();
+
+        public IReadOnlyList<(LogLevel Level, string Message)> Entries
+        {
+            get
+            {
+                lock (_gate)
+                    return _entries.ToList();
+            }
+        }
+
+        public IDisposable BeginScope<TState>(TState state) => new NoopDisposable();
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        )
+        {
+            lock (_gate)
+                _entries.Add((logLevel, formatter(state, exception)));
+        }
+
+        private sealed class NoopDisposable : IDisposable
+        {
+            public void Dispose() { }
+        }
     }
 
     /// <summary>Per-stream canned dump, recording which streams were queried.</summary>
@@ -315,7 +354,8 @@ public sealed class PostmarkSuppressionSyncRunnerTests
                     It.IsAny<string>(),
                     It.IsAny<Guid?>(),
                     It.IsAny<string?>(),
-                    It.IsAny<string?>()
+                    It.IsAny<string?>(),
+                    It.IsAny<DateTime?>()
                 )
             )
             .ThrowsAsync(new ConcurrencyConflictException("lost every race", new Exception()));
@@ -329,12 +369,13 @@ public sealed class PostmarkSuppressionSyncRunnerTests
                     It.IsAny<string>(),
                     It.IsAny<Guid?>(),
                     It.IsAny<string?>(),
-                    It.IsAny<string?>()
+                    It.IsAny<string?>(),
+                    It.IsAny<DateTime?>()
                 )
             )
             .Returns(
-                (string email, SuppressionReason reason, string by, Guid? job, string? diagnostic, string? key) =>
-                    h.SuppressionService.RecordAsync(email, reason, by, job, diagnostic, key)
+                (string email, SuppressionReason reason, string by, Guid? job, string? diagnostic, string? key, DateTime? eventUtc) =>
+                    h.SuppressionService.RecordAsync(email, reason, by, job, diagnostic, key, eventUtc)
             );
         h.DumpClient.WithDump(
             "broadcast",
@@ -346,6 +387,83 @@ public sealed class PostmarkSuppressionSyncRunnerTests
 
         Assert.Equal(1, result.Errors);
         Assert.NotNull(await h.GetAsync("good@example.com"));
+    }
+
+    [Fact]
+    public async Task The_records_suppressed_date_is_the_providers_created_at_not_the_run_time()
+    {
+        // The admin reads SUPPRESSED as "when did this address stop getting mail" - for a
+        // reconciled record that is Postmark's CreatedAt, not when the sync happened to run.
+        var h = new Harness();
+        h.DumpClient.WithDump("broadcast", DumpEntry("a@example.com"));
+
+        await h.Runner.RunAsync(CancellationToken.None);
+
+        var suppression = await h.GetAsync("a@example.com");
+        Assert.Equal(new DateTime(2026, 8, 1, 17, 0, 0, DateTimeKind.Utc), suppression!.SuppressedUtc);
+        // ...while first/last-seen stay honest about when the evidence arrived here.
+        Assert.Equal(h.Clock.GetUtcNow().UtcDateTime, suppression.FirstSeenUtc);
+        Assert.Equal(h.Clock.GetUtcNow().UtcDateTime, suppression.LastSeenUtc);
+    }
+
+    [Fact]
+    public async Task An_entry_without_created_at_suppresses_at_the_run_time()
+    {
+        var h = new Harness();
+        var entry = DumpEntry("a@example.com");
+        entry.CreatedAt = null;
+        h.DumpClient.WithDump("broadcast", entry);
+
+        await h.Runner.RunAsync(CancellationToken.None);
+
+        var suppression = await h.GetAsync("a@example.com");
+        Assert.Equal(h.Clock.GetUtcNow().UtcDateTime, suppression!.SuppressedUtc);
+    }
+
+    [Theory]
+    [InlineData("2019-12-17T08:58:33-05:00", "2019-12-17T13:58:33Z")]
+    [InlineData("2026-08-01T12:00:00Z", "2026-08-01T12:00:00Z")]
+    // Offset-less input is read as UTC, not host-local time.
+    [InlineData("2026-08-01T12:00:00", "2026-08-01T12:00:00Z")]
+    [InlineData("not-a-date", null)]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    public void Parse_created_at_is_lenient(string? createdAt, string? expectedUtc)
+    {
+        var parsed = new Harness().Runner.ParseCreatedAt(createdAt);
+
+        if (expectedUtc == null)
+        {
+            Assert.Null(parsed);
+        }
+        else
+        {
+            Assert.Equal(DateTimeOffset.Parse(expectedUtc).UtcDateTime, parsed);
+        }
+    }
+
+    [Fact]
+    public void An_unparseable_created_at_warns_with_the_offending_value()
+    {
+        var h = new Harness();
+
+        h.Runner.ParseCreatedAt("not-a-date");
+
+        Assert.Contains(
+            h.Logs.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("not-a-date")
+        );
+    }
+
+    [Fact]
+    public void An_absent_created_at_does_not_warn()
+    {
+        var h = new Harness();
+
+        h.Runner.ParseCreatedAt(null);
+        h.Runner.ParseCreatedAt("   ");
+
+        Assert.DoesNotContain(h.Logs.Entries, e => e.Level == LogLevel.Warning);
     }
 
     [Fact]
