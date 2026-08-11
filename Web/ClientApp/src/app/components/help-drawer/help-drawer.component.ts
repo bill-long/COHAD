@@ -103,7 +103,10 @@ export class HelpDrawerComponent implements OnDestroy {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
       return;
     }
-    const anchor = (event.target as HTMLElement).closest('a');
+    // event.target can be a Text node in some browsers; walk up to its element so a click on an
+    // anchor's text is still intercepted rather than falling through to a full page load.
+    const target = event.target instanceof Element ? event.target : (event.target as Node | null)?.parentElement;
+    const anchor = target?.closest('a') ?? null;
     if (!anchor) {
       return;
     }

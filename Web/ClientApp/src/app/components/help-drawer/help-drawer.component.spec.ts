@@ -153,6 +153,24 @@ describe('HelpDrawerComponent', () => {
     expect(helpService.close).toHaveBeenCalled();
   });
 
+  it('intercepts a click whose event target is the text node inside an anchor', () => {
+    helpService.currentTopic = TOPICS[1];
+    open$.next(true);
+    fixture.detectChanges();
+
+    const link = fixture.debugElement.query(By.css('.help-content a[href="/manage/users"]'));
+    const textNode = (link.nativeElement as HTMLElement).firstChild!;
+    // Guard the fixture itself: if the link text is ever wrapped in an element, this spec would
+    // silently duplicate the element-target test instead of exercising the Text-node path.
+    expect(textNode.nodeType).toBe(Node.TEXT_NODE);
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+    textNode.dispatchEvent(event);
+
+    expect(event.defaultPrevented).withContext('default full page load must be prevented').toBeTrue();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/manage/users');
+    expect(helpService.close).toHaveBeenCalled();
+  });
+
   it('leaves modified clicks (e.g. ctrl-click for a new tab) to the browser', () => {
     helpService.currentTopic = TOPICS[1];
     open$.next(true);
