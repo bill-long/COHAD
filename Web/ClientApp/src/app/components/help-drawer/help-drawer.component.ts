@@ -34,6 +34,8 @@ export class HelpDrawerComponent implements OnDestroy {
   private readonly subscriptions = new Subscription();
   /** Doc requests; null cancels the in-flight load (switchMap drops stale responses on its own). */
   private readonly topicRequests = new Subject<HelpTopic | null>();
+  /** body overflow value captured when the drawer opened; null while closed (nothing to restore). */
+  private previousBodyOverflow: string | null = null;
 
   constructor(
     private readonly helpService: HelpService,
@@ -54,8 +56,8 @@ export class HelpDrawerComponent implements OnDestroy {
     // scroll out from under the contextual topic.
     this.subscriptions.add(
       helpService.open$.subscribe(open => {
-        document.body.style.overflow = open ? 'hidden' : '';
         if (open) {
+          this.blockBodyScroll();
           const contextual = helpService.currentTopic;
           if (contextual) {
             this.showTopic(contextual);
@@ -63,6 +65,7 @@ export class HelpDrawerComponent implements OnDestroy {
             this.showIndex();
           }
         } else {
+          this.restoreBodyScroll();
           // Drop any in-flight doc load so a late response cannot mutate state behind a closed
           // drawer; reopening always issues a fresh request anyway.
           this.topicRequests.next(null);
@@ -73,7 +76,23 @@ export class HelpDrawerComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
-    document.body.style.overflow = '';
+    this.restoreBodyScroll();
+  }
+
+  /** Blocks page scrolling behind the modal drawer, remembering the value to restore on close. */
+  private blockBodyScroll(): void {
+    if (this.previousBodyOverflow === null) {
+      this.previousBodyOverflow = document.body.style.overflow;
+    }
+    document.body.style.overflow = 'hidden';
+  }
+
+  /** Restores exactly the pre-open overflow value; a no-op while the drawer is already closed. */
+  private restoreBodyScroll(): void {
+    if (this.previousBodyOverflow !== null) {
+      document.body.style.overflow = this.previousBodyOverflow;
+      this.previousBodyOverflow = null;
+    }
   }
 
   close(): void {

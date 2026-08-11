@@ -1,4 +1,4 @@
-import { isManageItemVisibleForRoles, manageNavGroups } from '../components/manage/manage.component';
+import { isManageItemVisibleForRoles, manageNavGroups } from '../components/manage/manage-nav';
 import { rolePermissions } from '../services/rolepermission.service';
 
 /**

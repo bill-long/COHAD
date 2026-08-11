@@ -1,5 +1,5 @@
 import { routes } from '../app-routing.module';
-import { manageNavGroups } from '../components/manage/manage.component';
+import { manageNavGroups } from '../components/manage/manage-nav';
 import { rolePermissions } from '../services/rolepermission.service';
 import { helpTopics, topicForUrl, userCanSeeTopic } from './help-topics';
 

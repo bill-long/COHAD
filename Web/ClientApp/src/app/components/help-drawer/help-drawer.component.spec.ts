@@ -211,14 +211,19 @@ describe('HelpDrawerComponent', () => {
     expect(fixture.componentInstance.topicHtml).withContext('late response must not mutate closed-drawer state').toBeNull();
   });
 
-  it('blocks page scrolling while open and restores it on close', () => {
-    open$.next(true);
-    fixture.detectChanges();
-    expect(document.body.style.overflow).toBe('hidden');
+  it('blocks page scrolling while open and restores the pre-open value on close', () => {
+    document.body.style.overflow = 'scroll';
+    try {
+      open$.next(true);
+      fixture.detectChanges();
+      expect(document.body.style.overflow).toBe('hidden');
 
-    open$.next(false);
-    fixture.detectChanges();
-    expect(document.body.style.overflow).toBe('');
+      open$.next(false);
+      fixture.detectChanges();
+      expect(document.body.style.overflow).withContext('pre-open overflow must be restored, not cleared').toBe('scroll');
+    } finally {
+      document.body.style.overflow = '';
+    }
   });
 
   it('shows the failure message when a doc cannot be loaded', () => {
