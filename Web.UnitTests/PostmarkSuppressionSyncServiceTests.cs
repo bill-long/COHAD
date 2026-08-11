@@ -20,7 +20,7 @@ namespace Web.UnitTests;
 
 public sealed class PostmarkSuppressionSyncServiceTests
 {
-    private static (PostmarkSuppressionSyncService Service, Mock<IPostmarkSuppressionDumpClient> DumpClient) Create(
+    private static (PostmarkSuppressionSyncService Service, Mock<IPostmarkSuppressionClient> DumpClient) Create(
         PostmarkSuppressionSyncOptions options,
         string serverToken,
         string environmentName,
@@ -28,7 +28,7 @@ public sealed class PostmarkSuppressionSyncServiceTests
         ILogger<PostmarkSuppressionSyncService>? logger = null
     )
     {
-        var dumpClient = new Mock<IPostmarkSuppressionDumpClient>();
+        var dumpClient = new Mock<IPostmarkSuppressionClient>();
         dumpClient
             .Setup(c => c.GetSuppressionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<PostmarkSuppressionDumpEntry>())

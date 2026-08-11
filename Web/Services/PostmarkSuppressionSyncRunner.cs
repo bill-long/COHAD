@@ -1,7 +1,5 @@
 #nullable enable
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -68,14 +66,15 @@ namespace Web.Services
     /// Idempotent per dumped address: the evidence key is deterministic over (stream, address), so
     /// a rerun finds the active record already carrying the key and applies nothing - no count
     /// inflation, no duplicate audit entries, exactly like the webhook writers. One deliberate
-    /// consequence: an address an admin cleared ONLY in COHAD (without reactivating it in Postmark,
-    /// the documented two-system clear procedure) is re-suppressed by the next run, because
-    /// Postmark still silently drops its mail - the re-suppression is the truthful state.
+    /// consequence: an address cleared in COHAD while Postmark still holds its suppression entry
+    /// (the admin clear's provider-side reactivation failed, and the warning it surfaced went
+    /// unactioned) is re-suppressed by the next run, because Postmark still silently drops its
+    /// mail - the re-suppression is the truthful state.
     /// </para>
     /// </summary>
     public sealed class PostmarkSuppressionSyncRunner
     {
-        private readonly IPostmarkSuppressionDumpClient _dumpClient;
+        private readonly IPostmarkSuppressionClient _dumpClient;
         private readonly IEmailSuppressionRepository _repository;
         private readonly IEmailSuppressionService _suppressionService;
         private readonly IAuditLogRepository _auditLogRepository;
@@ -83,7 +82,7 @@ namespace Web.Services
         private readonly ILogger<PostmarkSuppressionSyncRunner> _logger;
 
         public PostmarkSuppressionSyncRunner(
-            IPostmarkSuppressionDumpClient dumpClient,
+            IPostmarkSuppressionClient dumpClient,
             IEmailSuppressionRepository repository,
             IEmailSuppressionService suppressionService,
             IAuditLogRepository auditLogRepository,
@@ -160,14 +159,10 @@ namespace Web.Services
         {
             var result = new PostmarkSuppressionSyncResult();
 
-            // Both streams, deduped: a misconfiguration pointing both at the same stream must not
-            // reconcile it twice (the second pass would be a no-op anyway, but the log would lie).
-            var streams = new List<string>();
-            foreach (var stream in new[] { _postmarkOptions.BroadcastStream, _postmarkOptions.TransactionalStream })
-            {
-                if (!string.IsNullOrWhiteSpace(stream) && !streams.Contains(stream, StringComparer.Ordinal))
-                    streams.Add(stream);
-            }
+            // Both streams, deduped (the shared definition): a misconfiguration pointing both at
+            // the same stream must not reconcile it twice (the second pass would be a no-op
+            // anyway, but the log would lie).
+            var streams = _postmarkOptions.GetConfiguredStreams();
 
             // One read of the COHAD list per run; the set is updated as records are written below,
             // so an address dumped on BOTH streams is recorded once, not once per stream.

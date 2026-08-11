@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Web.Models;
 
 namespace Web.Configuration
@@ -69,5 +71,19 @@ namespace Web.Configuration
         /// SMTP host for broadcast emails.
         /// </summary>
         public string BroadcastSmtpHost { get; set; } = "smtp-broadcasts.postmarkapp.com";
+
+        /// <summary>
+        /// The distinct configured message streams, blanks dropped - the one definition of
+        /// "every stream" for the callers that act per stream (the suppression-dump
+        /// reconciliation and the admin-clear reactivation). Deduped because a misconfiguration
+        /// pointing both settings at the same stream must not act on it twice.
+        /// </summary>
+        public IReadOnlyList<string> GetConfiguredStreams()
+        {
+            return new[] { BroadcastStream, TransactionalStream }
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+        }
     }
 }

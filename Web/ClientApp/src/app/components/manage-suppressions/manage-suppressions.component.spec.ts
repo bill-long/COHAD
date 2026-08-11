@@ -118,13 +118,52 @@ describe('ManageSuppressionsComponent', () => {
     component.ngOnInit();
     serviceSpy.getSuppressions.calls.reset();
     serviceSpy.getSuppressions.and.returnValue(of([]));
-    serviceSpy.clearSuppression.and.returnValue(of(makeSuppression({ isActive: false, clearedUtc: '2026-08-09T00:00:00Z' })));
+    serviceSpy.clearSuppression.and.returnValue(
+      of({ suppression: makeSuppression({ isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }), providerWarning: null }),
+    );
 
     component.clear(makeSuppression());
 
     expect(serviceSpy.clearSuppression).toHaveBeenCalledWith('abc');
     expect(serviceSpy.getSuppressions).toHaveBeenCalledTimes(1);
     expect(suppressedAddressesSpy.refresh).toHaveBeenCalledTimes(1);
+    expect(component.warningText).toBeNull();
+  });
+
+  it('keeps the provider warning visible through the reload a clear triggers', () => {
+    // A ProviderUnsubscribe clear whose provider-side reactivation failed: the local clear
+    // succeeded (rows reload), but the warning must survive that reload or the admin never
+    // learns the address is still suppressed at the provider.
+    component.ngOnInit();
+    serviceSpy.getSuppressions.and.returnValue(of([]));
+    serviceSpy.clearSuppression.and.returnValue(
+      of({
+        suppression: makeSuppression({ isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }),
+        providerWarning: 'still suppressed at the provider',
+      }),
+    );
+
+    component.clear(makeSuppression());
+
+    expect(component.warningText).toBe('still suppressed at the provider');
+    expect(component.errorText).toBeNull();
+  });
+
+  it('clears the provider warning on the next user-initiated load', () => {
+    component.ngOnInit();
+    serviceSpy.getSuppressions.and.returnValue(of([]));
+    serviceSpy.clearSuppression.and.returnValue(
+      of({
+        suppression: makeSuppression({ isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }),
+        providerWarning: 'still suppressed at the provider',
+      }),
+    );
+    component.clear(makeSuppression());
+    expect(component.warningText).toBeTruthy();
+
+    component.onIncludeClearedChange(true);
+
+    expect(component.warningText).toBeNull();
   });
 
   it('surfaces a 409 as try-again guidance, not an error state', () => {

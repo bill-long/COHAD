@@ -24,6 +24,13 @@ export class ManageSuppressionsComponent implements OnInit {
   errorText: string | null = null;
   /** Non-error guidance, e.g. the 409 "try again" message. */
   noticeText: string | null = null;
+  /**
+   * The clear endpoint's provider warning: the suppression is cleared here, but reactivating the
+   * address at the email provider failed, so its mail may still be silently dropped. Distinct
+   * from errorText because the requested action DID succeed locally, and from noticeText because
+   * it needs warning styling - it describes a condition the admin must act on, not guidance.
+   */
+  warningText: string | null = null;
   includeCleared = false;
   newEmail = '';
   createInProgress = false;
@@ -51,8 +58,11 @@ export class ManageSuppressionsComponent implements OnInit {
     this.loading = true;
     this.errorText = null;
     // Also clear the 409 "try again" notice: a fresh load (including a checkbox toggle) supersedes
-    // it, so leaving it would falsely imply the reload itself was contended.
+    // it, so leaving it would falsely imply the reload itself was contended. The provider warning
+    // goes too - a user-initiated reload is the next action, and clear() re-sets it AFTER calling
+    // load() when the warning must outlive the reload it triggers.
     this.noticeText = null;
+    this.warningText = null;
     const generation = ++this.loadGeneration;
     this.suppressionService.getSuppressions(this.includeCleared).subscribe({
       next: suppressions => {
@@ -107,10 +117,14 @@ export class ManageSuppressionsComponent implements OnInit {
     this.errorText = null;
     this.noticeText = null;
     this.suppressionService.clearSuppression(suppression.id).subscribe({
-      next: () => {
+      next: result => {
         this.clearingIds.delete(suppression.id);
         this.suppressedAddresses.refresh();
         this.load();
+        // After load(), which resets the banners: this warning is the one piece of the clear
+        // outcome that must survive its own reload ("cleared here, but the address may still be
+        // suppressed at the provider").
+        this.warningText = result.providerWarning;
       },
       error: err => {
         this.applyWriteError(err, 'Failed to clear the suppression.');

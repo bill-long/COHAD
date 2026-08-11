@@ -13,21 +13,21 @@ using Xunit;
 
 namespace Web.UnitTests;
 
-public sealed class PostmarkSuppressionDumpClientTests
+public sealed class PostmarkSuppressionClientTests
 {
     private const string Token = "unit-test-server-token";
 
-    private static (PostmarkSuppressionDumpClient Client, StubHandler Handler) Create(
+    private static (PostmarkSuppressionClient Client, StubHandler Handler) Create(
         HttpStatusCode status = HttpStatusCode.OK,
         string body = """{"Suppressions":[]}""",
         string serverToken = Token
     )
     {
         var handler = new StubHandler(status, body);
-        var client = new PostmarkSuppressionDumpClient(
+        var client = new PostmarkSuppressionClient(
             new HttpClient(handler, disposeHandler: true),
             Options.Create(new PostmarkOptions { ServerToken = serverToken }),
-            NullLogger<PostmarkSuppressionDumpClient>.Instance
+            NullLogger<PostmarkSuppressionClient>.Instance
         );
         return (client, handler);
     }
@@ -166,6 +166,106 @@ public sealed class PostmarkSuppressionDumpClientTests
         );
     }
 
+    // --- ReactivateAsync (issue #11) ---
+
+    private const string DeletedBody = """
+        {"Suppressions":[{"EmailAddress":"jane@example.com","Status":"Deleted","Message":null}]}
+        """;
+
+    [Fact]
+    public async Task Reactivate_posts_the_delete_request_with_token_and_address()
+    {
+        var (client, handler) = Create(body: DeletedBody);
+
+        await client.ReactivateAsync("broadcast", "jane@example.com", CancellationToken.None);
+
+        var request = handler.Request!;
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal(
+            "https://api.postmarkapp.com/message-streams/broadcast/suppressions/delete",
+            request.RequestUri?.ToString()
+        );
+        Assert.Equal(Token, request.Headers.GetValues("X-Postmark-Server-Token").Single());
+        Assert.Contains(@"""EmailAddress"":""jane@example.com""", handler.RequestBody);
+    }
+
+    [Fact]
+    public async Task Reactivate_accepts_a_deleted_status_with_different_address_casing()
+    {
+        // Postmark keys suppressions on the address, not its casing; the echo can differ from
+        // what was sent.
+        var body = """
+            {"Suppressions":[{"EmailAddress":"Jane@Example.com","Status":"Deleted","Message":null}]}
+            """;
+        var (client, _) = Create(body: body);
+
+        await client.ReactivateAsync("broadcast", "jane@example.com", CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Reactivate_throws_with_postmarks_message_on_a_failed_entry()
+    {
+        var body = """
+            {"Suppressions":[{"EmailAddress":"jane@example.com","Status":"Failed","Message":"You do not have the required authority to change this suppression."}]}
+            """;
+        var (client, _) = Create(body: body);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.ReactivateAsync("broadcast", "jane@example.com", CancellationToken.None)
+        );
+        Assert.Contains("You do not have the required authority", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("""{"Suppressions":[]}""")]
+    [InlineData("""{"Suppressions":[{"EmailAddress":"other@example.com","Status":"Deleted"}]}""")]
+    [InlineData("""{"Unexpected":true}""")]
+    [InlineData("not json")]
+    public async Task Reactivate_reads_an_ambiguous_answer_as_failure(string body)
+    {
+        // The opposite lenience direction from the dump: a false "reactivated" leaves the admin
+        // believing mail flows while Postmark still silently drops it.
+        var (client, _) = Create(body: body);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.ReactivateAsync("broadcast", "jane@example.com", CancellationToken.None)
+        );
+    }
+
+    [Fact]
+    public async Task Reactivate_throws_on_a_non_success_status()
+    {
+        var (client, _) = Create(HttpStatusCode.Unauthorized, """{"ErrorCode":401}""");
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => client.ReactivateAsync("broadcast", "jane@example.com", CancellationToken.None)
+        );
+    }
+
+    [Fact]
+    public async Task Reactivate_with_a_missing_server_token_fails_before_any_request()
+    {
+        var (client, handler) = Create(serverToken: "");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.ReactivateAsync("broadcast", "jane@example.com", CancellationToken.None)
+        );
+        Assert.Null(handler.Request);
+    }
+
+    [Theory]
+    [InlineData("  ", "jane@example.com")]
+    [InlineData("broadcast", "  ")]
+    public async Task Reactivate_rejects_blank_arguments(string stream, string email)
+    {
+        var (client, handler) = Create();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => client.ReactivateAsync(stream, email, CancellationToken.None)
+        );
+        Assert.Null(handler.Request);
+    }
+
     private sealed class StubHandler : HttpMessageHandler
     {
         private readonly HttpStatusCode _status;
@@ -180,18 +280,22 @@ public sealed class PostmarkSuppressionDumpClientTests
         /// <summary>The most recent request, or null before the first one.</summary>
         public HttpRequestMessage? Request { get; private set; }
 
-        protected override Task<HttpResponseMessage> SendAsync(
+        /// <summary>The most recent request's body, captured before the client disposes it.</summary>
+        public string? RequestBody { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken
         )
         {
             Request = request;
-            return Task.FromResult(
-                new HttpResponseMessage(_status)
-                {
-                    Content = new StringContent(_body, Encoding.UTF8, "application/json"),
-                }
-            );
+            RequestBody = request.Content == null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(_status)
+            {
+                Content = new StringContent(_body, Encoding.UTF8, "application/json"),
+            };
         }
     }
 }

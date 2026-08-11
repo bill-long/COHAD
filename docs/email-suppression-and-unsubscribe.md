@@ -829,21 +829,22 @@ implemented - see below).
 `ProviderUnsubscribe` is deliberately **not** resident-resumable, unlike `ResidentRequest`:
 lifting only COHAD's record would resume "successful" sends that Postmark still silently drops,
 because Postmark keeps its own suppression entry for the address. Clearing one is an admin
-action performed in BOTH systems - Manage > Suppressions here, and reactivating the address on
-the stream's suppression list in the Postmark dashboard (issue #11 tracks making that one action
-via Postmark's reactivation API). This preserves the Part 3 invariant with one
-refinement: `IEmailSuppressionService` remains the single writer of COHAD suppressions, and the
-Postmark sync becomes one more evidence source feeding it, exactly like bounce and complaint
-webhooks.
+action that acts on BOTH systems: the Manage > Suppressions clear also calls Postmark's
+suppression-delete API to reactivate the address on the stream suppression lists (issue #11,
+implemented - see below), so the two-system clear is one action. This preserves the Part 3
+invariant with one refinement: `IEmailSuppressionService` remains the single writer of COHAD
+suppressions, and the Postmark sync becomes one more evidence source feeding it, exactly like
+bounce and complaint webhooks.
 
 #### Implementation notes - issue #9: periodic reconciliation against the suppression dump (implemented)
 
 `PostmarkSuppressionSyncService` (hosted, self-disabling, same shape as `UserPurgeService`) runs
 `PostmarkSuppressionSyncRunner` on an interval - daily by default, enabled in production via
 `Postmark:SuppressionSync:Enabled`. The runner reads both streams' suppression dumps through
-`PostmarkSuppressionDumpClient` (`GET /message-streams/{stream}/suppressions/dump`, the
+`PostmarkSuppressionClient` (`GET /message-streams/{stream}/suppressions/dump`, the
 codebase's first Postmark HTTP client, authenticated with the same `Postmark:ServerToken` the
-SMTP transport uses) and records a COHAD suppression for any dumped address not already actively
+SMTP transport uses; named `PostmarkSuppressionDumpClient` until issue #11 gave it a second
+endpoint) and records a COHAD suppression for any dumped address not already actively
 suppressed here. Decisions made in the writing:
 
 - **Additive only.** The runner never clears: a clear is a deliberate act, and an absent dump
@@ -851,10 +852,10 @@ suppressed here. Decisions made in the writing:
 - **Idempotent per dumped address.** The evidence key is deterministic over (stream, normalized
   address) - `postmark:suppression-dump:{stream}:{address}` - so a rerun against an unchanged
   dump applies nothing: no count inflation, no duplicate audit entries, the same evidence-key
-  discipline as the webhook writers. One deliberate consequence: an address an admin cleared
-  ONLY in COHAD (without the Postmark-side reactivation the clear procedure requires) is
-  re-suppressed by the next run, because Postmark still silently drops its mail - the
-  re-suppression is the truthful state, and issue #11 exists to make that fight unnecessary.
+  discipline as the webhook writers. One deliberate consequence: an address cleared in COHAD
+  while Postmark still holds its suppression entry (the clear's provider-side reactivation
+  failed and the warning went unactioned) is re-suppressed by the next run, because Postmark
+  still silently drops its mail - the re-suppression is the truthful state.
 - **Reason mapping:** Postmark `ManualSuppression` -> `ProviderUnsubscribe`; `HardBounce` /
   `SpamComplaint` -> the matching COHAD reason; anything unrecognized -> `ProviderUnsubscribe`
   with a warning, because the address IS on Postmark's suppression list and "do not mail" is the
@@ -878,8 +879,44 @@ suppressed here. Decisions made in the writing:
   entry (`postmark.unsubscribed@cohad.local`, an address with no COHAD suppression) is recorded
   by the first sync run, so the reconciler's provenance is exercisable on the Manage >
   Suppressions page without a Postmark account.
-- The **reverse direction** - admin clear also reactivating the address in Postmark - is
-  deliberately NOT in this change; it is issue #11.
+- The **reverse direction** - admin clear also reactivating the address in Postmark - was
+  deliberately NOT in this change; it is issue #11, implemented below.
+
+#### Implementation notes - issue #11: admin clear reactivates the address in Postmark (implemented)
+
+Clearing a `ProviderUnsubscribe` suppression on Manage > Suppressions also deletes the
+address's entry from Postmark's stream suppression lists
+(`POST /message-streams/{stream}/suppressions/delete`, a second endpoint on the renamed
+`PostmarkSuppressionClient`), so the two-system clear the addendum above documented as a manual
+procedure is one action. Decisions made in the writing:
+
+- **Both streams are targeted** (`PostmarkReactivationService`, over
+  `PostmarkOptions.GetConfiguredStreams()` - the same deduped stream list the reconciliation
+  reads): the COHAD record does not store which stream suppressed the address, only the
+  diagnostic text, and Postmark reports success ("Deleted") for an entry that does not exist,
+  so over-targeting costs nothing. One stream's failure does not stop the other's attempt.
+- **COHAD's clear happens first; a failed provider call warns instead of failing the request.**
+  The response carries a `ProviderWarning` ("cleared here, still suppressed at the provider"),
+  shown as a warning banner that survives the page's own reload, and the audit entry records
+  the provider outcome either way. The request does not fail because the inconsistency is
+  bounded: the reconciliation re-suppresses the address within its interval, and clearing
+  again retries the provider call.
+- **The retry path is the already-cleared clear.** The idempotent clear of an already-cleared
+  `ProviderUnsubscribe` record repeats the provider call (harmless when the entry is already
+  gone), so no separate retry endpoint exists; the UI exposes it as **Retry provider
+  reactivation** on a cleared provider-unsubscribe row (visible with "Show cleared
+  suppressions"). A retry writes no audit entry: Postmark answers "Deleted" for a
+  never-existing entry too, so a repair is indistinguishable from a no-op.
+- **Only failure is strict.** The delete response is read in the opposite lenience direction
+  from the dump: an ambiguous answer (no entry for the address, unparseable body) reads as
+  failure, because a false "reactivated" leaves the admin believing mail flows while Postmark
+  still silently drops it - a false failure only shows a spurious warning.
+- **Scope stays `ProviderUnsubscribe`.** Clearing a `HardBounce`/`SpamComplaint` suppression
+  does not touch the provider: Postmark refuses to delete spam-complaint entries, and deleting
+  a hard-bounce entry is a deliverability decision the documented procedure keeps manual.
+- **MockData closes the loop end to end:** `MockPostmarkSuppressionClient.ReactivateAsync`
+  deletes the seeded dump entry, so clearing the reconciler-recorded suppression prevents the
+  next sync run from re-suppressing it - the same fight-free behavior the real provider gives.
 
 **The header generation in `EmailJobProcessor` stays**, dormant on broadcast mail, because it is
 the only RFC 8058 compliance on the non-Postmark fallback transport and on any category ever

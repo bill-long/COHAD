@@ -22,6 +22,7 @@
   </div>
 
   <div *ngIf="noticeText" class="cohad-inline-alert" role="status">{{ noticeText }}</div>
+  <div *ngIf="warningText" class="cohad-inline-alert cohad-inline-alert--warning" role="alert">{{ warningText }}</div>
   <div *ngIf="errorText" class="cohad-inline-alert cohad-inline-alert--error" role="alert">{{ errorText }}</div>
 
   <div *ngIf="loading" class="loading-state">
@@ -70,6 +71,19 @@
                   matTooltip="Mail to this address resumes (subject to its opt-in preferences)."
                 >
                   Clear
+                </button>
+                <!-- The remedy the provider warning points at: the clear endpoint is idempotent
+                     and repeats the provider-side reactivation on an already-cleared record, so
+                     a failed provider call is retryable without a separate endpoint. -->
+                <button
+                  *ngIf="!s.isActive && s.reason === 'ProviderUnsubscribe'"
+                  mat-stroked-button
+                  type="button"
+                  (click)="clear(s)"
+                  [disabled]="clearingIds.has(s.id)"
+                  matTooltip="Repeats the provider-side reactivation for this address - use it if clearing warned that the provider call failed."
+                >
+                  Retry provider reactivation
                 </button>
               </td>
             </tr>
