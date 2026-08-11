@@ -1,0 +1,146 @@
+/* Backdrop and drawer share z-index 1000 with the sticky navbar and the CDK overlay container.
+   Ties resolve by DOM order: both render after the navbar inside app-root (so they cover it), and
+   before the body-level .cdk-overlay-container (so Material tooltips, menus, and snackbars raised
+   while the drawer is open still paint on top). Do not raise these above 1000. */
+.help-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1000;
+}
+
+.help-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 100vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text-primary);
+  border-left: 1px solid var(--border-subtle);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
+  z-index: 1000;
+  animation: help-drawer-slide-in 180ms ease-out;
+}
+
+@keyframes help-drawer-slide-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-drawer {
+    animation: none;
+  }
+}
+
+.help-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.help-drawer-title {
+  font-size: var(--heading-section);
+  font-weight: var(--heading-section-weight);
+}
+
+.help-drawer-spacer {
+  flex: 1;
+}
+
+.help-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 20px 24px;
+}
+
+.help-section-heading {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin: 18px 0 2px;
+}
+
+.help-topic-list {
+  padding-top: 0;
+}
+
+.help-content-loading {
+  display: flex;
+  justify-content: center;
+  padding: 32px 0;
+}
+
+.help-content-error {
+  color: var(--error);
+}
+
+/* Rendered markdown arrives via [innerHTML], so these rules must not rely on Angular's scoping
+   attribute reaching the injected elements - hence ::ng-deep on descendants (same constraint as
+   blog-detail's .blog-content). */
+.help-content ::ng-deep h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0.4em 0 0.5em;
+}
+
+.help-content ::ng-deep h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 1.2em 0 0.4em;
+}
+
+.help-content ::ng-deep h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 1em 0 0.3em;
+}
+
+.help-content ::ng-deep p,
+.help-content ::ng-deep li {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.help-content ::ng-deep ul,
+.help-content ::ng-deep ol {
+  padding-left: 1.3em;
+  margin: 0.4em 0 0.8em;
+}
+
+.help-content ::ng-deep a {
+  color: var(--primary-sage);
+}
+
+.help-content ::ng-deep code {
+  background: var(--surface-chip);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
+}
+
+.help-content ::ng-deep blockquote {
+  margin: 0.8em 0;
+  padding: 0.4em 0.9em;
+  border-left: 3px solid var(--border-subtle);
+  background: var(--surface-subtle);
+}
+
+.help-content ::ng-deep blockquote p {
+  margin: 0.2em 0;
+}

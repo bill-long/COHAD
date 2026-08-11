@@ -14,6 +14,15 @@
       <a mat-button *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
       <button
         mat-icon-button
+        class="help-button"
+        *ngIf="helpVisible$ | async"
+        (click)="openHelp()"
+        matTooltip="Help"
+        aria-label="Help">
+        <mat-icon>help_outline</mat-icon>
+      </button>
+      <button
+        mat-icon-button
         class="notification-bell-button"
         *ngIf="notificationBellVisible$ | async"
         [matMenuTriggerFor]="notificationMenu"
@@ -97,6 +106,7 @@
         matBadgeColor="warn">
         Notifications
       </button>
+      <button mat-menu-item color="primary" *ngIf="helpVisible$ | async" (click)="openHelp()">Help</button>
       <ng-container *ngIf="!vm.authUser?.identityClaims?.emails">
         <button mat-menu-item *ngIf="!useMockAuth" (click)="login()" [disabled]="disabled">Sign In</button>
         <button mat-menu-item *ngIf="useMockAuth" [matMenuTriggerFor]="mockLoginMenuMobile" [disabled]="disabled">Sign In As...</button>

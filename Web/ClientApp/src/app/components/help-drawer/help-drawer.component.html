@@ -1,0 +1,54 @@
+<ng-container *ngIf="open$ | async">
+  <div class="help-backdrop" (click)="close()" aria-hidden="true"></div>
+  <aside
+    class="help-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Help"
+    cdkTrapFocus
+    cdkTrapFocusAutoCapture
+    (keydown.escape)="close()">
+    <header class="help-drawer-header">
+      <button
+        mat-icon-button
+        *ngIf="view === 'topic'"
+        (click)="showIndex()"
+        matTooltip="All help topics"
+        aria-label="All help topics">
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+      <span class="help-drawer-title">{{ view === 'topic' ? activeTopic?.title : 'Help' }}</span>
+      <span class="help-drawer-spacer"></span>
+      <button mat-icon-button (click)="close()" matTooltip="Close help" aria-label="Close help">
+        <mat-icon>close</mat-icon>
+      </button>
+    </header>
+
+    <div class="help-drawer-body">
+      <ng-container *ngIf="view === 'index'">
+        <ng-container *ngFor="let section of sections$ | async">
+          <h2 class="help-section-heading">{{ section.name }}</h2>
+          <mat-action-list class="help-topic-list">
+            <button mat-list-item *ngFor="let topic of section.topics" (click)="showTopic(topic)">
+              {{ topic.title }}
+            </button>
+          </mat-action-list>
+        </ng-container>
+      </ng-container>
+
+      <ng-container *ngIf="view === 'topic'">
+        <div
+          class="help-content"
+          *ngIf="topicHtml !== null"
+          [innerHTML]="topicHtml"
+          (click)="onContentClick($event)"></div>
+        <div class="help-content-loading" *ngIf="topicHtml === null && !topicLoadFailed">
+          <mat-spinner diameter="28"></mat-spinner>
+        </div>
+        <p class="help-content-error" role="alert" *ngIf="topicLoadFailed">
+          This help topic could not be loaded. Please try again.
+        </p>
+      </ng-container>
+    </div>
+  </aside>
+</ng-container>

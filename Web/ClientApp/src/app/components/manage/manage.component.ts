@@ -6,30 +6,12 @@ import { Observable } from 'rxjs';
 import { filter, map, shareReplay, startWith, switchMap, take } from 'rxjs/operators';
 import { ApiUser } from 'src/app/models';
 import { NotificationsService } from 'src/app/services/notifications.service';
-import { rolePermissions } from 'src/app/services/rolepermission.service';
+import { isManageItemVisibleForRoles, ManageNavGroup, ManageNavItem, manageNavGroups } from './manage-nav';
 import { ApplicationState, applicationState } from 'src/app/state';
 import { observeCompactLayout } from 'src/app/utils/compact-layout';
 
-/** One tool in the Manage rail. Visibility mirrors the old per-tab getters exactly. */
-interface ManageNavItem {
-  label: string;
-  /** Child route under /manage. */
-  route: string;
-  /** Material icon name. */
-  icon: string;
-  /** Roles that may see this tool (any-of). */
-  roles: string[];
-  /** When true, the tool also requires the Resident role (Events, News). */
-  requireResident?: boolean;
-  /** Live count rendered as a badge; the badge is hidden when the count is 0. */
-  badgeCount$?: Observable<number>;
-}
-
-/** A labelled cluster of tools. A group renders only when at least one of its items is visible. */
-interface ManageNavGroup {
-  label: string;
-  items: ManageNavItem[];
-}
+// The rail definition and visibility rule live in manage-nav.ts (component-free) so the help
+// registry can import them without dragging this component along.
 
 /**
  * Manage shell: a grouped left nav rail (Directory / Communications / Governance) over a routed
@@ -79,41 +61,11 @@ export class ManageComponent implements OnInit {
     // threshold, so the rail flips to a drawer at the same width everything else switches.
     this.isHandset$ = observeCompactLayout(this.breakpointObserver);
 
-    this.groups = [
-      {
-        label: 'Directory',
-        items: [
-          { label: 'Users', route: 'users', icon: 'group', roles: rolePermissions.manageUsersRoles },
-          { label: 'Homes', route: 'homes', icon: 'home', roles: rolePermissions.manageHomesRoles },
-          { label: 'Print Directory', route: 'print', icon: 'print', roles: rolePermissions.printDirectoryRoles },
-        ],
-      },
-      {
-        label: 'Communications',
-        items: [
-          { label: 'Email', route: 'send-email', icon: 'mail', roles: rolePermissions.manageEmailRoles },
-          { label: 'Suppressions', route: 'suppressions', icon: 'unsubscribe', roles: rolePermissions.manageSuppressionsRoles },
-          { label: 'News', route: 'blog', icon: 'article', roles: rolePermissions.manageBlogRoles, requireResident: true },
-          { label: 'Events', route: 'events', icon: 'event', roles: rolePermissions.manageEventsRoles, requireResident: true },
-          // Documents mirrors the old getter: gated by the manage-users (Administrator) role set.
-          { label: 'Documents', route: 'documents', icon: 'folder', roles: rolePermissions.manageUsersRoles },
-        ],
-      },
-      {
-        label: 'Governance',
-        items: [
-          { label: 'Committees', route: 'committees', icon: 'diversity_3', roles: rolePermissions.manageCommitteesRoles },
-          {
-            label: 'Approvals',
-            route: 'approvals',
-            icon: 'inbox',
-            roles: rolePermissions.manageCommitteesRoles,
-            badgeCount$: this.approvalsCount$,
-          },
-          { label: 'Audit Log', route: 'audit-log', icon: 'receipt_long', roles: rolePermissions.manageAuditLogRoles },
-        ],
-      },
-    ];
+    // The static rail definition plus this instance's live badge stream on Approvals.
+    this.groups = manageNavGroups.map(group => ({
+      ...group,
+      items: group.items.map(item => (item.route === 'approvals' ? { ...item, badgeCount$: this.approvalsCount$ } : item)),
+    }));
 
     this.visibleGroups$ = this.apiUser$.pipe(
       map(user =>
@@ -157,10 +109,8 @@ export class ManageComponent implements OnInit {
     return path === '/manage';
   }
 
-  /** Reproduces the previous per-tab visibility logic: role match, plus the Resident requirement. */
+  /** Reproduces the previous per-tab visibility logic (see isManageItemVisibleForRoles). */
   private isItemVisible(item: ManageNavItem, user: ApiUser | null): boolean {
-    if (user === null) return false;
-    if (item.requireResident && !user.roles.includes('Resident')) return false;
-    return user.roles.some(role => item.roles.includes(role));
+    return user !== null && isManageItemVisibleForRoles(item, user.roles);
   }
 }
