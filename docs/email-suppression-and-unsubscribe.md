@@ -967,6 +967,12 @@ procedure is one action. Decisions made in the writing:
   episode-guard refusal all really deleted provider entries; each writes an audit line through
   one shared writer, so the audit log can always explain why Postmark no longer suppresses an
   address COHAD still does.
+- **Clear confirms first, with the reason-specific stake.** The button opens the shared
+  `ConfirmDialogComponent` restating the help doc's "only clear when you understand why"
+  guidance at the moment of the click - per reason: a hard bounce's manual Postmark-dashboard
+  step, a spam complaint's reputation risk, a provider unsubscribe's provider-side
+  reactivation (which COHAD cannot undo by itself). The caution must not live only behind the
+  help drawer when the click now changes provider-side state.
 - **MockData closes the loop end to end:** `MockPostmarkSuppressionClient.ReactivateAsync`
   deletes the seeded dump entry, so clearing the reconciler-recorded suppression prevents the
   next sync run from re-suppressing it - the same fight-free behavior the real provider gives.

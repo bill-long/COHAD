@@ -17,7 +17,7 @@ The do-not-mail list. An address on this list receives **no association email at
 
 ## Clearing a suppression
 
-**Clear** resumes mail to the address (still subject to the person's normal opt-in preferences). Only clear when you understand why the address was suppressed and believe it is resolved - for example, the resident fixed a typo in their address, or confirmed their mailbox works again. Clearing a spam-complaint suppression without the recipient's agreement risks the association's sending reputation.
+**Clear** resumes mail to the address (still subject to the person's normal opt-in preferences). Clicking it first opens a confirmation that restates what this particular suppression means, so nothing changes until you confirm. Only clear when you understand why the address was suppressed and believe it is resolved - for example, the resident fixed a typo in their address, or confirmed their mailbox works again. Clearing a spam-complaint suppression without the recipient's agreement risks the association's sending reputation.
 
 Clearing a **provider unsubscribe** (an unsubscribe recorded by the mail provider, typically a mail client's Unsubscribe button) also reactivates the address at the mail provider automatically, so you do not need to touch the Postmark dashboard. The provider is updated first: if that call fails (for example, the provider is unreachable), the clear fails with an error and the suppression stays in place - nothing is half-done. Just click **Clear** again later.
 
