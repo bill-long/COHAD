@@ -145,7 +145,16 @@ namespace Web.Controllers
         /// </para>
         /// </summary>
         [HttpPost("{id}/clear")]
-        public async Task<IActionResult> Clear(string id, [FromBody] ClearEmailSuppressionRequestDto request = null)
+        public async Task<IActionResult> Clear(
+            string id,
+            // EmptyBodyBehavior.Allow, explicitly: [ApiController] otherwise 400s a missing body
+            // at model binding, and the episode stamp is deliberately optional (older or non-UI
+            // callers simply skip the guard). Stated on the attribute rather than via a nullable
+            // annotation because controllers here stay nullable-oblivious - on an MVC action,
+            // nullability is binding semantics, not documentation.
+            [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)]
+                ClearEmailSuppressionRequestDto request = null
+        )
         {
             // Independent reads (user store and suppression store), so the interactive request
             // does not pay two round-trips in series before the provider call it already waits
