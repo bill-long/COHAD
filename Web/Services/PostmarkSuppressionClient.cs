@@ -90,24 +90,14 @@ namespace Web.Services
             RequireMessageStream(messageStream);
             RequireServerToken();
 
-            var url =
-                $"{ApiBaseUrl}/message-streams/{Uri.EscapeDataString(messageStream)}/suppressions/dump";
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("X-Postmark-Server-Token", _options.ServerToken);
-            request.Headers.Add("Accept", "application/json");
-
-            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError(
-                    "Postmark suppression dump for stream {MessageStream} failed: {Status} {Body}",
-                    messageStream,
-                    (int)response.StatusCode,
-                    body
-                );
-                response.EnsureSuccessStatusCode();
-            }
+            var body = await SendAsync(
+                HttpMethod.Get,
+                $"{ApiBaseUrl}/message-streams/{Uri.EscapeDataString(messageStream)}/suppressions/dump",
+                content: null,
+                "suppression dump",
+                messageStream,
+                cancellationToken
+            ).ConfigureAwait(false);
 
             return ParseDump(body, messageStream);
         }
@@ -123,38 +113,27 @@ namespace Web.Services
                 throw new ArgumentException("Email address must not be empty.", nameof(emailAddress));
             RequireServerToken();
 
-            var url =
-                $"{ApiBaseUrl}/message-streams/{Uri.EscapeDataString(messageStream)}/suppressions/delete";
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Headers.Add("X-Postmark-Server-Token", _options.ServerToken);
-            request.Headers.Add("Accept", "application/json");
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(
-                    new { Suppressions = new[] { new { EmailAddress = emailAddress } } }
+            var body = await SendAsync(
+                HttpMethod.Post,
+                $"{ApiBaseUrl}/message-streams/{Uri.EscapeDataString(messageStream)}/suppressions/delete",
+                new StringContent(
+                    JsonSerializer.Serialize(
+                        new { Suppressions = new[] { new { EmailAddress = emailAddress } } }
+                    ),
+                    Encoding.UTF8,
+                    "application/json"
                 ),
-                Encoding.UTF8,
-                "application/json"
-            );
-
-            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError(
-                    "Postmark suppression delete on stream {MessageStream} failed: {Status} {Body}",
-                    messageStream,
-                    (int)response.StatusCode,
-                    body
-                );
-                response.EnsureSuccessStatusCode();
-            }
+                "suppression delete",
+                messageStream,
+                cancellationToken
+            ).ConfigureAwait(false);
 
             // Postmark answers 200 with a per-entry Status: "Deleted" on success (including the
             // no-op delete of an entry that does not exist), "Failed" with a Message otherwise
             // (e.g. a SpamComplaint entry, which only the recipient can lift). Strict in the
             // OPPOSITE direction from the dump parsing: an ambiguous answer here must read as
             // failure, because a false "reactivated" leaves the admin believing mail flows while
-            // Postmark still silently drops it - a false failure only shows a spurious warning.
+            // Postmark still silently drops it - a false failure only fails a retryable clear.
             var failure = ExtractReactivationFailure(body, emailAddress);
             if (failure != null)
             {
@@ -169,6 +148,50 @@ namespace Web.Services
                 );
             }
         }
+
+        /// <summary>
+        /// The one request/send/error pipeline for both endpoints, so a future change to it
+        /// (token redaction, retry, 429 handling) cannot be applied to one and missed on the
+        /// other. Returns the response body; throws on a non-success status after logging it.
+        /// </summary>
+        private async Task<string> SendAsync(
+            HttpMethod method,
+            string url,
+            StringContent? content,
+            string operation,
+            string messageStream,
+            CancellationToken cancellationToken
+        )
+        {
+            using var request = new HttpRequestMessage(method, url);
+            request.Headers.Add("X-Postmark-Server-Token", _options.ServerToken);
+            request.Headers.Add("Accept", "application/json");
+            request.Content = content;
+
+            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError(
+                    "Postmark {Operation} on stream {MessageStream} failed: {Status} {Body}",
+                    operation,
+                    messageStream,
+                    (int)response.StatusCode,
+                    body
+                );
+                response.EnsureSuccessStatusCode();
+            }
+            return body;
+        }
+
+        /// <summary>
+        /// The one address-match rule for provider suppression entries: trimmed and
+        /// case-insensitive, because Postmark keys suppressions on the address, not its casing.
+        /// Shared with <c>MockPostmarkSuppressionClient</c> so the fake cannot drift from what
+        /// the real client accepts.
+        /// </summary>
+        internal static bool AddressesMatch(string left, string right) =>
+            string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Returns null when the response confirms the entry was deleted, otherwise a
@@ -193,13 +216,8 @@ namespace Web.Services
                     if (item.ValueKind != JsonValueKind.Object)
                         continue;
                     var entryAddress = GetOptionalString(item, "EmailAddress");
-                    if (
-                        entryAddress == null
-                        || !string.Equals(entryAddress.Trim(), emailAddress.Trim(), StringComparison.OrdinalIgnoreCase)
-                    )
-                    {
+                    if (entryAddress == null || !AddressesMatch(entryAddress, emailAddress))
                         continue;
-                    }
 
                     var status = GetOptionalString(item, "Status");
                     if (string.Equals(status, "Deleted", StringComparison.Ordinal))

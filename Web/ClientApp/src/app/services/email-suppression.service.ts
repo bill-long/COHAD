@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { ClearEmailSuppressionResult, EmailSuppression } from '../models';
+import { EmailSuppression } from '../models';
 
 /**
  * Client for the Administrator-only suppression list (api/email-suppressions). Create and clear
@@ -21,7 +21,7 @@ export class EmailSuppressionService {
     return this.httpClient.post<EmailSuppression>('api/email-suppressions', { email });
   }
 
-  clearSuppression(id: string): Observable<ClearEmailSuppressionResult> {
-    return this.httpClient.post<ClearEmailSuppressionResult>(`api/email-suppressions/${id}/clear`, null);
+  clearSuppression(id: string): Observable<EmailSuppression> {
+    return this.httpClient.post<EmailSuppression>(`api/email-suppressions/${id}/clear`, null);
   }
 }

@@ -51,22 +51,4 @@ namespace Web.PresentationModels
     {
         public string Email { get; set; } = string.Empty;
     }
-
-    /// <summary>
-    /// Response for the admin clear endpoint. Not just the record: clearing a
-    /// <see cref="SuppressionReason.ProviderUnsubscribe"/> suppression also reactivates the
-    /// address at the email provider, and when that provider call fails the clear must not read
-    /// as a silent success - <see cref="ProviderWarning"/> is how the admin learns the address
-    /// may still be suppressed provider-side.
-    /// </summary>
-    public class ClearEmailSuppressionResponseDto
-    {
-        public EmailSuppressionDto Suppression { get; set; } = new();
-
-        /// <summary>
-        /// Human-readable warning when the provider-side reactivation did not fully succeed;
-        /// null when it did, or when the record's reason involves no provider-side entry.
-        /// </summary>
-        public string? ProviderWarning { get; set; }
-    }
 }

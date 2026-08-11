@@ -61,17 +61,11 @@ describe('EmailSuppressionService', () => {
     req.flush(suppression);
   });
 
-  it('clears a suppression by document id and surfaces the provider warning', () => {
-    let providerWarning: string | null | undefined;
-    service.clearSuppression('abc').subscribe(result => (providerWarning = result.providerWarning));
+  it('clears a suppression by document id', () => {
+    service.clearSuppression('abc').subscribe();
 
     const req = httpMock.expectOne('api/email-suppressions/abc/clear');
     expect(req.request.method).toBe('POST');
-    req.flush({
-      suppression: { ...suppression, clearedUtc: '2026-08-09T00:00:00Z', isActive: false },
-      providerWarning: 'still suppressed at the provider',
-    });
-
-    expect(providerWarning).toBe('still suppressed at the provider');
+    req.flush({ ...suppression, clearedUtc: '2026-08-09T00:00:00Z', isActive: false });
   });
 });

@@ -11,9 +11,9 @@ using Web.Configuration;
 namespace Web.Services
 {
     /// <summary>
-    /// What one provider-side reactivation attempt did, per stream. The caller turns a failed
-    /// attempt into a visible warning: "cleared here, still suppressed at the provider" must
-    /// never read as a silent 200.
+    /// What one provider-side reactivation attempt did, per stream. The caller runs this BEFORE
+    /// its own clear and refuses the clear on failure, so "cleared here, still suppressed at
+    /// the provider" is never a reachable state.
     /// </summary>
     public sealed class PostmarkReactivationResult
     {
@@ -47,16 +47,16 @@ namespace Web.Services
 
         /// <summary>
         /// True when the attempt was skipped because no provider integration is configured -
-        /// neither a success (nothing was reactivated) nor a warnable failure (there is no
-        /// provider-side suppression affecting the send path). Callers branch on this before
-        /// <see cref="Succeeded"/>.
+        /// neither a success (nothing was reactivated) nor a failure that should refuse a clear
+        /// (there is no provider-side suppression affecting the send path). Callers branch on
+        /// this before <see cref="Succeeded"/>.
         /// </summary>
         public bool SkippedNotConfigured { get; }
 
         /// <summary>
         /// True only when every configured stream confirmed the delete. Zero attempted streams
-        /// (no streams configured) counts as failure: the provider side was not touched, which
-        /// is exactly what the warning exists to say.
+        /// (no streams configured) counts as failure: the provider side was not touched, so a
+        /// clear gated on this must not proceed.
         /// </summary>
         public bool Succeeded => StreamsAttempted > 0 && FailedStreams.Count == 0;
     }
@@ -74,9 +74,8 @@ namespace Web.Services
         /// <summary>
         /// Attempts the delete on every configured stream, never throwing for a failed
         /// provider call - including a provider timeout: one stream's failure must not stop
-        /// the other's attempt, and the caller's COHAD clear has already happened, so the
-        /// result is how the caller learns what to warn about. Only the caller's own
-        /// cancellation propagates.
+        /// the other's attempt, and the result is how the caller decides whether its clear may
+        /// proceed. Only the caller's own cancellation propagates.
         /// </summary>
         Task<PostmarkReactivationResult> ReactivateAsync(string email, CancellationToken cancellationToken);
     }
@@ -152,9 +151,9 @@ namespace Web.Services
     /// The registration when no <c>Postmark:ServerToken</c> is configured (webhook-only
     /// Postmark, or no Postmark at all) - the <c>DisabledSpamClassifier</c> precedent. In those
     /// deployments sends do not pass through Postmark's suppression filter, so there is no
-    /// provider-side entry to reactivate and warning the admin about a "failed" provider call
-    /// on every clear would report a false, unresolvable problem. MockData does not use this:
-    /// its suppression client is the in-memory fake, which needs no token.
+    /// provider-side entry to reactivate and refusing every clear over a "failed" provider
+    /// call would block the admin on a false, unresolvable problem. MockData does not use
+    /// this: its suppression client is the in-memory fake, which needs no token.
     /// </summary>
     public sealed class NotConfiguredPostmarkReactivationService : IPostmarkReactivationService
     {

@@ -74,6 +74,17 @@ namespace Web.Services
         /// evidence arrived HERE). A missing or future-dated value falls back to now.
         /// </para>
         /// <para>
+        /// <paramref name="evidenceSnapshotUtc"/> is for evidence read from a point-in-time
+        /// snapshot of provider state (the suppression dump): when the record was cleared AT OR
+        /// AFTER the snapshot was taken, the evidence says nothing about post-clear state and is
+        /// ignored - otherwise a reconciliation run whose dump was fetched moments before an
+        /// admin's clear-with-provider-reactivation would silently undo the clear, with nothing
+        /// left to lift it (the sync is additive). A clear that predates the snapshot is still
+        /// re-suppressed: the provider really was still suppressing the address when looked at.
+        /// Event-shaped evidence (webhooks) passes null - an event arriving after a clear is
+        /// genuinely new.
+        /// </para>
+        /// <para>
         /// Throws <see cref="ArgumentException"/> for a blank address, and
         /// <see cref="ConcurrencyConflictException"/> when every retry of the write loses its
         /// race - callers on request paths surface that as 409, not 500.
@@ -86,7 +97,8 @@ namespace Web.Services
             Guid? causingJobId,
             string? providerDiagnostic,
             string? evidenceKey = null,
-            DateTime? eventUtc = null
+            DateTime? eventUtc = null,
+            DateTime? evidenceSnapshotUtc = null
         );
 
         /// <summary>
@@ -107,9 +119,12 @@ namespace Web.Services
         /// Clears the record with this document id. Exists for the admin surface, which acts on a
         /// listed row: a hand-authored document whose id does not match
         /// <see cref="EmailSuppression.MakeId"/> of its own Email is unreachable by address and
-        /// must still be clearable by the human looking at it.
+        /// must still be clearable by the human looking at it. <paramref name="onlyIfReason"/>
+        /// carries the same write-time guarantee as on <see cref="ClearAsync"/> - the admin
+        /// surface passes the reason it showed the admin, so a record re-suppressed for a
+        /// different reason between page load and click is not lifted on stale information.
         /// </summary>
-        Task<SuppressionClearOutcome> ClearByIdAsync(string id, string clearedBy);
+        Task<SuppressionClearOutcome> ClearByIdAsync(string id, string clearedBy, SuppressionReason? onlyIfReason = null);
     }
 
     public class EmailSuppressionService : IEmailSuppressionService
@@ -138,7 +153,8 @@ namespace Web.Services
             Guid? causingJobId,
             string? providerDiagnostic,
             string? evidenceKey = null,
-            DateTime? eventUtc = null
+            DateTime? eventUtc = null,
+            DateTime? evidenceSnapshotUtc = null
         )
         {
             // A blank address can never be mailed, so a suppression for one is not a safety
@@ -193,6 +209,23 @@ namespace Web.Services
                         existing.IsActive
                         && evidenceKey != null
                         && string.Equals(existing.LastEvidenceKey, evidenceKey, StringComparison.Ordinal)
+                    )
+                    {
+                        return new SuppressionRecordOutcome(existing, applied: false);
+                    }
+
+                    // Snapshot-shaped evidence taken before the clear says nothing about
+                    // post-clear provider state: enforced inside the write cycle (on the record
+                    // this attempt actually holds), so a clear landing mid-reconciliation cannot
+                    // be undone by the stale dump either. Deliberately keyed on when the snapshot
+                    // was TAKEN, not on the entry's own provider timestamp: a half-done manual
+                    // clear (hard bounce cleared here, dashboard step skipped) must still be
+                    // re-suppressed by the next run, whose fresher snapshot postdates that clear.
+                    if (
+                        !existing.IsActive
+                        && evidenceSnapshotUtc.HasValue
+                        && existing.ClearedUtc.HasValue
+                        && existing.ClearedUtc.Value >= AsUtc(evidenceSnapshotUtc.Value)
                     )
                     {
                         return new SuppressionRecordOutcome(existing, applied: false);
@@ -275,9 +308,9 @@ namespace Web.Services
             return ClearCoreAsync(() => _repository.GetByEmailAsync(email), clearedBy, onlyIfReason);
         }
 
-        public Task<SuppressionClearOutcome> ClearByIdAsync(string id, string clearedBy)
+        public Task<SuppressionClearOutcome> ClearByIdAsync(string id, string clearedBy, SuppressionReason? onlyIfReason = null)
         {
-            return ClearCoreAsync(() => _repository.GetByIdAsync(id), clearedBy, onlyIfReason: null);
+            return ClearCoreAsync(() => _repository.GetByIdAsync(id), clearedBy, onlyIfReason);
         }
 
         private async Task<SuppressionClearOutcome> ClearCoreAsync(

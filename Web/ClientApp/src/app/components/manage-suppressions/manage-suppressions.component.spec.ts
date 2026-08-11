@@ -118,94 +118,33 @@ describe('ManageSuppressionsComponent', () => {
     component.ngOnInit();
     serviceSpy.getSuppressions.calls.reset();
     serviceSpy.getSuppressions.and.returnValue(of([]));
-    serviceSpy.clearSuppression.and.returnValue(
-      of({ suppression: makeSuppression({ isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }), providerWarning: null }),
-    );
+    serviceSpy.clearSuppression.and.returnValue(of(makeSuppression({ isActive: false, clearedUtc: '2026-08-09T00:00:00Z' })));
 
     component.clear(makeSuppression());
 
     expect(serviceSpy.clearSuppression).toHaveBeenCalledWith('abc');
     expect(serviceSpy.getSuppressions).toHaveBeenCalledTimes(1);
     expect(suppressedAddressesSpy.refresh).toHaveBeenCalledTimes(1);
-    expect(component.warningText).toBeNull();
   });
 
-  it('keeps the provider warning visible through the reload a clear triggers', () => {
-    // A ProviderUnsubscribe clear whose provider-side reactivation failed: the local clear
-    // succeeded (rows reload), but the warning must survive that reload or the admin never
-    // learns the address is still suppressed at the provider.
-    component.ngOnInit();
-    serviceSpy.getSuppressions.and.returnValue(of([]));
+  it('surfaces a failed provider reactivation (502) as an error with the server text', () => {
+    // The clear endpoint reactivates the address at the email provider BEFORE clearing; a
+    // provider failure fails the whole request and the record stays suppressed, so the admin's
+    // retry is simply clicking Clear again on the still-active row.
     serviceSpy.clearSuppression.and.returnValue(
-      of({
-        suppression: makeSuppression({ isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }),
-        providerWarning: 'still suppressed at the provider',
-      }),
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 502,
+            error: { error: 'Could not reactivate taylor.old@cohad.local at the email provider, so the suppression was not cleared.' },
+          }),
+      ),
     );
 
     component.clear(makeSuppression());
 
-    expect(component.warningText).toBe('still suppressed at the provider');
-    expect(component.errorText).toBeNull();
-  });
-
-  it('keeps an unactioned warning when a different record is cleared successfully', () => {
-    // The warning about record A must not be dismissed by record B's clean clear - A still
-    // needs its provider retry.
-    component.ngOnInit();
-    serviceSpy.getSuppressions.and.returnValue(of([]));
-    serviceSpy.clearSuppression.and.returnValue(
-      of({
-        suppression: makeSuppression({ id: 'a', isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }),
-        providerWarning: 'record A still suppressed at the provider',
-      }),
-    );
-    component.clear(makeSuppression({ id: 'a' }));
-
-    serviceSpy.clearSuppression.and.returnValue(
-      of({ suppression: makeSuppression({ id: 'b', isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }), providerWarning: null }),
-    );
-    component.clear(makeSuppression({ id: 'b' }));
-
-    expect(component.warningText).toBe('record A still suppressed at the provider');
-  });
-
-  it('dismisses the warning when the same record\'s retry succeeds', () => {
-    component.ngOnInit();
-    serviceSpy.getSuppressions.and.returnValue(of([]));
-    serviceSpy.clearSuppression.and.returnValue(
-      of({
-        suppression: makeSuppression({ id: 'a', isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }),
-        providerWarning: 'record A still suppressed at the provider',
-      }),
-    );
-    component.clear(makeSuppression({ id: 'a' }));
-    expect(component.warningText).toBeTruthy();
-
-    // The retry (the clear endpoint is idempotent) now reaches the provider.
-    serviceSpy.clearSuppression.and.returnValue(
-      of({ suppression: makeSuppression({ id: 'a', isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }), providerWarning: null }),
-    );
-    component.clear(makeSuppression({ id: 'a', isActive: false }));
-
-    expect(component.warningText).toBeNull();
-  });
-
-  it('clears the provider warning on the next user-initiated load', () => {
-    component.ngOnInit();
-    serviceSpy.getSuppressions.and.returnValue(of([]));
-    serviceSpy.clearSuppression.and.returnValue(
-      of({
-        suppression: makeSuppression({ isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }),
-        providerWarning: 'still suppressed at the provider',
-      }),
-    );
-    component.clear(makeSuppression());
-    expect(component.warningText).toBeTruthy();
-
-    component.onIncludeClearedChange(true);
-
-    expect(component.warningText).toBeNull();
+    expect(component.errorText).toContain('taylor.old@cohad.local');
+    expect(component.noticeText).toBeNull();
   });
 
   it('surfaces a 409 as try-again guidance, not an error state', () => {

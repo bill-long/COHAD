@@ -337,6 +337,102 @@ namespace Web.UnitTests
         }
 
         [Fact]
+        public async Task ClearById_WithOnlyIfReason_RefusesAMismatchedReason()
+        {
+            // The admin surface passes the reason it showed the admin, so a record re-suppressed
+            // for a different reason between page load and click is not lifted on stale
+            // information - same write-time guarantee as the address-keyed clear.
+            var service = CreateService();
+            var outcome0 = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.HardBounce,
+                EmailSuppression.SystemDeliveryEvent,
+                null,
+                null
+            );
+
+            var outcome = await service.ClearByIdAsync(
+                outcome0.Suppression.Id,
+                "admin-user",
+                onlyIfReason: SuppressionReason.ProviderUnsubscribe
+            );
+
+            Assert.False(outcome.Cleared);
+            Assert.True(outcome.Suppression!.IsActive);
+        }
+
+        [Fact]
+        public async Task Record_SnapshotEvidence_IgnoredWhenTheRecordWasClearedAfterTheSnapshot()
+        {
+            // The clear-vs-inflight-sync race: a suppression-dump snapshot fetched moments
+            // before an admin's clear (with provider-side reactivation) still lists the address,
+            // and re-suppressing from it would silently undo the clear with nothing left to lift
+            // it. A snapshot taken before the clear says nothing about post-clear state.
+            var service = CreateService();
+            await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                evidenceKey: "postmark:suppression-dump:broadcast:jane@example.com",
+                eventUtc: Now.UtcDateTime.AddDays(-10)
+            );
+            var snapshotUtc = Now.UtcDateTime.AddMinutes(30);
+            _time.Advance(TimeSpan.FromHours(1));
+            await service.ClearAsync("jane@example.com", "admin-user");
+
+            var outcome = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.ProviderUnsubscribe,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                evidenceKey: "postmark:suppression-dump:broadcast:jane@example.com",
+                eventUtc: Now.UtcDateTime.AddDays(-10),
+                evidenceSnapshotUtc: snapshotUtc
+            );
+
+            Assert.False(outcome.Applied);
+            Assert.False((await _repo.GetByEmailAsync("jane@example.com"))!.IsActive);
+        }
+
+        [Fact]
+        public async Task Record_SnapshotEvidence_TakenAfterTheClear_StillReSuppresses()
+        {
+            // The counterpart, and why the guard keys on the snapshot time rather than the
+            // entry's own provider date: a half-done manual clear (hard bounce cleared here, the
+            // Postmark dashboard step skipped) must be re-suppressed by the NEXT run, whose
+            // fresher snapshot proves the provider was still suppressing the address after the
+            // clear - even though the entry's CreatedAt long predates it.
+            var service = CreateService();
+            await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.HardBounce,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                eventUtc: Now.UtcDateTime.AddDays(-10)
+            );
+            _time.Advance(TimeSpan.FromHours(1));
+            await service.ClearAsync("jane@example.com", "admin-user");
+
+            _time.Advance(TimeSpan.FromDays(1));
+            var outcome = await service.RecordAsync(
+                "jane@example.com",
+                SuppressionReason.HardBounce,
+                EmailSuppression.PostmarkSuppressionDump,
+                null,
+                null,
+                eventUtc: Now.UtcDateTime.AddDays(-10),
+                evidenceSnapshotUtc: _time.GetUtcNow().UtcDateTime
+            );
+
+            Assert.True(outcome.Applied);
+            Assert.True(outcome.Suppression.IsActive);
+        }
+
+        [Fact]
         public async Task ResuppressionAfterClear_StartsANewEpisodeButKeepsFirstSeen()
         {
             var service = CreateService();

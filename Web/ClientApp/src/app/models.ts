@@ -266,17 +266,6 @@ export interface EmailSuppression {
   isActive: boolean;
 }
 
-/**
- * Response of POST api/email-suppressions/{id}/clear. Clearing a ProviderUnsubscribe record also
- * reactivates the address at the email provider; providerWarning is non-null when that provider
- * call did not fully succeed, so the clear never reads as a silent success while the provider
- * still drops the address's mail.
- */
-export interface ClearEmailSuppressionResult {
-  suppression: EmailSuppression;
-  providerWarning: string | null;
-}
-
 /** Returned by GET/POST api/payment. Omits raw PayPal payloads and internal payer linkage. */
 export interface PaymentSummary {
   id: string;

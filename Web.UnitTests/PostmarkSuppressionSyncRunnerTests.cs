@@ -365,6 +365,7 @@ public sealed class PostmarkSuppressionSyncRunnerTests
                     It.IsAny<Guid?>(),
                     It.IsAny<string?>(),
                     It.IsAny<string?>(),
+                    It.IsAny<DateTime?>(),
                     It.IsAny<DateTime?>()
                 )
             )
@@ -380,12 +381,13 @@ public sealed class PostmarkSuppressionSyncRunnerTests
                     It.IsAny<Guid?>(),
                     It.IsAny<string?>(),
                     It.IsAny<string?>(),
+                    It.IsAny<DateTime?>(),
                     It.IsAny<DateTime?>()
                 )
             )
             .Returns(
-                (string email, SuppressionReason reason, string by, Guid? job, string? diagnostic, string? key, DateTime? eventUtc) =>
-                    h.SuppressionService.RecordAsync(email, reason, by, job, diagnostic, key, eventUtc)
+                (string email, SuppressionReason reason, string by, Guid? job, string? diagnostic, string? key, DateTime? eventUtc, DateTime? snapshotUtc) =>
+                    h.SuppressionService.RecordAsync(email, reason, by, job, diagnostic, key, eventUtc, snapshotUtc)
             );
         h.DumpClient.WithDump(
             "broadcast",

@@ -57,13 +57,21 @@ namespace Web.MockData
                 throw new ArgumentException("Message stream must not be empty.", nameof(messageStream));
             cancellationToken.ThrowIfCancellationRequested();
 
-            // A copy, matching the mock repositories' clones-on-every-path convention: the caller
-            // can never mutate the seeded store.
+            // Deep copies, matching the mock repositories' clones-on-every-path convention: the
+            // caller can never mutate the seeded store, entry objects included.
             lock (_gate)
             {
                 return Task.FromResult<IReadOnlyList<PostmarkSuppressionDumpEntry>>(
                     _dumpsByStream.TryGetValue(messageStream, out var entries)
-                        ? entries.ToList()
+                        ? entries
+                            .Select(e => new PostmarkSuppressionDumpEntry
+                            {
+                                EmailAddress = e.EmailAddress,
+                                SuppressionReason = e.SuppressionReason,
+                                Origin = e.Origin,
+                                CreatedAt = e.CreatedAt,
+                            })
+                            .ToList()
                         : new List<PostmarkSuppressionDumpEntry>()
                 );
             }
@@ -82,18 +90,13 @@ namespace Web.MockData
             cancellationToken.ThrowIfCancellationRequested();
 
             // Behaviorally identical to the provider: deleting an entry that does not exist is a
-            // success, and the address match is case-insensitive on the trimmed value (Postmark
-            // keys suppressions on the address, not on its casing).
+            // success, and the address match is the real client's own rule.
             lock (_gate)
             {
                 if (_dumpsByStream.TryGetValue(messageStream, out var entries))
                 {
                     entries.RemoveAll(e =>
-                        string.Equals(
-                            e.EmailAddress.Trim(),
-                            emailAddress.Trim(),
-                            StringComparison.OrdinalIgnoreCase
-                        )
+                        PostmarkSuppressionClient.AddressesMatch(e.EmailAddress, emailAddress)
                     );
                 }
             }

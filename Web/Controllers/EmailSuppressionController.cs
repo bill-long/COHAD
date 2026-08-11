@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Web.Models;
 using Web.PresentationModels;
@@ -127,12 +127,19 @@ namespace Web.Controllers
         /// the address at the email provider (issue #11): Postmark keeps its own stream
         /// suppression entry, so lifting only COHAD's record would resume "successful" sends the
         /// provider silently drops - and the nightly reconciliation would re-suppress the address,
-        /// fighting the admin. COHAD's clear happens first; a failed provider call is surfaced as
-        /// <see cref="ClearEmailSuppressionResponseDto.ProviderWarning"/> rather than failing the
-        /// request, because the reconciliation bounds the inconsistency and Clear can be retried.
-        /// The provider call also runs on the idempotent already-cleared path - that retry is the
-        /// recovery route the warning points at, and the provider-side delete is itself a no-op
-        /// when the entry is already gone.
+        /// fighting the admin. The provider reactivation runs FIRST, and a failure fails the
+        /// request with the record unchanged (the UnsubscribeLink send-gate philosophy: a
+        /// synchronous, human-visible error whose whole recovery is clicking Clear again once the
+        /// provider is reachable). The inverse never exists: COHAD cannot show a
+        /// provider-unsubscribe record as cleared while the provider still drops its mail, which
+        /// no warning banner or reconciliation interval can promise. A provider-side delete that
+        /// succeeds but loses the local write race leaves mail suppressed here - the safe
+        /// direction - and the retried Clear's provider call is a no-op.
+        /// </para>
+        /// <para>
+        /// The clear itself passes the pre-read's reason as <c>onlyIfReason</c>, so a record
+        /// re-suppressed for a different reason between page load and click is not lifted on
+        /// stale information - the still-active record comes back and the UI's reload shows it.
         /// </para>
         /// </summary>
         [HttpPost("{id}/clear")]
@@ -140,10 +147,45 @@ namespace Web.Controllers
         {
             var apiUser = await _currentUser.GetAsync(User);
 
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound(new { error = "No suppression with this id." });
+
+            var providerAuditNote = "";
+            if (existing.IsActive && existing.Reason == SuppressionReason.ProviderUnsubscribe)
+            {
+                var reactivation = await _reactivationService.ReactivateAsync(
+                    existing.Email,
+                    HttpContext.RequestAborted
+                );
+                if (!reactivation.SkippedNotConfigured)
+                {
+                    if (!reactivation.Succeeded)
+                    {
+                        // 502: the upstream provider call failed, and without it the clear would
+                        // resume "successful" sends the provider silently drops.
+                        return StatusCode(
+                            StatusCodes.Status502BadGateway,
+                            new
+                            {
+                                error =
+                                    $"Could not reactivate {existing.Email} at the email provider, so the"
+                                    + " suppression was not cleared. Mail to a provider-suppressed address"
+                                    + " is silently dropped; please try again later.",
+                            }
+                        );
+                    }
+                    providerAuditNote = " Also reactivated the address at the email provider.";
+                }
+                // SkippedNotConfigured: no provider integration on the send path (webhook-only
+                // Postmark, or none at all), so there is nothing to reactivate and nothing
+                // blocking the clear.
+            }
+
             SuppressionClearOutcome outcome;
             try
             {
-                outcome = await _service.ClearByIdAsync(id, apiUser.UniqueId);
+                outcome = await _service.ClearByIdAsync(id, apiUser.UniqueId, onlyIfReason: existing.Reason);
             }
             catch (ConcurrencyConflictException)
             {
@@ -153,43 +195,8 @@ namespace Web.Controllers
             if (outcome.Suppression == null)
                 return NotFound(new { error = "No suppression with this id." });
 
-            string providerWarning = null;
-            string providerAuditNote = "";
-            if (outcome.Suppression.Reason == SuppressionReason.ProviderUnsubscribe)
-            {
-                // CancellationToken.None, deliberately: the COHAD clear above is already
-                // persisted, so from here the work must run to completion - honoring
-                // RequestAborted would let a client disconnect skip the audit write below and
-                // lose the provider outcome entirely. The provider calls are bounded by the
-                // HTTP client's own timeout, not by the caller's patience.
-                var reactivation = await _reactivationService.ReactivateAsync(
-                    outcome.Suppression.Email,
-                    CancellationToken.None
-                );
-                if (reactivation.Succeeded)
-                {
-                    providerAuditNote = " Also reactivated the address at the email provider.";
-                }
-                else if (!reactivation.SkippedNotConfigured)
-                {
-                    providerWarning =
-                        $"The suppression for {outcome.Suppression.Email} is cleared here, but"
-                        + " reactivating the address at the email provider failed - mail to it may"
-                        + " still be silently dropped, and the periodic reconciliation may"
-                        + " re-suppress it. Show cleared suppressions and use Retry provider"
-                        + " reactivation on that address to try the provider call again.";
-                    providerAuditNote =
-                        " Reactivating the address at the email provider failed; it may still be suppressed there.";
-                }
-                // SkippedNotConfigured: no provider integration on the send path, so there is
-                // neither a reactivation to record nor a failure to warn about.
-            }
-
             // Audited only when this call did the clearing - an idempotent no-op recording "X
-            // cleared the suppression" would attribute the action to someone who took none. A
-            // retry that only repeats the provider call is deliberately not audited either: the
-            // provider reports "Deleted" for an entry that never existed, so there is no telling
-            // a repair from a no-op.
+            // cleared the suppression" would attribute the action to someone who took none.
             if (outcome.Cleared)
             {
                 var suppression = outcome.Suppression;
@@ -209,13 +216,7 @@ namespace Web.Controllers
                 );
             }
 
-            return Ok(
-                new ClearEmailSuppressionResponseDto
-                {
-                    Suppression = EmailSuppressionDto.FromModel(outcome.Suppression),
-                    ProviderWarning = providerWarning,
-                }
-            );
+            return Ok(EmailSuppressionDto.FromModel(outcome.Suppression));
         }
     }
 }

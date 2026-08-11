@@ -555,8 +555,11 @@ namespace Web
             );
             if (!useMockData)
             {
-                // The default HttpClient timeout is 100s; a hung Postmark would otherwise stall
-                // the sequential two-stream loop that long per stream, every run.
+                // The default HttpClient timeout is 100s. This bound serves TWO consumers: the
+                // sync's per-stream dump reads, and - more latency-sensitive - the admin's
+                // interactive Clear request, which waits out the reactivation delete before the
+                // clear proceeds. Raising it for a slow dump makes every Clear during a Postmark
+                // outage hang that much longer before its 502.
                 services.AddHttpClient<IPostmarkSuppressionClient, PostmarkSuppressionClient>(
                     client => client.Timeout = TimeSpan.FromSeconds(30)
                 );

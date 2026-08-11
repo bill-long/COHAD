@@ -182,12 +182,6 @@ mat-expansion-panel.residentPanel .mat-expansion-panel-body {
   border: 1px solid color-mix(in srgb, var(--error) 28%, transparent);
 }
 
-.cohad-inline-alert--warning {
-  color: var(--warning);
-  background: var(--warning-bg);
-  border: 1px solid color-mix(in srgb, var(--warning) 28%, transparent);
-}
-
 .cohad-inline-alert--success {
   color: var(--success);
   background: var(--success-bg);

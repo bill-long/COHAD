@@ -33,8 +33,8 @@ namespace Web.Models
         /// acting on the List-Unsubscribe header Postmark manages. Not resident-resumable:
         /// the provider keeps its own suppression entry, so lifting only COHAD's record would
         /// resume "successful" sends that the provider silently drops. Clearing is an admin
-        /// action that acts on both systems - the clear endpoint also reactivates the address
-        /// at the provider, and warns when that provider call fails.
+        /// action that acts on both systems - the clear endpoint reactivates the address at
+        /// the provider first, and refuses the clear when that provider call fails.
         /// </summary>
         ProviderUnsubscribe = 4,
     }

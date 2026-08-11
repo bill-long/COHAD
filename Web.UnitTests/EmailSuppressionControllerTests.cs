@@ -211,10 +211,9 @@ namespace Web.UnitTests
             var controller = CreateController();
             var result = await controller.Clear(seeded.Id) as OkObjectResult;
 
-            var response = Assert.IsType<ClearEmailSuppressionResponseDto>(result!.Value);
-            Assert.False(response.Suppression.IsActive);
-            Assert.Equal(AdminUniqueId, response.Suppression.ClearedBy);
-            Assert.Null(response.ProviderWarning);
+            var dto = Assert.IsType<EmailSuppressionDto>(result!.Value);
+            Assert.False(dto.IsActive);
+            Assert.Equal(AdminUniqueId, dto.ClearedBy);
 
             Assert.NotNull(entry);
             Assert.Contains("SpamComplaint", entry.Action);
@@ -246,16 +245,16 @@ namespace Web.UnitTests
             var controller = CreateController();
             var result = await controller.Clear(seeded.Id) as OkObjectResult;
 
-            var response = Assert.IsType<ClearEmailSuppressionResponseDto>(result!.Value);
-            Assert.False(response.Suppression.IsActive);
-            Assert.Equal("first-admin", response.Suppression.ClearedBy);
+            var dto = Assert.IsType<EmailSuppressionDto>(result!.Value);
+            Assert.False(dto.IsActive);
+            Assert.Equal("first-admin", dto.ClearedBy);
             _auditLog.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
         }
 
         // --- Clear: provider-side reactivation (issue #11) ---
 
         [Fact]
-        public async Task Clear_ProviderUnsubscribe_ReactivatesAtTheProviderAndAuditsIt()
+        public async Task Clear_ProviderUnsubscribe_ReactivatesAtTheProviderThenClearsAndAudits()
         {
             var seeded = await SeedAsync("jane@example.com", SuppressionReason.ProviderUnsubscribe, new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
 
@@ -268,9 +267,8 @@ namespace Web.UnitTests
             var controller = CreateController();
             var result = await controller.Clear(seeded.Id) as OkObjectResult;
 
-            var response = Assert.IsType<ClearEmailSuppressionResponseDto>(result!.Value);
-            Assert.False(response.Suppression.IsActive);
-            Assert.Null(response.ProviderWarning);
+            var dto = Assert.IsType<EmailSuppressionDto>(result!.Value);
+            Assert.False(dto.IsActive);
             _reactivation.Verify(
                 r => r.ReactivateAsync("jane@example.com", It.IsAny<CancellationToken>()),
                 Times.Once
@@ -280,41 +278,34 @@ namespace Web.UnitTests
         }
 
         [Fact]
-        public async Task Clear_ProviderUnsubscribe_FailedReactivationStillClearsButWarns()
+        public async Task Clear_ProviderUnsubscribe_FailedReactivationFailsTheRequestAndClearsNothing()
         {
-            // The issue's contract: the COHAD clear must not read as a silent success when the
-            // provider call fails - the admin gets a warning, and the audit entry says the
-            // address may still be suppressed provider-side.
+            // Provider-first, by design: lifting only COHAD's record would resume "successful"
+            // sends the provider silently drops, so a failed reactivation refuses the clear
+            // (502) and the record stays in force - clicking Clear again is the whole retry.
             var seeded = await SeedAsync("jane@example.com", SuppressionReason.ProviderUnsubscribe, new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
             _reactivation
                 .Setup(r => r.ReactivateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new PostmarkReactivationResult(2, new[] { "broadcast" }));
 
-            NewAuditLogEntry entry = null;
-            _auditLog
-                .Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
-                .Callback<NewAuditLogEntry>(e => entry = e)
-                .Returns(Task.CompletedTask);
-
             var controller = CreateController();
-            var result = await controller.Clear(seeded.Id) as OkObjectResult;
+            var result = await controller.Clear(seeded.Id);
 
-            var response = Assert.IsType<ClearEmailSuppressionResponseDto>(result!.Value);
-            Assert.False(response.Suppression.IsActive);
-            Assert.NotNull(response.ProviderWarning);
-            // The warning names the address, so an admin who cleared several rows knows which
-            // one needs the retry.
-            Assert.Contains("jane@example.com", response.ProviderWarning);
-            Assert.NotNull(entry);
-            Assert.Contains("failed", entry.Action);
+            var status = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(StatusCodes.Status502BadGateway, status.StatusCode);
+            // The error names the address, so the admin knows which record was refused.
+            Assert.Contains("jane@example.com", status.Value!.ToString());
+            var record = await _suppressions.GetByIdAsync(seeded.Id);
+            Assert.True(record!.IsActive);
+            _auditLog.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
         }
 
         [Fact]
-        public async Task Clear_ProviderUnsubscribe_WithNoProviderConfigured_NeitherWarnsNorClaimsReactivation()
+        public async Task Clear_ProviderUnsubscribe_WithNoProviderConfigured_ClearsWithoutClaimingReactivation()
         {
-            // The webhook-only / Postmark-less registration returns SkippedNotConfigured: there
-            // is no provider-side entry dropping mail, so warning would report a false,
-            // unresolvable problem - and the audit entry must not claim a reactivation either.
+            // The webhook-only / Postmark-less registration returns SkippedNotConfigured: sends
+            // do not pass through the provider's suppression filter, so nothing blocks the clear
+            // - but the audit entry must not claim a reactivation either.
             var seeded = await SeedAsync("jane@example.com", SuppressionReason.ProviderUnsubscribe, new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
             _reactivation
                 .Setup(r => r.ReactivateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -329,32 +320,30 @@ namespace Web.UnitTests
             var controller = CreateController();
             var result = await controller.Clear(seeded.Id) as OkObjectResult;
 
-            var response = Assert.IsType<ClearEmailSuppressionResponseDto>(result!.Value);
-            Assert.False(response.Suppression.IsActive);
-            Assert.Null(response.ProviderWarning);
+            var dto = Assert.IsType<EmailSuppressionDto>(result!.Value);
+            Assert.False(dto.IsActive);
             Assert.NotNull(entry);
             Assert.DoesNotContain("reactivat", entry.Action, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("failed", entry.Action);
         }
 
         [Fact]
-        public async Task Clear_AlreadyClearedProviderUnsubscribe_RetriesTheProviderCallWithoutReauditing()
+        public async Task Clear_AlreadyClearedProviderUnsubscribe_IsIdempotentWithoutAProviderCall()
         {
-            // The recovery route the warning points at: a clear whose provider call failed can be
-            // retried by clearing again, even though the COHAD record is already cleared. No new
-            // audit entry - the provider reports "Deleted" for a missing entry too, so a repair
-            // is indistinguishable from a no-op.
+            // Under provider-first ordering a cleared record can only exist after a successful
+            // (or not-configured) reactivation, so the idempotent re-clear has nothing to do at
+            // the provider.
             var seeded = await SeedAsync("jane@example.com", SuppressionReason.ProviderUnsubscribe, new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
             await new EmailSuppressionService(_suppressions, _time).ClearAsync(seeded.Email, "first-admin");
 
             var controller = CreateController();
             var result = await controller.Clear(seeded.Id) as OkObjectResult;
 
-            var response = Assert.IsType<ClearEmailSuppressionResponseDto>(result!.Value);
-            Assert.Null(response.ProviderWarning);
+            var dto = Assert.IsType<EmailSuppressionDto>(result!.Value);
+            Assert.False(dto.IsActive);
+            Assert.Equal("first-admin", dto.ClearedBy);
             _reactivation.Verify(
-                r => r.ReactivateAsync("jane@example.com", It.IsAny<CancellationToken>()),
-                Times.Once
+                r => r.ReactivateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+                Times.Never
             );
             _auditLog.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
         }

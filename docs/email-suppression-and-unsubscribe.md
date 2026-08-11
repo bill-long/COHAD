@@ -897,25 +897,35 @@ procedure is one action. Decisions made in the writing:
   so over-targeting costs nothing. One stream's failure does not stop the other's attempt,
   and a provider timeout (`HttpClient` reports its own timeout as `TaskCanceledException`) is
   a failed stream, not a cancellation - only the caller's own cancellation propagates.
-- **COHAD's clear happens first; a failed provider call warns instead of failing the request.**
-  The response carries a `ProviderWarning` naming the address ("cleared here, still suppressed
-  at the provider"), shown as a warning banner that survives the page's own reload - and an
-  unrelated record's later successful clear - and the audit entry records the provider outcome
-  either way. The request does not fail because the inconsistency is bounded: the
-  reconciliation re-suppresses the address within its interval, and clearing again retries the
-  provider call. The provider call and audit write run on `CancellationToken.None`: the clear
-  is already persisted at that point, so a client disconnect must not skip the audit write or
-  lose the provider outcome.
-- **The retry path is the already-cleared clear.** The idempotent clear of an already-cleared
-  `ProviderUnsubscribe` record repeats the provider call (harmless when the entry is already
-  gone), so no separate retry endpoint exists; the UI exposes it as **Retry provider
-  reactivation** on a cleared provider-unsubscribe row (visible with "Show cleared
-  suppressions"). A retry writes no audit entry: Postmark answers "Deleted" for a
-  never-existing entry too, so a repair is indistinguishable from a no-op.
+- **The provider reactivation runs FIRST; a failure fails the clear.** An earlier draft
+  cleared COHAD first and surfaced a provider failure as a warning banner, relying on the
+  reconciliation to bound the divergence - but the sync is opt-in
+  (`Postmark:SuppressionSync:Enabled`), the ephemeral banner kept sprouting lifecycle bugs
+  (wiped by the very toggle its text pointed at; overwritten by the next clear), and the
+  "retry" affordance on a cleared row was really an unconditional clear that could lift a
+  newer hard-bounce suppression. Provider-first makes the bad state unrepresentable: a
+  `ProviderUnsubscribe` record can only read Cleared after Postmark confirmed the delete (or
+  no provider is configured), so "cleared here, still dropped at the provider" never exists.
+  A failed provider call answers 502 naming the address, the record stays in force, and
+  clicking Clear again is the whole retry - the UnsubscribeLink send-gate philosophy. The
+  reverse divergence (provider reactivated, then the local write loses its race) is safe:
+  mail stays suppressed here, and the retried clear's provider delete is a no-op.
+- **The clear acts on the reason the admin saw.** The endpoint passes its pre-read's reason
+  to `ClearByIdAsync` as `onlyIfReason` (the resident-resume write-time guard), so a record
+  re-suppressed for a different reason between page load and click is not lifted on stale
+  information.
+- **A stale dump snapshot cannot undo the clear.** The reconciliation could have fetched a
+  stream dump moments before the delete, and its add-only write would silently re-suppress
+  the just-cleared record with nothing left to lift it. The runner stamps when each stream's
+  dump was fetched, and `RecordAsync` ignores snapshot evidence for a record cleared at or
+  after that instant (`evidenceSnapshotUtc`). Keyed on the fetch time rather than the entry's
+  own `CreatedAt` deliberately: a half-done manual clear (hard bounce cleared here, dashboard
+  step skipped) must still be re-suppressed by the next run, whose fresher snapshot postdates
+  that clear even though the entry's provider date does not.
 - **Only failure is strict.** The delete response is read in the opposite lenience direction
   from the dump: an ambiguous answer (no entry for the address, unparseable body) reads as
   failure, because a false "reactivated" leaves the admin believing mail flows while Postmark
-  still silently drops it - a false failure only shows a spurious warning.
+  still silently drops it - a false failure only fails a retryable clear.
 - **Scope stays `ProviderUnsubscribe`.** Clearing a `HardBounce`/`SpamComplaint` suppression
   does not touch the provider, so the manual procedure remains for those: after clearing here,
   also reactivate the address on the stream's suppression list in the Postmark dashboard
@@ -923,12 +933,12 @@ procedure is one action. Decisions made in the writing:
   deliberately keeps human), or the nightly sync re-suppresses the address on its next pass.
   Spam-complaint entries cannot be deleted at Postmark at all, by API or dashboard - only the
   recipient can undo one.
-- **A deployment with no `Postmark:ServerToken` skips the provider call without warning**
+- **A deployment with no `Postmark:ServerToken` skips the provider call and clears normally**
   (`NotConfiguredPostmarkReactivationService`, registered on the `DisabledSpamClassifier`
   precedent): in webhook-only Postmark mode - and with no Postmark at all - sends do not pass
   through Postmark's suppression filter, so there is no provider-side entry dropping mail and
-  a per-clear warning would report a false, unresolvable problem. MockData keeps the real
-  service over the in-memory client, which needs no token.
+  refusing the clear would block the admin over a false, unresolvable problem. MockData keeps
+  the real service over the in-memory client, which needs no token.
 - **MockData closes the loop end to end:** `MockPostmarkSuppressionClient.ReactivateAsync`
   deletes the seeded dump entry, so clearing the reconciler-recorded suppression prevents the
   next sync run from re-suppressing it - the same fight-free behavior the real provider gives.
