@@ -162,8 +162,8 @@ namespace Web.Controllers
             var apiUserTask = _currentUser.GetAsync(User);
             var existingTask = _repository.GetByIdAsync(id);
             await Task.WhenAll(apiUserTask, existingTask);
-            var apiUser = apiUserTask.Result;
-            var existing = existingTask.Result;
+            var apiUser = await apiUserTask;
+            var existing = await existingTask;
 
             if (existing == null)
                 return NotFoundNoSuppression();
