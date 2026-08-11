@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { By, DomSanitizer } from '@angular/platform-browser';
+import { By, DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { A11yModule } from '@angular/cdk/a11y';
 import { MatButtonModule } from '@angular/material/button';
@@ -8,7 +8,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Router } from '@angular/router';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, Subject, of } from 'rxjs';
 
 import { HelpDrawerComponent } from './help-drawer.component';
 import { HelpService } from 'src/app/services/help.service';
@@ -193,6 +193,22 @@ describe('HelpDrawerComponent', () => {
     (drawer.nativeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
     expect(helpService.close).toHaveBeenCalled();
+  });
+
+  it('ignores a doc response arriving after the drawer closes', () => {
+    const doc$ = new Subject<SafeHtml | null>();
+    helpService.getTopicHtml.and.returnValue(doc$.asObservable());
+    helpService.currentTopic = TOPICS[1];
+    open$.next(true);
+    fixture.detectChanges();
+    // Guard against vacuous success: the load this test cancels must actually be in flight.
+    expect(helpService.getTopicHtml).toHaveBeenCalledWith('users');
+    expect(doc$.observed).withContext('doc request should be subscribed while the drawer is open').toBeTrue();
+
+    open$.next(false);
+    doc$.next({} as SafeHtml);
+
+    expect(fixture.componentInstance.topicHtml).withContext('late response must not mutate closed-drawer state').toBeNull();
   });
 
   it('blocks page scrolling while open and restores it on close', () => {

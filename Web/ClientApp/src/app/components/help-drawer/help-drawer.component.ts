@@ -62,6 +62,10 @@ export class HelpDrawerComponent implements OnDestroy {
           } else {
             this.showIndex();
           }
+        } else {
+          // Drop any in-flight doc load so a late response cannot mutate state behind a closed
+          // drawer; reopening always issues a fresh request anyway.
+          this.topicRequests.next(null);
         }
       }),
     );

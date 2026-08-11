@@ -32,18 +32,24 @@ describe('HelpService', () => {
   let service: HelpService;
   let httpMock: HttpTestingController;
 
-  beforeEach(() => {
-    appState$ = new BehaviorSubject<ApplicationState>(initialStateValue);
-    routerEvents$ = new Subject<unknown>();
-
+  // The single place the testing module is defined; the seeding test re-runs it with a different
+  // router stub, so a new HelpService dependency only ever has to be added here.
+  function configureHelpModule(routerStub: { events: unknown; url: string }): void {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: Router, useValue: { events: routerEvents$.asObservable() } },
+        { provide: Router, useValue: routerStub },
         { provide: applicationState, useValue: appState$.asObservable() },
       ],
     });
+  }
+
+  beforeEach(() => {
+    appState$ = new BehaviorSubject<ApplicationState>(initialStateValue);
+    routerEvents$ = new Subject<unknown>();
+
+    configureHelpModule({ events: routerEvents$.asObservable(), url: '/' });
 
     service = TestBed.inject(HelpService);
     httpMock = TestBed.inject(HttpTestingController);
@@ -101,6 +107,18 @@ describe('HelpService', () => {
   });
 
   describe('currentTopic', () => {
+    it('seeds from the current URL at construction, before any NavigationEnd', () => {
+      // A service instantiated after the navigation that would have reported the route must still
+      // know the contextual topic immediately.
+      TestBed.resetTestingModule();
+      configureHelpModule({ events: new Subject().asObservable(), url: '/manage/users' });
+      const seeded = TestBed.inject(HelpService);
+      // Re-point the shared controller at the re-created module so the afterEach verify() checks
+      // THIS module's requests instead of vacuously passing against the destroyed one.
+      httpMock = TestBed.inject(HttpTestingController);
+      expect(seeded.currentTopic?.id).toBe('users');
+    });
+
     it('follows router navigation', () => {
       expect(service.currentTopic).toBeNull();
       routerEvents$.next(new NavigationEnd(1, '/manage/users', '/manage/users'));

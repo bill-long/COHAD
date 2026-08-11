@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { NavigationEnd, Router } from '@angular/router';
 import { BehaviorSubject, Observable, of } from 'rxjs';
-import { catchError, distinctUntilChanged, filter, map, shareReplay } from 'rxjs/operators';
+import { catchError, distinctUntilChanged, filter, map, shareReplay, startWith } from 'rxjs/operators';
 import { applicationState, ApplicationState } from '../state';
 import { HelpTopic, helpTopics, topicForUrl, userCanSeeTopic } from '../help/help-topics';
 import { renderMarkdownToHtml } from '../utils/markdown';
@@ -30,9 +30,18 @@ export class HelpService {
     router: Router,
     @Inject(applicationState) appState: Observable<ApplicationState>,
   ) {
-    router.events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd)).subscribe(e => {
-      this.currentTopicSubject.next(topicForUrl(helpTopics, e.urlAfterRedirects));
-    });
+    // startWith seeds from the current URL so the contextual topic is correct even if this service
+    // is first instantiated after the navigation that would have reported it; NavigationEnd keeps
+    // it fresh. One pipeline, so the url-to-topic mapping has a single call site.
+    router.events
+      .pipe(
+        filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+        map(e => e.urlAfterRedirects),
+        startWith(router.url),
+      )
+      .subscribe(url => {
+        this.currentTopicSubject.next(topicForUrl(helpTopics, url));
+      });
 
     this.visibleTopics$ = appState.pipe(
       map(s => s.apiUser?.roles ?? []),
