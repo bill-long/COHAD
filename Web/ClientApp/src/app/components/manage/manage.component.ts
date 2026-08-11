@@ -11,7 +11,7 @@ import { ApplicationState, applicationState } from 'src/app/state';
 import { observeCompactLayout } from 'src/app/utils/compact-layout';
 
 /** One tool in the Manage rail. Visibility mirrors the old per-tab getters exactly. */
-interface ManageNavItem {
+export interface ManageNavItem {
   label: string;
   /** Child route under /manage. */
   route: string;
@@ -26,9 +26,58 @@ interface ManageNavItem {
 }
 
 /** A labelled cluster of tools. A group renders only when at least one of its items is visible. */
-interface ManageNavGroup {
+export interface ManageNavGroup {
   label: string;
   items: ManageNavItem[];
+}
+
+/**
+ * The Manage rail, as data. Exported (rather than built inline in the component) because the
+ * contextual help registry (app/help/help-topics.ts) derives its topic titles, sections, and
+ * visibility from these same entries - one definition, so a renamed label or a moved tool updates
+ * the help index automatically. Per-instance state (the Approvals badge stream) is grafted on in
+ * the component constructor.
+ */
+export const manageNavGroups: ManageNavGroup[] = [
+  {
+    label: 'Directory',
+    items: [
+      { label: 'Users', route: 'users', icon: 'group', roles: rolePermissions.manageUsersRoles },
+      { label: 'Homes', route: 'homes', icon: 'home', roles: rolePermissions.manageHomesRoles },
+      { label: 'Print Directory', route: 'print', icon: 'print', roles: rolePermissions.printDirectoryRoles },
+    ],
+  },
+  {
+    label: 'Communications',
+    items: [
+      { label: 'Email', route: 'send-email', icon: 'mail', roles: rolePermissions.manageEmailRoles },
+      { label: 'Suppressions', route: 'suppressions', icon: 'unsubscribe', roles: rolePermissions.manageSuppressionsRoles },
+      { label: 'News', route: 'blog', icon: 'article', roles: rolePermissions.manageBlogRoles, requireResident: true },
+      { label: 'Events', route: 'events', icon: 'event', roles: rolePermissions.manageEventsRoles, requireResident: true },
+      // Documents mirrors the old getter: gated by the manage-users (Administrator) role set.
+      { label: 'Documents', route: 'documents', icon: 'folder', roles: rolePermissions.manageUsersRoles },
+    ],
+  },
+  {
+    label: 'Governance',
+    items: [
+      { label: 'Committees', route: 'committees', icon: 'diversity_3', roles: rolePermissions.manageCommitteesRoles },
+      { label: 'Approvals', route: 'approvals', icon: 'inbox', roles: rolePermissions.manageCommitteesRoles },
+      { label: 'Audit Log', route: 'audit-log', icon: 'receipt_long', roles: rolePermissions.manageAuditLogRoles },
+    ],
+  },
+];
+
+/**
+ * The rail's visibility rule, shared with the help registry: role match, plus the Resident
+ * requirement. This is the single place that answers "may these roles see this tool".
+ */
+export function isManageItemVisibleForRoles(
+  item: { roles: string[]; requireResident?: boolean },
+  userRoles: string[],
+): boolean {
+  if (item.requireResident && !userRoles.includes('Resident')) return false;
+  return userRoles.some(role => item.roles.includes(role));
 }
 
 /**
@@ -79,41 +128,11 @@ export class ManageComponent implements OnInit {
     // threshold, so the rail flips to a drawer at the same width everything else switches.
     this.isHandset$ = observeCompactLayout(this.breakpointObserver);
 
-    this.groups = [
-      {
-        label: 'Directory',
-        items: [
-          { label: 'Users', route: 'users', icon: 'group', roles: rolePermissions.manageUsersRoles },
-          { label: 'Homes', route: 'homes', icon: 'home', roles: rolePermissions.manageHomesRoles },
-          { label: 'Print Directory', route: 'print', icon: 'print', roles: rolePermissions.printDirectoryRoles },
-        ],
-      },
-      {
-        label: 'Communications',
-        items: [
-          { label: 'Email', route: 'send-email', icon: 'mail', roles: rolePermissions.manageEmailRoles },
-          { label: 'Suppressions', route: 'suppressions', icon: 'unsubscribe', roles: rolePermissions.manageSuppressionsRoles },
-          { label: 'News', route: 'blog', icon: 'article', roles: rolePermissions.manageBlogRoles, requireResident: true },
-          { label: 'Events', route: 'events', icon: 'event', roles: rolePermissions.manageEventsRoles, requireResident: true },
-          // Documents mirrors the old getter: gated by the manage-users (Administrator) role set.
-          { label: 'Documents', route: 'documents', icon: 'folder', roles: rolePermissions.manageUsersRoles },
-        ],
-      },
-      {
-        label: 'Governance',
-        items: [
-          { label: 'Committees', route: 'committees', icon: 'diversity_3', roles: rolePermissions.manageCommitteesRoles },
-          {
-            label: 'Approvals',
-            route: 'approvals',
-            icon: 'inbox',
-            roles: rolePermissions.manageCommitteesRoles,
-            badgeCount$: this.approvalsCount$,
-          },
-          { label: 'Audit Log', route: 'audit-log', icon: 'receipt_long', roles: rolePermissions.manageAuditLogRoles },
-        ],
-      },
-    ];
+    // The static rail definition plus this instance's live badge stream on Approvals.
+    this.groups = manageNavGroups.map(group => ({
+      ...group,
+      items: group.items.map(item => (item.route === 'approvals' ? { ...item, badgeCount$: this.approvalsCount$ } : item)),
+    }));
 
     this.visibleGroups$ = this.apiUser$.pipe(
       map(user =>
@@ -157,10 +176,8 @@ export class ManageComponent implements OnInit {
     return path === '/manage';
   }
 
-  /** Reproduces the previous per-tab visibility logic: role match, plus the Resident requirement. */
+  /** Reproduces the previous per-tab visibility logic (see isManageItemVisibleForRoles). */
   private isItemVisible(item: ManageNavItem, user: ApiUser | null): boolean {
-    if (user === null) return false;
-    if (item.requireResident && !user.roles.includes('Resident')) return false;
-    return user.roles.some(role => item.roles.includes(role));
+    return user !== null && isManageItemVisibleForRoles(item, user.roles);
   }
 }

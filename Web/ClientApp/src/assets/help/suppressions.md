@@ -1,0 +1,24 @@
+# Suppressions
+
+The do-not-mail list. An address on this list receives **no association email at all** - broadcasts, committee forwards, or notification digests - regardless of its opt-in preferences.
+
+## How addresses get here
+
+- **Automatically**: a hard bounce (the mailbox does not exist), a spam complaint (the recipient reported our mail), or an unsubscribe request.
+- **By hand**: the add form at the top, for when someone asks you directly to stop all mail.
+
+## Reading the table
+
+- **Status** - "Suppressed" means active (no mail); "Cleared" means a past suppression that has been lifted, shown dimmed when "Show cleared suppressions" is on.
+- **Reason** - what caused it: a hard bounce, a spam complaint, the resident unsubscribing, an administrator adding it here, or an unsubscribe recorded by the mail provider.
+- **By** - the technical source of the record, shown verbatim (for example `system:delivery-event` for an automatic suppression).
+- **Evidence** - how many consecutive delivery failures backed an automatic suppression.
+- The detail row under each record shows the mail provider's own diagnostic message - the best clue for telling a typo'd address from a mailbox that has closed.
+
+## Clearing a suppression
+
+**Clear** resumes mail to the address (still subject to the person's normal opt-in preferences). Only clear when you understand why the address was suppressed and believe it is resolved - for example, the resident fixed a typo in their address, or confirmed their mailbox works again. Clearing a spam-complaint suppression without the recipient's agreement risks the association's sending reputation.
+
+If you see "The record was updated by someone else at the same time", another admin or an automatic event wrote the same record concurrently - just refresh and try again if still needed.
+
+Suppressed addresses also show as read-only chips in the [home contact editor](#topic:homes); clearing is only possible here, by design.

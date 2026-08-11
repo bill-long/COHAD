@@ -97,6 +97,7 @@ import { CommitteesComponent } from './components/committees/committees.componen
 import { ManageCommitteesComponent } from './components/manage-committees/manage-committees.component';
 import { ManageApprovalsComponent } from './components/manage-approvals/manage-approvals.component';
 import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tiptap-email-editor.component';
+import { HelpDrawerComponent } from './components/help-drawer/help-drawer.component';
 
 @NgModule({
   declarations: [
@@ -153,6 +154,7 @@ import { TiptapEmailEditorComponent } from './components/tiptap-email-editor/tip
     CommitteesComponent,
     ManageCommitteesComponent,
     ManageApprovalsComponent,
+    HelpDrawerComponent,
   ],
   bootstrap: [AppComponent],
   imports: [

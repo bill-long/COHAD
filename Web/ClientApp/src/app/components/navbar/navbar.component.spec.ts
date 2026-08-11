@@ -17,6 +17,7 @@ import { TimeAgoPipe } from 'src/app/pipes/time-ago.pipe';
 import { ApplicationState, applicationState, dispatcher, initialStateValue } from 'src/app/state';
 import { EventsService } from 'src/app/services/events.service';
 import { AppNotification, NotificationsService } from 'src/app/services/notifications.service';
+import { HelpService } from 'src/app/services/help.service';
 import { ThemeService } from 'src/app/services/theme.service';
 
 /**
@@ -57,6 +58,7 @@ describe('NavbarComponent (mobile hamburger menu)', () => {
         { provide: EventsService, useValue: { getUpcoming: () => of([]) } },
         { provide: NotificationsService, useValue: { notifications$: of([]), unreadCount$: of(0) } },
         { provide: ThemeService, useValue: { isDarkTheme$: of(false), toggleTheme: () => {} } },
+        { provide: HelpService, useValue: { visibleTopics$: of([]), open: () => {} } },
       ],
     }).compileComponents();
 
@@ -199,6 +201,7 @@ describe('NavbarComponent (notification bell menu)', () => {
         { provide: EventsService, useValue: { getUpcoming: () => of([]) } },
         { provide: NotificationsService, useValue: notificationsService },
         { provide: ThemeService, useValue: { isDarkTheme$: of(false), toggleTheme: () => {} } },
+        { provide: HelpService, useValue: { visibleTopics$: of([]), open: () => {} } },
       ],
     }).compileComponents();
 
@@ -486,5 +489,74 @@ describe('NavbarComponent (notification bell menu)', () => {
     expect(trigger.menuOpen)
       .withContext('handling one notification should not close the menu over the others')
       .toBeTrue();
+  });
+});
+
+/**
+ * The help button is gated by HelpService.visibleTopics$: it must render exactly when the signed-in
+ * user's roles surface at least one help topic, and clicking it must open the drawer.
+ */
+describe('NavbarComponent (help button)', () => {
+  let openSpy: jasmine.Spy;
+
+  async function setup(topicCount: number): Promise<ComponentFixture<NavbarComponent>> {
+    openSpy = jasmine.createSpy('open');
+    const topics = Array.from({ length: topicCount }, (_, i) => ({
+      id: `topic-${i}`,
+      title: `Topic ${i}`,
+      section: 'Directory',
+      routePrefix: `/manage/topic-${i}`,
+      roles: ['Administrator'],
+    }));
+
+    await TestBed.configureTestingModule({
+      declarations: [NavbarComponent, TimeAgoPipe],
+      imports: [
+        NoopAnimationsModule,
+        RouterModule,
+        MatToolbarModule,
+        MatMenuModule,
+        MatIconModule,
+        MatButtonModule,
+        MatBadgeModule,
+        MatTooltipModule,
+        MatSnackBarModule,
+        A11yModule,
+      ],
+      providers: [
+        provideRouter([]),
+        { provide: applicationState, useValue: new BehaviorSubject<ApplicationState>(initialStateValue).asObservable() },
+        { provide: dispatcher, useValue: new Subject() },
+        { provide: EventsService, useValue: { getUpcoming: () => of([]) } },
+        { provide: NotificationsService, useValue: { notifications$: of([]), unreadCount$: of(0) } },
+        { provide: ThemeService, useValue: { isDarkTheme$: of(false), toggleTheme: () => {} } },
+        { provide: HelpService, useValue: { visibleTopics$: of(topics), open: openSpy } },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(NavbarComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function helpButton(fixture: ComponentFixture<NavbarComponent>): HTMLButtonElement | null {
+    return (fixture.nativeElement as HTMLElement).querySelector('button.help-button');
+  }
+
+  it('renders when the user has visible help topics and opens the drawer on click', async () => {
+    const fixture = await setup(1);
+
+    const button = helpButton(fixture);
+    expect(button).withContext('help button should render when topics are visible').not.toBeNull();
+    button!.click();
+    expect(openSpy).toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('stays hidden when no help topics are visible', async () => {
+    const fixture = await setup(0);
+
+    expect(helpButton(fixture)).withContext('help button should hide with no visible topics').toBeNull();
+    fixture.destroy();
   });
 });

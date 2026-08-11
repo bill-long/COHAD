@@ -9,6 +9,7 @@ import { Router, NavigationEnd, NavigationStart } from '@angular/router';
 import { applicationState, ApplicationState, dispatcher, Action, Login, MockLogin, Logout } from 'src/app/state';
 import { ApiUser, AuthUser } from 'src/app/models';
 import { rolePermissions } from 'src/app/services/rolepermission.service';
+import { HelpService } from 'src/app/services/help.service';
 import { ThemeService } from 'src/app/services/theme.service';
 import { environment } from 'src/environments/environment';
 
@@ -54,6 +55,8 @@ export class NavbarComponent implements OnInit {
   readonly manageVisible$: Observable<boolean>;
   /** The bell shows for anyone who can hold a notification audience: Administrators and committee moderators. */
   readonly notificationBellVisible$: Observable<boolean>;
+  /** The help button shows whenever the signed-in user's roles surface at least one help topic. */
+  readonly helpVisible$: Observable<boolean>;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -63,6 +66,7 @@ export class NavbarComponent implements OnInit {
     private readonly eventsService: EventsService,
     private readonly notificationsService: NotificationsService,
     private readonly snackBar: MatSnackBar,
+    private readonly helpService: HelpService,
   ) {
     this.showEventsNav$ = this.eventsService.getUpcoming().pipe(
       map(events => events.length > 0),
@@ -103,6 +107,8 @@ export class NavbarComponent implements OnInit {
           vm.apiUser.roles.some(r => rolePermissions.manageCommitteesRoles.includes(r)),
       ),
     );
+
+    this.helpVisible$ = this.helpService.visibleTopics$.pipe(map(topics => topics.length > 0));
 
     router.events.subscribe(e => {
       if (e instanceof NavigationStart) {
@@ -157,6 +163,10 @@ export class NavbarComponent implements OnInit {
 
   toggleTheme(): void {
     this.themeService.toggleTheme();
+  }
+
+  openHelp(): void {
+    this.helpService.open();
   }
 
   /**
