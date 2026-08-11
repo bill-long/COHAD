@@ -33,7 +33,11 @@ export class HelpDrawerComponent implements OnDestroy {
   topicLoadFailed = false;
 
   private readonly subscriptions = new Subscription();
-  /** Doc requests; null cancels the in-flight load (switchMap drops stale responses on its own). */
+  /**
+   * Doc requests; null drops the current subscription so a late response cannot mutate drawer
+   * state. The underlying HTTP request deliberately survives (HelpService caches via shareReplay
+   * with refCount: false), so an abandoned load still warms the doc cache for the next open.
+   */
   private readonly topicRequests = new Subject<HelpTopic | null>();
   /**
    * CDK's scroll blocker - the same mechanism Material dialogs use - instead of hand-managed
