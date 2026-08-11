@@ -369,9 +369,11 @@ namespace Web
                     new MockEmailSuppressionRepository().SeedSampleData()
                 );
                 // Seeded with one dumped address holding no COHAD suppression, so the suppression
-                // sync's first run records it end to end; see SeedSampleData.
-                services.AddSingleton<IPostmarkSuppressionDumpClient>(
-                    new MockPostmarkSuppressionDumpClient().SeedSampleData()
+                // sync's first run records it end to end (and clearing that record exercises the
+                // provider-side reactivation, which deletes the mock dump entry); see
+                // SeedSampleData.
+                services.AddSingleton<IPostmarkSuppressionClient>(
+                    new MockPostmarkSuppressionClient().SeedSampleData()
                 );
             }
             else
@@ -544,21 +546,46 @@ namespace Web
             // catches addresses suppressed at the Postmark layer while the SubscriptionChange
             // webhook trigger was not configured. Self-disables unless
             // Postmark:SuppressionSync:Enabled is set; idempotent via deterministic evidence keys,
-            // so the interval is in-process pacing only, like the user purge. The dump client is
-            // an in-memory fake in MockData (registered above); the real one is the codebase's
-            // only Postmark HTTP client, scoped to the suppression-dump endpoint.
+            // so the interval is in-process pacing only, like the user purge. The suppression
+            // client is an in-memory fake in MockData (registered above); the real one is the
+            // codebase's only Postmark HTTP client, scoped to the suppression dump and delete
+            // endpoints.
             services.Configure<PostmarkSuppressionSyncOptions>(
                 Configuration.GetSection(PostmarkSuppressionSyncOptions.SectionName)
             );
             if (!useMockData)
             {
-                // The default HttpClient timeout is 100s; a hung Postmark would otherwise stall
-                // the sequential two-stream loop that long per stream, every run.
-                services.AddHttpClient<IPostmarkSuppressionDumpClient, PostmarkSuppressionDumpClient>(
+                // The default HttpClient timeout is 100s. This bound serves TWO consumers: the
+                // sync's per-stream dump reads, and - more latency-sensitive - the admin's
+                // interactive Clear request, which waits out the reactivation delete before the
+                // clear proceeds. Raising it for a slow dump makes every Clear during a Postmark
+                // outage hang that much longer before its 502.
+                services.AddHttpClient<IPostmarkSuppressionClient, PostmarkSuppressionClient>(
                     client => client.Timeout = TimeSpan.FromSeconds(30)
                 );
             }
             services.AddScoped<PostmarkSuppressionSyncRunner>();
+            // The other consumer of the Postmark suppression API: clearing a ProviderUnsubscribe
+            // suppression also reactivates the address at the provider (issue #11), so the
+            // two-system clear is one action. The real service is registered whenever the
+            // suppression API is callable and meaningful (PostmarkOptions.SuppressionApiConfigured:
+            // integration on + server token) - including webhook-only mode, where the
+            // reconciliation can mirror Postmark's lists and would otherwise re-suppress every
+            // clear the reactivation skipped. With Postmark disabled (even with a stale token
+            // left in settings) or no token at all, a no-op implementation is registered
+            // instead (the DisabledSpamClassifier precedent), so a dead integration cannot
+            // block clears. MockData keeps the real service: its suppression client is the
+            // in-memory fake, which needs no token.
+            var postmarkOptionsSnapshot =
+                Configuration.GetSection("Postmark").Get<PostmarkOptions>() ?? new PostmarkOptions();
+            if (useMockData || postmarkOptionsSnapshot.SuppressionApiConfigured)
+            {
+                services.AddScoped<IPostmarkReactivationService, PostmarkReactivationService>();
+            }
+            else
+            {
+                services.AddScoped<IPostmarkReactivationService, NotConfiguredPostmarkReactivationService>();
+            }
             // Registered only when their data layer can actually work. Without this the loops would run
             // and throw on every tick, contradicting the startup error logged in Configure that says they
             // are not running.

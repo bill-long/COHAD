@@ -78,11 +78,12 @@ namespace Web.UnitTests
                 Guid? causingJobId,
                 string? providerDiagnostic,
                 string? evidenceKey = null,
-                DateTime? eventUtc = null
+                DateTime? eventUtc = null,
+                DateTime? evidenceSnapshotUtc = null
             ) =>
                 _fail()
                     ? throw new InvalidOperationException("Cosmos is unavailable.")
-                    : _inner.RecordAsync(email, reason, suppressedBy, causingJobId, providerDiagnostic, evidenceKey, eventUtc);
+                    : _inner.RecordAsync(email, reason, suppressedBy, causingJobId, providerDiagnostic, evidenceKey, eventUtc, evidenceSnapshotUtc);
 
             public Task<SuppressionClearOutcome> ClearAsync(
                 string email,
@@ -93,10 +94,14 @@ namespace Web.UnitTests
                     ? throw new InvalidOperationException("Cosmos is unavailable.")
                     : _inner.ClearAsync(email, clearedBy, onlyIfReason);
 
-            public Task<SuppressionClearOutcome> ClearByIdAsync(string id, string clearedBy) =>
+            public Task<SuppressionClearOutcome> ClearByIdAsync(
+                string id,
+                string clearedBy,
+                DateTime? onlyIfSuppressedUtc = null
+            ) =>
                 _fail()
                     ? throw new InvalidOperationException("Cosmos is unavailable.")
-                    : _inner.ClearByIdAsync(id, clearedBy);
+                    : _inner.ClearByIdAsync(id, clearedBy, onlyIfSuppressedUtc);
         }
         private readonly IHost _host;
         private readonly HttpClient _client;

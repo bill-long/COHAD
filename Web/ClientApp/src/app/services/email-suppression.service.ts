@@ -21,7 +21,12 @@ export class EmailSuppressionService {
     return this.httpClient.post<EmailSuppression>('api/email-suppressions', { email });
   }
 
-  clearSuppression(id: string): Observable<EmailSuppression> {
-    return this.httpClient.post<EmailSuppression>(`api/email-suppressions/${id}/clear`, null);
+  /**
+   * suppressedUtc identifies the episode being cleared (the row's displayed value): the server
+   * answers 409 if the record was re-suppressed since, so a stale page cannot lift a newer
+   * suppression it never showed.
+   */
+  clearSuppression(id: string, suppressedUtc: string): Observable<EmailSuppression> {
+    return this.httpClient.post<EmailSuppression>(`api/email-suppressions/${id}/clear`, { suppressedUtc });
   }
 }

@@ -89,7 +89,7 @@ public sealed class PostmarkSuppressionSyncRunnerTests
     }
 
     /// <summary>Per-stream canned dump, recording which streams were queried.</summary>
-    private sealed class StubDumpClient : IPostmarkSuppressionDumpClient
+    private sealed class StubDumpClient : IPostmarkSuppressionClient
     {
         private readonly Dictionary<string, IReadOnlyList<PostmarkSuppressionDumpEntry>> _dumps =
             new(StringComparer.Ordinal);
@@ -122,6 +122,16 @@ public sealed class PostmarkSuppressionSyncRunnerTests
                     ? entries
                     : (IReadOnlyList<PostmarkSuppressionDumpEntry>)Array.Empty<PostmarkSuppressionDumpEntry>()
             );
+        }
+
+        public Task ReactivateAsync(
+            string messageStream,
+            string emailAddress,
+            CancellationToken cancellationToken
+        )
+        {
+            // The runner is additive only and never reactivates; reaching this is a test failure.
+            throw new NotSupportedException("The sync runner must never call ReactivateAsync.");
         }
     }
 
@@ -355,6 +365,7 @@ public sealed class PostmarkSuppressionSyncRunnerTests
                     It.IsAny<Guid?>(),
                     It.IsAny<string?>(),
                     It.IsAny<string?>(),
+                    It.IsAny<DateTime?>(),
                     It.IsAny<DateTime?>()
                 )
             )
@@ -370,12 +381,13 @@ public sealed class PostmarkSuppressionSyncRunnerTests
                     It.IsAny<Guid?>(),
                     It.IsAny<string?>(),
                     It.IsAny<string?>(),
+                    It.IsAny<DateTime?>(),
                     It.IsAny<DateTime?>()
                 )
             )
             .Returns(
-                (string email, SuppressionReason reason, string by, Guid? job, string? diagnostic, string? key, DateTime? eventUtc) =>
-                    h.SuppressionService.RecordAsync(email, reason, by, job, diagnostic, key, eventUtc)
+                (string email, SuppressionReason reason, string by, Guid? job, string? diagnostic, string? key, DateTime? eventUtc, DateTime? snapshotUtc) =>
+                    h.SuppressionService.RecordAsync(email, reason, by, job, diagnostic, key, eventUtc, snapshotUtc)
             );
         h.DumpClient.WithDump(
             "broadcast",
@@ -503,7 +515,7 @@ public sealed class PostmarkSuppressionSyncRunnerTests
     public async Task A_blank_entry_is_skipped_without_counting_as_dumped()
     {
         // Defense in depth behind the client's own blank-entry skip (the runner must be safe
-        // against any IPostmarkSuppressionDumpClient, including the MockData fake).
+        // against any IPostmarkSuppressionClient, including the MockData fake).
         var h = new Harness();
         h.DumpClient.WithDump("broadcast", DumpEntry("   "), DumpEntry("real@example.com"));
 

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Web.Models;
 
 namespace Web.Configuration
@@ -69,5 +71,32 @@ namespace Web.Configuration
         /// SMTP host for broadcast emails.
         /// </summary>
         public string BroadcastSmtpHost { get; set; } = "smtp-broadcasts.postmarkapp.com";
+
+        /// <summary>
+        /// Whether the Postmark suppression API is callable and meaningful: the integration is
+        /// on and a server token exists. Deliberately NOT conditioned on
+        /// <see cref="UsePostmarkAsDefault"/>: in webhook-only mode Postmark still owns the
+        /// stream suppression lists the reconciliation mirrors into COHAD, so the admin-clear
+        /// reactivation must keep working there - gating it on the send path would let the
+        /// sync re-suppress every clear, the exact fight issue #11 removes. The one definition
+        /// of this predicate; the reactivation registration reads it, and any future consumer
+        /// should too.
+        /// </summary>
+        public bool SuppressionApiConfigured =>
+            Enabled && !string.IsNullOrWhiteSpace(ServerToken);
+
+        /// <summary>
+        /// The distinct configured message streams, blanks dropped - the one definition of
+        /// "every stream" for the callers that act per stream (the suppression-dump
+        /// reconciliation and the admin-clear reactivation). Deduped because a misconfiguration
+        /// pointing both settings at the same stream must not act on it twice.
+        /// </summary>
+        public IReadOnlyList<string> GetConfiguredStreams()
+        {
+            return new[] { BroadcastStream, TransactionalStream }
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+        }
     }
 }

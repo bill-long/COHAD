@@ -51,4 +51,16 @@ namespace Web.PresentationModels
     {
         public string Email { get; set; } = string.Empty;
     }
+
+    /// <summary>
+    /// Body for the admin clear endpoint: which suppression episode the admin is acting on.
+    /// <see cref="SuppressedUtc"/> is the row's displayed value - it identifies the episode
+    /// (every re-suppression resets it), so a record re-suppressed between page load and click
+    /// is refused with 409 instead of being lifted on stale information. Null (an older or
+    /// non-UI caller) skips the episode guard.
+    /// </summary>
+    public class ClearEmailSuppressionRequestDto
+    {
+        public DateTime? SuppressedUtc { get; set; }
+    }
 }

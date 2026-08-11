@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { Subject, of, throwError } from 'rxjs';
 import { ManageSuppressionsComponent } from './manage-suppressions.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../confirm-dialog/confirm-dialog.component';
 import { EmailSuppressionService } from 'src/app/services/email-suppression.service';
 import { SuppressedAddressesService } from 'src/app/services/suppressed-addresses.service';
 import { EmailSuppression } from 'src/app/models';
@@ -27,17 +29,25 @@ describe('ManageSuppressionsComponent', () => {
   let component: ManageSuppressionsComponent;
   let serviceSpy: jasmine.SpyObj<EmailSuppressionService>;
   let suppressedAddressesSpy: jasmine.SpyObj<SuppressedAddressesService>;
+  let dialogSpy: jasmine.SpyObj<MatDialog>;
+
+  /** The confirmation data passed to the most recent dialog open. */
+  const lastDialogData = (): ConfirmDialogData => dialogSpy.open.calls.mostRecent().args[1]!.data as ConfirmDialogData;
 
   beforeEach(() => {
     serviceSpy = jasmine.createSpyObj('EmailSuppressionService', ['getSuppressions', 'createSuppression', 'clearSuppression']);
     serviceSpy.getSuppressions.and.returnValue(of([makeSuppression()]));
     suppressedAddressesSpy = jasmine.createSpyObj('SuppressedAddressesService', ['refresh']);
+    dialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
+    // Confirmed by default; individual tests override to simulate a cancel.
+    dialogSpy.open.and.returnValue({ afterClosed: () => of(true) } as MatDialogRef<ConfirmDialogComponent, boolean>);
 
     TestBed.configureTestingModule({
       providers: [
         ManageSuppressionsComponent,
         { provide: EmailSuppressionService, useValue: serviceSpy },
         { provide: SuppressedAddressesService, useValue: suppressedAddressesSpy },
+        { provide: MatDialog, useValue: dialogSpy },
       ],
     });
 
@@ -122,9 +132,58 @@ describe('ManageSuppressionsComponent', () => {
 
     component.clear(makeSuppression());
 
-    expect(serviceSpy.clearSuppression).toHaveBeenCalledWith('abc');
+    expect(serviceSpy.clearSuppression).toHaveBeenCalledWith('abc', '2026-08-01T00:00:00Z');
     expect(serviceSpy.getSuppressions).toHaveBeenCalledTimes(1);
     expect(suppressedAddressesSpy.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not clear when the confirmation is cancelled', () => {
+    // The help doc's "only clear when you understand why" caution is enforced as a
+    // confirmation at the moment of the click; dismissing it must change nothing.
+    dialogSpy.open.and.returnValue({ afterClosed: () => of(false) } as MatDialogRef<ConfirmDialogComponent, boolean>);
+
+    component.clear(makeSuppression());
+
+    expect(dialogSpy.open).toHaveBeenCalledTimes(1);
+    expect(serviceSpy.clearSuppression).not.toHaveBeenCalled();
+    expect(component.clearingIds.size).toBe(0);
+  });
+
+  it('confirmation names the address and states the reason-specific stake', () => {
+    dialogSpy.open.and.returnValue({ afterClosed: () => of(false) } as MatDialogRef<ConfirmDialogComponent, boolean>);
+
+    component.clear(makeSuppression({ reason: 'SpamComplaint' }));
+    expect(lastDialogData().body).toContain('taylor.old@cohad.local');
+    expect(lastDialogData().body).toContain('sending reputation');
+    // The provider-side hazard: Postmark's own complaint entry survives the clear, so the
+    // daily sync re-adds the suppression until the recipient lifts it.
+    expect(lastDialogData().body).toContain('daily sync will re-add');
+
+    component.clear(makeSuppression({ reason: 'ProviderUnsubscribe' }));
+    expect(lastDialogData().body).toContain("reactivates the address on the provider's suppression lists");
+
+    component.clear(makeSuppression({ reason: 'HardBounce' }));
+    expect(lastDialogData().body).toContain('Postmark dashboard');
+  });
+
+  it('surfaces a failed provider reactivation (502) as an error with the server text', () => {
+    // The clear endpoint reactivates the address at the email provider BEFORE clearing; a
+    // provider failure fails the whole request and the record stays suppressed, so the admin's
+    // retry is simply clicking Clear again on the still-active row.
+    serviceSpy.clearSuppression.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 502,
+            error: { error: 'Could not reactivate taylor.old@cohad.local at the email provider, so the suppression was not cleared.' },
+          }),
+      ),
+    );
+
+    component.clear(makeSuppression());
+
+    expect(component.errorText).toContain('taylor.old@cohad.local');
+    expect(component.noticeText).toBeNull();
   });
 
   it('surfaces a 409 as try-again guidance, not an error state', () => {

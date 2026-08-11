@@ -1,7 +1,5 @@
 #nullable enable
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -67,15 +65,19 @@ namespace Web.Services
     /// <para>
     /// Idempotent per dumped address: the evidence key is deterministic over (stream, address), so
     /// a rerun finds the active record already carrying the key and applies nothing - no count
-    /// inflation, no duplicate audit entries, exactly like the webhook writers. One deliberate
-    /// consequence: an address an admin cleared ONLY in COHAD (without reactivating it in Postmark,
-    /// the documented two-system clear procedure) is re-suppressed by the next run, because
-    /// Postmark still silently drops its mail - the re-suppression is the truthful state.
+    /// inflation, no duplicate audit entries, exactly like the webhook writers. An address
+    /// cleared in COHAD while Postmark still holds its suppression entry (a hard-bounce clear
+    /// whose manual dashboard step was skipped - the ProviderUnsubscribe clear reactivates
+    /// provider-side before clearing, so it cannot reach this state) is re-suppressed by the
+    /// next run, because Postmark still silently drops its mail - the re-suppression is the
+    /// truthful state. The one snapshot hazard - a dump fetched moments before an admin's
+    /// clear-with-reactivation - is closed in <c>RecordAsync</c>, which ignores dump evidence
+    /// for a record cleared after the snapshot was taken.
     /// </para>
     /// </summary>
     public sealed class PostmarkSuppressionSyncRunner
     {
-        private readonly IPostmarkSuppressionDumpClient _dumpClient;
+        private readonly IPostmarkSuppressionClient _dumpClient;
         private readonly IEmailSuppressionRepository _repository;
         private readonly IEmailSuppressionService _suppressionService;
         private readonly IAuditLogRepository _auditLogRepository;
@@ -83,7 +85,7 @@ namespace Web.Services
         private readonly ILogger<PostmarkSuppressionSyncRunner> _logger;
 
         public PostmarkSuppressionSyncRunner(
-            IPostmarkSuppressionDumpClient dumpClient,
+            IPostmarkSuppressionClient dumpClient,
             IEmailSuppressionRepository repository,
             IEmailSuppressionService suppressionService,
             IAuditLogRepository auditLogRepository,
@@ -160,14 +162,10 @@ namespace Web.Services
         {
             var result = new PostmarkSuppressionSyncResult();
 
-            // Both streams, deduped: a misconfiguration pointing both at the same stream must not
-            // reconcile it twice (the second pass would be a no-op anyway, but the log would lie).
-            var streams = new List<string>();
-            foreach (var stream in new[] { _postmarkOptions.BroadcastStream, _postmarkOptions.TransactionalStream })
-            {
-                if (!string.IsNullOrWhiteSpace(stream) && !streams.Contains(stream, StringComparer.Ordinal))
-                    streams.Add(stream);
-            }
+            // Both streams, deduped (the shared definition): a misconfiguration pointing both at
+            // the same stream must not reconcile it twice (the second pass would be a no-op
+            // anyway, but the log would lie).
+            var streams = _postmarkOptions.GetConfiguredStreams();
 
             // One read of the COHAD list per run; the set is updated as records are written below,
             // so an address dumped on BOTH streams is recorded once, not once per stream.
@@ -181,6 +179,11 @@ namespace Web.Services
                 // A failed dump read aborts the run (the hosted service logs it and the next
                 // interval retries): reconciling with half the picture risks nothing - the pass is
                 // additive - but a silently skipped stream would make the summary log lie.
+                // Stamped before the fetch: the dump is a point-in-time snapshot, and RecordAsync
+                // uses this to ignore its evidence for any record cleared after it was taken -
+                // otherwise a run racing an admin's clear-with-provider-reactivation would undo
+                // the clear from a dump that predates the delete.
+                var snapshotUtc = DateTime.UtcNow;
                 var entries = await _dumpClient.GetSuppressionsAsync(stream, cancellationToken);
 
                 foreach (var entry in entries)
@@ -228,7 +231,8 @@ namespace Web.Services
                             null,
                             diagnostic,
                             evidenceKey: MakeEvidenceKey(stream, normalized),
-                            eventUtc: ParseCreatedAt(entry.CreatedAt)
+                            eventUtc: ParseCreatedAt(entry.CreatedAt),
+                            evidenceSnapshotUtc: snapshotUtc
                         );
 
                         // The record is in force either way; only a write THIS call performed is
