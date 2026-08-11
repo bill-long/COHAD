@@ -95,17 +95,56 @@ public sealed class PostmarkReactivationServiceTests
     }
 
     [Fact]
-    public async Task Cancellation_propagates_rather_than_reading_as_a_failed_stream()
+    public async Task A_provider_timeout_reads_as_a_failed_stream_not_cancellation()
     {
+        // HttpClient reports its own timeout as TaskCanceledException. The caller's token was
+        // never cancelled, so a hung provider must be reported as a failed stream - not escape
+        // as a cancellation that skips the other stream and 500s the admin's request.
+        var client = new Mock<IPostmarkSuppressionClient>();
+        client
+            .Setup(c => c.ReactivateAsync("broadcast", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout"));
+        var service = Create(client.Object);
+
+        var result = await service.ReactivateAsync("jane@example.com", CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(new[] { "broadcast" }, result.FailedStreams);
+        client.Verify(c => c.ReactivateAsync("outbound", "jane@example.com", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task The_callers_own_cancellation_propagates()
+    {
+        using var cts = new CancellationTokenSource();
         var client = new Mock<IPostmarkSuppressionClient>();
         client
             .Setup(c => c.ReactivateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new OperationCanceledException());
+            .Returns(async (string _, string _, CancellationToken ct) =>
+            {
+                // Cancellation arrives mid-call, the way a real aborted request delivers it.
+                cts.Cancel();
+                ct.ThrowIfCancellationRequested();
+            });
         var service = Create(client.Object);
 
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            () => service.ReactivateAsync("jane@example.com", CancellationToken.None)
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => service.ReactivateAsync("jane@example.com", cts.Token)
         );
+    }
+
+    [Fact]
+    public async Task The_not_configured_service_skips_without_warning_material()
+    {
+        // The webhook-only / Postmark-less registration: nothing attempted, nothing to warn
+        // about - the caller branches on SkippedNotConfigured before Succeeded.
+        var service = new NotConfiguredPostmarkReactivationService();
+
+        var result = await service.ReactivateAsync("jane@example.com", CancellationToken.None);
+
+        Assert.True(result.SkippedNotConfigured);
+        Assert.False(result.Succeeded);
+        Assert.Equal(0, result.StreamsAttempted);
     }
 
     // --- MockPostmarkSuppressionClient parity (the MockData stand-in must close the same loop

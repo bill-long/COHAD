@@ -18,23 +18,31 @@ namespace Web.MockData
     /// same loop the real provider closes. Seeding is called from the Startup registration
     /// rather than the constructor so unit tests get an empty dump, matching
     /// <see cref="MockEmailSuppressionRepository"/>'s seeding convention.
+    /// <para>
+    /// Locked like the other MockData stores: the singleton is read by the suppression-sync
+    /// background timer while an admin's clear mutates it from a request thread.
+    /// </para>
     /// </summary>
     public sealed class MockPostmarkSuppressionClient : IPostmarkSuppressionClient
     {
+        private readonly object _gate = new();
         private readonly Dictionary<string, List<PostmarkSuppressionDumpEntry>> _dumpsByStream = new();
 
         public MockPostmarkSuppressionClient SeedSampleData()
         {
-            _dumpsByStream["broadcast"] = new List<PostmarkSuppressionDumpEntry>
+            lock (_gate)
             {
-                new()
+                _dumpsByStream["broadcast"] = new List<PostmarkSuppressionDumpEntry>
                 {
-                    EmailAddress = "postmark.unsubscribed@cohad.local",
-                    SuppressionReason = "ManualSuppression",
-                    Origin = "Recipient",
-                    CreatedAt = "2026-08-01T12:00:00-05:00",
-                },
-            };
+                    new()
+                    {
+                        EmailAddress = "postmark.unsubscribed@cohad.local",
+                        SuppressionReason = "ManualSuppression",
+                        Origin = "Recipient",
+                        CreatedAt = "2026-08-01T12:00:00-05:00",
+                    },
+                };
+            }
             return this;
         }
 
@@ -43,13 +51,22 @@ namespace Web.MockData
             CancellationToken cancellationToken
         )
         {
+            // Behaviorally identical to the real client, per the mock-parity convention: the
+            // same argument rejection, and the token is observed.
+            if (string.IsNullOrWhiteSpace(messageStream))
+                throw new ArgumentException("Message stream must not be empty.", nameof(messageStream));
+            cancellationToken.ThrowIfCancellationRequested();
+
             // A copy, matching the mock repositories' clones-on-every-path convention: the caller
             // can never mutate the seeded store.
-            return Task.FromResult<IReadOnlyList<PostmarkSuppressionDumpEntry>>(
-                _dumpsByStream.TryGetValue(messageStream, out var entries)
-                    ? entries.ToList()
-                    : new List<PostmarkSuppressionDumpEntry>()
-            );
+            lock (_gate)
+            {
+                return Task.FromResult<IReadOnlyList<PostmarkSuppressionDumpEntry>>(
+                    _dumpsByStream.TryGetValue(messageStream, out var entries)
+                        ? entries.ToList()
+                        : new List<PostmarkSuppressionDumpEntry>()
+                );
+            }
         }
 
         public Task ReactivateAsync(
@@ -58,18 +75,27 @@ namespace Web.MockData
             CancellationToken cancellationToken
         )
         {
+            if (string.IsNullOrWhiteSpace(messageStream))
+                throw new ArgumentException("Message stream must not be empty.", nameof(messageStream));
+            if (string.IsNullOrWhiteSpace(emailAddress))
+                throw new ArgumentException("Email address must not be empty.", nameof(emailAddress));
+            cancellationToken.ThrowIfCancellationRequested();
+
             // Behaviorally identical to the provider: deleting an entry that does not exist is a
             // success, and the address match is case-insensitive on the trimmed value (Postmark
             // keys suppressions on the address, not on its casing).
-            if (_dumpsByStream.TryGetValue(messageStream, out var entries))
+            lock (_gate)
             {
-                entries.RemoveAll(e =>
-                    string.Equals(
-                        e.EmailAddress.Trim(),
-                        emailAddress.Trim(),
-                        StringComparison.OrdinalIgnoreCase
-                    )
-                );
+                if (_dumpsByStream.TryGetValue(messageStream, out var entries))
+                {
+                    entries.RemoveAll(e =>
+                        string.Equals(
+                            e.EmailAddress.Trim(),
+                            emailAddress.Trim(),
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    );
+                }
             }
             return Task.CompletedTask;
         }

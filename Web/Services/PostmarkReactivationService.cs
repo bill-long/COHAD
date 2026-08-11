@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -10,22 +11,47 @@ using Web.Configuration;
 namespace Web.Services
 {
     /// <summary>
-    /// What one provider-side reactivation attempt did, per stream. The caller turns anything
-    /// short of full success into a visible warning: "cleared here, still suppressed at the
-    /// provider" must never read as a silent 200.
+    /// What one provider-side reactivation attempt did, per stream. The caller turns a failed
+    /// attempt into a visible warning: "cleared here, still suppressed at the provider" must
+    /// never read as a silent 200.
     /// </summary>
     public sealed class PostmarkReactivationResult
     {
+        /// <summary>
+        /// The outcome when no provider integration is configured to act against (see
+        /// <see cref="NotConfiguredPostmarkReactivationService"/>): nothing was attempted, and
+        /// nothing needs a warning - without a server token the send path does not go through
+        /// Postmark's suppression filter, so there is no provider-side entry dropping mail.
+        /// </summary>
+        public static readonly PostmarkReactivationResult NotConfigured =
+            new(0, Array.Empty<string>(), skippedNotConfigured: true);
+
         public PostmarkReactivationResult(int streamsAttempted, IReadOnlyList<string> failedStreams)
+            : this(streamsAttempted, failedStreams, skippedNotConfigured: false) { }
+
+        private PostmarkReactivationResult(
+            int streamsAttempted,
+            IReadOnlyList<string> failedStreams,
+            bool skippedNotConfigured
+        )
         {
             StreamsAttempted = streamsAttempted;
             FailedStreams = failedStreams;
+            SkippedNotConfigured = skippedNotConfigured;
         }
 
         public int StreamsAttempted { get; }
 
         /// <summary>The streams whose delete call failed; empty on full success.</summary>
         public IReadOnlyList<string> FailedStreams { get; }
+
+        /// <summary>
+        /// True when the attempt was skipped because no provider integration is configured -
+        /// neither a success (nothing was reactivated) nor a warnable failure (there is no
+        /// provider-side suppression affecting the send path). Callers branch on this before
+        /// <see cref="Succeeded"/>.
+        /// </summary>
+        public bool SkippedNotConfigured { get; }
 
         /// <summary>
         /// True only when every configured stream confirmed the delete. Zero attempted streams
@@ -47,9 +73,10 @@ namespace Web.Services
     {
         /// <summary>
         /// Attempts the delete on every configured stream, never throwing for a failed
-        /// provider call: one stream's failure must not stop the other's attempt, and the
-        /// caller's COHAD clear has already happened - the result is how the caller learns
-        /// what to warn about. Cancellation still propagates.
+        /// provider call - including a provider timeout: one stream's failure must not stop
+        /// the other's attempt, and the caller's COHAD clear has already happened, so the
+        /// result is how the caller learns what to warn about. Only the caller's own
+        /// cancellation propagates.
         /// </summary>
         Task<PostmarkReactivationResult> ReactivateAsync(string email, CancellationToken cancellationToken);
     }
@@ -76,31 +103,68 @@ namespace Web.Services
             CancellationToken cancellationToken
         )
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // The per-stream deletes are independent calls against a thread-safe HttpClient, so
+            // they run concurrently: with a hung provider, the caller waits out one timeout, not
+            // one per stream.
             var streams = _options.GetConfiguredStreams();
-            var failed = new List<string>();
+            var attempts = await Task.WhenAll(
+                streams.Select(stream => AttemptAsync(stream, email, cancellationToken))
+            );
 
-            foreach (var stream in streams)
+            return new PostmarkReactivationResult(
+                streams.Count,
+                attempts.Where(a => !a.Succeeded).Select(a => a.Stream).ToList()
+            );
+        }
+
+        private async Task<(string Stream, bool Succeeded)> AttemptAsync(
+            string stream,
+            string email,
+            CancellationToken cancellationToken
+        )
+        {
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    await _client.ReactivateAsync(stream, email, cancellationToken);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    // The client already logged the provider's answer; this line ties the
-                    // failure to the reactivation attempt as a whole.
-                    failed.Add(stream);
-                    _logger.LogError(
-                        ex,
-                        "Reactivating {Email} on the Postmark {Stream} stream failed.",
-                        email,
-                        stream
-                    );
-                }
+                await _client.ReactivateAsync(stream, email, cancellationToken);
+                return (stream, true);
             }
+            catch (Exception ex)
+                when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                // Cancellation-shaped exceptions are only rethrown when the CALLER cancelled:
+                // HttpClient reports its own timeout as TaskCanceledException, and a hung
+                // provider is precisely the failure this result exists to report, not a reason
+                // to abandon the other stream and escape as an unhandled 500.
+                _logger.LogError(
+                    ex,
+                    "Reactivating {Email} on the Postmark {Stream} stream failed.",
+                    email,
+                    stream
+                );
+                return (stream, false);
+            }
+        }
+    }
 
-            return new PostmarkReactivationResult(streams.Count, failed);
+    /// <summary>
+    /// The registration when no <c>Postmark:ServerToken</c> is configured (webhook-only
+    /// Postmark, or no Postmark at all) - the <c>DisabledSpamClassifier</c> precedent. In those
+    /// deployments sends do not pass through Postmark's suppression filter, so there is no
+    /// provider-side entry to reactivate and warning the admin about a "failed" provider call
+    /// on every clear would report a false, unresolvable problem. MockData does not use this:
+    /// its suppression client is the in-memory fake, which needs no token.
+    /// </summary>
+    public sealed class NotConfiguredPostmarkReactivationService : IPostmarkReactivationService
+    {
+        public Task<PostmarkReactivationResult> ReactivateAsync(
+            string email,
+            CancellationToken cancellationToken
+        )
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(PostmarkReactivationResult.NotConfigured);
         }
     }
 }

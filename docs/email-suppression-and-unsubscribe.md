@@ -890,17 +890,22 @@ address's entry from Postmark's stream suppression lists
 `PostmarkSuppressionClient`), so the two-system clear the addendum above documented as a manual
 procedure is one action. Decisions made in the writing:
 
-- **Both streams are targeted** (`PostmarkReactivationService`, over
+- **Both streams are targeted, concurrently** (`PostmarkReactivationService`, over
   `PostmarkOptions.GetConfiguredStreams()` - the same deduped stream list the reconciliation
   reads): the COHAD record does not store which stream suppressed the address, only the
   diagnostic text, and Postmark reports success ("Deleted") for an entry that does not exist,
-  so over-targeting costs nothing. One stream's failure does not stop the other's attempt.
+  so over-targeting costs nothing. One stream's failure does not stop the other's attempt,
+  and a provider timeout (`HttpClient` reports its own timeout as `TaskCanceledException`) is
+  a failed stream, not a cancellation - only the caller's own cancellation propagates.
 - **COHAD's clear happens first; a failed provider call warns instead of failing the request.**
-  The response carries a `ProviderWarning` ("cleared here, still suppressed at the provider"),
-  shown as a warning banner that survives the page's own reload, and the audit entry records
-  the provider outcome either way. The request does not fail because the inconsistency is
-  bounded: the reconciliation re-suppresses the address within its interval, and clearing
-  again retries the provider call.
+  The response carries a `ProviderWarning` naming the address ("cleared here, still suppressed
+  at the provider"), shown as a warning banner that survives the page's own reload - and an
+  unrelated record's later successful clear - and the audit entry records the provider outcome
+  either way. The request does not fail because the inconsistency is bounded: the
+  reconciliation re-suppresses the address within its interval, and clearing again retries the
+  provider call. The provider call and audit write run on `CancellationToken.None`: the clear
+  is already persisted at that point, so a client disconnect must not skip the audit write or
+  lose the provider outcome.
 - **The retry path is the already-cleared clear.** The idempotent clear of an already-cleared
   `ProviderUnsubscribe` record repeats the provider call (harmless when the entry is already
   gone), so no separate retry endpoint exists; the UI exposes it as **Retry provider
@@ -912,8 +917,18 @@ procedure is one action. Decisions made in the writing:
   failure, because a false "reactivated" leaves the admin believing mail flows while Postmark
   still silently drops it - a false failure only shows a spurious warning.
 - **Scope stays `ProviderUnsubscribe`.** Clearing a `HardBounce`/`SpamComplaint` suppression
-  does not touch the provider: Postmark refuses to delete spam-complaint entries, and deleting
-  a hard-bounce entry is a deliverability decision the documented procedure keeps manual.
+  does not touch the provider, so the manual procedure remains for those: after clearing here,
+  also reactivate the address on the stream's suppression list in the Postmark dashboard
+  (deleting a hard-bounce entry reactivates the bounce - a deliverability decision this change
+  deliberately keeps human), or the nightly sync re-suppresses the address on its next pass.
+  Spam-complaint entries cannot be deleted at Postmark at all, by API or dashboard - only the
+  recipient can undo one.
+- **A deployment with no `Postmark:ServerToken` skips the provider call without warning**
+  (`NotConfiguredPostmarkReactivationService`, registered on the `DisabledSpamClassifier`
+  precedent): in webhook-only Postmark mode - and with no Postmark at all - sends do not pass
+  through Postmark's suppression filter, so there is no provider-side entry dropping mail and
+  a per-clear warning would report a false, unresolvable problem. MockData keeps the real
+  service over the in-memory client, which needs no token.
 - **MockData closes the loop end to end:** `MockPostmarkSuppressionClient.ReactivateAsync`
   deletes the seeded dump entry, so clearing the reconciler-recorded suppression prevents the
   next sync run from re-suppressing it - the same fight-free behavior the real provider gives.

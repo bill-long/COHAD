@@ -302,8 +302,39 @@ namespace Web.UnitTests
             var response = Assert.IsType<ClearEmailSuppressionResponseDto>(result!.Value);
             Assert.False(response.Suppression.IsActive);
             Assert.NotNull(response.ProviderWarning);
+            // The warning names the address, so an admin who cleared several rows knows which
+            // one needs the retry.
+            Assert.Contains("jane@example.com", response.ProviderWarning);
             Assert.NotNull(entry);
             Assert.Contains("failed", entry.Action);
+        }
+
+        [Fact]
+        public async Task Clear_ProviderUnsubscribe_WithNoProviderConfigured_NeitherWarnsNorClaimsReactivation()
+        {
+            // The webhook-only / Postmark-less registration returns SkippedNotConfigured: there
+            // is no provider-side entry dropping mail, so warning would report a false,
+            // unresolvable problem - and the audit entry must not claim a reactivation either.
+            var seeded = await SeedAsync("jane@example.com", SuppressionReason.ProviderUnsubscribe, new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero));
+            _reactivation
+                .Setup(r => r.ReactivateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(PostmarkReactivationResult.NotConfigured);
+
+            NewAuditLogEntry entry = null;
+            _auditLog
+                .Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()))
+                .Callback<NewAuditLogEntry>(e => entry = e)
+                .Returns(Task.CompletedTask);
+
+            var controller = CreateController();
+            var result = await controller.Clear(seeded.Id) as OkObjectResult;
+
+            var response = Assert.IsType<ClearEmailSuppressionResponseDto>(result!.Value);
+            Assert.False(response.Suppression.IsActive);
+            Assert.Null(response.ProviderWarning);
+            Assert.NotNull(entry);
+            Assert.DoesNotContain("reactivat", entry.Action, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("failed", entry.Action);
         }
 
         [Fact]

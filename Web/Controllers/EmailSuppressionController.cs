@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -156,24 +157,32 @@ namespace Web.Controllers
             string providerAuditNote = "";
             if (outcome.Suppression.Reason == SuppressionReason.ProviderUnsubscribe)
             {
+                // CancellationToken.None, deliberately: the COHAD clear above is already
+                // persisted, so from here the work must run to completion - honoring
+                // RequestAborted would let a client disconnect skip the audit write below and
+                // lose the provider outcome entirely. The provider calls are bounded by the
+                // HTTP client's own timeout, not by the caller's patience.
                 var reactivation = await _reactivationService.ReactivateAsync(
                     outcome.Suppression.Email,
-                    HttpContext.RequestAborted
+                    CancellationToken.None
                 );
                 if (reactivation.Succeeded)
                 {
                     providerAuditNote = " Also reactivated the address at the email provider.";
                 }
-                else
+                else if (!reactivation.SkippedNotConfigured)
                 {
                     providerWarning =
-                        "The suppression is cleared here, but reactivating the address at the email"
-                        + " provider failed - mail to it may still be silently dropped, and the"
-                        + " periodic reconciliation may re-suppress it. Show cleared suppressions"
-                        + " and use Retry provider reactivation to try the provider call again.";
+                        $"The suppression for {outcome.Suppression.Email} is cleared here, but"
+                        + " reactivating the address at the email provider failed - mail to it may"
+                        + " still be silently dropped, and the periodic reconciliation may"
+                        + " re-suppress it. Show cleared suppressions and use Retry provider"
+                        + " reactivation on that address to try the provider call again.";
                     providerAuditNote =
                         " Reactivating the address at the email provider failed; it may still be suppressed there.";
                 }
+                // SkippedNotConfigured: no provider integration on the send path, so there is
+                // neither a reactivation to record nor a failure to warn about.
             }
 
             // Audited only when this call did the clearing - an idempotent no-op recording "X

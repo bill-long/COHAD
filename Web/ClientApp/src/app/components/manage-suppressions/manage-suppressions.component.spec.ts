@@ -149,6 +149,48 @@ describe('ManageSuppressionsComponent', () => {
     expect(component.errorText).toBeNull();
   });
 
+  it('keeps an unactioned warning when a different record is cleared successfully', () => {
+    // The warning about record A must not be dismissed by record B's clean clear - A still
+    // needs its provider retry.
+    component.ngOnInit();
+    serviceSpy.getSuppressions.and.returnValue(of([]));
+    serviceSpy.clearSuppression.and.returnValue(
+      of({
+        suppression: makeSuppression({ id: 'a', isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }),
+        providerWarning: 'record A still suppressed at the provider',
+      }),
+    );
+    component.clear(makeSuppression({ id: 'a' }));
+
+    serviceSpy.clearSuppression.and.returnValue(
+      of({ suppression: makeSuppression({ id: 'b', isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }), providerWarning: null }),
+    );
+    component.clear(makeSuppression({ id: 'b' }));
+
+    expect(component.warningText).toBe('record A still suppressed at the provider');
+  });
+
+  it('dismisses the warning when the same record\'s retry succeeds', () => {
+    component.ngOnInit();
+    serviceSpy.getSuppressions.and.returnValue(of([]));
+    serviceSpy.clearSuppression.and.returnValue(
+      of({
+        suppression: makeSuppression({ id: 'a', isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }),
+        providerWarning: 'record A still suppressed at the provider',
+      }),
+    );
+    component.clear(makeSuppression({ id: 'a' }));
+    expect(component.warningText).toBeTruthy();
+
+    // The retry (the clear endpoint is idempotent) now reaches the provider.
+    serviceSpy.clearSuppression.and.returnValue(
+      of({ suppression: makeSuppression({ id: 'a', isActive: false, clearedUtc: '2026-08-09T00:00:00Z' }), providerWarning: null }),
+    );
+    component.clear(makeSuppression({ id: 'a', isActive: false }));
+
+    expect(component.warningText).toBeNull();
+  });
+
   it('clears the provider warning on the next user-initiated load', () => {
     component.ngOnInit();
     serviceSpy.getSuppressions.and.returnValue(of([]));

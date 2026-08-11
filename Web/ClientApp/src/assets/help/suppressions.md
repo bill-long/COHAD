@@ -21,6 +21,8 @@ The do-not-mail list. An address on this list receives **no association email at
 
 Clearing a **provider unsubscribe** (an unsubscribe recorded by the mail provider, typically a mail client's Unsubscribe button) also reactivates the address at the mail provider automatically, so you do not need to touch the Postmark dashboard. If that provider call fails, a warning appears: the suppression is cleared here, but the provider may still be silently dropping the address's mail, and the daily sync may re-add the suppression. To retry, turn on "Show cleared suppressions", find the record, and use **Retry provider reactivation**.
 
+Clearing a **hard bounce** does not touch the mail provider. If the address is also on Postmark's own suppression list (Postmark suppresses hard-bounced addresses itself), reactivate it in the Postmark dashboard as well, or the daily sync will re-add the suppression here. A provider-side spam-complaint suppression cannot be lifted by the association at all - only the recipient can undo it.
+
 If you see "The record was updated by someone else at the same time", another admin or an automatic event wrote the same record concurrently - just refresh and try again if still needed.
 
 Suppressed addresses also show as read-only chips in the [home contact editor](#topic:homes); clearing is only possible here, by design.

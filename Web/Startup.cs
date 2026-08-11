@@ -564,8 +564,20 @@ namespace Web
             services.AddScoped<PostmarkSuppressionSyncRunner>();
             // The other consumer of the Postmark suppression API: clearing a ProviderUnsubscribe
             // suppression also reactivates the address at the provider (issue #11), so the
-            // two-system clear is one action.
-            services.AddScoped<IPostmarkReactivationService, PostmarkReactivationService>();
+            // two-system clear is one action. Without a server token (webhook-only Postmark, or
+            // no Postmark at all) the real client cannot call the API and - more to the point -
+            // sends do not pass through Postmark's suppression filter, so a no-op implementation
+            // is registered instead of warning every clear about an unresolvable provider
+            // failure (the DisabledSpamClassifier precedent). MockData keeps the real service:
+            // its suppression client is the in-memory fake, which needs no token.
+            if (useMockData || !string.IsNullOrWhiteSpace(Configuration["Postmark:ServerToken"]))
+            {
+                services.AddScoped<IPostmarkReactivationService, PostmarkReactivationService>();
+            }
+            else
+            {
+                services.AddScoped<IPostmarkReactivationService, NotConfiguredPostmarkReactivationService>();
+            }
             // Registered only when their data layer can actually work. Without this the loops would run
             // and throw on every tick, contradicting the startup error logged in Configure that says they
             // are not running.

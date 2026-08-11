@@ -31,6 +31,11 @@ export class ManageSuppressionsComponent implements OnInit {
    * it needs warning styling - it describes a condition the admin must act on, not guidance.
    */
   warningText: string | null = null;
+  /**
+   * Which record warningText belongs to, so a DIFFERENT record's successful clear cannot
+   * dismiss a still-unactioned warning, while a successful retry of the same record does.
+   */
+  private warningRecordId: string | null = null;
   includeCleared = false;
   newEmail = '';
   createInProgress = false;
@@ -59,10 +64,11 @@ export class ManageSuppressionsComponent implements OnInit {
     this.errorText = null;
     // Also clear the 409 "try again" notice: a fresh load (including a checkbox toggle) supersedes
     // it, so leaving it would falsely imply the reload itself was contended. The provider warning
-    // goes too - a user-initiated reload is the next action, and clear() re-sets it AFTER calling
+    // goes too - a user-initiated reload is the next action, and clear() restores it AFTER calling
     // load() when the warning must outlive the reload it triggers.
     this.noticeText = null;
     this.warningText = null;
+    this.warningRecordId = null;
     const generation = ++this.loadGeneration;
     this.suppressionService.getSuppressions(this.includeCleared).subscribe({
       next: suppressions => {
@@ -120,11 +126,22 @@ export class ManageSuppressionsComponent implements OnInit {
       next: result => {
         this.clearingIds.delete(suppression.id);
         this.suppressedAddresses.refresh();
+        // A DIFFERENT record's still-unactioned warning survives this clear; a clear (or retry)
+        // of the record the warning is about supersedes it - with a fresh warning, or on success
+        // with nothing.
+        const unrelatedWarning = this.warningRecordId !== suppression.id ? this.warningText : null;
+        const unrelatedWarningRecordId = this.warningRecordId !== suppression.id ? this.warningRecordId : null;
         this.load();
-        // After load(), which resets the banners: this warning is the one piece of the clear
-        // outcome that must survive its own reload ("cleared here, but the address may still be
-        // suppressed at the provider").
-        this.warningText = result.providerWarning;
+        // After load(), which resets the banners: the provider warning is the one piece of the
+        // clear outcome that must survive its own reload ("cleared here, but the address may
+        // still be suppressed at the provider").
+        if (result.providerWarning) {
+          this.warningText = result.providerWarning;
+          this.warningRecordId = suppression.id;
+        } else if (unrelatedWarning) {
+          this.warningText = unrelatedWarning;
+          this.warningRecordId = unrelatedWarningRecordId;
+        }
       },
       error: err => {
         this.applyWriteError(err, 'Failed to clear the suppression.');
