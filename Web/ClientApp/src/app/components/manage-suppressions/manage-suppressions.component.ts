@@ -170,7 +170,10 @@ export class ManageSuppressionsComponent implements OnInit {
       case 'SpamComplaint':
         return (
           `${lead}\n\nThe recipient reported association mail as spam. Clearing without their ` +
-          "agreement risks the association's sending reputation."
+          "agreement risks the association's sending reputation. Postmark also keeps its own " +
+          'spam-complaint entry for the address, which only the recipient can lift - until they ' +
+          'do, their mail stays blocked at the provider and the daily sync will re-add this ' +
+          'suppression.'
         );
       case 'ResidentRequest':
         return `${lead}\n\nThe resident asked for all association mail to stop. Clear only at their request.`;

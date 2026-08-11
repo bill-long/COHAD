@@ -155,6 +155,9 @@ describe('ManageSuppressionsComponent', () => {
     component.clear(makeSuppression({ reason: 'SpamComplaint' }));
     expect(lastDialogData().body).toContain('taylor.old@cohad.local');
     expect(lastDialogData().body).toContain('sending reputation');
+    // The provider-side hazard: Postmark's own complaint entry survives the clear, so the
+    // daily sync re-adds the suppression until the recipient lifts it.
+    expect(lastDialogData().body).toContain('daily sync will re-add');
 
     component.clear(makeSuppression({ reason: 'ProviderUnsubscribe' }));
     expect(lastDialogData().body).toContain("reactivates the address on the provider's suppression lists");
