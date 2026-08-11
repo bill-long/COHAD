@@ -136,13 +136,18 @@ public sealed class PostmarkSuppressionClientTests
     }
 
     [Fact]
-    public async Task A_non_success_status_throws()
+    public async Task A_non_success_status_throws_carrying_the_provider_body()
     {
-        var (client, _) = Create(HttpStatusCode.Unauthorized, """{"ErrorCode":401}""");
+        // The exception message is what the reactivation service surfaces to the admin's 502;
+        // a generic "status code does not indicate success" would strip the provider's own
+        // refusal text.
+        var (client, _) = Create(HttpStatusCode.Unauthorized, """{"ErrorCode":401,"Message":"Unauthorized token"}""");
 
-        await Assert.ThrowsAsync<HttpRequestException>(
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(
             () => client.GetSuppressionsAsync("broadcast", CancellationToken.None)
         );
+        Assert.Contains("401", ex.Message);
+        Assert.Contains("Unauthorized token", ex.Message);
     }
 
     [Fact]
@@ -233,13 +238,14 @@ public sealed class PostmarkSuppressionClientTests
     }
 
     [Fact]
-    public async Task Reactivate_throws_on_a_non_success_status()
+    public async Task Reactivate_throws_on_a_non_success_status_carrying_the_provider_body()
     {
-        var (client, _) = Create(HttpStatusCode.Unauthorized, """{"ErrorCode":401}""");
+        var (client, _) = Create(HttpStatusCode.Unauthorized, """{"ErrorCode":401,"Message":"Unauthorized token"}""");
 
-        await Assert.ThrowsAsync<HttpRequestException>(
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(
             () => client.ReactivateAsync("broadcast", "jane@example.com", CancellationToken.None)
         );
+        Assert.Contains("Unauthorized token", ex.Message);
     }
 
     [Fact]

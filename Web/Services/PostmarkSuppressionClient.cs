@@ -179,7 +179,16 @@ namespace Web.Services
                     (int)response.StatusCode,
                     body
                 );
-                response.EnsureSuccessStatusCode();
+                // The provider's own words travel with the exception - EnsureSuccessStatusCode's
+                // generic message would strip the refusal text before the reactivation service
+                // surfaces it on the admin's 502, defeating the reason the detail exists.
+                // Truncated so a proxy's HTML error page cannot flood the message.
+                var detail = body.Length > 300 ? body[..300] + "..." : body;
+                throw new HttpRequestException(
+                    $"Postmark {operation} on stream {messageStream} failed with status {(int)response.StatusCode}: {detail}",
+                    inner: null,
+                    response.StatusCode
+                );
             }
             return body;
         }
