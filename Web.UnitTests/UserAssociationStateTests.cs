@@ -189,4 +189,36 @@ public sealed class UserAssociationStateTests
         Assert.Contains(User.Role.Administrator, user.Roles);
         Assert.Contains(User.Role.Resident, user.Roles);
     }
+
+    [Fact]
+    public void Apply_reports_no_change_for_an_already_settled_user()
+    {
+        // Callers use the return value to decide whether a write is needed, so a settled user must
+        // report false or every caller writes on every pass.
+        var user = new User
+        {
+            OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+            Roles = new List<User.Role> { User.Role.Resident },
+        };
+
+        Assert.False(UserAssociationState.Apply(user), "a settled user is already normalized");
+        Assert.False(UserAssociationState.Apply(user), "and stays that way on a repeat pass");
+    }
+
+    [Fact]
+    public void Apply_reports_a_change_when_it_only_starts_a_purge_clock()
+    {
+        // The role list keeps its single Administrator entry, so nothing about the lists changes -
+        // only UnassociatedSinceUtc. A caller comparing list lengths would miss this.
+        var user = new User
+        {
+            OwnedHomeIds = new List<Guid>(),
+            Roles = new List<User.Role> { User.Role.Administrator },
+            UnassociatedSinceUtc = null,
+        };
+
+        Assert.True(UserAssociationState.Apply(user));
+        Assert.NotNull(user.UnassociatedSinceUtc);
+        Assert.Single(user.Roles);
+    }
 }

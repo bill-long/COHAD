@@ -179,8 +179,12 @@ namespace Web.Controllers
                 // propagates immediately instead of reaching the per-task handling.
             }
 
+            // Check that every requested id came back, rather than comparing counts: the question
+            // being asked is "does each of these homes exist", and coverage answers it directly
+            // without depending on the repository returning exactly one document per id.
             var existingHomes = await homesTask;
-            if (existingHomes.Count != requestedHomeIds.Count)
+            var existingHomeIds = new HashSet<Guid>(existingHomes.Select(h => h.Id));
+            if (requestedHomeIds.Any(id => !existingHomeIds.Contains(id)))
             {
                 return BadRequest("One or more specified homes do not exist.");
             }

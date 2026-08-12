@@ -125,6 +125,13 @@ namespace Web.MockData
 
         public Task DeleteAsync(string uniqueId)
         {
+            if (string.IsNullOrEmpty(uniqueId))
+            {
+                // Same as CosmosUserRepository: reads answer null for a blank id, but a delete must
+                // fail loudly, because its caller audits a successful return as a real deletion.
+                throw new ArgumentException("A user id is required to delete a user.", nameof(uniqueId));
+            }
+
             lock (_users)
             {
                 _users.Remove(uniqueId);

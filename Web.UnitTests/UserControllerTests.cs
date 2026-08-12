@@ -343,6 +343,125 @@ public sealed class UserControllerTests
     }
 
     [Fact]
+    public async Task UpdateUserAssociations_accepts_a_home_returned_more_than_once()
+    {
+        // The existence check asks whether every requested id came back, so it must not be thrown
+        // off by a repository that returns more than one document for the same home.
+        var apiUniqueId = UniqueId("admin");
+        var targetUniqueId = "target-user";
+        var homeId = Guid.NewGuid();
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(apiUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = apiUniqueId,
+                    GivenName = "Admin",
+                    Surname = "User",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(targetUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = targetUniqueId,
+                    Emails = "target@example.com",
+                    Roles = new List<User.Role>(),
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+        mockUsers
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .ReturnsAsync((User u) => u);
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(
+                new List<Home>
+                {
+                    new Home { Id = homeId, StreetNumber = 42, StreetName = "Oak Ave", Residents = new List<Resident>() },
+                    new Home { Id = homeId, StreetNumber = 42, StreetName = "Oak Ave", Residents = new List<Resident>() },
+                }
+            );
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var mockConversion = new Mock<IEventSignupConversionService>();
+        mockConversion
+            .Setup(s => s.ConvertUserSignupsToHomeAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>()))
+            .ReturnsAsync(0);
+
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, mockConversion.Object, nameId: "admin");
+        var result = await c.UpdateUserAssociations(
+            targetUniqueId,
+            new UpdatedUserAssociations
+            {
+                RoleNames = new List<string> { "Resident" },
+                OwnedHomeIds = new List<Guid> { homeId },
+            }
+        );
+
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateUserAssociations_rejects_a_home_id_that_does_not_exist()
+    {
+        var apiUniqueId = UniqueId("admin");
+        var targetUniqueId = "target-user";
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(apiUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = apiUniqueId,
+                    GivenName = "Admin",
+                    Surname = "User",
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(targetUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = targetUniqueId,
+                    Emails = "target@example.com",
+                    Roles = new List<User.Role>(),
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync(new List<Home>());
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        var mockConversion = new Mock<IEventSignupConversionService>();
+
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, mockConversion.Object, nameId: "admin");
+        var result = await c.UpdateUserAssociations(
+            targetUniqueId,
+            new UpdatedUserAssociations
+            {
+                RoleNames = new List<string> { "Resident" },
+                OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+            }
+        );
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("One or more specified homes do not exist.", badRequest.Value);
+        mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
     public async Task UpdateUserAssociations_does_not_convert_signups_when_no_homes_assigned()
     {
         var apiUniqueId = UniqueId("admin");

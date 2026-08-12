@@ -79,17 +79,41 @@ namespace Web.Services.Repositories
                 }
 
                 var created = CosmosLegacyDocumentMapper.ToUserDocument(user);
-                // EF Core Cosmos containers created with no HasPartitionKey() use the default path (__partitionKey in
-                // newer tooling; portal may label it "NoPartitionKey"). Legacy docs often omit that property; writes must
-                // use PartitionKey.None so the header matches what Cosmos extracts from the payload.
-                var createResponse = await _usersContainer.UpsertItemAsync(created, CosmosPartitionKey.None);
-                user.ETag = createResponse.Headers.ETag;
-                return user;
+                try
+                {
+                    // Create, not upsert: this branch only runs when the read found nothing, so a
+                    // document appearing in between is a concurrent create, and an upsert would
+                    // silently overwrite it (the same lost write the ETag branch exists to stop).
+                    // Cosmos answers 409 on a duplicate id, which the catch below resolves against
+                    // the winner. EF Core Cosmos containers created with no HasPartitionKey() use
+                    // the default path (__partitionKey in newer tooling; portal may label it
+                    // "NoPartitionKey"). Legacy docs often omit that property; writes must use
+                    // PartitionKey.None so the header matches what Cosmos extracts from the payload.
+                    var createResponse = await _usersContainer.CreateItemAsync(created, CosmosPartitionKey.None);
+                    user.ETag = createResponse.Headers.ETag;
+                    return user;
+                }
+                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
+                {
+                    // Losing a create race is not a lost write: the winner stored the document this
+                    // call was going to store (both are built from the same claims), so succeed
+                    // idempotently against it rather than reporting a conflict. A first login
+                    // raced by a second tab must not answer 409 - the SPA only logs that, leaving
+                    // the new account signed in with no roles until a manual reload.
+                    var winner = await GetRawUserDocumentAsync(user.UniqueId);
+                    if (winner == null)
+                    {
+                        throw ConcurrencyConflictException.For("User", user.UniqueId, ex);
+                    }
+
+                    user.ETag = winner.Value<string>("_etag");
+                    return user;
+                }
             }
 
-            // The write must land on the document that was actually read: legacy documents may use
-            // the unprefixed id shape, and MergeUserIntoDocument normalizes doc["id"], which would
-            // aim the write at a prefixed twin instead of the stored document. Keep the stored id.
+            // The write must land on the document that was actually read: MergeUserIntoDocument
+            // normalizes doc["id"] to the prefixed shape, so for a document still stored under the
+            // unprefixed id that would write a second document rather than update this one.
             var storedId = existing.Value<string>("id");
             CosmosLegacyDocumentMapper.MergeUserIntoDocument(existing, user);
             existing["id"] = storedId;
@@ -113,8 +137,10 @@ namespace Web.Services.Repositories
                     user.ETag = response.Headers.ETag;
                 }
                 catch (CosmosException ex)
-                    when (ex.StatusCode == HttpStatusCode.PreconditionFailed || ex.StatusCode == HttpStatusCode.NotFound)
+                    when (ex.StatusCode == HttpStatusCode.PreconditionFailed || CosmosNotFound.IsItemNotFound(ex))
                 {
+                    // Item-not-found only (not e.g. a provisioning-level 404, which must surface
+                    // raw instead of advising a retry that can never succeed).
                     throw ConcurrencyConflictException.For("User", user.UniqueId, ex);
                 }
             }
@@ -188,46 +214,81 @@ WHERE c.Discriminator = 'User'
 
         public async Task DeleteAsync(string uniqueId)
         {
-            // Delete every id shape the read path recognizes (the consistent-idempotency-keys rule:
-            // reads, writes, and deletes must key on the same ids). Legacy documents may be stored
-            // under the unprefixed id - and upserts deliberately preserve the stored id - so
-            // deleting only the prefixed shape would leave such a document alive while the purge's
-            // audit entry says it was removed.
-            var candidateIds = new[] { CosmosLegacyDocumentMapper.ToUserDocumentId(uniqueId), uniqueId }.Distinct();
-            await Task.WhenAll(candidateIds.Select(DeleteDocumentIdAsync));
-        }
+            if (string.IsNullOrEmpty(uniqueId))
+            {
+                // A blank id is a malformed request, not a statement about the store - there is no
+                // document it could refer to. Returning quietly would let UserPurgeRunner audit a
+                // deletion it never asked for against no particular document; failing loudly gets
+                // it counted as an error instead, naming the record in the log.
+                throw new ArgumentException("A user id is required to delete a user.", nameof(uniqueId));
+            }
 
-        private async Task DeleteDocumentIdAsync(string id)
-        {
+            // Delete the document the read path resolves, by its stored id, so reads, writes, and
+            // deletes all key on the same document (the consistent-idempotency-keys rule). Deleting
+            // both id shapes instead would be a two-write fan-out whose partial failure throws
+            // after the account is already gone - and the purge audits only after a successful
+            // delete, so that gap would permanently lose the record of a real deletion.
+            var existing = await GetRawUserDocumentAsync(uniqueId);
+            if (existing == null)
+            {
+                // No such document: an idempotent delete has nothing to do and has succeeded. This
+                // is the same answer main gave (its DeleteItemAsync 404 was swallowed here too), so
+                // a repeat purge of an already-deleted account still reports success rather than
+                // an error.
+                return;
+            }
+
             try
             {
-                await _usersContainer.DeleteItemAsync<JObject>(id, CosmosPartitionKey.None);
+                await _usersContainer.DeleteItemAsync<JObject>(
+                    existing.Value<string>("id"),
+                    CosmosPartitionKey.None
+                );
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
-                // Idempotent delete
+                // Already deleted between the read and here; the caller's intent is satisfied.
+                // A non-item 404 must surface - swallowing it would let the purge audit a deletion
+                // that never happened.
             }
         }
 
         private async Task<JObject> GetRawUserDocumentAsync(string uniqueId)
         {
-            var prefixedId = CosmosLegacyDocumentMapper.ToUserDocumentId(uniqueId);
-            var candidateIds = new[] { prefixedId, uniqueId };
-            var idLiterals = candidateIds.Select(id => $"\"{id}\"");
-            var query = new CosmosQueryDefinition($"SELECT * FROM c WHERE c.id IN ({string.Join(", ", idLiterals)})");
-            var iterator = _usersContainer.GetItemQueryIterator<JObject>(query);
-            var matches = new List<JObject>();
-            while (iterator.HasMoreResults)
+            if (string.IsNullOrEmpty(uniqueId))
             {
-                var response = await iterator.ReadNextAsync();
-                matches.AddRange(response);
+                // No document can have a blank id. ReadItemAsync would throw ArgumentNullException
+                // rather than return a 404, so guard here to keep this behaviorally identical to
+                // MockUserRepository (the repository convention) and to keep a legacy document with
+                // no UniqueId from aborting a purge sweep instead of being skipped.
+                return null;
             }
 
-            // Twin documents (both id shapes for the same user) can exist from the era when merges
-            // were written to the normalized id while the original document remained. Prefer the
-            // prefixed shape deterministically, so the ETag a caller read and the document this
-            // class writes always refer to the same twin.
-            return matches.FirstOrDefault(d => d.Value<string>("id") == prefixedId) ?? matches.FirstOrDefault();
+            // Id lookups are point reads, per the repository convention. The prefixed shape is the
+            // only one this app writes (creates derive it, updates keep the stored id), so it is
+            // read first and the unprefixed shape is a fallback for any pre-EF-migration document
+            // - which costs a second read only when the first genuinely misses, e.g. a first login.
+            var prefixedId = CosmosLegacyDocumentMapper.ToUserDocumentId(uniqueId);
+            var doc = await ReadDocumentIdAsync(prefixedId);
+            if (doc != null || string.Equals(prefixedId, uniqueId, StringComparison.Ordinal))
+            {
+                return doc;
+            }
+
+            return await ReadDocumentIdAsync(uniqueId);
+        }
+
+        private async Task<JObject> ReadDocumentIdAsync(string id)
+        {
+            try
+            {
+                var response = await _usersContainer.ReadItemAsync<JObject>(id, CosmosPartitionKey.None);
+                return response.Resource;
+            }
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
+            {
+                return null;
+            }
         }
 
         private static void StripCosmosSystemProperties(JObject doc)

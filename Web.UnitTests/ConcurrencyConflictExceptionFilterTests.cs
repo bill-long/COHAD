@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging.Abstractions;
 using Web.Controllers;
 using Web.Services.Repositories;
 using Xunit;
@@ -22,7 +23,7 @@ public sealed class ConcurrencyConflictExceptionFilterTests
     [Fact]
     public void Maps_conflict_to_409_with_the_shared_body()
     {
-        var filter = new ConcurrencyConflictExceptionFilter();
+        var filter = new ConcurrencyConflictExceptionFilter(NullLogger<ConcurrencyConflictExceptionFilter>.Instance);
         var context = MakeContext(
             ConcurrencyConflictException.For("User", "u-1", new InvalidOperationException("ETag mismatch"))
         );
@@ -40,7 +41,7 @@ public sealed class ConcurrencyConflictExceptionFilterTests
     {
         // Older throw sites use the plain constructor and have no Subject; the 409 must still be
         // truthful rather than becoming a 500.
-        var filter = new ConcurrencyConflictExceptionFilter();
+        var filter = new ConcurrencyConflictExceptionFilter(NullLogger<ConcurrencyConflictExceptionFilter>.Instance);
         var context = MakeContext(
             new ConcurrencyConflictException("legacy message", new InvalidOperationException("ETag mismatch"))
         );
@@ -56,7 +57,7 @@ public sealed class ConcurrencyConflictExceptionFilterTests
     [Fact]
     public void Ignores_other_exceptions()
     {
-        var filter = new ConcurrencyConflictExceptionFilter();
+        var filter = new ConcurrencyConflictExceptionFilter(NullLogger<ConcurrencyConflictExceptionFilter>.Instance);
         var context = MakeContext(new InvalidOperationException("unrelated"));
 
         filter.OnException(context);

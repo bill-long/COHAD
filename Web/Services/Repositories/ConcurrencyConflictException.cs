@@ -27,8 +27,9 @@ namespace Web.Services.Repositories
         }
 
         /// <summary>
-        /// The one place the conflict wording is built, so log lines and alerts keyed on it cannot
-        /// drift between repositories.
+        /// The one place the User/Home repositories (Cosmos and Mock) build their conflict
+        /// wording, so it cannot drift between them. Older subsystems (email suppression) still
+        /// word their own conflicts through the public constructor.
         /// </summary>
         public static ConcurrencyConflictException For(string subject, object id, Exception innerException) =>
             new(subject, $"{subject} {id} was modified by another request. Retry the operation.", innerException);

@@ -51,8 +51,9 @@ namespace Web.MockData
         /// <summary>Records a successful write and returns the key's fresh ETag.</summary>
         internal string Advance(TKey key)
         {
-            _versions[key] = ++_lastVersion;
-            return _versions[key].ToString();
+            var version = ++_lastVersion;
+            _versions[key] = version;
+            return version.ToString();
         }
 
         /// <summary>Forgets a deleted key. The retired versions are never reissued.</summary>

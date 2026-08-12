@@ -655,4 +655,23 @@ public sealed class CosmosLegacyDocumentMapperTests
 
         Assert.Equal("\"abc123\"", job.ETag);
     }
+
+    [Fact]
+    public void MergeUserIntoDocument_normalizes_id_to_the_prefixed_shape()
+    {
+        // The prefixed shape is the only id this app writes: creates derive it here, and
+        // UpsertAsync keeps the stored id on update. That is what keeps a second document for the
+        // same user from ever being created.
+        var doc = new JObject();
+        var user = new User
+        {
+            UniqueId = "google.comu1",
+            Roles = new List<User.Role>(),
+            OwnedHomeIds = new List<Guid>(),
+        };
+
+        CosmosLegacyDocumentMapper.MergeUserIntoDocument(doc, user);
+
+        Assert.Equal("User|google.comu1", doc.Value<string>("id"));
+    }
 }

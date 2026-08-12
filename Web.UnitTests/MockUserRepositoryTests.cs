@@ -160,4 +160,30 @@ public sealed class MockUserRepositoryTests
         var reread = await repo.GetByUniqueIdAsync(SeededUserId);
         Assert.Equal("Recreated", reread.GivenName);
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task DeleteAsync_rejects_a_blank_id(string uniqueId)
+    {
+        // A silent no-op would be audited by UserPurgeRunner as a completed deletion, leaving a
+        // permanent, false "purged" entry for a document that is still there.
+        var repo = new MockUserRepository();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.DeleteAsync(uniqueId));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task GetByUniqueIdAsync_returns_null_for_a_blank_id(string uniqueId)
+    {
+        // No document can have a blank id. Both repositories answer null rather than throwing, so
+        // a legacy document with no UniqueId is skipped by sweeps instead of aborting them -
+        // CosmosUserRepository guards this explicitly because ReadItemAsync would throw
+        // ArgumentNullException rather than return a 404.
+        var repo = new MockUserRepository();
+
+        Assert.Null(await repo.GetByUniqueIdAsync(uniqueId));
+    }
 }

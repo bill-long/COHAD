@@ -115,14 +115,33 @@ namespace Web.Services.Repositories
                 }
 
                 var created = CosmosLegacyDocumentMapper.ToHomeDocument(home);
-                var createResponse = await _homesContainer.UpsertItemAsync(created, CosmosPartitionKey.None);
-                home.ETag = createResponse.Headers.ETag;
-                return home;
+                try
+                {
+                    // Create, not upsert, for the same reason as CosmosUserRepository: this branch
+                    // only runs when the read found nothing, so a document appearing in between is
+                    // a concurrent create that an upsert would silently overwrite.
+                    var createResponse = await _homesContainer.CreateItemAsync(created, CosmosPartitionKey.None);
+                    home.ETag = createResponse.Headers.ETag;
+                    return home;
+                }
+                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
+                {
+                    // Same as CosmosUserRepository: a lost create race is not a lost write, so
+                    // succeed idempotently against the winner rather than reporting a conflict.
+                    var winner = await GetRawHomeDocumentAsync(home.Id);
+                    if (winner == null)
+                    {
+                        throw ConcurrencyConflictException.For("Home", home.Id, ex);
+                    }
+
+                    home.ETag = winner.Value<string>("_etag");
+                    return home;
+                }
             }
 
-            // The write must land on the document that was actually read: legacy documents may use
-            // the unprefixed id shape, and MergeHomeIntoDocument normalizes doc["id"], which would
-            // aim the write at a prefixed twin instead of the stored document. Keep the stored id.
+            // The write must land on the document that was actually read: MergeHomeIntoDocument
+            // normalizes doc["id"] to the prefixed shape, so for a document still stored under the
+            // unprefixed id that would write a second document rather than update this one.
             var storedId = existing.Value<string>("id");
             CosmosLegacyDocumentMapper.MergeHomeIntoDocument(existing, home);
             existing["id"] = storedId;
@@ -145,8 +164,10 @@ namespace Web.Services.Repositories
                     home.ETag = response.Headers.ETag;
                 }
                 catch (CosmosException ex)
-                    when (ex.StatusCode == HttpStatusCode.PreconditionFailed || ex.StatusCode == HttpStatusCode.NotFound)
+                    when (ex.StatusCode == HttpStatusCode.PreconditionFailed || CosmosNotFound.IsItemNotFound(ex))
                 {
+                    // Item-not-found only (not e.g. a provisioning-level 404, which must surface
+                    // raw instead of advising a retry that can never succeed).
                     throw ConcurrencyConflictException.For("Home", home.Id, ex);
                 }
             }
@@ -164,23 +185,24 @@ namespace Web.Services.Repositories
 
         private async Task<JObject> GetRawHomeDocumentAsync(Guid id)
         {
-            var prefixedId = CosmosLegacyDocumentMapper.ToHomeDocumentId(id);
-            var candidates = new[] { prefixedId, id.ToString("D") };
-            var idLiterals = candidates.Select(x => $"\"{x}\"");
-            var query = new CosmosQueryDefinition($"SELECT * FROM c WHERE c.id IN ({string.Join(", ", idLiterals)})");
-            var iterator = _homesContainer.GetItemQueryIterator<JObject>(query);
-            var matches = new List<JObject>();
-            while (iterator.HasMoreResults)
-            {
-                var response = await iterator.ReadNextAsync();
-                matches.AddRange(response);
-            }
+            // Same shape as CosmosUserRepository.GetRawUserDocumentAsync: id lookups are point
+            // reads (the repository convention), prefixed first because that is the only shape
+            // this app writes, and the unprefixed pre-migration shape only when that misses.
+            var doc = await ReadDocumentIdAsync(CosmosLegacyDocumentMapper.ToHomeDocumentId(id));
+            return doc ?? await ReadDocumentIdAsync(id.ToString("D"));
+        }
 
-            // Twin documents (both id shapes for the same home) can exist from the era when merges
-            // were written to the normalized id while the original document remained. Prefer the
-            // prefixed shape deterministically, so the ETag a caller read and the document this
-            // class writes always refer to the same twin.
-            return matches.FirstOrDefault(d => d.Value<string>("id") == prefixedId) ?? matches.FirstOrDefault();
+        private async Task<JObject> ReadDocumentIdAsync(string id)
+        {
+            try
+            {
+                var response = await _homesContainer.ReadItemAsync<JObject>(id, CosmosPartitionKey.None);
+                return response.Resource;
+            }
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
+            {
+                return null;
+            }
         }
 
         private static void StripCosmosSystemProperties(JObject doc)

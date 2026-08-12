@@ -421,4 +421,279 @@ public sealed class MeControllerTests
 
         users.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Exactly(2));
     }
+
+    [Fact]
+    public async Task Get_persists_the_login_snapshot_even_when_the_homes_read_fails()
+    {
+        // Authentication succeeded, so a failed enrichment read (owned homes lookup) must not lose
+        // the claims sync or the LastLoggedIn stamp - the request may 500, but the background
+        // refresh still fires.
+        var uniqueId = "google.comu1";
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+                }
+            );
+
+        var upserted = new TaskCompletionSource<User>(TaskCreationOptions.RunContinuationsAsynchronously);
+        users
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .Callback<User>(u => upserted.TrySetResult(u))
+            .ReturnsAsync((User u) => u);
+        users.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<User>());
+
+        var homes = new Mock<IHomeRepository>();
+        homes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ThrowsAsync(new InvalidOperationException("homes read failed"));
+
+        var controller = CreateController(users.Object, homes.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => controller.Get());
+
+        var completed = await Task.WhenAny(upserted.Task, Task.Delay(5000));
+        Assert.Same(upserted.Task, completed);
+        Assert.Equal("test@example.com", (await upserted.Task).Emails);
+    }
+
+    /// <summary>
+    /// A user whose stored state is already normalized (roles and a home), so nothing but the
+    /// claims/stamp checks can trigger the background write.
+    /// </summary>
+    private static User SettledUser(string uniqueId, string emails = "test@example.com") =>
+        new()
+        {
+            UniqueId = uniqueId,
+            GivenName = "Test",
+            Surname = "User",
+            Emails = emails,
+            LastLoggedIn = DateTime.UtcNow,
+            Roles = new List<User.Role> { User.Role.Resident },
+            OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+        };
+
+    private static Mock<IUserRepository> SettledUserRepo(string uniqueId, string emails = "test@example.com")
+    {
+        var users = new Mock<IUserRepository>();
+        users.Setup(r => r.GetByUniqueIdAsync(uniqueId)).ReturnsAsync(SettledUser(uniqueId, emails));
+        users.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<User>());
+        return users;
+    }
+
+    private static IHomeRepository EmptyHomes()
+    {
+        var homes = new Mock<IHomeRepository>();
+        homes.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync(new List<Home>());
+        return homes.Object;
+    }
+
+    [Fact]
+    public async Task Get_does_not_write_when_the_claims_match_and_the_login_stamp_is_fresh()
+    {
+        // This endpoint runs on every page load. An unconditional write would put an ETag-guarded
+        // write of the caller's own document behind every page view, which loses races against
+        // that same user's foreground saves.
+        var uniqueId = "google.comu1";
+        var users = SettledUserRepo(uniqueId);
+
+        var controller = CreateController(users.Object, EmptyHomes());
+        await controller.Get();
+
+        await Task.Delay(100);
+        users.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Get_writes_when_a_claim_changed()
+    {
+        var uniqueId = "google.comu1";
+        var users = SettledUserRepo(uniqueId, emails: "stale@example.com");
+
+        var upserted = new TaskCompletionSource<User>(TaskCreationOptions.RunContinuationsAsynchronously);
+        users
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .Callback<User>(u => upserted.TrySetResult(u))
+            .ReturnsAsync((User u) => u);
+
+        var controller = CreateController(users.Object, EmptyHomes());
+        await controller.Get();
+
+        var completed = await Task.WhenAny(upserted.Task, Task.Delay(5000));
+        Assert.Same(upserted.Task, completed);
+        Assert.Equal("test@example.com", (await upserted.Task).Emails);
+    }
+
+    [Fact]
+    public async Task Get_writes_when_the_stored_document_is_not_normalized()
+    {
+        // Roles with no homes is a state UpsertAsync normalizes away. Reporting it without
+        // converging the document would make the response depend on whether the hourly stamp
+        // happened to be stale, so the normalization itself is a reason to write.
+        var uniqueId = "google.comu1";
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "test@example.com",
+                    LastLoggedIn = DateTime.UtcNow,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+
+        var upserted = new TaskCompletionSource<User>(TaskCreationOptions.RunContinuationsAsynchronously);
+        users
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .Callback<User>(u => upserted.TrySetResult(u))
+            .ReturnsAsync((User u) => u);
+
+        var controller = CreateController(users.Object, EmptyHomes());
+        await controller.Get();
+
+        var completed = await Task.WhenAny(upserted.Task, Task.Delay(5000));
+        Assert.Same(upserted.Task, completed);
+    }
+
+    [Fact]
+    public async Task Get_writes_when_normalization_only_starts_a_purge_clock()
+    {
+        // An Administrator with no homes keeps their single role, so a count-only comparison sees
+        // no change - but Apply starts UnassociatedSinceUtc. Without persisting that, the response
+        // reports a purge clock that was never stored and the deletion countdown never starts.
+        var uniqueId = "google.comu1";
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "test@example.com",
+                    LastLoggedIn = DateTime.UtcNow,
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                    OwnedHomeIds = new List<Guid>(),
+                    UnassociatedSinceUtc = null,
+                }
+            );
+
+        var upserted = new TaskCompletionSource<User>(TaskCreationOptions.RunContinuationsAsynchronously);
+        users
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .Callback<User>(u => upserted.TrySetResult(u))
+            .ReturnsAsync((User u) => u);
+
+        var controller = CreateController(users.Object, EmptyHomes());
+        await controller.Get();
+
+        var completed = await Task.WhenAny(upserted.Task, Task.Delay(5000));
+        Assert.Same(upserted.Task, completed);
+        Assert.NotNull((await upserted.Task).UnassociatedSinceUtc);
+    }
+
+    [Fact]
+    public async Task Get_keeps_stored_profile_values_when_a_claim_is_missing()
+    {
+        // A token without the emails claim means "no information", not "cleared" - persisting the
+        // null would wipe the account's directory address with nothing able to recover it.
+        var uniqueId = "google.comu1";
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "stored@example.com",
+                    LastLoggedIn = DateTime.UtcNow,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+                }
+            );
+        users.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<User>());
+        users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+
+        // Claims deliberately omit "emails".
+        var controller = new MeController(
+            users.Object,
+            EmptyHomes(),
+            CreateDefaultResidentMock(),
+            new NotificationService(
+                new MockNotificationRepository(),
+                new NoOpNotificationRealtimeNotifier(),
+                NullLogger<NotificationService>.Instance
+            ),
+            Mock.Of<ILogger<MeController>>()
+        )
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(
+                        new ClaimsIdentity(
+                            new[]
+                            {
+                                new Claim(ClaimTypes.NameIdentifier, "u1"),
+                                new Claim(ClaimTypes.GivenName, "Test"),
+                                new Claim(ClaimTypes.Surname, "User"),
+                                new Claim(IdentityProviderClaim, "google.com"),
+                            },
+                            "Test"
+                        )
+                    ),
+                },
+            },
+        };
+
+        var presentation = await controller.Get();
+
+        Assert.Equal("stored@example.com", presentation.Email);
+        users.Verify(r => r.UpsertAsync(It.Is<User>(u => u.Emails == null)), Times.Never);
+    }
+
+    [Fact]
+    public async Task Get_reports_the_normalized_role_set_on_every_load()
+    {
+        // UpsertAsync drops the roles of a user with no homes. The response must agree with that
+        // on every load, not only the ones that refresh - otherwise the same account's navigation
+        // appears and disappears between page loads.
+        var uniqueId = "google.comu1";
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetByUniqueIdAsync(uniqueId))
+            .ReturnsAsync(() =>
+                new User
+                {
+                    UniqueId = uniqueId,
+                    GivenName = "Test",
+                    Surname = "User",
+                    Emails = "test@example.com",
+                    // Fresh stamp: nothing but the normalization can trigger a refresh.
+                    LastLoggedIn = DateTime.UtcNow,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+        users.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+
+        var controller = CreateController(users.Object, EmptyHomes());
+
+        Assert.DoesNotContain("Resident", (await controller.Get()).Roles);
+        Assert.DoesNotContain("Resident", (await controller.Get()).Roles);
+    }
 }
