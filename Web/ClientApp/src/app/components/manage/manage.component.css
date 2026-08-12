@@ -11,7 +11,11 @@
     padding: 8px 0 24px;
     /* Faint hairline rather than a heavy panel edge — keeps the airy feel of the app. */
     border-right: 1px solid var(--border-faint);
-    background: transparent;
+    /* Opaque surface, not transparent: on handset the sidenav switches to `over`
+       mode and floats above the content pane, so a transparent drawer lets the
+       page show through. Desktop side mode sits on the same surface color, so
+       this is visually identical there. */
+    background: var(--surface);
 }
 
 .manage-nav mat-nav-list {
