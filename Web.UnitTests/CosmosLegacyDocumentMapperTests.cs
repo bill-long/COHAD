@@ -194,6 +194,31 @@ public sealed class CosmosLegacyDocumentMapperTests
     }
 
     [Fact]
+    public void User_ResidentId_round_trips_and_defaults_to_null()
+    {
+        var residentId = Guid.NewGuid();
+        var user = new User
+        {
+            UniqueId = "google.comu1",
+            NameIdentifier = "u1",
+            Roles = new List<User.Role>(),
+            OwnedHomeIds = new List<Guid>(),
+            ResidentId = residentId,
+        };
+
+        var doc = CosmosLegacyDocumentMapper.ToUserDocument(user);
+        Assert.Equal(residentId, CosmosLegacyDocumentMapper.ToUser(doc).ResidentId);
+
+        // Legacy documents without the property (and explicit nulls) read back as no link.
+        var legacyDoc = JObject.Parse(@"{ ""id"": ""User|google.comx"", ""Roles"": ""[]"", ""OwnedHomeIds"": ""[]"" }");
+        Assert.Null(CosmosLegacyDocumentMapper.ToUser(legacyDoc).ResidentId);
+
+        user.ResidentId = null;
+        CosmosLegacyDocumentMapper.MergeUserIntoDocument(doc, user);
+        Assert.Null(CosmosLegacyDocumentMapper.ToUser(doc).ResidentId);
+    }
+
+    [Fact]
     public void MergeUserIntoDocument_keeps_AuditLog_when_present()
     {
         var doc = JObject.Parse(

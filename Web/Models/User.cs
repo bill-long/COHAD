@@ -28,6 +28,15 @@ namespace Web.Models
 
         public List<Guid> OwnedHomeIds { get; set; }
 
+        /// <summary>
+        /// Optional link to the <see cref="Resident"/> this account belongs to, chosen explicitly by an
+        /// administrator (never inferred by matching). The resident must belong to one of the user's
+        /// <see cref="OwnedHomeIds"/>. This is a routing preference, not a referential invariant:
+        /// consumers must treat a dangling or out-of-home link as "no link" and fall back to the
+        /// account email, so a missed cleanup can never make anything worse than an unlinked account.
+        /// </summary>
+        public Guid? ResidentId { get; set; }
+
         public DateTime? LastLoggedIn { get; set; }
 
         /// <summary>

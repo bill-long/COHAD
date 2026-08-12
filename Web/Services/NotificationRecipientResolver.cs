@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Web.Models;
 using Web.Services.Repositories;
 
@@ -26,9 +27,9 @@ namespace Web.Services
     public sealed class NotificationRecipientResolver : INotificationRecipientResolver
     {
         private readonly IUserRepository _userRepository;
-        private readonly IHomeRepository _homeRepository;
         private readonly IResidentRepository _residentRepository;
         private readonly ICommitteeRepository _committeeRepository;
+        private readonly ILogger<NotificationRecipientResolver> _logger;
 
         // The resolver is registered scoped and the escalation sweep creates one scope per run, so a
         // single instance resolves every audience in a sweep. Cache the (expensive) full user list once
@@ -37,15 +38,15 @@ namespace Web.Services
 
         public NotificationRecipientResolver(
             IUserRepository userRepository,
-            IHomeRepository homeRepository,
             IResidentRepository residentRepository,
-            ICommitteeRepository committeeRepository
+            ICommitteeRepository committeeRepository,
+            ILogger<NotificationRecipientResolver> logger
         )
         {
             _userRepository = userRepository;
-            _homeRepository = homeRepository;
             _residentRepository = residentRepository;
             _committeeRepository = committeeRepository;
+            _logger = logger;
         }
 
         public async Task<IReadOnlyList<string>> ResolveAudienceEmailsAsync(string audienceKey, CancellationToken ct = default)
@@ -98,9 +99,13 @@ namespace Web.Services
         }
 
         /// <summary>
-        /// Maps a set of users to deliverable email addresses (distinct, case-insensitive). For each user
-        /// with an owned home, prefers the resident address matching their account (by email, then by
-        /// name); a home-less user falls back to their own account email. Shared by the Administrators and
+        /// Maps a set of users to deliverable email addresses (distinct, case-insensitive). A user with
+        /// an explicit resident link (<see cref="Models.User.ResidentId"/>) gets that resident's first
+        /// non-blank address; everyone else gets their first account email. There is deliberately no
+        /// email/name matching against resident records - inferred correlation silently dropped audience
+        /// members whose records disagreed (see issue #15); the link is set by a human or not at all.
+        /// A dangling or out-of-home link falls back to the account email, so a stale link can never
+        /// make anyone worse off than an unlinked account. Shared by the Administrators and
         /// committee-moderator resolution so both reach people the same way.
         /// </summary>
         private async Task<IReadOnlyList<string>> ResolveUserEmailsAsync(List<Models.User> users)
@@ -108,86 +113,67 @@ namespace Web.Services
             if (users.Count == 0)
                 return Array.Empty<string>();
 
-            var allHomeIds = users
-                .Where(u => u.OwnedHomeIds != null)
-                .SelectMany(u => u.OwnedHomeIds)
+            var linkedResidentIds = users
+                .Where(u => u.ResidentId != null)
+                .Select(u => u.ResidentId!.Value)
                 .Distinct()
                 .ToList();
-
-            var homes = allHomeIds.Count > 0 ? await _homeRepository.GetByIdsAsync(allHomeIds) : new List<Home>();
-            var residentHomeIds = homes.Select(h => h.Id).ToList();
-            var residents =
-                residentHomeIds.Count > 0
-                    ? await _residentRepository.GetByHomeIdsAsync(residentHomeIds)
+            var linkedResidents =
+                linkedResidentIds.Count > 0
+                    ? await _residentRepository.GetByIdsAsync(linkedResidentIds)
                     : new List<Resident>();
-            var residentsByHome = residents.GroupBy(r => r.HomeId).ToDictionary(g => g.Key, g => g.ToList());
+            var residentsById = linkedResidents.ToDictionary(r => r.Id);
 
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var result = new List<string>();
 
             foreach (var user in users)
             {
-                // Home-less users can't be matched to a resident record, so fall back to their own
-                // account email. Without this they would silently never receive escalations.
-                if (user.OwnedHomeIds == null || user.OwnedHomeIds.Count == 0)
+                var resolvedEmail = ResolveLinkedResidentEmail(user, residentsById)
+                    ?? UserEmailHelpers.SplitEmails(user.Emails).FirstOrDefault();
+
+                if (string.IsNullOrWhiteSpace(resolvedEmail))
                 {
-                    var accountEmail = UserEmailHelpers.SplitEmails(user.Emails).FirstOrDefault();
-                    if (!string.IsNullOrWhiteSpace(accountEmail) && seen.Add(accountEmail))
-                        result.Add(accountEmail);
+                    // One member silently falling out of an audience is exactly the failure mode that
+                    // made issue #15 undiagnosable from telemetry; Warning is the app's capture level.
+                    // Opaque id only - logs flow to Application Insights, whose stance is no PII.
+                    _logger.LogWarning(
+                        "Audience member {UserId} resolved to no email address and will not receive escalation digests.",
+                        user.UniqueId
+                    );
                     continue;
                 }
 
-                var userGivenName = user.GivenName?.Trim();
-                var userSurname = user.Surname?.Trim();
-
-                foreach (var homeId in user.OwnedHomeIds)
-                {
-                    if (!residentsByHome.TryGetValue(homeId, out var homeResidents))
-                        continue;
-
-                    // Try matching by email first — if a resident email matches one of the user's
-                    // addresses, use that single matched address. user.Emails may hold several
-                    // comma/semicolon-separated addresses, so match each individually (matching the
-                    // whole blob as one string would never match and would yield an invalid recipient).
-                    string? resolvedEmail = null;
-                    foreach (var userAddress in UserEmailHelpers.SplitEmails(user.Emails))
-                    {
-                        var emailMatch = homeResidents.FirstOrDefault(r =>
-                            r.EmailAddresses != null
-                            && r.EmailAddresses.Any(e =>
-                                string.Equals(e.Address?.Trim(), userAddress, StringComparison.OrdinalIgnoreCase)
-                            )
-                        );
-                        if (emailMatch != null)
-                        {
-                            resolvedEmail = userAddress;
-                            break;
-                        }
-                    }
-
-                    // Fall back to name matching — use the resident's first non-empty email.
-                    if (resolvedEmail == null)
-                    {
-                        var nameMatch = homeResidents.FirstOrDefault(r =>
-                            string.Equals(r.GivenName?.Trim(), userGivenName, StringComparison.OrdinalIgnoreCase)
-                            && string.Equals(r.Surname?.Trim(), userSurname, StringComparison.OrdinalIgnoreCase)
-                        );
-                        resolvedEmail = nameMatch
-                            ?.EmailAddresses?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Address))
-                            ?.Address?.Trim();
-                    }
-
-                    if (string.IsNullOrWhiteSpace(resolvedEmail))
-                        continue;
-
-                    if (seen.Add(resolvedEmail))
-                        result.Add(resolvedEmail);
-
-                    break; // Found a match for this user, no need to check other homes.
-                }
+                if (seen.Add(resolvedEmail))
+                    result.Add(resolvedEmail);
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// The linked resident's delivery address, or null when the user has no usable link
+        /// (<see cref="ResidentLinkRules.IsUsable"/> fails, or the resident lists no addresses) -
+        /// callers fall back to the account email. Among the resident's addresses, one that is also
+        /// an account address of the user wins, else the first non-blank: a resident record often
+        /// lists a whole household's addresses, and when the account holder's own mailbox is among
+        /// them it is the right destination, not whichever address happens to be listed first.
+        /// </summary>
+        private static string? ResolveLinkedResidentEmail(Models.User user, Dictionary<Guid, Resident> residentsById)
+        {
+            if (user.ResidentId == null || !residentsById.TryGetValue(user.ResidentId.Value, out var resident))
+                return null;
+
+            if (!ResidentLinkRules.IsUsable(resident, user.OwnedHomeIds))
+                return null;
+
+            var addresses = (resident.EmailAddresses ?? new List<EmailAddress>())
+                .Select(e => e.Address?.Trim())
+                .Where(a => !string.IsNullOrWhiteSpace(a))
+                .ToList();
+
+            var accountEmails = new HashSet<string>(UserEmailHelpers.SplitEmails(user.Emails), StringComparer.OrdinalIgnoreCase);
+            return addresses.FirstOrDefault(a => accountEmails.Contains(a!)) ?? addresses.FirstOrDefault();
         }
     }
 }

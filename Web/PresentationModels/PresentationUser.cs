@@ -19,6 +19,7 @@ namespace Web.PresentationModels
         public DateTime? NoRolesSinceUtc { get; private set; }
         public List<string> Roles { get; private set; }
         public List<Home> OwnedHomes { get; private set; }
+        public Guid? ResidentId { get; private set; }
 
         public static PresentationUser FromStorageModel(Models.User user, List<Models.Home> ownedHomes)
         {
@@ -35,6 +36,7 @@ namespace Web.PresentationModels
                 NoRolesSinceUtc = user.NoRolesSinceUtc,
                 Roles = user.Roles?.Select(r => r.ToString()).ToList() ?? new List<string>(),
                 OwnedHomes = ownedHomes,
+                ResidentId = user.ResidentId,
             };
         }
     }

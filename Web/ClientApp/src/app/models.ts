@@ -15,6 +15,7 @@ export interface ApiUser {
   noRolesSinceUtc?: string | null;
   roles: string[];
   ownedHomes: Home[];
+  residentId?: string | null;
 }
 
 export interface IdentityClaims {

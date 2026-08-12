@@ -137,6 +137,7 @@ namespace Web.MockData
                 Roles = u.Roles?.ToList() ?? new List<User.Role>(),
                 UniqueId = u.UniqueId,
                 OwnedHomeIds = u.OwnedHomeIds?.ToList() ?? new List<Guid>(),
+                ResidentId = u.ResidentId,
                 LastLoggedIn = u.LastLoggedIn,
                 UnassociatedSinceUtc = u.UnassociatedSinceUtc,
                 NoRolesSinceUtc = u.NoRolesSinceUtc,

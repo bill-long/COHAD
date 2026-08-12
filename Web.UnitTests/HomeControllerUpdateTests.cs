@@ -43,6 +43,8 @@ public sealed class HomeControllerUpdateTests
                     )
                 ),
                 Mock.Of<IDocumentFileStore>(),
+                users,
+                Mock.Of<IAuditLogRepository>(),
                 Mock.Of<ILogger<ResidentCleanupService>>()
             ),
             Mock.Of<ILogger<HomeController>>()
