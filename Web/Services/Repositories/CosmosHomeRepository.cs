@@ -99,35 +99,85 @@ namespace Web.Services.Repositories
         public async Task<Home> UpsertAsync(Home home)
         {
             var existing = await GetRawHomeDocumentAsync(home.Id);
-            JObject doc;
-            if (existing != null)
+            if (existing == null)
             {
-                CosmosLegacyDocumentMapper.MergeHomeIntoDocument(existing, home);
-                StripCosmosSystemProperties(existing);
-                doc = existing;
+                // A caller-supplied ETag asserts "this write continues from a document I read"; if
+                // that document is gone, conflict rather than silently recreate it (UpsertItemAsync
+                // ignores IfMatchEtag when the write materializes as a Create). Same shape as
+                // CosmosUserRepository.UpsertAsync, and matches MockHomeRepository's version map.
+                if (!string.IsNullOrEmpty(home.ETag))
+                {
+                    throw ConcurrencyConflictException.For(
+                        "Home",
+                        home.Id,
+                        new InvalidOperationException("The document no longer exists.")
+                    );
+                }
+
+                var created = CosmosLegacyDocumentMapper.ToHomeDocument(home);
+                try
+                {
+                    // Create, not upsert, for the same reason as CosmosUserRepository: this branch
+                    // only runs when the read found nothing, so a document appearing in between is
+                    // a concurrent create that an upsert would silently overwrite.
+                    var createResponse = await _homesContainer.CreateItemAsync(created, CosmosPartitionKey.None);
+                    home.ETag = createResponse.Headers.ETag;
+                    return home;
+                }
+                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
+                {
+                    // Same as CosmosUserRepository: a lost create race is not a lost write, so
+                    // succeed idempotently against the winner rather than reporting a conflict.
+                    var winner = await GetRawHomeDocumentAsync(home.Id);
+                    if (winner == null)
+                    {
+                        throw ConcurrencyConflictException.For("Home", home.Id, ex);
+                    }
+
+                    home.ETag = winner.Value<string>("_etag");
+                    return home;
+                }
+            }
+
+            // The write must land on the document that was actually read: MergeHomeIntoDocument
+            // normalizes doc["id"] to the prefixed shape, so for a document still stored under the
+            // unprefixed id that would write a second document rather than update this one.
+            var storedId = existing.Value<string>("id");
+            CosmosLegacyDocumentMapper.MergeHomeIntoDocument(existing, home);
+            existing["id"] = storedId;
+            StripCosmosSystemProperties(existing);
+
+            if (!string.IsNullOrEmpty(home.ETag))
+            {
+                try
+                {
+                    // Replace rather than upsert: replace honors IfMatchEtag unconditionally, and a
+                    // document deleted between the read above and this write fails with NotFound
+                    // instead of being recreated. Both surface as the retryable conflict.
+                    var requestOptions = new ItemRequestOptions { IfMatchEtag = home.ETag };
+                    var response = await _homesContainer.ReplaceItemAsync(
+                        existing,
+                        storedId,
+                        CosmosPartitionKey.None,
+                        requestOptions
+                    );
+                    home.ETag = response.Headers.ETag;
+                }
+                catch (CosmosException ex)
+                    when (ex.StatusCode == HttpStatusCode.PreconditionFailed || CosmosNotFound.IsItemNotFound(ex))
+                {
+                    // Item-not-found only (not e.g. a provisioning-level 404, which must surface
+                    // raw instead of advising a retry that can never succeed).
+                    throw ConcurrencyConflictException.For("Home", home.Id, ex);
+                }
             }
             else
             {
-                doc = CosmosLegacyDocumentMapper.ToHomeDocument(home);
-            }
-
-            var requestOptions = new ItemRequestOptions();
-            if (!string.IsNullOrEmpty(home.ETag))
-            {
-                requestOptions.IfMatchEtag = home.ETag;
-            }
-
-            try
-            {
-                var response = await _homesContainer.UpsertItemAsync(doc, CosmosPartitionKey.None, requestOptions);
+                // Blind write: there is no precondition to lose, so a CosmosException here can only
+                // be infrastructure failure and must surface raw rather than masquerade as a
+                // retryable conflict.
+                var response = await _homesContainer.UpsertItemAsync(existing, CosmosPartitionKey.None);
                 home.ETag = response.Headers.ETag;
-            }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
-            {
-                throw new ConcurrencyConflictException(
-                    $"Home {home.Id} was modified by another request. Retry the operation.",
-                    ex
-                );
             }
 
             return home;
@@ -135,21 +185,24 @@ namespace Web.Services.Repositories
 
         private async Task<JObject> GetRawHomeDocumentAsync(Guid id)
         {
-            var candidates = new[] { CosmosLegacyDocumentMapper.ToHomeDocumentId(id), id.ToString("D") };
-            var idLiterals = candidates.Select(x => $"\"{x}\"");
-            var query = new CosmosQueryDefinition($"SELECT * FROM c WHERE c.id IN ({string.Join(", ", idLiterals)})");
-            var iterator = _homesContainer.GetItemQueryIterator<JObject>(query);
-            while (iterator.HasMoreResults)
-            {
-                var response = await iterator.ReadNextAsync();
-                var doc = response.FirstOrDefault();
-                if (doc != null)
-                {
-                    return doc;
-                }
-            }
+            // Same shape as CosmosUserRepository.GetRawUserDocumentAsync: id lookups are point
+            // reads (the repository convention), prefixed first because that is the only shape
+            // this app writes, and the unprefixed pre-migration shape only when that misses.
+            var doc = await ReadDocumentIdAsync(CosmosLegacyDocumentMapper.ToHomeDocumentId(id));
+            return doc ?? await ReadDocumentIdAsync(id.ToString("D"));
+        }
 
-            return null;
+        private async Task<JObject> ReadDocumentIdAsync(string id)
+        {
+            try
+            {
+                var response = await _homesContainer.ReadItemAsync<JObject>(id, CosmosPartitionKey.None);
+                return response.Resource;
+            }
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
+            {
+                return null;
+            }
         }
 
         private static void StripCosmosSystemProperties(JObject doc)

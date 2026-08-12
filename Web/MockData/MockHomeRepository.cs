@@ -10,7 +10,9 @@ namespace Web.MockData
     public sealed class MockHomeRepository : IHomeRepository
     {
         private readonly Dictionary<Guid, Home> _homes = new();
-        private readonly Dictionary<Guid, int> _versions = new();
+
+        // Simulated document versions backing ETag checks; guarded by the _homes lock.
+        private readonly MockVersionMap<Guid> _versions = new();
 
         public MockHomeRepository()
         {
@@ -41,7 +43,7 @@ namespace Web.MockData
                 AssociatedUsers = new List<HomeAssociatedUser>(),
             };
             _homes[primaryHome.Id] = CloneHome(primaryHome);
-            _versions[primaryHome.Id] = 1;
+            _versions.Advance(primaryHome.Id);
 
             var secondaryHome = new Home
             {
@@ -70,7 +72,7 @@ namespace Web.MockData
                 AssociatedUsers = new List<HomeAssociatedUser>(),
             };
             _homes[secondaryHome.Id] = CloneHome(secondaryHome);
-            _versions[secondaryHome.Id] = 1;
+            _versions.Advance(secondaryHome.Id);
         }
 
         public Task<List<Home>> GetAllAsync()
@@ -128,37 +130,25 @@ namespace Web.MockData
         {
             lock (_homes)
             {
-                // Optimistic concurrency: if ETag is provided, check it matches current version
-                if (!string.IsNullOrEmpty(home.ETag) && _versions.TryGetValue(home.Id, out var currentVersion))
-                {
-                    if (home.ETag != currentVersion.ToString())
-                    {
-                        throw new ConcurrencyConflictException(
-                            $"Home {home.Id} was modified by another request. Retry the operation.",
-                            new InvalidOperationException("ETag mismatch")
-                        );
-                    }
-                }
+                _versions.ThrowIfStale(home.Id, home.ETag, "Home");
 
                 _homes[home.Id] = CloneHome(home);
-                _versions[home.Id] = (_versions.TryGetValue(home.Id, out var v) ? v : 0) + 1;
 
                 // Match CosmosHomeRepository.UpsertAsync: mutate the caller's instance ETag in place and
                 // return that same instance, so a caller reusing a Home across sequential upserts sees the
                 // fresh ETag without recapturing the return value (the stored copy above is a defensive clone).
-                home.ETag = _versions[home.Id].ToString();
+                home.ETag = _versions.Advance(home.Id);
                 return Task.FromResult(home);
             }
         }
 
         // Clone a stored home and stamp its ETag from the version map, so every read path carries
-        // ETag - matching CosmosHomeRepository/ToHome and keeping optimistic-concurrency behavior
-        // identical between Mock and Cosmos. Callers must hold the _homes lock (which also guards
-        // _versions).
+        // ETag - matching CosmosHomeRepository/ToHome. Callers must hold the _homes lock (which
+        // also guards _versions).
         private Home CloneWithETag(Home h)
         {
             var clone = CloneHome(h);
-            clone.ETag = _versions.TryGetValue(h.Id, out var v) ? v.ToString() : null;
+            clone.ETag = _versions.GetETag(h.Id);
             return clone;
         }
 

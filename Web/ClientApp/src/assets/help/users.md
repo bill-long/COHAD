@@ -39,4 +39,6 @@ An account missing a home, or missing roles, is deleted automatically 30 days af
 
 - Editing happens inline - the table returns when you save or cancel.
 - Column widths can be dragged and are remembered on this browser.
+- **Last logged in** is approximate - treat it as "active around then", not an exact time.
 - Removing someone's home or roles restricts their access right away and may start their purge clock, so double-check before saving.
+- If a save fails with "User was modified by another request", refresh and make the change again. Part of the edit may already have been applied, so check what took effect before reapplying it.

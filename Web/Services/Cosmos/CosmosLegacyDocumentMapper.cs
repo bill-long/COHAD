@@ -85,6 +85,9 @@ namespace Web.Services.Cosmos
                 Roles = DeserializeFlexible<List<User.Role>>(doc["Roles"]) ?? new List<User.Role>(),
                 OwnedHomeIds = DeserializeFlexible<List<Guid>>(doc["OwnedHomeIds"]) ?? new List<Guid>(),
                 ResidentId = ParseNullableGuid(doc["ResidentId"]),
+                // Populate ETag on every read path (per the repository convention) so query results can
+                // be written back under optimistic concurrency.
+                ETag = doc.Value<string>("_etag"),
             };
         }
 

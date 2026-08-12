@@ -252,6 +252,33 @@ public class ResidentCleanupServiceTests
     }
 
     [Fact]
+    public async Task ConcurrencyConflictOnClearSkipsUserWithoutAuditAndContinues()
+    {
+        // Losing the race between the fresh re-read and the write is per-record best-effort like any
+        // other failure here: the sweep continues, and no audit entry may describe a clear that was
+        // never applied.
+        var conflicted = new User { UniqueId = "u1", ResidentId = ResidentA };
+        var succeeding = new User { UniqueId = "u2", ResidentId = ResidentA };
+        _userRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<User> { conflicted, succeeding });
+        _userRepo.Setup(r => r.GetByUniqueIdAsync("u1")).ReturnsAsync(conflicted);
+        _userRepo.Setup(r => r.GetByUniqueIdAsync("u2")).ReturnsAsync(succeeding);
+        _userRepo
+            .Setup(r => r.UpsertAsync(conflicted))
+            .ThrowsAsync(
+                ConcurrencyConflictException.For("User", "u1", new InvalidOperationException("ETag mismatch"))
+            );
+        _userRepo.Setup(r => r.UpsertAsync(succeeding)).ReturnsAsync((User u) => u);
+        _committeeRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Committee>());
+
+        await _service.HandleDeletedResidentsAsync(new[] { ResidentA });
+
+        Assert.Null(succeeding.ResidentId);
+        _userRepo.Verify(r => r.UpsertAsync(succeeding), Times.Once);
+        _auditRepo.Verify(a => a.AddAsync(It.Is<NewAuditLogEntry>(e => e.SubjectId == "u1")), Times.Never);
+        _auditRepo.Verify(a => a.AddAsync(It.Is<NewAuditLogEntry>(e => e.SubjectId == "u2")), Times.Once);
+    }
+
+    [Fact]
     public async Task UserListReadFailureStillCompletesCommitteeCleanup()
     {
         var committee = MakeCommittee("board", (ResidentA, null));
