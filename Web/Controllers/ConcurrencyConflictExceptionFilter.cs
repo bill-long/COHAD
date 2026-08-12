@@ -36,11 +36,11 @@ namespace Web.Controllers
             _logger.LogWarning(
                 ex,
                 "Concurrency conflict on {Subject} for {Path}; returning 409.",
-                ex.Subject ?? "record",
+                ex.Subject,
                 context.HttpContext?.Request?.Path.ToString()
             );
 
-            context.Result = new ConflictObjectResult(ConcurrencyConflictResponse.Body(ex.Subject ?? "The record"));
+            context.Result = new ConflictObjectResult(ConcurrencyConflictResponse.Body(ex.Subject));
             context.ExceptionHandled = true;
         }
     }

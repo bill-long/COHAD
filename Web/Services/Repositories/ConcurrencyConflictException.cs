@@ -11,14 +11,22 @@ namespace Web.Services.Repositories
     public class ConcurrencyConflictException : Exception
     {
         /// <summary>
+        /// Generic noun for throw sites that do not name a record type, so <see cref="Subject"/>
+        /// is never null and consumers never have to supply their own fallback wording.
+        /// </summary>
+        internal const string GenericSubject = "The record";
+
+        /// <summary>
         /// Short noun for the conflicted record ("User", "Home"), used to build the client-facing
-        /// 409 body. Null when the throw site predates the factory; consumers fall back to a
-        /// generic subject.
+        /// 409 body. Throw sites that predate the factory report <see cref="GenericSubject"/>.
         /// </summary>
         public string Subject { get; }
 
         public ConcurrencyConflictException(string message, Exception innerException)
-            : base(message, innerException) { }
+            : base(message, innerException)
+        {
+            Subject = GenericSubject;
+        }
 
         private ConcurrencyConflictException(string subject, string message, Exception innerException)
             : base(message, innerException)

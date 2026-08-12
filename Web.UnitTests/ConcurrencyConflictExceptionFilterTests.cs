@@ -37,10 +37,10 @@ public sealed class ConcurrencyConflictExceptionFilterTests
     }
 
     [Fact]
-    public void Falls_back_to_a_generic_subject_when_the_exception_carries_none()
+    public void Uses_the_generic_subject_for_throw_sites_that_do_not_name_a_record()
     {
-        // Older throw sites use the plain constructor and have no Subject; the 409 must still be
-        // truthful rather than becoming a 500.
+        // Older throw sites use the plain constructor, which reports the generic noun rather than
+        // null; the 409 must still read truthfully rather than becoming a 500.
         var filter = new ConcurrencyConflictExceptionFilter(NullLogger<ConcurrencyConflictExceptionFilter>.Instance);
         var context = MakeContext(
             new ConcurrencyConflictException("legacy message", new InvalidOperationException("ETag mismatch"))
