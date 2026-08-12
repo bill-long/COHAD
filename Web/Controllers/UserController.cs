@@ -164,14 +164,17 @@ namespace Web.Controllers
                     : Task.FromResult<Resident>(null);
 
             // Complete both lookups before acting on either, so an early return (bad home id) or a
-            // fault in one can never leave the other faulted and unobserved. The individual awaits
-            // below rethrow with their own handling; this only joins the tasks.
+            // fault in one can never leave the other faulted and unobserved.
             try
             {
                 await Task.WhenAll(homesTask, residentTask);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // Deliberately empty: the individual awaits below rethrow with their own handling -
+                // this join only guarantees both tasks are complete and observed before any early
+                // return. Cancellation is excluded by the filter (which is what uses ex) so it
+                // propagates immediately instead of reaching the per-task handling.
             }
 
             var existingHomes = await homesTask;

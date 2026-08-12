@@ -37,5 +37,10 @@ public sealed class ResidentLinkRulesTests
         var child = Adult(HomeId);
         child.ResidentType = Resident.Type.Child;
         Assert.False(ResidentLinkRules.IsUsable(child, ownedHomes));
+
+        // A legacy zero-id record can never be a link target: Guid.Empty is the clear sentinel.
+        var zeroId = Adult(HomeId);
+        zeroId.Id = Guid.Empty;
+        Assert.False(ResidentLinkRules.IsUsable(zeroId, ownedHomes));
     }
 }
