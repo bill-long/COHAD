@@ -59,7 +59,9 @@
 </div>
 
 <div class="wide-input" *ngIf="linkableResidents.length > 0">
-    <mat-form-field appearance="fill">
+    <!-- subscriptSizing="dynamic" lets the subscript area grow: the default reserves a single
+         line, which clipped this two-line hint behind the action bar. -->
+    <mat-form-field appearance="fill" subscriptSizing="dynamic">
         <mat-label>Linked resident</mat-label>
         <mat-select [(ngModel)]="apiUserCopy.residentId">
             <mat-option [value]="null">None</mat-option>
@@ -67,7 +69,7 @@
                 {{option.resident.givenName}} {{option.resident.surname}} ({{option.homeLabel}})
             </mat-option>
         </mat-select>
-        <mat-hint>Which resident this account is. Notification emails go to the linked resident's address instead of the account's sign-in address.</mat-hint>
+        <mat-hint class="normalization-hint">Which resident this account is. Notification emails go to the linked resident's address instead of the account's sign-in address.</mat-hint>
     </mat-form-field>
 </div>
 

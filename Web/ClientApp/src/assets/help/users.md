@@ -23,8 +23,6 @@ The link controls where system notification emails (for example escalation diges
 
 Link an account whenever the person reads mail at their directory address rather than their sign-in address. If the linked resident is later deleted from the home, or the home is removed from the account, the link is cleared automatically and mail falls back to the sign-in address.
 
-One-time setup after this feature first rolls out: an administrator can seed links for all existing accounts at once by calling `POST api/user/admin/backfill-resident-links` (signed in as an administrator). It applies the retired automatic matching once - email match first, then exact name - and every link it creates is visible and correctable on this screen. Until it runs, existing accounts are unlinked and notification mail goes to sign-in addresses.
-
 ## Days Until Purge
 
 An account missing a home, or missing roles, is deleted automatically 30 days after it lost (or never had) that attribute - this keeps abandoned sign-ups from accumulating. Each missing attribute runs its own clock, so an account is only safe once it has **both** a home and at least one role. The column shows the soonest deletion; a dash means no clock is running.
