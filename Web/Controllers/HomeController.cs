@@ -130,21 +130,14 @@ namespace Web.Controllers
                     return BadRequest("Resident IDs must already belong to the home being updated.");
                 }
 
-                // Upsert home first — this is the concurrency-checked operation (ETag).
-                // If it fails, no resident or committee mutations have been applied yet.
+                // Upsert home first - this is the concurrency-checked operation (ETag). If it
+                // loses the race, ConcurrencyConflictException propagates to the global
+                // ConcurrencyConflictExceptionFilter's 409 and no resident or committee mutations
+                // have been applied yet.
                 storedHome.EmailAddress = updatedHome.EmailAddress;
                 storedHome.PhoneNumber = updatedHome.PhoneNumber;
 
-                try
-                {
-                    await _homeRepository.UpsertAsync(storedHome);
-                }
-                catch (ConcurrencyConflictException)
-                {
-                    return Conflict(
-                        new { error = "Home was modified by another request. Please refresh and try again." }
-                    );
-                }
+                await _homeRepository.UpsertAsync(storedHome);
 
                 // Home saved — now apply resident creates/updates/deletes.
                 //
@@ -231,20 +224,12 @@ namespace Web.Controllers
             }
             else
             {
-                // No resident changes — just update home fields.
+                // No resident changes - just update home fields. A lost write race propagates to
+                // the global ConcurrencyConflictExceptionFilter's 409.
                 storedHome.EmailAddress = updatedHome.EmailAddress;
                 storedHome.PhoneNumber = updatedHome.PhoneNumber;
 
-                try
-                {
-                    await _homeRepository.UpsertAsync(storedHome);
-                }
-                catch (ConcurrencyConflictException)
-                {
-                    return Conflict(
-                        new { error = "Home was modified by another request. Please refresh and try again." }
-                    );
-                }
+                await _homeRepository.UpsertAsync(storedHome);
             }
 
             await WriteAuditAsync(storedHome, apiUser, "Updated home information.");
@@ -332,6 +317,8 @@ namespace Web.Controllers
             // Write then audit, so the audit log only ever describes changes that really happened.
             // The audit write is best-effort: the removal has been applied, so failing the request
             // now would misreport a success; the gap is logged and names the user.
+            // A lost write race surfaces as ConcurrencyConflictException, which the global
+            // ConcurrencyConflictExceptionFilter maps to the 409 refresh guidance.
             await _userRepository.UpsertAsync(userToUpdate);
 
             try

@@ -336,4 +336,89 @@ public sealed class MeControllerTests
         homes.Verify(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()), Times.Once);
         users.Verify(r => r.GetAllAsync(), Times.Once);
     }
+
+    // ── Login-time refresh (RefreshLoginSnapshotAsync) ──────────────────
+
+    private static User LoginSnapshot() =>
+        new()
+        {
+            UniqueId = "google.comu1",
+            GivenName = "New",
+            Surname = "Name",
+            Emails = "new@example.com",
+            LastLoggedIn = new DateTime(2026, 8, 12, 0, 0, 0, DateTimeKind.Utc),
+            Roles = new List<User.Role> { User.Role.Resident },
+            OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+        };
+
+    [Fact]
+    public async Task RefreshLoginSnapshot_retries_once_against_the_fresh_document_on_conflict()
+    {
+        // Losing the race must not lose the claims sync: a changed sign-in email would otherwise
+        // stay stale in the directory until the next login. The retry must re-apply the snapshot to
+        // the FRESH document, so the concurrent change (here, a role edit) is not reverted.
+        var snapshot = LoginSnapshot();
+        var fresh = new User
+        {
+            UniqueId = snapshot.UniqueId,
+            GivenName = "Old",
+            Surname = "Name",
+            Emails = "old@example.com",
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Board },
+            OwnedHomeIds = new List<Guid>(snapshot.OwnedHomeIds),
+        };
+
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.UpsertAsync(snapshot))
+            .ThrowsAsync(ConcurrencyConflictException.For("User", snapshot.UniqueId, new InvalidOperationException()));
+        users.Setup(r => r.GetByUniqueIdAsync(snapshot.UniqueId)).ReturnsAsync(fresh);
+        users.Setup(r => r.UpsertAsync(fresh)).ReturnsAsync(fresh);
+
+        var controller = CreateController(users.Object, Mock.Of<IHomeRepository>());
+        await controller.RefreshLoginSnapshotAsync(snapshot);
+
+        users.Verify(r => r.UpsertAsync(fresh), Times.Once);
+        Assert.Equal("New", fresh.GivenName);
+        Assert.Equal("new@example.com", fresh.Emails);
+        Assert.Equal(snapshot.LastLoggedIn, fresh.LastLoggedIn);
+        Assert.Contains(User.Role.Board, fresh.Roles);
+    }
+
+    [Fact]
+    public async Task RefreshLoginSnapshot_does_not_resurrect_a_concurrently_deleted_account()
+    {
+        var snapshot = LoginSnapshot();
+
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .ThrowsAsync(ConcurrencyConflictException.For("User", snapshot.UniqueId, new InvalidOperationException()));
+        users.Setup(r => r.GetByUniqueIdAsync(snapshot.UniqueId)).ReturnsAsync((User?)null);
+
+        var controller = CreateController(users.Object, Mock.Of<IHomeRepository>());
+        await controller.RefreshLoginSnapshotAsync(snapshot);
+
+        // Only the initial attempt: a deleted account must not be written back by a login stamp.
+        users.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefreshLoginSnapshot_gives_up_quietly_after_losing_twice()
+    {
+        // Two lost races in one refresh means heavy contention on the record; the next login
+        // re-syncs, so the second conflict must not escape into FireAndForget's generic error.
+        var snapshot = LoginSnapshot();
+
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .ThrowsAsync(ConcurrencyConflictException.For("User", snapshot.UniqueId, new InvalidOperationException()));
+        users.Setup(r => r.GetByUniqueIdAsync(snapshot.UniqueId)).ReturnsAsync(LoginSnapshot());
+
+        var controller = CreateController(users.Object, Mock.Of<IHomeRepository>());
+        await controller.RefreshLoginSnapshotAsync(snapshot);
+
+        users.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Exactly(2));
+    }
 }

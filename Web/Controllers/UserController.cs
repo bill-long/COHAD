@@ -85,6 +85,8 @@ namespace Web.Controllers
             // Write then audit, best-effort, like the sibling association endpoints: the audit log
             // only ever describes changes that really happened, and a failed audit after an applied
             // write is logged rather than misreported as a failed save.
+            // A lost write race surfaces as ConcurrencyConflictException, which the global
+            // ConcurrencyConflictExceptionFilter maps to the 409 refresh guidance.
             await _userRepository.UpsertAsync(storedUser);
 
             try
@@ -242,6 +244,8 @@ namespace Web.Controllers
             // best-effort for the same reason the purge's is: the change has already been applied,
             // so failing the request now would misreport a success and skip the signup conversion
             // below; the gap is visible in the error log and names the user.
+            // A lost write race surfaces as ConcurrencyConflictException, which the global
+            // ConcurrencyConflictExceptionFilter maps to the 409 refresh guidance.
             await _userRepository.UpsertAsync(userToModify);
 
             // Explicit link changes are called out so the audit log can answer "who redirected this
@@ -396,9 +400,10 @@ namespace Web.Controllers
                     continue;
                 }
 
-                // Re-read just before writing (the user repo has no ETag support), so the backfill's
-                // snapshot cannot revert a concurrent admin edit; skip anyone whose link or homes
-                // changed since the snapshot - a rerun picks up whoever is still unlinked.
+                // Re-read just before writing, so the backfill's snapshot cannot revert a concurrent
+                // admin edit; skip anyone whose link or homes changed since the snapshot - a rerun
+                // picks up whoever is still unlinked. The fresh read also carries the ETag that
+                // protects the write below.
                 var fresh = await _userRepository.GetByUniqueIdAsync(user.UniqueId);
                 if (
                     fresh == null
@@ -412,7 +417,18 @@ namespace Web.Controllers
                 }
 
                 fresh.ResidentId = match.Id;
-                await _userRepository.UpsertAsync(fresh);
+                try
+                {
+                    await _userRepository.UpsertAsync(fresh);
+                }
+                catch (ConcurrencyConflictException)
+                {
+                    // Lost the race between the fresh read and the write: same outcome as the
+                    // snapshot check above - a rerun picks the user up if they are still unlinked.
+                    result.SkippedChangedDuringRun++;
+                    continue;
+                }
+
                 result.Linked++;
             }
 

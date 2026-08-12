@@ -33,8 +33,9 @@ namespace Web.Models
         public List<HomeAssociatedUser> AssociatedUsers { get; set; }
 
         /// <summary>
-        /// Cosmos DB ETag for optimistic concurrency. Populated on read, checked on write.
-        /// Null when not loaded from Cosmos (new documents or mock data without versioning).
+        /// ETag for optimistic concurrency, populated on every repository read (Cosmos and Mock
+        /// alike) and checked on write. Null only on instances that did not come from a repository
+        /// read (request payloads, newly constructed homes), whose writes are blind.
         /// </summary>
         public string ETag { get; set; }
     }

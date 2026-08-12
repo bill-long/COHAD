@@ -139,6 +139,96 @@ public sealed class UserControllerTests
     }
 
     [Fact]
+    public async Task UpdateUserProperties_propagates_conflict_for_the_409_filter_without_auditing()
+    {
+        var apiUniqueId = UniqueId("admin");
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(apiUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = apiUniqueId,
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync("target-user"))
+            .ReturnsAsync(new User { UniqueId = "target-user", Emails = "target@example.com" });
+        mockUsers
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .ThrowsAsync(
+                ConcurrencyConflictException.For("User", "target-user", new InvalidOperationException("ETag mismatch"))
+            );
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), mockAudit.Object, nameId: "admin");
+
+        // The exception must escape the action (the global ConcurrencyConflictExceptionFilter maps
+        // it to the 409 refresh guidance) - and write-then-audit means no audit entry may describe
+        // the change that never happened.
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
+            c.UpdateUserProperties(new UpdatedUser { UniqueId = "target-user", GivenName = "New", Surname = "Name" })
+        );
+        mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateUserAssociations_propagates_conflict_for_the_409_filter_without_auditing()
+    {
+        var apiUniqueId = UniqueId("admin");
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(apiUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = apiUniqueId,
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync("target-user"))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = "target-user",
+                    Emails = "target@example.com",
+                    Roles = new List<User.Role>(),
+                    OwnedHomeIds = new List<Guid>(),
+                }
+            );
+        mockUsers
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .ThrowsAsync(
+                ConcurrencyConflictException.For("User", "target-user", new InvalidOperationException("ETag mismatch"))
+            );
+
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync(new List<Home>());
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        var mockConversion = new Mock<IEventSignupConversionService>();
+
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, mockConversion.Object, nameId: "admin");
+
+        // The exception must escape the action (the global ConcurrencyConflictExceptionFilter maps
+        // it to the 409 refresh guidance). The write was not applied: no audit entry, and no signup
+        // conversion for a home assignment that never happened.
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
+            c.UpdateUserAssociations("target-user", new UpdatedUserAssociations { RoleNames = new List<string> { "Resident" } })
+        );
+        mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+        mockConversion.Verify(
+            s => s.ConvertUserSignupsToHomeAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>()),
+            Times.Never
+        );
+    }
+
+    [Fact]
     public async Task UpdateUserAssociations_returns_BadRequest_for_unknown_role()
     {
         var apiUniqueId = UniqueId("admin");
@@ -825,6 +915,80 @@ public sealed class UserControllerTests
         Assert.Equal(3, upserted.Count);
         Assert.DoesNotContain(upserted, u => u.UniqueId == "already-linked");
         mockAudit.Verify(a => a.AddAsync(It.Is<NewAuditLogEntry>(e => e.SubjectId == "backfill-resident-links")), Times.Once);
+    }
+
+    [Fact]
+    public async Task BackfillResidentLinks_counts_upsert_conflict_as_skipped_and_continues()
+    {
+        var apiUniqueId = UniqueId("admin");
+        var homeId = Guid.NewGuid();
+
+        // Two candidates with email matches; the first loses the write race, the second succeeds.
+        var conflicted = new User
+        {
+            UniqueId = "conflicted",
+            Emails = "bob@home.com",
+            OwnedHomeIds = new List<Guid> { homeId },
+        };
+        var linked = new User
+        {
+            UniqueId = "linked",
+            Emails = "karen@home.com",
+            OwnedHomeIds = new List<Guid> { homeId },
+        };
+
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(apiUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = apiUniqueId,
+                    Roles = new List<User.Role> { User.Role.Administrator },
+                }
+            );
+        mockUsers.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<User> { conflicted, linked });
+        mockUsers.Setup(r => r.GetByUniqueIdAsync("conflicted")).ReturnsAsync(conflicted);
+        mockUsers.Setup(r => r.GetByUniqueIdAsync("linked")).ReturnsAsync(linked);
+        mockUsers
+            .Setup(r => r.UpsertAsync(conflicted))
+            .ThrowsAsync(
+                ConcurrencyConflictException.For("User", "conflicted", new InvalidOperationException("ETag mismatch"))
+            );
+        mockUsers.Setup(r => r.UpsertAsync(linked)).ReturnsAsync((User u) => u);
+
+        var bobResident = new Resident
+        {
+            Id = Guid.NewGuid(),
+            HomeId = homeId,
+            EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "bob@home.com" } },
+        };
+        var karenResident = new Resident
+        {
+            Id = Guid.NewGuid(),
+            HomeId = homeId,
+            EmailAddresses = new List<EmailAddress> { new EmailAddress { Address = "karen@home.com" } },
+        };
+        var mockResidents = new Mock<IResidentRepository>();
+        mockResidents
+            .Setup(r => r.GetByHomeIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(new List<Resident> { bobResident, karenResident });
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), mockAudit.Object, nameId: "admin", residents: mockResidents.Object);
+        var result = await c.BackfillResidentLinks();
+
+        // Losing the race between the fresh read and the write is the same outcome as the snapshot
+        // check catching a change: skipped, not failed - a rerun picks the user up.
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var body = Assert.IsType<ResidentLinkBackfillResult>(ok.Value);
+        Assert.Equal(2, body.UsersConsidered);
+        Assert.Equal(1, body.Linked);
+        Assert.Equal(1, body.SkippedChangedDuringRun);
+        Assert.Equal(karenResident.Id, linked.ResidentId);
+        mockUsers.Verify(r => r.UpsertAsync(linked), Times.Once);
     }
 
     [Fact]

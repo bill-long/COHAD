@@ -54,7 +54,6 @@ namespace Web.Controllers
                 user.Surname = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Surname)?.Value;
                 user.Emails = User.Claims.FirstOrDefault(c => c.Type == "emails")?.Value;
                 user.LastLoggedIn = DateTime.UtcNow;
-                FireAndForget(() => _userRepository.UpsertAsync(user));
 
                 var ownedHomes = new List<Home>();
                 if (user.HasResidentAccess && user.OwnedHomeIds != null && user.OwnedHomeIds.Count > 0)
@@ -68,7 +67,15 @@ namespace Web.Controllers
                     PopulateAssociatedUsers(ownedHomes, allUsers);
                     PopulateResidents(ownedHomes, ownedResidents);
                 }
-                return PresentationUser.FromStorageModel(user, ownedHomes);
+
+                // Build the response model before firing the refresh: UpsertAsync mutates the
+                // instance it is handed (association-state stamps, the fresh ETag), and
+                // FromStorageModel copies everything it needs, so ordering it first keeps the
+                // background write from racing this request's serialization.
+                var presentation = PresentationUser.FromStorageModel(user, ownedHomes);
+                FireAndForget(() => RefreshLoginSnapshotAsync(user));
+
+                return presentation;
             }
 
             var newUser = new User
@@ -98,6 +105,54 @@ namespace Web.Controllers
             FireAndForget(() => RaiseNewUserNotification(newUser));
 
             return PresentationUser.FromStorageModel(newUser, new List<Home>());
+        }
+
+        /// <summary>
+        /// Persists the login-time snapshot (B2C claims sync + LastLoggedIn) taken by
+        /// <see cref="Get"/>. Losing a write race must not lose the claims sync - a changed sign-in
+        /// email would otherwise stay stale in the directory until the next login - so a conflict
+        /// is retried once against the fresh document. A missing document means the account was
+        /// deleted concurrently (e.g. by the purge) and must not be resurrected by a login stamp.
+        /// Failures log at Warning so a systematically losing refresh stays visible in production
+        /// logs, which capture Warning and above.
+        /// </summary>
+        internal async Task RefreshLoginSnapshotAsync(User user)
+        {
+            try
+            {
+                await _userRepository.UpsertAsync(user);
+                return;
+            }
+            catch (ConcurrencyConflictException)
+            {
+                // Fall through to the single fresh-read retry below.
+            }
+
+            var fresh = await _userRepository.GetByUniqueIdAsync(user.UniqueId);
+            if (fresh == null)
+            {
+                _logger.LogWarning(
+                    "Skipped the login-time refresh for user {UserId}: the account was deleted concurrently.",
+                    user.UniqueId
+                );
+                return;
+            }
+
+            fresh.GivenName = user.GivenName;
+            fresh.Surname = user.Surname;
+            fresh.Emails = user.Emails;
+            fresh.LastLoggedIn = user.LastLoggedIn;
+            try
+            {
+                await _userRepository.UpsertAsync(fresh);
+            }
+            catch (ConcurrencyConflictException)
+            {
+                _logger.LogWarning(
+                    "Login-time refresh for user {UserId} lost two concurrent-write races; the claims re-sync on the next login.",
+                    user.UniqueId
+                );
+            }
         }
 
         private void FireAndForget(Func<Task> taskFactory)

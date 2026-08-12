@@ -219,6 +219,43 @@ public sealed class CosmosLegacyDocumentMapperTests
     }
 
     [Fact]
+    public void ToUser_populates_ETag_from_underscore_etag()
+    {
+        // Every User read path (GetAllAsync, GetByUniqueIdAsync's raw query, GetPurgeCandidatesAsync)
+        // goes through this mapper, so ETag must be set here for optimistic concurrency to survive a
+        // read-modify-write - matching ToHome/ToEmailJob and the Mock repo, which set ETag everywhere.
+        var doc = JObject.Parse(
+            @"{ ""id"": ""User|google.comu1"", ""Roles"": ""[]"", ""OwnedHomeIds"": ""[]"" }"
+        );
+        doc["_etag"] = "\"abc123\"";
+
+        var user = CosmosLegacyDocumentMapper.ToUser(doc);
+
+        Assert.Equal("\"abc123\"", user.ETag);
+    }
+
+    [Fact]
+    public void MergeUserIntoDocument_does_not_write_ETag_into_the_body()
+    {
+        // ETag rides the model for If-Match headers only; the document body must never carry it
+        // (the Cosmos system property _etag is stripped before upsert and re-issued by the service).
+        var doc = new JObject();
+        var user = new User
+        {
+            UniqueId = "google.comu1",
+            NameIdentifier = "u1",
+            Roles = new List<User.Role>(),
+            OwnedHomeIds = new List<Guid>(),
+            ETag = "\"abc123\"",
+        };
+
+        CosmosLegacyDocumentMapper.MergeUserIntoDocument(doc, user);
+
+        Assert.Null(doc.Property("ETag"));
+        Assert.Null(doc.Property("_etag"));
+    }
+
+    [Fact]
     public void MergeUserIntoDocument_keeps_AuditLog_when_present()
     {
         var doc = JObject.Parse(

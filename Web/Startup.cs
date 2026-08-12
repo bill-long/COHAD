@@ -59,7 +59,9 @@ namespace Web
                 services.AddApplicationInsightsTelemetry();
             }
 
-            services.AddControllers();
+            // The filter is the single mapping from an unhandled optimistic-concurrency conflict to
+            // a 409; without it a lost write race surfaces as a 500 with no refresh guidance.
+            services.AddControllers(options => options.Filters.Add<Controllers.ConcurrencyConflictExceptionFilter>());
             services.AddSignalR();
             services.AddMemoryCache();
             services.AddScoped<DocumentListCache>(sp => new DocumentListCache(

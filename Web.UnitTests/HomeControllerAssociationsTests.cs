@@ -212,6 +212,47 @@ public sealed class HomeControllerAssociationsTests
     }
 
     [Fact]
+    public async Task RemoveAssociatedUser_propagates_conflict_for_the_409_filter_without_auditing()
+    {
+        var homeId = Guid.NewGuid();
+        var requesterUniqueId = ExpectedUniqueId("u1", "google.com");
+        var target = new User
+        {
+            UniqueId = "target-user",
+            Emails = "target@example.com",
+            OwnedHomeIds = new List<Guid> { homeId },
+            Roles = new List<User.Role>(),
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(requesterUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = requesterUniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+        mockUsers.Setup(r => r.GetByUniqueIdAsync("target-user")).ReturnsAsync(target);
+        mockUsers
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .ThrowsAsync(
+                ConcurrencyConflictException.For("User", "target-user", new InvalidOperationException("ETag mismatch"))
+            );
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), mockAudit.Object, nameId: "u1");
+
+        // The exception must escape the action (the global ConcurrencyConflictExceptionFilter maps
+        // it to the 409 refresh guidance) - and write-then-audit means no audit entry may describe
+        // the change that never happened.
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(() => c.RemoveAssociatedUser(homeId, "target-user"));
+        mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+    }
+
+    [Fact]
     public async Task RemoveAssociatedUser_clears_resident_link_when_linked_residents_home_removed()
     {
         var homeId = Guid.NewGuid();

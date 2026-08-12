@@ -50,6 +50,13 @@ namespace Web.Models
         public DateTime? NoRolesSinceUtc { get; set; }
 
         /// <summary>
+        /// ETag for optimistic concurrency, populated on every repository read (Cosmos and Mock
+        /// alike) and checked on write. Null only on instances that did not come from a repository
+        /// read (request payloads, newly constructed users), whose writes are blind.
+        /// </summary>
+        public string ETag { get; set; }
+
+        /// <summary>
         /// Whether this user satisfies Resident-level access. True when the user has the Resident role
         /// or the Administrator role (which implies Resident access per the role hierarchy).
         /// </summary>

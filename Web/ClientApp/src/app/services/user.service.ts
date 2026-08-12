@@ -88,7 +88,24 @@ export class UserService {
   }
 
   private serverMessage(err: unknown): string | null {
-    const body = (err as HttpErrorResponse)?.error;
-    return typeof body === 'string' && body.trim().length > 0 ? body : null;
+    const response = err as HttpErrorResponse | undefined;
+    const body: unknown = response?.error;
+
+    // Bare strings are the deterministic validation 400s; surface them for any status, as before.
+    if (typeof body === 'string' && body.trim().length > 0) {
+      return body;
+    }
+
+    // The object shape `{ error: "..." }` (the shared ConcurrencyConflictResponse body) is read
+    // only for 409, matching home.service: other statuses' object bodies are deliberately generic
+    // (the global 500 handler returns "An unexpected error occurred.") and would be a downgrade on
+    // the fallback wording below. The 409's refresh guidance matters because retrying re-sends the
+    // same stale payload - the opposite of the right advice.
+    if (response?.status !== 409) {
+      return null;
+    }
+
+    const message = (body as { error?: unknown } | null)?.error;
+    return typeof message === 'string' && message.trim().length > 0 ? message : null;
   }
 }

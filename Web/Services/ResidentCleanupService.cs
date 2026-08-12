@@ -148,8 +148,8 @@ namespace Web.Services
                 try
                 {
                     // Re-read just before writing: the list snapshot above may already be stale, and
-                    // the user repository has no ETag support, so upserting the freshest document
-                    // keeps this background write from reverting a concurrent role or home change.
+                    // upserting the freshest document (with its ETag protecting the write) keeps
+                    // this background write from reverting a concurrent role or home change.
                     var fresh = await _userRepository.GetByUniqueIdAsync(candidate.UniqueId);
                     if (fresh?.ResidentId == null || !removedSet.Contains(fresh.ResidentId.Value))
                         continue;
@@ -157,6 +157,18 @@ namespace Web.Services
                     fresh.ResidentId = null;
                     await _userRepository.UpsertAsync(fresh);
                     cleared = true;
+                }
+                catch (ConcurrencyConflictException ex)
+                {
+                    // Lost the race between the fresh read and the write. Per-record best-effort,
+                    // like every failure here: the dangling link only degrades that user to the
+                    // account-email fallback, so a warning suffices - nothing needs to page.
+                    _logger.LogWarning(
+                        ex,
+                        "Skipped clearing resident link {ResidentId} from user {UserId}: the record was modified concurrently; the dangling link falls back to account email",
+                        candidate.ResidentId,
+                        candidate.UniqueId
+                    );
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {

@@ -12,6 +12,9 @@ namespace Web.MockData
     {
         private readonly Dictionary<string, User> _users = new(StringComparer.Ordinal);
 
+        // Simulated document versions backing ETag checks; guarded by the _users lock.
+        private readonly MockVersionMap<string> _versions = new(StringComparer.Ordinal);
+
         public MockUserRepository()
         {
             var adminUser = new User
@@ -29,6 +32,7 @@ namespace Web.MockData
             };
             UserAssociationState.Apply(adminUser);
             _users[adminUser.UniqueId] = adminUser;
+            _versions.Advance(adminUser.UniqueId);
 
             var secondaryUser = new User
             {
@@ -45,13 +49,14 @@ namespace Web.MockData
             };
             UserAssociationState.Apply(secondaryUser);
             _users[secondaryUser.UniqueId] = secondaryUser;
+            _versions.Advance(secondaryUser.UniqueId);
         }
 
         public Task<List<User>> GetAllAsync()
         {
             lock (_users)
             {
-                return Task.FromResult(_users.Values.Select(CloneUser).ToList());
+                return Task.FromResult(_users.Values.Select(CloneWithETag).ToList());
             }
         }
 
@@ -64,18 +69,27 @@ namespace Web.MockData
 
             lock (_users)
             {
-                return Task.FromResult(_users.TryGetValue(uniqueId, out var u) ? CloneUser(u) : null);
+                return Task.FromResult(_users.TryGetValue(uniqueId, out var u) ? CloneWithETag(u) : null);
             }
         }
 
         public Task<User> UpsertAsync(User user)
         {
-            var copy = CloneUser(user);
-            UserAssociationState.Apply(copy);
+            // Match CosmosUserRepository.UpsertAsync, which applies association state to the caller's
+            // instance before writing.
+            UserAssociationState.Apply(user);
             lock (_users)
             {
-                _users[copy.UniqueId] = copy;
-                return Task.FromResult(CloneUser(copy));
+                _versions.ThrowIfStale(user.UniqueId, user.ETag, "User");
+
+                _users[user.UniqueId] = CloneUser(user);
+
+                // Match CosmosUserRepository.UpsertAsync: mutate the caller's instance ETag in place and
+                // return that same instance, so a caller reusing a User across sequential upserts sees
+                // the fresh ETag without recapturing the return value (the stored copy above is a
+                // defensive clone).
+                user.ETag = _versions.Advance(user.UniqueId);
+                return Task.FromResult(user);
             }
         }
 
@@ -102,7 +116,7 @@ namespace Web.MockData
                             && u.NoRolesSinceUtc <= cutoffUtc;
                         return noHomesEligible || noRolesEligible;
                     })
-                    .Select(CloneUser)
+                    .Select(CloneWithETag)
                     .ToList();
 
                 return Task.FromResult(candidates);
@@ -114,9 +128,20 @@ namespace Web.MockData
             lock (_users)
             {
                 _users.Remove(uniqueId);
+                _versions.Remove(uniqueId);
             }
 
             return Task.CompletedTask;
+        }
+
+        // Clone a stored user and stamp its ETag from the version map, so every read path carries
+        // ETag - matching CosmosUserRepository/ToUser. Callers must hold the _users lock (which
+        // also guards _versions).
+        private User CloneWithETag(User u)
+        {
+            var clone = CloneUser(u);
+            clone.ETag = _versions.GetETag(u.UniqueId);
+            return clone;
         }
 
         private static User CloneUser(User u)
