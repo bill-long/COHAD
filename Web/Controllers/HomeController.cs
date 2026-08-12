@@ -182,8 +182,9 @@ namespace Web.Controllers
                         removedResidentIds.Add(removed.Id);
                     }
 
-                    // Cascade: remove deleted residents from any committees they belong to.
-                    await _residentCleanup.RemoveFromCommitteesAsync(removedResidentIds);
+                    // Cascade: remove deleted residents from any committees they belong to and clear
+                    // any user accounts' links to them.
+                    await _residentCleanup.HandleDeletedResidentsAsync(removedResidentIds);
                 }
                 // Deliberately not filtered on OperationCanceledException, against the repo
                 // checklist, and the reason is specific rather than inherited: these repositories
@@ -299,20 +300,66 @@ namespace Web.Controllers
             }
 
             userToUpdate.OwnedHomeIds = userToUpdate.OwnedHomeIds.Where(h => h != homeId).ToList();
-            await _auditLogRepository.AddAsync(
-                new NewAuditLogEntry
-                {
-                    Id = Guid.NewGuid(),
-                    SubjectId = userToUpdate.UniqueId,
-                    SubjectName = userToUpdate.Emails,
-                    Action = $"Removed home {homeId:D} from this user.",
-                    Time = DateTime.UtcNow,
-                    UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
-                    UserId = apiUser.UniqueId,
-                }
-            );
 
+            // The resident link must stay usable against the reduced home list (ResidentLinkRules is
+            // the single definition); clear it when it is not. Readers also treat an unusable link as
+            // "no link", so this is hygiene, not load-bearing - which is why a failed resident read
+            // is swallowed rather than allowed to fail the unassignment it decorates.
+            var residentLinkCleared = false;
+            if (userToUpdate.ResidentId != null)
+            {
+                try
+                {
+                    var linkedResident = await _residentRepository.GetByIdAsync(userToUpdate.ResidentId.Value);
+                    if (!ResidentLinkRules.IsUsable(linkedResident, userToUpdate.OwnedHomeIds))
+                    {
+                        userToUpdate.ResidentId = null;
+                        residentLinkCleared = true;
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Could not verify resident link {ResidentId} while removing home {HomeId} from user {UserId}; leaving the link in place",
+                        userToUpdate.ResidentId,
+                        homeId,
+                        userUniqueId
+                    );
+                }
+            }
+
+            // Write then audit, so the audit log only ever describes changes that really happened.
+            // The audit write is best-effort: the removal has been applied, so failing the request
+            // now would misreport a success; the gap is logged and names the user.
             await _userRepository.UpsertAsync(userToUpdate);
+
+            try
+            {
+                await _auditLogRepository.AddAsync(
+                    new NewAuditLogEntry
+                    {
+                        Id = Guid.NewGuid(),
+                        SubjectId = userToUpdate.UniqueId,
+                        SubjectName = userToUpdate.Emails,
+                        Action = residentLinkCleared
+                            ? $"Removed home {homeId:D} from this user. Cleared the resident link, which is no longer valid without this home."
+                            : $"Removed home {homeId:D} from this user.",
+                        Time = DateTime.UtcNow,
+                        UserDisplayName = $"{apiUser.GivenName ?? ""} {apiUser.Surname ?? ""}",
+                        UserId = apiUser.UniqueId,
+                    }
+                );
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to write the audit entry for an applied home removal from user {UserId}",
+                    userUniqueId
+                );
+            }
+
             return Ok();
         }
 

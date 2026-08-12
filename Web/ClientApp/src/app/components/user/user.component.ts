@@ -1,6 +1,6 @@
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
-import { Component, OnInit, Input, ElementRef, ViewChild, ViewEncapsulation, Output, EventEmitter, Inject } from '@angular/core';
-import { ApiUser, Home } from 'src/app/models';
+import { Component, OnInit, OnChanges, SimpleChanges, Input, ElementRef, ViewChild, ViewEncapsulation, Output, EventEmitter, Inject } from '@angular/core';
+import { ApiUser, Home, Resident } from 'src/app/models';
 import { UntypedFormControl } from '@angular/forms';
 import { MatChipInputEvent } from '@angular/material/chips';
 import { MatAutocompleteSelectedEvent, MatAutocompleteTrigger } from '@angular/material/autocomplete';
@@ -8,7 +8,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { Observable } from 'rxjs';
 import { startWith, map } from 'rxjs/operators';
-import { UserService } from 'src/app/services/user.service';
+import { EMPTY_GUID, UserService } from 'src/app/services/user.service';
 import { applicationState, ApplicationState } from 'src/app/state';
 
 @Component({
@@ -18,7 +18,7 @@ import { applicationState, ApplicationState } from 'src/app/state';
   encapsulation: ViewEncapsulation.None,
   standalone: false,
 })
-export class UserComponent implements OnInit {
+export class UserComponent implements OnInit, OnChanges {
   @Input() apiUser!: ApiUser;
 
   @Input() allHomes!: Home[];
@@ -26,6 +26,13 @@ export class UserComponent implements OnInit {
   @Output() doneEvent = new EventEmitter<void>();
 
   apiUserCopy!: ApiUser;
+
+  /**
+   * Residents of the user's currently selected homes, offered as the optional "this account is this
+   * person" link. Children are excluded (they hold no email addresses and cannot own accounts).
+   * Sourced from allHomes because ownedHomes entries arrive without residents populated.
+   */
+  linkableResidents: { resident: Resident; homeLabel: string }[] = [];
 
   filteredHomes!: Observable<Home[]>;
 
@@ -79,12 +86,51 @@ export class UserComponent implements OnInit {
     this.apiUserCopy = JSON.parse(JSON.stringify(this.apiUser));
     this.apiUserCopy.roles ??= [];
     this.apiUserCopy.ownedHomes ??= [];
+    this.syncResidentLinkOptions();
   }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    // allHomes arrives asynchronously (allHomes$ | async), so the options must be recomputed when
+    // it lands or the dropdown would stay hidden for the whole edit session.
+    if (changes['allHomes'] && this.apiUserCopy) {
+      this.syncResidentLinkOptions();
+    }
+  }
+
+  /**
+   * Recomputes the linkable-resident options from the selected homes. Deliberately never clears
+   * apiUserCopy.residentId: an absent option can mean allHomes simply has not loaded (or failed to
+   * load), and the server is the one place that decides a retained link is no longer valid.
+   */
+  private syncResidentLinkOptions(): void {
+    const childResidentType = 2;
+    const options: { resident: Resident; homeLabel: string }[] = [];
+    for (const owned of this.apiUserCopy.ownedHomes ?? []) {
+      const home = (this.allHomes ?? []).find(h => h.id === owned.id);
+      if (!home) {
+        continue;
+      }
+      const homeLabel = `${home.streetNumber} ${home.streetName}`;
+      // Legacy resident records can carry an all-zeros id, which collides with the wire
+      // protocol's clear sentinel - never offer them as link targets.
+      for (const resident of (home.residents ?? []).filter(r => r.residentType !== childResidentType && r.id !== EMPTY_GUID)) {
+        options.push({ resident, homeLabel });
+      }
+    }
+    this.linkableResidents = options;
+  }
+
+  // Deliberately no client-side link-validity logic: the client's view (cached allHomes) cannot
+  // distinguish "invalid" from "not loaded yet", and every attempt to decide here has produced a
+  // silent-clear bug. The selection is sent as-is; the server is the sole authority - it retains
+  // an untouched link, clears an invalidated retained link with an audit note, and rejects an
+  // explicitly invalid one with a message the save flow surfaces in the snackbar.
 
   removeHome(home: Home) {
     const index = this.apiUserCopy.ownedHomes.indexOf(home);
     if (index >= 0) {
       this.apiUserCopy.ownedHomes.splice(index, 1);
+      this.syncResidentLinkOptions();
       if (!this.hasAnyHomes()) {
         this.apiUserCopy.roles = (this.apiUserCopy.roles ?? []).filter(r => r === this.administratorRole);
       }
@@ -104,6 +150,7 @@ export class UserComponent implements OnInit {
         if (home) {
           this.ensureHomeEditRole();
           this.apiUserCopy.ownedHomes.push(home);
+          this.syncResidentLinkOptions();
         }
       }
     }
@@ -124,6 +171,7 @@ export class UserComponent implements OnInit {
 
     if (this.apiUserCopy.ownedHomes.find(h => h.id == event.option.value.id) == null) {
       this.apiUserCopy.ownedHomes.push(event.option.value);
+      this.syncResidentLinkOptions();
     }
 
     this.homeInput.nativeElement.value = '';
@@ -214,8 +262,14 @@ export class UserComponent implements OnInit {
 
   private runSave(): void {
     this.saveInProgress = true;
-    this.userService.saveUser(this.apiUser, this.apiUserCopy).subscribe(r => {
-      this.doneEvent.next();
+    this.userService.saveUser(this.apiUser, this.apiUserCopy).subscribe(ok => {
+      // saveUser maps request failures to false (after reporting the reason itself); closing the
+      // editor anyway would silently discard the admin's changes, so stay open.
+      if (ok) {
+        this.doneEvent.next();
+        return;
+      }
+      this.saveInProgress = false;
     });
   }
 

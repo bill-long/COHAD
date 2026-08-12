@@ -84,6 +84,7 @@ namespace Web.Services.Cosmos
                 NoRolesSinceUtc = doc["NoRolesSinceUtc"]?.ToObject<DateTime?>(),
                 Roles = DeserializeFlexible<List<User.Role>>(doc["Roles"]) ?? new List<User.Role>(),
                 OwnedHomeIds = DeserializeFlexible<List<Guid>>(doc["OwnedHomeIds"]) ?? new List<Guid>(),
+                ResidentId = ParseNullableGuid(doc["ResidentId"]),
             };
         }
 
@@ -118,6 +119,7 @@ namespace Web.Services.Cosmos
             // Keep legacy storage format for backward compatibility.
             doc["Roles"] = JsonConvert.SerializeObject(user.Roles ?? new List<User.Role>());
             doc["OwnedHomeIds"] = JsonConvert.SerializeObject(user.OwnedHomeIds ?? new List<Guid>());
+            doc["ResidentId"] = user.ResidentId != null ? user.ResidentId.Value.ToString("D") : JValue.CreateNull();
         }
 
         internal static Home ToHome(JObject doc)

@@ -49,6 +49,8 @@ public sealed class HomeControllerAssociationsTests
                     )
                 ),
                 Mock.Of<IDocumentFileStore>(),
+                users,
+                Mock.Of<IAuditLogRepository>(),
                 Mock.Of<ILogger<ResidentCleanupService>>()
             ),
             Mock.Of<ILogger<HomeController>>()
@@ -207,5 +209,140 @@ public sealed class HomeControllerAssociationsTests
         Assert.DoesNotContain(homeId, target.OwnedHomeIds);
         mockUsers.Verify(r => r.UpsertAsync(It.Is<User>(u => u.UniqueId == "target-user")), Times.Once);
         mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RemoveAssociatedUser_clears_resident_link_when_linked_residents_home_removed()
+    {
+        var homeId = Guid.NewGuid();
+        var otherHomeId = Guid.NewGuid();
+        var residentId = Guid.NewGuid();
+        var requesterUniqueId = ExpectedUniqueId("u1", "google.com");
+        var target = new User
+        {
+            UniqueId = "target-user",
+            Emails = "target@example.com",
+            OwnedHomeIds = new List<Guid> { homeId, otherHomeId },
+            Roles = new List<User.Role>(),
+            ResidentId = residentId,
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(requesterUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = requesterUniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+        mockUsers.Setup(r => r.GetByUniqueIdAsync("target-user")).ReturnsAsync(target);
+        mockUsers.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+
+        var mockResidents = new Mock<IResidentRepository>();
+        mockResidents
+            .Setup(r => r.GetByIdAsync(residentId))
+            .ReturnsAsync(new Resident { Id = residentId, HomeId = homeId });
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), mockAudit.Object, mockResidents.Object, nameId: "u1");
+        var result = await c.RemoveAssociatedUser(homeId, "target-user");
+
+        Assert.IsType<OkResult>(result);
+        Assert.Null(target.ResidentId);
+    }
+
+    [Fact]
+    public async Task RemoveAssociatedUser_keeps_resident_link_when_other_home_removed()
+    {
+        var homeId = Guid.NewGuid();
+        var linkedHomeId = Guid.NewGuid();
+        var residentId = Guid.NewGuid();
+        var requesterUniqueId = ExpectedUniqueId("u1", "google.com");
+        var target = new User
+        {
+            UniqueId = "target-user",
+            Emails = "target@example.com",
+            OwnedHomeIds = new List<Guid> { homeId, linkedHomeId },
+            Roles = new List<User.Role>(),
+            ResidentId = residentId,
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(requesterUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = requesterUniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+        mockUsers.Setup(r => r.GetByUniqueIdAsync("target-user")).ReturnsAsync(target);
+        mockUsers.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+
+        var mockResidents = new Mock<IResidentRepository>();
+        mockResidents
+            .Setup(r => r.GetByIdAsync(residentId))
+            .ReturnsAsync(new Resident { Id = residentId, HomeId = linkedHomeId });
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), mockAudit.Object, mockResidents.Object, nameId: "u1");
+        var result = await c.RemoveAssociatedUser(homeId, "target-user");
+
+        Assert.IsType<OkResult>(result);
+        Assert.Equal(residentId, target.ResidentId);
+    }
+
+    [Fact]
+    public async Task RemoveAssociatedUser_succeeds_and_keeps_link_when_resident_read_fails()
+    {
+        // The link check is hygiene only (readers treat an out-of-home link as no link), so a
+        // transient resident-read failure must not fail the unassignment itself.
+        var homeId = Guid.NewGuid();
+        var residentId = Guid.NewGuid();
+        var requesterUniqueId = ExpectedUniqueId("u1", "google.com");
+        var target = new User
+        {
+            UniqueId = "target-user",
+            Emails = "target@example.com",
+            OwnedHomeIds = new List<Guid> { homeId },
+            Roles = new List<User.Role>(),
+            ResidentId = residentId,
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(requesterUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = requesterUniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { homeId },
+                }
+            );
+        mockUsers.Setup(r => r.GetByUniqueIdAsync("target-user")).ReturnsAsync(target);
+        mockUsers.Setup(r => r.UpsertAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+
+        var mockResidents = new Mock<IResidentRepository>();
+        mockResidents
+            .Setup(r => r.GetByIdAsync(residentId))
+            .ThrowsAsync(new InvalidOperationException("Cosmos error"));
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), mockAudit.Object, mockResidents.Object, nameId: "u1");
+        var result = await c.RemoveAssociatedUser(homeId, "target-user");
+
+        Assert.IsType<OkResult>(result);
+        Assert.DoesNotContain(homeId, target.OwnedHomeIds);
+        Assert.Equal(residentId, target.ResidentId);
+        mockUsers.Verify(r => r.UpsertAsync(It.Is<User>(u => u.UniqueId == "target-user")), Times.Once);
     }
 }
