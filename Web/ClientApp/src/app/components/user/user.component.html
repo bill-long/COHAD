@@ -67,8 +67,10 @@
                 {{option.resident.givenName}} {{option.resident.surname}} ({{option.homeLabel}})
             </mat-option>
         </mat-select>
-        <mat-hint>Which resident this account is. Notification emails go to the linked resident's address instead of the account's sign-in address.</mat-hint>
     </mat-form-field>
+    <!-- A regular flowing note, not a mat-hint: the form field's subscript area reserves a single
+         line, so this two-line explanation was clipped by the content below it. -->
+    <div class="field-note">Which resident this account is. Notification emails go to the linked resident's address instead of the account's sign-in address.</div>
 </div>
 
 <div class="action-bar">
