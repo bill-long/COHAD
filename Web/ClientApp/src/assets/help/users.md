@@ -39,7 +39,6 @@ An account missing a home, or missing roles, is deleted automatically 30 days af
 
 - Editing happens inline - the table returns when you save or cancel.
 - Column widths can be dragged and are remembered on this browser.
-- **Last logged in** is recorded about once an hour per person, so it shows when someone was last active to roughly the hour even though it displays a precise time. Someone browsing right now may still show a time earlier in the hour.
+- **Last logged in** is approximate - treat it as "active around then", not an exact time.
 - Removing someone's home or roles restricts their access right away and may start their purge clock, so double-check before saving.
-- If a save fails with "User was modified by another request", something else wrote the same account in the instant your save was being applied - usually an automatic cleanup or the person signing in, occasionally another admin saving at the same moment. Refresh and make the change again. An edit that changed several things at once may be partially applied (role and home changes save before name and address), so refresh to see what took effect and reapply the rest.
-- This check guards the moment of saving, not the age of what is on your screen. If another admin changed this account while your list sat open, your save still overwrites their change without warning, so refresh before editing an account you have had open for a while.
+- If a save fails with "User was modified by another request", refresh and make the change again. Part of the edit may already have been applied, so check what took effect before reapplying it.
