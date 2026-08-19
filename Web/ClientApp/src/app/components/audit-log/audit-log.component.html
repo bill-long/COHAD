@@ -1,16 +1,23 @@
 <div class="audit-log-page">
+  <h1 class="visually-hidden">Audit Log</h1>
   <mat-form-field appearance="fill" class="audit-search-field">
     <mat-label>Search audit log</mat-label>
     <input matInput [formControl]="searchControl" />
     <mat-hint>Matches user, subject, or action</mat-hint>
   </mat-form-field>
 
-  <div class="audit-status" *ngIf="isLoadingInitial">
+  <!-- Permanently rendered: a polite live region has to exist before its content
+       changes for assistive tech to observe the mutation, so a role="status" that
+       is inserted together with its text announces nothing. The visible block
+       below is hidden from AT to avoid saying it twice. -->
+  <div class="visually-hidden" role="status">{{ loadingStatusMessage }}</div>
+
+  <div class="audit-status" *ngIf="isLoadingInitial" aria-hidden="true">
     <mat-spinner diameter="32"></mat-spinner>
     <span>Loading recent events...</span>
   </div>
 
-  <div class="audit-status error" *ngIf="errorMessage && !isLoadingInitial">
+  <div class="audit-status error" *ngIf="errorMessage && !isLoadingInitial" role="alert">
     {{ errorMessage }}
   </div>
 

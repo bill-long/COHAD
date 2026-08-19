@@ -21,14 +21,29 @@
       <mat-expansion-panel *ngFor="let committee of committees; let i = index" class="committee-panel" (closed)="finishEdit()">
         <mat-expansion-panel-header>
           <mat-panel-title>
+            <!-- Not a control: stops a click on the reorder buttons from toggling
+                 the panel. The buttons inside carry the interaction. -->
+            <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
             <span class="committee-order-controls" *ngIf="isAdmin" (click)="$event.stopPropagation()">
-              <button mat-icon-button [disabled]="i === 0" (click)="moveCommittee(i, -1)" matTooltip="Move up" class="order-btn">
+              <!-- matTooltip sets aria-describedby, not the accessible name, so
+                   these icon-only buttons need an explicit aria-label. -->
+              <button
+                mat-icon-button
+                type="button"
+                [disabled]="i === 0"
+                (click)="moveCommittee(i, -1)"
+                [attr.aria-label]="'Move ' + committee.displayName + ' up'"
+                matTooltip="Move up"
+                class="order-btn"
+              >
                 <mat-icon>arrow_upward</mat-icon>
               </button>
               <button
                 mat-icon-button
+                type="button"
                 [disabled]="i === committees.length - 1"
                 (click)="moveCommittee(i, 1)"
+                [attr.aria-label]="'Move ' + committee.displayName + ' down'"
                 matTooltip="Move down"
                 class="order-btn"
               >
@@ -50,19 +65,52 @@
         </div>
 
         <!-- Members -->
-        <h3 class="members-heading">Members</h3>
+        <h2 class="members-heading">Members</h2>
 
         <div cdkDropList (cdkDropListDropped)="dropMember($event, committee)" class="members-list">
           <div
             class="member-row"
-            *ngFor="let member of committee.members"
+            *ngFor="let member of committee.members; let mi = index"
             cdkDrag
             [cdkDragDisabled]="editingMemberId !== null"
             [class.member-row--editing]="editingMemberId === member.id"
           >
             <!-- ===== Compact (read-only) view ===== -->
             <ng-container *ngIf="editingMemberId !== member.id">
-              <mat-icon class="drag-handle" cdkDragHandle [class.drag-handle--hidden]="editingMemberId !== null">drag_indicator</mat-icon>
+              <div class="member-order-controls">
+                <!-- Pointer-only affordance, hidden from assistive tech: CDK
+                     drag-and-drop has no keyboard equivalent, so the buttons
+                     below are the accessible path to the same reordering. -->
+                <mat-icon
+                  class="drag-handle"
+                  cdkDragHandle
+                  aria-hidden="true"
+                  [class.drag-handle--hidden]="editingMemberId !== null"
+                  >drag_indicator</mat-icon
+                >
+                <button
+                  mat-icon-button
+                  class="order-btn"
+                  type="button"
+                  [disabled]="mi === 0 || editingMemberId !== null"
+                  (click)="moveMember(committee, mi, -1)"
+                  [attr.aria-label]="'Move ' + memberOrderLabel(member) + ' up'"
+                  matTooltip="Move up"
+                >
+                  <mat-icon>arrow_upward</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  class="order-btn"
+                  type="button"
+                  [disabled]="mi === committee.members.length - 1 || editingMemberId !== null"
+                  (click)="moveMember(committee, mi, 1)"
+                  [attr.aria-label]="'Move ' + memberOrderLabel(member) + ' down'"
+                  matTooltip="Move down"
+                >
+                  <mat-icon>arrow_downward</mat-icon>
+                </button>
+              </div>
 
               <div class="member-compact">
                 <div class="member-compact-photo">
@@ -184,9 +232,15 @@
                       />
                     </div>
                     <div class="photo-slider-group">
-                      <label class="photo-slider-label">Vertical position</label>
+                      <span class="photo-slider-label">Vertical position</span>
                       <mat-slider min="0" max="100" step="1" discrete class="photo-slider">
-                        <input matSliderThumb [(ngModel)]="member.photoOffsetY" />
+                        <!-- The visible text is a caption, not a <label> - it cannot
+                             be wired with "for" because the thumb id is generated. -->
+                        <input
+                          matSliderThumb
+                          [(ngModel)]="member.photoOffsetY"
+                          [attr.aria-label]="'Vertical photo position for ' + memberOrderLabel(member)"
+                        />
                       </mat-slider>
                     </div>
                   </div>
@@ -221,7 +275,7 @@
 
         <!-- Forwarding settings (polling mail gateway) -->
         <div class="forwarding-settings" *ngIf="getSettings(committee.id) as settings">
-          <h3 class="forwarding-heading">Mail Forwarding</h3>
+          <h2 class="forwarding-heading">Mail Forwarding</h2>
 
           <div class="forwarding-toggle-row">
             <mat-slide-toggle

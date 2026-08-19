@@ -55,11 +55,17 @@ module.exports = tseslint.config(
       ...angular.configs.templateAccessibility,
     ],
     rules: {
-      // Downgrade to warnings — existing templates use == and have a11y gaps to address incrementally
+      // Existing templates use ==; not worth churning every one of them.
       "@angular-eslint/template/eqeqeq": "warn",
-      "@angular-eslint/template/click-events-have-key-events": "warn",
-      "@angular-eslint/template/interactive-supports-focus": "warn",
-      "@angular-eslint/template/label-has-associated-control": "warn",
+      // The accessibility gaps these three flagged have been fixed, so they gate
+      // the build now. The handful of genuine false positives (stopPropagation
+      // shields, click delegation over rendered markdown, and the cdkTrapFocus
+      // Tab-containment wrappers inside MatMenu) carry inline disables that say
+      // why. If one of these fires, fix the template rather than downgrading the
+      // rule — the site regressed to where it was before.
+      "@angular-eslint/template/click-events-have-key-events": "error",
+      "@angular-eslint/template/interactive-supports-focus": "error",
+      "@angular-eslint/template/label-has-associated-control": "error",
     },
   }
 );

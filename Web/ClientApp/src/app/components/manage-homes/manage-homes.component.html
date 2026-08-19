@@ -1,3 +1,5 @@
+<h1 class="visually-hidden">Manage Homes</h1>
+
 <ng-container *ngIf="focusedHome$ | async as focusedHome; else homeList">
   <div class="focusedHomeEditor">
     <app-edit-home [home]="focusedHome" (doneEvent)="unfocusHome()" [startWithEditEnabled]="true" [reloadAllOnSave]="true"></app-edit-home>
@@ -44,7 +46,7 @@
       </ng-container>
 
       <ng-container matColumnDef="actions">
-        <th mat-header-cell *matHeaderCellDef></th>
+        <th mat-header-cell *matHeaderCellDef><span class="visually-hidden">Actions</span></th>
         <td mat-cell *matCellDef="let home">
           <button mat-icon-button color="primary" aria-label="Edit" (click)="focusHome(home.id)">
             <mat-icon>edit</mat-icon>

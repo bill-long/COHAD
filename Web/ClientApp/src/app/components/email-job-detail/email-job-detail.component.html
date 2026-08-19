@@ -2,7 +2,7 @@
   <mat-card>
     <mat-card-content>
       <button type="button" class="back-link" (click)="goBack()">← Back to Email Jobs</button>
-      <h2 class="page-title">Email Job</h2>
+      <h1 class="page-title">Email Job</h1>
 
       <div *ngIf="loading" class="loading-state">
         <mat-spinner diameter="32"></mat-spinner>
@@ -116,7 +116,7 @@
           <table *ngIf="job.recipients && job.recipients.length > 0" class="recipients-table">
             <thead>
               <tr>
-                <th *ngIf="isAdmin" class="col-expand"></th>
+                <th *ngIf="isAdmin" class="col-expand"><span class="visually-hidden">Details</span></th>
                 <th class="col-email">Email</th>
                 <th class="col-r-status">Status</th>
                 <th class="col-delivery">Delivery</th>

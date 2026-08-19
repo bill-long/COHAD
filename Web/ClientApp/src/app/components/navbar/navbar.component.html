@@ -1,17 +1,17 @@
-<mat-toolbar *ngIf="isHidden !== true">
+<mat-toolbar *ngIf="isHidden !== true" role="banner">
   <ng-container *ngIf="navVm$ | async as vm">
   <div class="nav-desktop">
     <span class="toolbar-app-title"> COHAD </span>
-    <div class="nav-left">
-      <a mat-button routerLink="" routerLinkActive="active-link" [routerLinkActiveOptions]="{exact: true}">Home</a>
-      <a mat-button routerLink="news" routerLinkActive="active-link">News</a>
-      <a *ngIf="showEventsNav$ | async" mat-button routerLink="events" routerLinkActive="active-link">Events</a>
-      <a mat-button routerLink="about" routerLinkActive="active-link">About</a>
-      <a mat-button routerLink="committees" routerLinkActive="active-link">Committees</a>
-      <a *ngIf="vm.showGuestPrivacy" mat-button routerLink="privacy" routerLinkActive="active-link" [routerLinkActiveOptions]="{exact: true}">Privacy
+    <nav class="nav-left" aria-label="Main">
+      <a mat-button routerLink="" routerLinkActive="active-link" #rla1="routerLinkActive" [attr.aria-current]="rla1.isActive ? 'page' : null" [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a mat-button routerLink="news" routerLinkActive="active-link" #rla2="routerLinkActive" [attr.aria-current]="rla2.isActive ? 'page' : null">News</a>
+      <a *ngIf="showEventsNav$ | async" mat-button routerLink="events" routerLinkActive="active-link" #rla3="routerLinkActive" [attr.aria-current]="rla3.isActive ? 'page' : null">Events</a>
+      <a mat-button routerLink="about" routerLinkActive="active-link" #rla4="routerLinkActive" [attr.aria-current]="rla4.isActive ? 'page' : null">About</a>
+      <a mat-button routerLink="committees" routerLinkActive="active-link" #rla5="routerLinkActive" [attr.aria-current]="rla5.isActive ? 'page' : null">Committees</a>
+      <a *ngIf="vm.showGuestPrivacy" mat-button routerLink="privacy" routerLinkActive="active-link" #rla6="routerLinkActive" [attr.aria-current]="rla6.isActive ? 'page' : null" [routerLinkActiveOptions]="{exact: true}">Privacy
         Policy</a>
-      <a mat-button *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
-      <a mat-button *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
+      <a mat-button *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="active-link" #rla7="routerLinkActive" [attr.aria-current]="rla7.isActive ? 'page' : null" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
+      <a mat-button *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="active-link" #rla8="routerLinkActive" [attr.aria-current]="rla8.isActive ? 'page' : null" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
       <button
         mat-icon-button
         class="help-button"
@@ -39,6 +39,7 @@
                    make the inline mark-as-handled buttons unreachable, so Tab/Shift+Tab are stopped at
                    this wrapper; cdkTrapFocus then wraps focus at the list edges so it can never land
                    outside the still-open menu (where Escape would no longer reach the panel). -->
+              <!-- eslint-disable-next-line @angular-eslint/template/interactive-supports-focus -->
               <div
                 cdkTrapFocus
                 (keydown.tab)="$event.stopPropagation()"
@@ -83,20 +84,20 @@
           <button mat-menu-item *ngFor="let u of mockUsers" (click)="loginAs(u.id)">{{u.label}}</button>
         </mat-menu>
       </ng-container>
-    </div>
+    </nav>
   </div>
   <div class="nav-mobile">
     <button mat-button [matMenuTriggerFor]="hamburgerMenu" aria-label="Open navigation menu">
       <mat-icon>menu</mat-icon>
     </button>
     <mat-menu #hamburgerMenu="matMenu">
-      <a mat-menu-item color="primary" routerLink="" routerLinkActive="active-link" [routerLinkActiveOptions]="{exact: true}">Home</a>
-      <a mat-menu-item color="primary" routerLink="news" routerLinkActive="active-link">News</a>
-      <a *ngIf="showEventsNav$ | async" mat-menu-item color="primary" routerLink="events" routerLinkActive="active-link">Events</a>
-      <a mat-menu-item color="primary" routerLink="about" routerLinkActive="active-link">About</a>
-      <a mat-menu-item color="primary" routerLink="committees" routerLinkActive="active-link">Committees</a>
-      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
-      <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="active-link" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
+      <a mat-menu-item color="primary" routerLink="" routerLinkActive="active-link" #rla9="routerLinkActive" [attr.aria-current]="rla9.isActive ? 'page' : null" [routerLinkActiveOptions]="{exact: true}">Home</a>
+      <a mat-menu-item color="primary" routerLink="news" routerLinkActive="active-link" #rla10="routerLinkActive" [attr.aria-current]="rla10.isActive ? 'page' : null">News</a>
+      <a *ngIf="showEventsNav$ | async" mat-menu-item color="primary" routerLink="events" routerLinkActive="active-link" #rla11="routerLinkActive" [attr.aria-current]="rla11.isActive ? 'page' : null">Events</a>
+      <a mat-menu-item color="primary" routerLink="about" routerLinkActive="active-link" #rla12="routerLinkActive" [attr.aria-current]="rla12.isActive ? 'page' : null">About</a>
+      <a mat-menu-item color="primary" routerLink="committees" routerLinkActive="active-link" #rla13="routerLinkActive" [attr.aria-current]="rla13.isActive ? 'page' : null">Committees</a>
+      <a mat-menu-item color="primary" *ngIf="vm.showAuthenticatedNav" routerLink="residents" routerLinkActive="active-link" #rla14="routerLinkActive" [attr.aria-current]="rla14.isActive ? 'page' : null" [routerLinkActiveOptions]="{ exact: false }">Residents</a>
+      <a mat-menu-item color="primary" *ngIf="manageVisible$ | async" routerLink="manage" routerLinkActive="active-link" #rla15="routerLinkActive" [attr.aria-current]="rla15.isActive ? 'page' : null" [routerLinkActiveOptions]="{ exact: false }">Manage</a>
       <button
         mat-menu-item
         color="primary"
@@ -125,6 +126,7 @@
         <ng-container *ngIf="(notifications$ | async) as notifications">
           <ng-container *ngIf="notifications.length > 0; else noNotificationsMobile">
             <!-- Tab containment + focus trap — same rationale as the desktop menu. -->
+            <!-- eslint-disable-next-line @angular-eslint/template/interactive-supports-focus -->
             <div
               cdkTrapFocus
               (keydown.tab)="$event.stopPropagation()"

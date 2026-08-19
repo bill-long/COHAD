@@ -19,7 +19,8 @@ RUN_COSMOS_INTEGRATION_TESTS=1 dotnet test Web.IntegrationTests/Web.IntegrationT
 ### Frontend
 
 ```bash
-cd Web/ClientApp && npx ng build          # type-check (no lint target configured)
+cd Web/ClientApp && npx ng build          # type-check
+cd Web/ClientApp && npx ng lint           # includes the template accessibility rules
 cd Web/ClientApp && npx ng test --no-watch --browsers=ChromeHeadless
 ```
 
@@ -83,6 +84,24 @@ Or run `./scripts/run-mock-data.sh` with no args and paste the printed one-liner
 - **Auth:** `angular-oauth2-oidc` in production; `mock-auth.interceptor` + `mock-auth-token.service` inject dev tokens in mock mode (controlled by `environment.useMockAuth`).
 - **Routing:** Lazy-loaded routes with `auth.guard` (requires login) and `role.guard` (requires specific roles). Public pages: home, about, news, events, email-preferences. Authenticated area: directory, map, vendors, youth-services, dues, myinfo, documents. Admin area: manage-users, manage-homes, manage-documents, manage-events, audit-log, send-email.
 - **Environment configs:** `environment.ts` (dev), `environment.prod.ts`, `environment.mock.ts`.
+- **Accessibility (target: WCAG 2.2 AA):** three things enforce this and none of them should be
+  weakened to make a build pass.
+  - `angular-eslint`'s `templateAccessibility` rules run at **error** severity
+    (`eslint.config.js`). A handful of genuine false positives carry inline
+    `eslint-disable-next-line` comments explaining why; the directive must be its **own** HTML
+    comment, since prose in the same comment stops it being parsed. If a rule fires on new markup,
+    fix the markup.
+  - `a11y-contrast.spec.ts` asserts every text token clears 4.5:1, and `--focus-ring` clears 3:1,
+    against **all three** surface tokens in **both** themes. It reads the computed custom properties
+    off `<body>`, so it tests the real cascade. Changing a colour in `styles.css` without checking it
+    against every surface is the failure mode it exists to catch.
+  - `a11y-smoke.spec.ts` runs axe over the app shell and locks the `<main>` landmark plus the skip
+    link (their `href`/`id` must agree, or the link silently does nothing).
+  - Structural conventions the linter cannot see: every routed page needs an `<h1>` (use
+    `class="visually-hidden"` when the design has no visible title - see `about.component.html`);
+    reordering must work without a pointer, because CDK drag-and-drop has **no** keyboard
+    equivalent (`moveCommittee` / `moveResident` / `moveMember` are the pattern); and icon-only
+    buttons need `aria-label` - `matTooltip` sets `aria-describedby`, not the accessible name.
 - **In-app help:** The navbar `?` button opens a contextual help drawer (`HelpDrawerComponent` + `HelpService`) showing the markdown doc for the current screen, or an index of every topic the user's roles allow. Topics live in `src/app/help/help-topics.ts` but are **derived from the Manage rail definition** (`manageNavGroups` in `manage-nav.ts`, a component-free module shared with `manage.component.ts`) - titles, sections, visibility roles, and the `requireResident` flag all come from the rail entry, so the help index cannot drift from the navigation and follows the rail's narrower gates (e.g. Print Directory is Administrator-only even though its route's `allowedRoles` is broader). Each topic id is the tool's route name and maps to `src/assets/help/{id}.md`. `help-topics.spec.ts` locks rail/routing/asset agreement: every rail tool has a topic, every topic prefix matches a `/manage` child route, every doc file exists, and every `[title](#topic:{id})` cross-reference resolves. Docs may also link app routes with absolute paths. **A PR that changes an admin screen's behavior must update that screen's help doc in the same PR** - that is the mechanism that keeps the docs from rotting.
 
 ### Cosmos DB config
@@ -124,7 +143,11 @@ When `appInsightsConnectionString` is empty, the service becomes a complete no-o
 - `dotnet publish` runs `npm install` + `npm run prodbuild` automatically (via `PublishRunWebpack` target). Use `dotnet run` for development.
 - Integration tests are skipped by default; set `RUN_COSMOS_INTEGRATION_TESTS=1` to enable.
 - `Web.UnitTests` uses `InternalsVisibleTo` to access internal types — keep internal where appropriate.
-- `ng lint` is not configured and will error. Use `ng build` for TypeScript type-checking.
+- `ng lint` **is** configured (`Web/ClientApp/eslint.config.js`). It runs on every pull request
+  (`.github/workflows/ci.yml`) and again before deploy (`main_cohadweb.yml`). On a Windows
+  checkout it also emits thousands of `Delete ␍` prettier warnings - the config sets
+  `endOfLine: "lf"` and git checks out CRLF. Those are warnings, not errors, and they do not
+  appear on the Linux CI runner; ignore them and look at the error count.
 - `MockJwt__SigningKey` must be ≥32 UTF-8 bytes for HS256. `appsettings.MockData.json` intentionally leaves it empty; supply via env var or `dotnet user-secrets`.
 - The **`UnsubscribeLink` Cosmos container must exist** before sending mail in a new environment (non-partitioned, `/NoPartitionKey`, container TTL ~400 days), like every other container here. Without it, link issuance fails **at job creation** and the admin's Send request errors with no job created - deliberately, because the alternative is sending bulk mail with no unsubscribe mechanism at all. The failure is synchronous and human-visible; there is no background retry state to reason about, and clicking Send again after fixing the container is the whole recovery. The TTL only prunes; the credential's own 365-day lifetime is enforced in code (`UnsubscribeLink.MaxLinkAge`), so a container created without a TTL does not turn links into permanent credentials.
 - The **`EmailSuppression` Cosmos container must exist** before deploying the suppression list (non-partitioned, `/NoPartitionKey`, **no TTL** - a suppression is permanent until a human clears it, and a row that quietly expired would resume mail to an address that bounced or complained). Without it, every send job fails at the enforcement point rather than going out unfiltered - deliberately, same philosophy as the `UnsubscribeLink` gate; the point read's `SubStatusCode == 0` narrowing keeps a missing container from reading as "not suppressed". Part 3 adds no configuration keys.

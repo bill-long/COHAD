@@ -27,7 +27,10 @@
   background: var(--surface-muted);
 }
 
+/* <dl> laid out as a two-column grid: <dt>/<dd> are the direct grid items, so
+   the pairing is conveyed by the markup rather than by ARIA roles. */
 .kvGrid {
+  margin: 0;
   display: grid;
   grid-template-columns: 180px 1fr;
   gap: 4px 16px;
@@ -40,11 +43,19 @@
 }
 
 .v {
+  /* <dd> carries a default margin-inline-start that would break the grid. */
+  margin: 0;
   overflow-wrap: anywhere;
 }
 
 .homesHeader {
   margin-top: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--heading-section);
+  font-weight: var(--heading-section-weight);
 }
 
 .accountCard {

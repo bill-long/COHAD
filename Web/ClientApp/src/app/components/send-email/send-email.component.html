@@ -4,6 +4,11 @@
        no committee role - would get an empty From list and a Send button that only 403s, so they
        get the job list below instead of a form that cannot work. Said out loud rather than left as
        an empty page. -->
+  <!-- The visible page title lives inside the send form below, which this user
+       does not get. Without this the page would have no h1 at all - a reachable
+       state, per the note above. -->
+  <h1 class="visually-hidden" *ngIf="(canSendFromAny | async) === false">Email</h1>
+
   <mat-card *ngIf="(canSendFromAny | async) === false" class="no-sender-card">
     <mat-card-content>
       <p class="no-sender-note">
@@ -15,7 +20,7 @@
 
   <mat-card *ngIf="canSendFromAny | async">
     <mat-card-content>
-      <h2 class="page-title">Send Neighborhood Email</h2>
+      <h1 class="page-title">Send Neighborhood Email</h1>
 
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>From</mat-label>

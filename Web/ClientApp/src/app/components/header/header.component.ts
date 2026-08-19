@@ -8,7 +8,7 @@ import { Component, OnInit, Input } from '@angular/core';
       <img class="header-bg" [src]="imagePath" alt="" loading="eager" [attr.fetchpriority]="imageFetchPriority || null" />
       <div class="header-content">
         <h1 class="header-title">{{ title }}</h1>
-        <h2 class="header-subtitle" *ngFor="let subtitle of subtitles || []">{{ subtitle }}</h2>
+        <p class="header-subtitle" *ngFor="let subtitle of subtitles || []">{{ subtitle }}</p>
       </div>
       <div class="header-overlay-slot">
         <ng-content></ng-content>

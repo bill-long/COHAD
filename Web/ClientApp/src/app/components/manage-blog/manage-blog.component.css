@@ -44,7 +44,7 @@
     gap: 0.75rem;
 }
 
-.post-row-title-wrap h3 {
+.post-row-title-wrap h2 {
     margin: 0;
     font-size: var(--heading-card);
     font-weight: var(--heading-card-weight);

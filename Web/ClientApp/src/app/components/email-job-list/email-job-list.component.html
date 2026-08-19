@@ -1,6 +1,8 @@
 <div class="email-job-list-page">
     <mat-card>
         <mat-card-content>
+            <!-- h2, not h1: this component is only ever embedded in the Send Email page,
+                 which owns that page's h1. It has no route of its own. -->
             <h2 class="page-title">Email Jobs</h2>
 
             <div *ngIf="loading" class="loading-state">

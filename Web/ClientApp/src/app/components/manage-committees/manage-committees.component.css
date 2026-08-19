@@ -172,6 +172,13 @@
 
 /* --- Drag handle --- */
 
+/* Drag handle plus the keyboard reorder buttons, stacked in the row gutter. */
+.member-order-controls {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .drag-handle {
   cursor: grab;
   color: var(--text-muted);
@@ -383,6 +390,16 @@
     width: 44px;
     height: 44px;
     line-height: 44px;
+  }
+
+  /* The member rows are much tighter than the panel header: two 44px buttons
+     plus the drag handle would take a quarter of a phone's width and squeeze
+     the member's name to nothing. 36px still clears the 24px minimum target
+     size (WCAG 2.5.8) by half again. */
+  .member-order-controls .order-btn {
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
   }
 
   .order-btn mat-icon {

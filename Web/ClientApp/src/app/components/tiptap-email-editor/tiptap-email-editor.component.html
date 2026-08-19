@@ -8,6 +8,7 @@
         matTooltip="Bold"
         aria-label="Bold"
         [class.active]="editor.isActive('bold')"
+        [attr.aria-pressed]="editor.isActive('bold')"
         (click)="editor.chain().focus().toggleBold().run()"
       >
         <mat-icon>format_bold</mat-icon>
@@ -17,6 +18,7 @@
         matTooltip="Italic"
         aria-label="Italic"
         [class.active]="editor.isActive('italic')"
+        [attr.aria-pressed]="editor.isActive('italic')"
         (click)="editor.chain().focus().toggleItalic().run()"
       >
         <mat-icon>format_italic</mat-icon>
@@ -26,6 +28,7 @@
         matTooltip="Underline"
         aria-label="Underline"
         [class.active]="editor.isActive('underline')"
+        [attr.aria-pressed]="editor.isActive('underline')"
         (click)="editor.chain().focus().toggleUnderline().run()"
       >
         <mat-icon>format_underlined</mat-icon>
@@ -35,6 +38,7 @@
         matTooltip="Strikethrough"
         aria-label="Strikethrough"
         [class.active]="editor.isActive('strike')"
+        [attr.aria-pressed]="editor.isActive('strike')"
         (click)="editor.chain().focus().toggleStrike().run()"
       >
         <mat-icon>strikethrough_s</mat-icon>
@@ -78,6 +82,7 @@
             [attr.aria-label]="'Text color ' + c"
             [style.background]="c"
             [class.active]="currentTextColor === c"
+            [attr.aria-pressed]="currentTextColor === c"
             (click)="setTextColor(c)"
           ></button>
         </div>
@@ -101,6 +106,7 @@
             [attr.aria-label]="c === 'transparent' ? 'No highlight' : 'Highlight ' + c"
             [style.background]="c"
             [class.active]="currentHighlight === c"
+            [attr.aria-pressed]="currentHighlight === c"
             [class.transparent-swatch]="c === 'transparent'"
             (click)="setHighlight(c)"
           ></button>
@@ -130,6 +136,7 @@
         matTooltip="Bullet list"
         aria-label="Bullet list"
         [class.active]="editor.isActive('bulletList')"
+        [attr.aria-pressed]="editor.isActive('bulletList')"
         (click)="editor.chain().focus().toggleBulletList().run()"
       >
         <mat-icon>format_list_bulleted</mat-icon>
@@ -139,6 +146,7 @@
         matTooltip="Ordered list"
         aria-label="Ordered list"
         [class.active]="editor.isActive('orderedList')"
+        [attr.aria-pressed]="editor.isActive('orderedList')"
         (click)="editor.chain().focus().toggleOrderedList().run()"
       >
         <mat-icon>format_list_numbered</mat-icon>
@@ -152,6 +160,7 @@
         matTooltip="Align left"
         aria-label="Align left"
         [class.active]="editor.isActive({ textAlign: 'left' })"
+        [attr.aria-pressed]="editor.isActive({ textAlign: 'left' })"
         (click)="editor.chain().focus().setTextAlign('left').run()"
       >
         <mat-icon>format_align_left</mat-icon>
@@ -161,6 +170,7 @@
         matTooltip="Align center"
         aria-label="Align center"
         [class.active]="editor.isActive({ textAlign: 'center' })"
+        [attr.aria-pressed]="editor.isActive({ textAlign: 'center' })"
         (click)="editor.chain().focus().setTextAlign('center').run()"
       >
         <mat-icon>format_align_center</mat-icon>
@@ -170,6 +180,7 @@
         matTooltip="Align right"
         aria-label="Align right"
         [class.active]="editor.isActive({ textAlign: 'right' })"
+        [attr.aria-pressed]="editor.isActive({ textAlign: 'right' })"
         (click)="editor.chain().focus().setTextAlign('right').run()"
       >
         <mat-icon>format_align_right</mat-icon>
@@ -183,6 +194,7 @@
         matTooltip="Insert link"
         aria-label="Insert link"
         [class.active]="editor.isActive('link')"
+        [attr.aria-pressed]="editor.isActive('link')"
         (click)="editor.isActive('link') ? removeLink() : insertLink()"
       >
         <mat-icon>link</mat-icon>
@@ -202,6 +214,7 @@
         matTooltip="Blockquote"
         aria-label="Blockquote"
         [class.active]="editor.isActive('blockquote')"
+        [attr.aria-pressed]="editor.isActive('blockquote')"
         (click)="editor.chain().focus().toggleBlockquote().run()"
       >
         <mat-icon>format_quote</mat-icon>

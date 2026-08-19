@@ -281,7 +281,10 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
       next: () => {
         this.actioning.delete(message.id);
         this.removeFromQueue(message.id); // drop it immediately; the row can't linger if the re-sync fails
-        this.snackBar.open(`Approved — message from ${sender} will be forwarded.`, 'Dismiss', { duration: 5000 });
+        this.snackBar.open(`Approved — message from ${sender} will be forwarded.`, 'Dismiss', {
+          duration: 5000,
+          politeness: 'polite',
+        });
         this.refresh();
       },
       error: (err: unknown) => {
@@ -299,7 +302,10 @@ export class ManageApprovalsComponent implements OnInit, OnDestroy {
       next: () => {
         this.actioning.delete(message.id);
         this.removeFromQueue(message.id);
-        this.snackBar.open(`Rejected — message from ${sender} was discarded.`, 'Dismiss', { duration: 5000 });
+        this.snackBar.open(`Rejected — message from ${sender} was discarded.`, 'Dismiss', {
+          duration: 5000,
+          politeness: 'polite',
+        });
         this.refresh();
       },
       error: (err: unknown) => {

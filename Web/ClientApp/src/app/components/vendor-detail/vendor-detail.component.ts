@@ -408,7 +408,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
       }
 
       this.vendor = updated;
-      this.snackBar.open('Vendor updated.', '', { duration: 4000 });
+      this.snackBar.open('Vendor updated.', '', { duration: 4000, politeness: 'polite' });
     });
   }
 
@@ -439,7 +439,7 @@ export class VendorDetailComponent implements OnInit, OnDestroy {
           // Deleting the vendor resolves its flags server-side, which clears their unified
           // notifications via the NotificationsChanged signal.
           this.saving = false;
-          this.snackBar.open('Vendor deleted.', '', { duration: 4000 });
+          this.snackBar.open('Vendor deleted.', '', { duration: 4000, politeness: 'polite' });
           this.router.navigate(['/residents/vendors']);
         },
         error: () => {

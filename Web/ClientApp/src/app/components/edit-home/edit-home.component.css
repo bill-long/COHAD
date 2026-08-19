@@ -153,6 +153,28 @@
   border-radius: 8px;
 }
 
+/* Drag handle plus the keyboard reorder buttons, stacked in the row gutter. */
+.residentOrderControls {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.orderBtn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.orderBtn .mat-icon {
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  font-size: 18px;
+}
+
 .dragHandle {
   width: 32px;
   height: 32px;

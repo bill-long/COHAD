@@ -49,7 +49,9 @@ mat-toolbar {
     margin: 0 auto;
 }
 
-.nav-desktop > div {
+/* .nav-left is a <nav> landmark, not a div, so match both element types. */
+.nav-desktop > div,
+.nav-desktop > nav {
     display: flex;
     align-items: center;
     flex-wrap: wrap;

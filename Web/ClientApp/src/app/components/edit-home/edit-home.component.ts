@@ -144,11 +144,32 @@ export class EditHomeComponent implements OnInit, OnChanges {
     return true;
   }
 
+  /**
+   * Name used in the reorder buttons' accessible names, so a screen-reader user
+   * hears which resident each button moves rather than "Move up" N times.
+   */
+  residentOrderLabel(resident: Resident): string {
+    const name = [resident.givenName, resident.surname].filter(p => !!p).join(' ').trim();
+    return name.length > 0 ? name : 'this resident';
+  }
+
   dropResident(event: CdkDragDrop<Resident[]>) {
+    this.moveResident(event.previousIndex, event.currentIndex);
+  }
+
+  /**
+   * Reorders a resident by index. Shared by drag-and-drop and the up/down
+   * buttons - CDK drag-and-drop has no keyboard equivalent, so the buttons are
+   * the only way to reorder without a pointer (WCAG 2.1.1, 2.5.7).
+   */
+  moveResident(previousIndex: number, currentIndex: number) {
     if (!this.homeCopy.residents) {
       return;
     }
-    moveItemInArray(this.homeCopy.residents, event.previousIndex, event.currentIndex);
+    if (currentIndex < 0 || currentIndex >= this.homeCopy.residents.length) {
+      return;
+    }
+    moveItemInArray(this.homeCopy.residents, previousIndex, currentIndex);
     this.residentOrderDirty = !this.isSameResidentOrder();
   }
 

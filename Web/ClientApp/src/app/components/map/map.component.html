@@ -1,5 +1,23 @@
 <div class="outer-div">
+  <!-- Hidden on the print view, which embeds this component twice per sheet. -->
+  <h1 class="visually-hidden" *ngIf="pageCount === undefined">Neighborhood Map</h1>
+
+  <!-- Named and described by the native SVG mechanism: <title> supplies the
+       accessible name, <desc> the description.
+       Deliberately NOT role="img". That would collapse the SVG to a leaf node
+       and drop everything inside it from the accessibility tree - including the
+       ~158 <foreignObject> blocks below, which render each household's surname
+       and phone number as real text. Only the street and house-number labels
+       are drawn; the household information is readable content and must stay
+       reachable. The street list after the SVG is a summary, not a substitute.
+       The ids are per-instance because the print view renders this component
+       twice on one page. -->
   <svg #mapSvg xmlns="http://www.w3.org/2000/svg">
+    <title [attr.id]="titleId">Map of the Canyon Oaks neighborhood</title>
+    <desc [attr.id]="descId">
+      A plan view of the neighborhood showing each home's parcel with its house
+      number, across nine streets.
+    </desc>
     <g id="CanyonOaks1Parcels" transform="translate(-128.22314,812.91323)">
       <polygon class="cls-3" points="270.7,-260.3 257.2,-256.6 135.2,-335.9 271.3,-333.7" />
       <polygon class="cls-3" points="335.3,-237.7 282.9,-250.7 270.7,-260.3 271.3,-333.7 338,-332.8" />
@@ -1086,4 +1104,26 @@
       </foreignObject>
     </g>
   </svg>
+
+  <!-- Summary of the map's coverage, for orienting before reading the parcels
+       above. Not a replacement for them - the per-household text inside the SVG
+       stays in the accessibility tree (see the comment on the svg). -->
+  <div class="visually-hidden" *ngIf="pageCount === undefined">
+    <h2>Streets shown on this map</h2>
+    <ul>
+      <li>Canyon Oaks Drive</li>
+      <li>Eagles Nest Circle</li>
+      <li>Falcon Court</li>
+      <li>Fawn Hollow Drive</li>
+      <li>Forest Hollow Drive</li>
+      <li>Hunters Hill Circle</li>
+      <li>Meadow View Drive</li>
+      <li>Pheasant Run Road</li>
+      <li>Winding Creek Way</li>
+    </ul>
+    <p>
+      For addresses and residents on these streets, see the
+      <a routerLink="/residents/directory">resident directory</a>.
+    </p>
+  </div>
 </div>
