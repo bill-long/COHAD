@@ -339,6 +339,19 @@
     font-size: 18px;
   }
 
+  /* Full 44x44 touch targets on mobile (mobile-css.instructions.md), stacked
+     so three of them in a row do not eat the resident's name. */
+  .residentOrderControls {
+    flex-direction: column;
+    margin-top: 0;
+  }
+
+  .orderBtn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+  }
+
   /* Remove card chrome — go full-bleed on mobile */
   :host ::ng-deep .homeCard.mat-mdc-card {
     box-shadow: none;

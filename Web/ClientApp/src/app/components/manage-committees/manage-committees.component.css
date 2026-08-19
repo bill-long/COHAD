@@ -392,14 +392,11 @@
     line-height: 44px;
   }
 
-  /* The member rows are much tighter than the panel header: two 44px buttons
-     plus the drag handle would take a quarter of a phone's width and squeeze
-     the member's name to nothing. 36px still clears the 24px minimum target
-     size (WCAG 2.5.8) by half again. */
-  .member-order-controls .order-btn {
-    width: 36px;
-    height: 36px;
-    line-height: 36px;
+  /* Three 44px targets in a row would take a quarter of a phone's width and
+     squeeze the member's name to nothing, so stack them instead of shrinking
+     them - the touch target stays 44x44 (mobile-css.instructions.md). */
+  .member-order-controls {
+    flex-direction: column;
   }
 
   .order-btn mat-icon {
