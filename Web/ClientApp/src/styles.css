@@ -8,22 +8,26 @@
   --surface-chip: rgba(87, 72, 56, 0.07);
   --text-primary: #2c2520;
   --text-secondary: #5c534b;
-  --text-tertiary: #766d64;
-  --text-muted: #968c82;
+  --text-tertiary: #635b54;
+  --text-muted: #6f6760;
   --text-separator: rgba(87, 72, 56, 0.3);
   --border-subtle: rgba(87, 72, 56, 0.12);
   --border-faint: rgba(87, 72, 56, 0.07);
-  --success: #4a7c59;
-  --success-bg: rgba(74, 124, 89, 0.12);
+  --success: #447252;
+  --success-bg: rgba(68, 114, 82, 0.12);
   --error: #b5403a;
   --error-bg: rgba(181, 64, 58, 0.1);
-  --warning: #e65100;
+  --warning: #b84100;
   --warning-bg: #fef3e0;
   --info-purple: #7b1fa2;
   --info-purple-bg: #f3e5f5;
-  --primary-sage: #6b8f71;
-  --secondary-terracotta: #c4704e;
-  --accent-gold: #b8860b;
+  --primary-sage: #536f58;
+  --secondary-terracotta: #99573d;
+  --accent-gold: #876208;
+  /* Dedicated focus-indicator colour. Kept separate from --primary-sage so a
+     future brand-colour tweak cannot silently drop the ring below the 3:1
+     non-text contrast floor (WCAG 1.4.11). */
+  --focus-ring: #536f58;
 
   /* M3 shape tokens */
   --mat-card-container-shape: 14px;
@@ -55,7 +59,7 @@ body.dark-theme {
   --text-primary: #ede5db;
   --text-secondary: #c5bbb0;
   --text-tertiary: #a89f94;
-  --text-muted: #8a8178;
+  --text-muted: #958d84;
   --text-separator: rgba(222, 210, 196, 0.35);
   --border-subtle: rgba(222, 210, 196, 0.16);
   --border-faint: rgba(222, 210, 196, 0.1);
@@ -70,6 +74,7 @@ body.dark-theme {
   --primary-sage: #9cbba1;
   --secondary-terracotta: #d99a7e;
   --accent-gold: #d4a843;
+  --focus-ring: #9cbba1;
 }
 
 html {
@@ -273,10 +278,20 @@ body.dark-theme .ql-editor.ql-blank::before {
   color: rgba(255, 255, 255, 0.4);
 }
 
-/* Respect reduced-motion preference */
+/* Respect reduced-motion preference.
+   The catch-all covers the ~20 component transitions and Angular Material's own
+   animations, which the previous .mat-mdc-card rule left running. Durations are
+   collapsed rather than set to zero so animation/transition end events still
+   fire and nothing that waits on them stalls. Indeterminate progress spinners
+   are exempt: they convey "still working", and freezing one reads as a hang. */
 @media (prefers-reduced-motion: reduce) {
-  .mat-mdc-card {
-    transition: none !important;
+  *:not(.mat-mdc-progress-spinner):not(.mat-mdc-progress-spinner *),
+  *:not(.mat-mdc-progress-spinner):not(.mat-mdc-progress-spinner *)::before,
+  *:not(.mat-mdc-progress-spinner):not(.mat-mdc-progress-spinner *)::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -291,6 +306,34 @@ body.dark-theme .ql-editor.ql-blank::before {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Skip link: hidden until focused, then pinned above the sticky toolbar.
+   Lets keyboard users bypass the ~12 navbar links on every route (WCAG 2.4.1). */
+.skip-link {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1100;
+  padding: 0.75rem 1.25rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 2px solid var(--focus-ring);
+  border-radius: 0 0 8px 0;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-120%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+/* The <main> landmark is focused programmatically after each route change so
+   screen readers land on the new page content. It is not an interactive
+   control, so it must not paint a focus ring. */
+main#main-content:focus {
+  outline: none;
 }
 
 /* Blog body headings: keep below post title (mat-headline-large ~2rem) */
@@ -409,15 +452,47 @@ body.dark-theme .milkdown-editor-container .milkdown {
 }
 
 .milkdown-editor-container:focus-within {
-  outline: 2px solid var(--primary-sage);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
   border-radius: 6px;
 }
 
 /* Global focus-visible styling */
 :focus-visible {
-  outline: 2px solid var(--primary-sage);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* WCAG 2.4.11 (Focus Not Obscured): the toolbar is position:sticky, so tabbing
+   to a control near the top of the viewport can scroll it underneath the bar -
+   focused but invisible. Reserve the toolbar's height whenever the browser
+   scrolls a focusable element into view.
+   This is the same hazard the router's scrollOffset (app-routing.module.ts,
+   currently 80) solves for fragment links, but it is a separate mechanism with
+   its own value: this one clears the bar for *focus*, so it adds a little
+   margin rather than sitting flush against it. Changing one does not require
+   changing the other, but the toolbar height drives both. */
+a[href],
+button,
+input,
+select,
+textarea,
+summary,
+[tabindex]:not([tabindex='-1']) {
+  scroll-margin-top: 96px;
+}
+
+/* ...but only on the page scroller. Menus, dialogs and autocomplete panels have
+   their own scroll containers with no toolbar over them, and the reservation
+   there just makes arrow-key navigation jump further than the user moved. */
+.cdk-overlay-container a[href],
+.cdk-overlay-container button,
+.cdk-overlay-container input,
+.cdk-overlay-container select,
+.cdk-overlay-container textarea,
+.cdk-overlay-container summary,
+.cdk-overlay-container [tabindex]:not([tabindex='-1']) {
+  scroll-margin-top: 0;
 }
 
 /* Global mobile dialog constraint — prevent dialogs from exceeding viewport */

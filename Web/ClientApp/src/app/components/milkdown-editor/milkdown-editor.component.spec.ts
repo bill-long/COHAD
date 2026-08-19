@@ -49,7 +49,7 @@ describe('MilkdownEditorComponent image upload helpers', () => {
     files: FileList,
     schema: import('@milkdown/kit/prose/model').Schema,
     uploadFn: (f: File) => Promise<string>,
-  ): Promise<Array<{ attrs: Record<string, unknown> }>> => priv().uploadImages(files, schema, uploadFn);
+  ): Promise<{ attrs: Record<string, unknown> }[]> => priv().uploadImages(files, schema, uploadFn);
 
   it('uploads each image file and maps the returned URL onto src with empty alt', async () => {
     const nodes = await uploadImages(

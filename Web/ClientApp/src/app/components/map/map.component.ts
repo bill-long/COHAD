@@ -16,6 +16,23 @@ export class MapComponent implements AfterViewInit {
   @Input() pageNumber: number | undefined;
   @ViewChild('mapSvg') mapSvg: any;
 
+  /**
+   * Ids for the SVG's <title>/<desc>. The print view renders this component
+   * twice on one page, so a fixed id would appear twice in one document. A
+   * counter rather than pageNumber: pageNumber is undefined outside the print
+   * view, so it would collide for any other repeated use.
+   */
+  private static nextInstanceId = 0;
+  private readonly instanceId = MapComponent.nextInstanceId++;
+
+  get titleId(): string {
+    return `map-title-${this.instanceId}`;
+  }
+
+  get descId(): string {
+    return `map-desc-${this.instanceId}`;
+  }
+
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     @Inject(dispatcher) private dispatcher: Subject<Action>,

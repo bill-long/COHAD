@@ -4,7 +4,7 @@
     class="help-drawer"
     role="dialog"
     aria-modal="true"
-    aria-label="Help"
+    aria-labelledby="help-drawer-title"
     cdkTrapFocus
     cdkTrapFocusAutoCapture
     (keydown.escape)="close()">
@@ -17,7 +17,9 @@
         aria-label="All help topics">
         <mat-icon>arrow_back</mat-icon>
       </button>
-      <span class="help-drawer-title">{{ view === 'topic' ? activeTopic?.title : 'Help' }}</span>
+      <h2 class="help-drawer-title" id="help-drawer-title" tabindex="-1" #drawerTitle>
+        {{ view === 'topic' ? activeTopic?.title : 'Help' }}
+      </h2>
       <span class="help-drawer-spacer"></span>
       <button mat-icon-button (click)="close()" matTooltip="Close help" aria-label="Close help">
         <mat-icon>close</mat-icon>
@@ -27,7 +29,7 @@
     <div class="help-drawer-body">
       <ng-container *ngIf="view === 'index'">
         <ng-container *ngFor="let section of sections$ | async">
-          <h2 class="help-section-heading">{{ section.name }}</h2>
+          <h3 class="help-section-heading">{{ section.name }}</h3>
           <mat-action-list class="help-topic-list">
             <button mat-list-item *ngFor="let topic of section.topics" (click)="showTopic(topic)">
               {{ topic.title }}
@@ -37,6 +39,10 @@
       </ng-container>
 
       <ng-container *ngIf="view === 'topic'">
+        <!-- Delegation, not a control: onContentClick acts only on a real anchor
+             found via closest('a'), and anchors already fire click on Enter. The
+             container itself is not activatable and must not be focusable. -->
+        <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
         <div
           class="help-content"
           *ngIf="topicHtml !== null"

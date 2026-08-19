@@ -13,6 +13,16 @@ export class PhoneNumberInputComponent implements OnInit {
 
   @Input() editEnabled!: boolean;
 
+  /** Visible field label. Without one the input has no name at all (WCAG 4.1.2). */
+  @Input() label = 'Phone number';
+
+  /**
+   * Overrides the accessible name when several of these are rendered in a list
+   * and the visible label alone would not tell them apart. Must contain the
+   * visible label text (WCAG 2.5.3, Label in Name). Defaults to the label.
+   */
+  @Input() ariaLabel?: string;
+
   phoneNumberControl = new UntypedFormControl();
 
   phoneNumberString!: string;

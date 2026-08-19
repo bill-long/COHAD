@@ -1,4 +1,8 @@
 <div class="outerWrapper">
+  <!-- Hidden on the printable directory, which embeds this component under its
+       own cover heading. hideSearch is the only signal that this is the print
+       view (same approach as pageCount in app-map). -->
+  <h1 class="visually-hidden" *ngIf="!hideSearch">Resident Directory</h1>
   <div>
     <mat-form-field *ngIf="hideSearch !== true" appearance="fill">
       <mat-label>Search</mat-label>

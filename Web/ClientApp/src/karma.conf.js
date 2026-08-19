@@ -21,6 +21,15 @@ module.exports = function (config) {
       subdir: '.',
       reporters: [{ type: 'html' }, { type: 'text-summary' }],
     },
+    // Used by CI (--browsers=ChromeHeadlessCI). The Chrome sandbox is
+    // unavailable on most hosted runners, and without --no-sandbox the browser
+    // exits before Karma can connect.
+    customLaunchers: {
+      ChromeHeadlessCI: {
+        base: 'ChromeHeadless',
+        flags: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
+      },
+    },
     reporters: ['progress', 'kjhtml'],
     browsers: ['ChromeHeadless'],
     restartOnFileChange: true,

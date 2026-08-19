@@ -7,7 +7,7 @@ Every home in the neighborhood, with its contact details and residents. This is 
 Click the pencil to open the editor. You can:
 
 - Update the **phone number and email addresses** (via the contact dialog).
-- Add, remove, and **reorder residents** (drag to reorder - the order controls how names print in the directory).
+- Add, remove, and **reorder residents** (drag a row, or use the up/down arrows beside it - the order controls how names print in the directory).
 - Remove a linked login account's association with the home.
 
 ## Things to know

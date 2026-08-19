@@ -63,7 +63,7 @@ export class ManageDocumentsComponent implements OnInit {
       next: () => {
         this.newFolderName = '';
         this.creatingFolder = false;
-        this.snackBar.open('Folder created.', 'Dismiss', { duration: 2500 });
+        this.snackBar.open('Folder created.', 'Dismiss', { duration: 2500, politeness: 'polite' });
         this.loadAll();
       },
       error: () => {
@@ -92,7 +92,7 @@ export class ManageDocumentsComponent implements OnInit {
       next: () => {
         this.editingFolderId = null;
         this.editingFolderName = '';
-        this.snackBar.open('Folder renamed.', 'Dismiss', { duration: 2500 });
+        this.snackBar.open('Folder renamed.', 'Dismiss', { duration: 2500, politeness: 'polite' });
         this.loadAll();
       },
       error: () => {
@@ -120,7 +120,7 @@ export class ManageDocumentsComponent implements OnInit {
       this.folderService.delete(folder.id).subscribe({
         next: () => {
           this.deletingFolderId = null;
-          this.snackBar.open('Folder deleted.', 'Dismiss', { duration: 2500 });
+          this.snackBar.open('Folder deleted.', 'Dismiss', { duration: 2500, politeness: 'polite' });
           this.loadAll();
         },
         error: () => {
@@ -220,7 +220,7 @@ export class ManageDocumentsComponent implements OnInit {
           this.uploadProgress = 100;
           this.selectedFile = null;
           this.resetFileInput();
-          this.snackBar.open('Document uploaded.', 'Dismiss', { duration: 2500 });
+          this.snackBar.open('Document uploaded.', 'Dismiss', { duration: 2500, politeness: 'polite' });
           this.loadAll();
         }
       },
@@ -255,7 +255,7 @@ export class ManageDocumentsComponent implements OnInit {
       this.documentsService.delete(doc.id).subscribe({
         next: () => {
           this.deletingId = null;
-          this.snackBar.open('Document deleted.', 'Dismiss', { duration: 2500 });
+          this.snackBar.open('Document deleted.', 'Dismiss', { duration: 2500, politeness: 'polite' });
           this.loadAll();
         },
         error: () => {

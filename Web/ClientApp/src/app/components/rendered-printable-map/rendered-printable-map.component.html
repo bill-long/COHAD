@@ -1,2 +1,6 @@
+<!-- This routed page owns its heading, the way the printable directory owns its
+     cover title. app-map suppresses its own h1 whenever pageCount is set, so
+     the two embedded maps do not each contribute one. -->
+<h1 class="visually-hidden">Neighborhood Map</h1>
 <app-map [pageCount]="2" [pageNumber]="1"></app-map>
 <app-map [pageCount]="2" [pageNumber]="2"></app-map>

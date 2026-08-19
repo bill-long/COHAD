@@ -16,6 +16,10 @@
         </div>
       </mat-panel-description>
 
+      <!-- Not a control: this only stops a click on the action buttons from
+           toggling the expansion panel behind them. There is nothing to
+           activate, so it needs neither focus nor a key handler. -->
+      <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
       <div class="headerActions" (click)="$event.stopPropagation()">
         <div class="fullActions">
           <ng-container *ngIf="!editEnabled; else editModeActions">
@@ -238,7 +242,11 @@
                 </mat-form-field>
 
                 <div class="phoneInput">
-                  <app-phone-number-input [phoneNumber]="phoneNumber" [editEnabled]="editEnabled"></app-phone-number-input>
+                  <app-phone-number-input
+                    [phoneNumber]="phoneNumber"
+                    [editEnabled]="editEnabled"
+                    [ariaLabel]="phoneAccessibleName(phoneNumber, i)"
+                  ></app-phone-number-input>
                 </div>
 
                 <div class="itemActions itemActionsInline" *ngIf="editEnabled">

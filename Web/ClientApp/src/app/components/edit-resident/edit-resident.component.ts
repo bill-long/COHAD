@@ -135,6 +135,19 @@ export class EditResidentComponent implements OnInit {
     return `(${ac}) ${pre}-${('0000' + line).slice(-4)}`;
   }
 
+  /**
+   * Accessible name for one phone field. A resident can have several, and the
+   * visible label is the same on every row, so a screen-reader user tabbing
+   * through them would hear "Phone number" repeatedly. The type alone is not
+   * enough - two numbers can share one - so the position is appended whenever
+   * there is more than one. Contains the visible label text, per WCAG 2.5.3.
+   */
+  phoneAccessibleName(phoneNumber: PhoneNumber, index: number): string {
+    const base = phoneNumber.type ? `${phoneNumber.type} phone number` : 'Phone number';
+    const count = this.resident?.phoneNumbers?.length ?? 0;
+    return count > 1 ? `${base} ${index + 1}` : base;
+  }
+
   addPhone() {
     if (this.resident.phoneNumbers == null) {
       this.resident.phoneNumbers = [];

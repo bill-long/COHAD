@@ -22,7 +22,7 @@
                 {{role}}
                 <mat-icon matChipRemove *ngIf="removable">cancel</mat-icon>
             </mat-chip-row>
-            <input placeholder="Roles" #roleInput #roleAutocompleteTrigger="matAutocompleteTrigger"
+            <input placeholder="Roles" aria-label="Add a role" #roleInput #roleAutocompleteTrigger="matAutocompleteTrigger"
                 [formControl]="roleControl" [matChipInputFor]="roleChipGrid"
                 [matAutocomplete]="roleAuto" [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
                 (matChipInputTokenEnd)="addRole($event)">
@@ -44,7 +44,7 @@
                 {{home.streetName}}
                 <mat-icon matChipRemove *ngIf="removable">cancel</mat-icon>
             </mat-chip-row>
-            <input placeholder="Homes" #homeInput #homeAutocompleteTrigger="matAutocompleteTrigger"
+            <input placeholder="Homes" aria-label="Add a home" #homeInput #homeAutocompleteTrigger="matAutocompleteTrigger"
                 [formControl]="homeControl" [matChipInputFor]="chipGrid"
                 [matAutocomplete]="auto" [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
                 (matChipInputTokenEnd)="addHome($event)">

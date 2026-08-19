@@ -22,6 +22,20 @@ export class AuditLogComponent implements OnInit, OnDestroy {
   entries: AuditLogEntry[] = [];
   searchControl = new UntypedFormControl('');
   isLoadingInitial = false;
+
+  /**
+   * Text of the always-present polite live region. Empty between states so the
+   * same message announced twice in a row is still observed as a change.
+   */
+  get loadingStatusMessage(): string {
+    if (this.isLoadingInitial) {
+      return 'Loading recent events';
+    }
+    if (this.errorMessage) {
+      return '';
+    }
+    return this.entries.length === 1 ? '1 event loaded' : `${this.entries.length} events loaded`;
+  }
   isLoadingMore = false;
   hasMore = true;
   errorMessage = '';

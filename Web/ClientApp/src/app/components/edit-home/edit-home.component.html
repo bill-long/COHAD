@@ -29,7 +29,7 @@
       <div class="sectionHeader">
         <div>
           <div class="sectionTitle">Residents</div>
-          <div class="muted reorderHint">Drag to reorder (the phone number of the first resident appears on the map, unless a home phone number is set).</div>
+          <div class="muted reorderHint">Drag a row or use the arrows to reorder (the phone number of the first resident appears on the map, unless a home phone number is set).</div>
         </div>
         <div class="sectionActions">
           <button mat-stroked-button color="primary" (click)="addResident()" aria-label="Add resident">Add resident</button>
@@ -46,10 +46,45 @@
             [cdkDropListData]="homeCopy.residents"
             (cdkDropListDropped)="dropResident($event)"
           >
-            <div class="residentDragRow" *ngFor="let resident of homeCopy.residents" cdkDrag>
-              <button mat-icon-button class="dragHandle" cdkDragHandle aria-label="Drag to reorder">
-                <mat-icon>drag_indicator</mat-icon>
-              </button>
+            <div class="residentDragRow" *ngFor="let resident of homeCopy.residents; let i = index" cdkDrag>
+              <div class="residentOrderControls">
+                <!-- Pointer-only affordance. CDK drag-and-drop has no keyboard
+                     equivalent, so it is hidden from assistive tech and removed
+                     from the tab order; the buttons below are the accessible
+                     path to the same reordering. -->
+                <button
+                  mat-icon-button
+                  class="dragHandle"
+                  cdkDragHandle
+                  type="button"
+                  tabindex="-1"
+                  aria-hidden="true"
+                >
+                  <mat-icon>drag_indicator</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  class="orderBtn"
+                  type="button"
+                  [disabled]="i === 0"
+                  (click)="moveResident(i, i - 1)"
+                  [attr.aria-label]="'Move ' + residentOrderLabel(resident) + ' up'"
+                  matTooltip="Move up"
+                >
+                  <mat-icon>arrow_upward</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  class="orderBtn"
+                  type="button"
+                  [disabled]="i === homeCopy.residents.length - 1"
+                  (click)="moveResident(i, i + 1)"
+                  [attr.aria-label]="'Move ' + residentOrderLabel(resident) + ' down'"
+                  matTooltip="Move down"
+                >
+                  <mat-icon>arrow_downward</mat-icon>
+                </button>
+              </div>
               <div class="residentContent">
                 <app-edit-resident
                   [resident]="resident"

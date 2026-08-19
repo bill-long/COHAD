@@ -1,6 +1,7 @@
 import { Injectable, NgModule } from '@angular/core';
 import { Routes, RouterModule, TitleStrategy, RouterStateSnapshot } from '@angular/router';
 import { Title } from '@angular/platform-browser';
+import { LiveAnnouncer } from '@angular/cdk/a11y';
 import { HomeComponent } from './components/home/home.component';
 import { AboutComponent } from './components/about/about.component';
 import { NewsComponent } from './components/news/news.component';
@@ -42,13 +43,29 @@ import { ManageApprovalsComponent } from './components/manage-approvals/manage-a
 
 @Injectable({ providedIn: 'root' })
 export class CohadTitleStrategy extends TitleStrategy {
-  constructor(private readonly title: Title) {
+  private titleApplied = false;
+
+  constructor(
+    private readonly title: Title,
+    private readonly liveAnnouncer: LiveAnnouncer,
+  ) {
     super();
   }
 
   override updateTitle(routerState: RouterStateSnapshot): void {
     const pageTitle = this.buildTitle(routerState);
-    this.title.setTitle(pageTitle ? `COHAD | ${pageTitle}` : 'COHAD');
+    const fullTitle = pageTitle ? `COHAD | ${pageTitle}` : 'COHAD';
+    this.title.setTitle(fullTitle);
+
+    // Announcing here rather than from a NavigationEnd subscriber is deliberate:
+    // this is where the new title is computed, so there is no ordering question.
+    // A subscriber would race the router and could announce the *previous*
+    // page's title. The first call is the initial page load - the document title
+    // is read normally then, and there is nothing to announce.
+    if (this.titleApplied) {
+      this.liveAnnouncer.announce(fullTitle, 'polite');
+    }
+    this.titleApplied = true;
   }
 }
 

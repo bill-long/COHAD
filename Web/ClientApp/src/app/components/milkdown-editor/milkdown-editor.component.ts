@@ -107,6 +107,13 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
         this.reconcile();
       });
     }
+
+    // The accessible name is written straight onto the editable node rather than
+    // bound in the template (see labelEditableElement), so it has to be
+    // re-applied by hand when a caller changes it.
+    if ((changes['ariaLabel'] || changes['placeholder']) && this.ready) {
+      this.labelEditableElement();
+    }
   }
 
   ngOnDestroy(): void {
@@ -292,6 +299,22 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
     };
   }
 
+  /**
+   * Names the element the user actually types into. Crepe mounts a
+   * contenteditable (`.ProseMirror`) inside the container, and that node - not
+   * the wrapper - is what assistive tech exposes as the text box, so the label
+   * has to land on it after create() rather than on the host div in the
+   * template (WCAG 4.1.2).
+   */
+  private labelEditableElement(): void {
+    const label = this.ariaLabel || this.placeholder;
+    if (!label) {
+      return;
+    }
+    const editable = this.container.nativeElement.querySelector('.ProseMirror');
+    editable?.setAttribute('aria-label', label);
+  }
+
   /** Builds a fresh Crepe editor loaded with `value`, wires its content listener, and returns the
    *  instance (also stored on {@link crepe}). The return value is used by the real-editor tests, which
    *  drive createEditor directly; {@link rebuild} disposes via {@link crepe} rather than the return. */
@@ -330,6 +353,7 @@ export class MilkdownEditorComponent implements AfterViewInit, OnChanges, OnDest
     // the component was torn down mid-build, keeping teardown single-destroy.
     this.crepe = crepe;
     this.ready = true;
+    this.labelEditableElement();
     // Baseline the echo guard on the editor's normalized serialization of the loaded content, so a
     // post-load normalization echo (which carries the normalized form, not the raw input) is
     // recognised and swallowed rather than emitted as a phantom user edit. Guard getMarkdown() as

@@ -8,7 +8,7 @@ Expand a committee to edit it:
 
 - **Add member** and pick the resident from the search list - every member row must have a resident selected before Save works.
 - Each member can have a title, bio, and photo (with a slider to adjust the photo's framing).
-- Drag rows to control the order members are listed publicly.
+- Drag rows, or use the up/down arrows beside a member, to control the order members are listed publicly.
 - **Remove is permanent** for a saved member - you will be asked to confirm.
 
 ## Mail forwarding

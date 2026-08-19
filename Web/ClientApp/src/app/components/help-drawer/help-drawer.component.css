@@ -52,8 +52,15 @@
 }
 
 .help-drawer-title {
+  margin: 0;
   font-size: var(--heading-section);
   font-weight: var(--heading-section-weight);
+}
+
+/* Focused programmatically when the drawer swaps between the index and a topic,
+   so it must not paint a focus ring - it is a heading, not a control. */
+.help-drawer-title:focus {
+  outline: none;
 }
 
 .help-drawer-spacer {

@@ -42,7 +42,7 @@ export class SendEmailComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Test recipient picker
   testRecipients: TestRecipientOption[] = [];
-  selectedTestRecipients: Set<string> = new Set();
+  selectedTestRecipients = new Set<string>();
 
   // Email job queue state (real send)
   activeJob: EmailJobSummary | null = null;

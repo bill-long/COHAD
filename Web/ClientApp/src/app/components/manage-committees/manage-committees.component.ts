@@ -384,8 +384,33 @@ export class ManageCommitteesComponent implements OnInit, OnDestroy {
     return null;
   }
 
+  /**
+   * Name used in the reorder buttons' accessible names, so a screen-reader user
+   * hears which member each button moves rather than "Move up" N times.
+   */
+  memberOrderLabel(member: CommitteeMemberAdmin): string {
+    const name = (member.displayName ?? '').trim();
+    return name.length > 0 ? name : 'this member';
+  }
+
   dropMember(event: CdkDragDrop<CommitteeMemberAdmin[]>, committee: CommitteeAdmin): void {
-    moveItemInArray(committee.members, event.previousIndex, event.currentIndex);
+    this.reorderMembers(committee, event.previousIndex, event.currentIndex);
+  }
+
+  /**
+   * Moves a member one position. CDK drag-and-drop has no keyboard equivalent,
+   * so the up/down buttons this backs are the only pointer-free way to reorder
+   * members (WCAG 2.1.1, 2.5.7). Mirrors moveCommittee below.
+   */
+  moveMember(committee: CommitteeAdmin, index: number, direction: -1 | 1): void {
+    this.reorderMembers(committee, index, index + direction);
+  }
+
+  private reorderMembers(committee: CommitteeAdmin, from: number, to: number): void {
+    if (to < 0 || to >= committee.members.length) {
+      return;
+    }
+    moveItemInArray(committee.members, from, to);
     committee.members.forEach((m, i) => (m.displayOrder = i));
   }
 

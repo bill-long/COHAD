@@ -1,8 +1,16 @@
-<app-navbar></app-navbar>
-<div>
+<!-- While auth is bootstrapping, a full-viewport scrim covers the page. The
+     shell is marked inert for that moment so keyboard and screen-reader users
+     cannot reach controls hidden behind it. Applied per element rather than via
+     a wrapper, to keep the sticky toolbar's containing block unchanged. -->
+<a class="skip-link" href="#main-content" [attr.inert]="(showPostLoginTransition$ | async) ? '' : null">
+    Skip to main content
+</a>
+<app-navbar [attr.inert]="(showPostLoginTransition$ | async) ? '' : null"></app-navbar>
+<main id="main-content" #mainContent tabindex="-1" [attr.inert]="(showPostLoginTransition$ | async) ? '' : null">
     <router-outlet></router-outlet>
-</div>
+</main>
 <app-help-drawer></app-help-drawer>
+
 <div *ngIf="showPostLoginTransition$ | async" class="post-login-transition" role="status" aria-live="polite">
     <div class="post-login-transition__content">
         <mat-progress-spinner diameter="36" mode="indeterminate"></mat-progress-spinner>

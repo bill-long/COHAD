@@ -1,4 +1,4 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
 import { BlockScrollStrategy, ScrollStrategyOptions } from '@angular/cdk/overlay';
 import { SafeHtml } from '@angular/platform-browser';
 import { Router } from '@angular/router';
@@ -24,6 +24,8 @@ interface HelpSection {
   standalone: false,
 })
 export class HelpDrawerComponent implements OnDestroy {
+  @ViewChild('drawerTitle') private drawerTitle?: ElementRef<HTMLElement>;
+
   readonly open$: Observable<boolean>;
   readonly sections$: Observable<HelpSection[]>;
 
@@ -72,9 +74,9 @@ export class HelpDrawerComponent implements OnDestroy {
           this.scrollBlock.enable();
           const contextual = helpService.currentTopic;
           if (contextual) {
-            this.showTopic(contextual);
+            this.showTopic(contextual, false);
           } else {
-            this.showIndex();
+            this.showIndex(false);
           }
         } else {
           this.scrollBlock.disable();
@@ -95,20 +97,48 @@ export class HelpDrawerComponent implements OnDestroy {
     this.helpService.close();
   }
 
-  showIndex(): void {
+  showIndex(moveFocus = true): void {
     this.view = 'index';
     this.activeTopic = null;
     this.topicHtml = null;
     this.topicLoadFailed = false;
     this.topicRequests.next(null);
+    if (moveFocus) {
+      this.focusTitle();
+    }
   }
 
-  showTopic(topic: HelpTopic): void {
+  /**
+   * Swapping between the index and a topic replaces the whole drawer body,
+   * destroying whatever the user just activated - focus would otherwise fall to
+   * the document. Moving it to the drawer's heading keeps focus inside the trap
+   * and makes a screen reader announce what is now on screen.
+   *
+   * The open$ subscription passes moveFocus: false when it sets up the initial
+   * view, because cdkTrapFocusAutoCapture owns focus at that point.
+   */
+  private focusTitle(): void {
+    if (!this.drawerTitle) {
+      return;
+    }
+    // setTimeout, not queueMicrotask: zone.js patches queueMicrotask into a Zone
+    // microtask, and microtasks drain *before* onMicrotaskEmpty triggers
+    // ApplicationRef.tick(). Focusing there would land on the heading while it
+    // still shows the previous view's title, so a screen reader would announce
+    // the view the user just left - the exact thing this focus move prevents.
+    // A macrotask runs after that tick, with the new title rendered.
+    setTimeout(() => this.drawerTitle?.nativeElement.focus());
+  }
+
+  showTopic(topic: HelpTopic, moveFocus = true): void {
     this.view = 'topic';
     this.activeTopic = topic;
     this.topicHtml = null;
     this.topicLoadFailed = false;
     this.topicRequests.next(topic);
+    if (moveFocus) {
+      this.focusTitle();
+    }
   }
 
   /**

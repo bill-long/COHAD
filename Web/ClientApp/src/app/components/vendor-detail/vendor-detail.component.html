@@ -15,7 +15,7 @@
 
   <ng-container *ngIf="vendor as v">
     <section class="vendor-summary" aria-label="Vendor information">
-      <h2 class="vendor-name">{{ v.name }}</h2>
+      <h1 class="vendor-name">{{ v.name }}</h1>
 
       <div class="vendor-categories" aria-label="Categories">
         <ng-container *ngIf="(v.categories?.length ?? 0) > 0; else uncategorizedDetail">

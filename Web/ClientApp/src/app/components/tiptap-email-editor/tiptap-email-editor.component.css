@@ -115,6 +115,9 @@
 }
 
 /* TipTap ProseMirror styles (ViewEncapsulation.None required) */
+/* ProseMirror paints its own outline on the contenteditable; it is suppressed
+   here and replaced by the :focus-within ring below, which follows the global
+   focus-indicator token instead (WCAG 2.4.7). */
 .tiptap-email-editor .tiptap {
   min-height: 200px;
   padding: 12px 16px;
@@ -123,6 +126,12 @@
   font-size: 14px;
   line-height: 1.6;
   color: var(--text-primary);
+}
+
+.tiptap-email-editor .editor-content:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+  border-radius: 6px;
 }
 
 .tiptap-email-editor .tiptap p {

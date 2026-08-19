@@ -172,6 +172,13 @@
 
 /* --- Drag handle --- */
 
+/* Drag handle plus the keyboard reorder buttons, stacked in the row gutter. */
+.member-order-controls {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .drag-handle {
   cursor: grab;
   color: var(--text-muted);
@@ -383,6 +390,13 @@
     width: 44px;
     height: 44px;
     line-height: 44px;
+  }
+
+  /* Three 44px targets in a row would take a quarter of a phone's width and
+     squeeze the member's name to nothing, so stack them instead of shrinking
+     them - the touch target stays 44x44 (mobile-css.instructions.md). */
+  .member-order-controls {
+    flex-direction: column;
   }
 
   .order-btn mat-icon {

@@ -153,6 +153,28 @@
   border-radius: 8px;
 }
 
+/* Drag handle plus the keyboard reorder buttons, stacked in the row gutter. */
+.residentOrderControls {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.orderBtn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.orderBtn .mat-icon {
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  font-size: 18px;
+}
+
 .dragHandle {
   width: 32px;
   height: 32px;
@@ -315,6 +337,19 @@
     height: 18px;
     line-height: 18px;
     font-size: 18px;
+  }
+
+  /* Full 44x44 touch targets on mobile (mobile-css.instructions.md), stacked
+     so three of them in a row do not eat the resident's name. */
+  .residentOrderControls {
+    flex-direction: column;
+    margin-top: 0;
+  }
+
+  .orderBtn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
   }
 
   /* Remove card chrome — go full-bleed on mobile */
