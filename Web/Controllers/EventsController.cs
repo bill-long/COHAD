@@ -229,6 +229,9 @@ namespace Web.Controllers
                     read.Event.PromoMediaThumbBlobPath = thumbBlobPath;
                     mayBeReferenced = true;
                     await _communityEventRepository.ReplaceAsync(read.Event, read.ETag);
+                    await CleanupAssetsAsync(
+                        GetEventAssetPaths(stored).Except(new[] { read.Event.PromoMediaBlobPath, thumbBlobPath })
+                    );
                 }
             }
             catch (Exception ex)
@@ -256,7 +259,17 @@ namespace Web.Controllers
             return File(thumbBytes, "image/jpeg");
         }
 
-        // These responses confirm rejection. Timeouts, cancellation and server errors do not.
+        // Include the legacy thumbnail even when older lazy generation did not persist its path.
+        private static string[] GetEventAssetPaths(CommunityEvent communityEvent) =>
+            new[]
+            {
+                communityEvent.PromoMediaBlobPath,
+                communityEvent.PromoMediaThumbBlobPath,
+                $"events/{communityEvent.Id:D}/og-thumb.jpg",
+            };
+
+        // These responses report a write that was not committed, including exhausted throttling retries.
+        // Timeouts, cancellation and server errors have an unknown outcome.
         private static bool IsRejectedAssetWrite(CosmosException ex) =>
             ex.StatusCode == HttpStatusCode.NotFound
             || ex.StatusCode == HttpStatusCode.PreconditionFailed
@@ -370,7 +383,7 @@ namespace Web.Controllers
                 communityEvent = updateRead.Event;
             }
 
-            var previousAssets = new[] { communityEvent.PromoMediaBlobPath, communityEvent.PromoMediaThumbBlobPath };
+            var previousAssets = GetEventAssetPaths(communityEvent);
             var newAssets = new HashSet<string>(StringComparer.Ordinal);
             var mayBeReferenced = false;
             CommunityEvent saved;
@@ -582,7 +595,7 @@ namespace Web.Controllers
             }
 
             await _communityEventRepository.DeleteAsync(id);
-            await CleanupAssetsAsync(new[] { stored.PromoMediaBlobPath, stored.PromoMediaThumbBlobPath });
+            await CleanupAssetsAsync(GetEventAssetPaths(stored));
             await _auditLogRepository.AddAsync(
                 new NewAuditLogEntry
                 {

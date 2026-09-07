@@ -252,6 +252,73 @@ public sealed class EventAssetLifecycleTests
             Assert.Null(error);
     }
 
+    [Theory]
+    [InlineData("replace", false)]
+    [InlineData("replace", true)]
+    [InlineData("remove", false)]
+    [InlineData("remove", true)]
+    [InlineData("delete", false)]
+    [InlineData("delete", true)]
+    [InlineData("lazy", false)]
+    [InlineData("lazy", true)]
+    public async Task Legacy_conventional_thumbnail_is_cleaned_only_after_confirmed_persistence(
+        string operation,
+        bool fail
+    )
+    {
+        var h = new Harness();
+        var legacyPath = $"events/{h.Stored.Id:D}/og-thumb.jpg";
+        h.Files[legacyPath] = new byte[] { 8 };
+        h.Stored.PromoMediaThumbBlobPath = null;
+        h.Files.Remove(Harness.OldThumb);
+        if (fail)
+            h.SaveFailure = new CosmosException("Conflict", HttpStatusCode.PreconditionFailed, 0, "test", 0);
+        if (operation == "delete")
+        {
+            h.Events.Setup(r => r.GetByIdAsync(h.Stored.Id)).ReturnsAsync(h.Stored);
+            h.Events.Setup(r => r.DeleteAsync(h.Stored.Id))
+                .Returns(() =>
+                    fail
+                        ? Task.FromException(
+                            new CosmosException("Conflict", HttpStatusCode.PreconditionFailed, 0, "test", 0)
+                        )
+                        : Task.CompletedTask
+                );
+            await Record.ExceptionAsync(() => h.Controller().DeleteManage(h.Stored.Id));
+        }
+        else if (operation == "lazy")
+        {
+            await h.Controller().DownloadPromoThumb("event");
+        }
+        else
+        {
+            var request = h.Request();
+            if (operation == "remove")
+            {
+                request.PromotionalAsset = null;
+                request.RemovePromoMedia = true;
+            }
+            await h.Controller().UpsertManage(request);
+        }
+        Assert.Equal(fail, h.Files.ContainsKey(legacyPath));
+    }
+
+    [Fact]
+    public async Task Legacy_named_promo_is_not_deleted_during_thumbnail_migration_or_metadata_save()
+    {
+        var h = new Harness();
+        var legacyPath = $"events/{h.Stored.Id:D}/og-thumb.jpg";
+        h.Files[legacyPath] = new byte[] { 8 };
+        h.Stored.PromoMediaBlobPath = legacyPath;
+        h.Stored.PromoMediaThumbBlobPath = null;
+        await h.Controller().DownloadPromoThumb("event");
+        var request = h.Request();
+        request.PromotionalAsset = null;
+        await h.Controller().UpsertManage(request);
+        Assert.True(h.Files.ContainsKey(legacyPath));
+        Assert.True(h.Files.ContainsKey(h.Stored.PromoMediaThumbBlobPath));
+    }
+
     private sealed class Harness
     {
         public const string OldPromo = "events/old-promo.jpg";
