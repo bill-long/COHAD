@@ -9,7 +9,7 @@ namespace Web.UpdateModels
     /// difference is that StreetName and StreetNumber are omitted,
     /// because they must not be changed.
     /// </summary>
-    public class UpdatedHome
+    public class UpdatedHome : VersionedUpdate
     {
         public Guid Id { get; set; }
 

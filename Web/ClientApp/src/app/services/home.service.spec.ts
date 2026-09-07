@@ -43,6 +43,29 @@ describe('HomeService failure reporting', () => {
 
   const home = { id: 'h-1' } as unknown as Home;
 
+  for (const method of ['saveHomeAndReloadAll', 'saveHomeAndReloadMine'] as const) {
+    it(`${method} sends the home snapshot version`, () => {
+      const service = setup(false);
+      service[method]({ ...home, eTag: 'home-v1' }).subscribe();
+      expect(httpSpy.put).toHaveBeenCalledOnceWith('api/home', jasmine.objectContaining({ eTag: 'home-v1' }));
+    });
+
+    it(`${method} shows missing-version refresh guidance`, () => {
+      const service = setup(false);
+      httpSpy.put.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: { errors: { ETag: ['Refresh to load the current record before saving.'] } },
+            }),
+        ),
+      );
+      service[method](home).subscribe();
+      expect(snackSpy.open.calls.mostRecent().args[0]).toBe('Refresh to load the current record before saving.');
+    });
+  }
+
   it('tells the user when saving all homes fails', () => {
     const service = setup(true);
     let emitted: boolean | undefined;
@@ -162,12 +185,8 @@ describe('HomeService failure reporting', () => {
     // so a transient outage left an empty home list until a page reload.
     httpSpy = jasmine.createSpyObj('HttpClient', ['get', 'put', 'delete']);
     let getCalls = 0;
-    httpSpy.get.and.callFake(
-      (() =>
-        getCalls++ === 0
-          ? throwError(() => new HttpErrorResponse({ status: 500 }))
-          : of([{ id: 'h-1' } as unknown as Home])) as never,
-    );
+    httpSpy.get.and.callFake((() =>
+      getCalls++ === 0 ? throwError(() => new HttpErrorResponse({ status: 500 })) : of([{ id: 'h-1' } as unknown as Home])) as never);
     snackSpy = jasmine.createSpyObj('MatSnackBar', ['open']);
     const bus = new Subject<Action>();
 

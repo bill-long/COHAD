@@ -126,6 +126,12 @@ export class HomeService {
    */
   private serverMessage(err: unknown): string | null {
     const response = err as HttpErrorResponse | undefined;
+    if (response?.status === 400) {
+      const errors = response.error?.errors?.ETag;
+      if (Array.isArray(errors) && typeof errors[0] === 'string') {
+        return errors[0];
+      }
+    }
     if (response?.status !== 409) {
       return null;
     }

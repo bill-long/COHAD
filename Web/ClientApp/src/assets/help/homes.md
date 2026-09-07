@@ -15,3 +15,4 @@ Click the pencil to open the editor. You can:
 - **Deleting a resident is permanent** once saved - you will be asked to confirm.
 - **Removing a home association** means that login can no longer edit the home's details; it does not delete the account itself (see [Users](#topic:users)).
 - If an email address shows a muted **Suppressed** chip, mail to it is currently blocked. That can only be changed from [Suppressions](#topic:suppressions) - there is deliberately no way to clear it from this editor.
+- Home saves check the version loaded when you opened the editor, including on My Info. If another save changed the home, refresh and reopen it before reapplying your changes. Home and resident changes are stored separately; after other save errors, check which changes took effect.

@@ -132,7 +132,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(upserted);
         Assert.Contains(User.Role.Resident, upserted!.Roles);
         Assert.Contains(homeId, upserted.OwnedHomeIds);
@@ -335,7 +335,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         mockConversion.Verify(
             s => s.ConvertUserSignupsToHomeAsync(targetUniqueId, homeId, "42 Oak Ave"),
             Times.Once
@@ -407,7 +407,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
     }
 
     [Fact]
@@ -514,7 +514,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         mockConversion.Verify(
             s => s.ConvertUserSignupsToHomeAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>()),
             Times.Never
@@ -580,7 +580,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         mockConversion.Verify(
             s => s.ConvertUserSignupsToHomeAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>()),
             Times.Never
@@ -668,7 +668,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.Equal(residentId, upserted!.ResidentId);
     }
 
@@ -757,7 +757,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.Equal(existingLink, upserted!.ResidentId);
     }
 
@@ -785,7 +785,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.Null(upserted!.ResidentId);
     }
 
@@ -849,7 +849,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.Null(upserted!.ResidentId);
         mockAudit.Verify(
             a => a.AddAsync(It.Is<NewAuditLogEntry>(e => e.Action.Contains("Cleared the resident link"))),
@@ -889,7 +889,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.Equal(existingLink, upserted!.ResidentId);
     }
 
@@ -1298,7 +1298,7 @@ public sealed class UserControllerTests
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Once);
         mockConversion.Verify(s => s.ConvertUserSignupsToHomeAsync(targetUniqueId, homeId, It.IsAny<string>()), Times.Once);
     }

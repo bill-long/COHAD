@@ -1,9 +1,9 @@
 import { Injectable, Inject } from '@angular/core';
 import { Action, applicationState, ApplicationState, dispatcher, LoadAllUsers, LoadAllUsersCompleted, LoadUserCompleted } from '../state';
-import { Observable, Subject, of, EMPTY, concat } from 'rxjs';
+import { Observable, Subject, of, EMPTY, concat, defer } from 'rxjs';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { switchMap, filter, defaultIfEmpty, catchError, finalize, ignoreElements } from 'rxjs/operators';
+import { switchMap, filter, defaultIfEmpty, catchError, finalize, ignoreElements, tap } from 'rxjs/operators';
 import { ApiUser } from '../models';
 
 /**
@@ -25,7 +25,7 @@ export class UserService {
     this.dispatcher
       .pipe(
         filter(a => a instanceof LoadAllUsers),
-        switchMap(a => this.httpClient.get<ApiUser[]>('api/user')),
+        switchMap(() => this.httpClient.get<ApiUser[]>('api/user').pipe(catchError(() => of<ApiUser[]>([])))),
       )
       .subscribe(
         u => this.dispatcher.next(new LoadAllUsersCompleted(u)),
@@ -52,44 +52,71 @@ export class UserService {
     // a link as a side effect (e.g. when the homes list had not loaded and the dropdown was empty).
     const residentIdForUpdate = residentLinkChanged ? (changedUser.residentId ?? EMPTY_GUID) : null;
 
-    const updateAssociations$ =
-      homesChanged || rolesChanged || residentLinkChanged
-        ? this.httpClient.put(`api/user/${encodeURIComponent(changedUser.uniqueId)}/associations`, {
-            roleNames: newRoleNames,
-            ownedHomeIds: newHomeIds,
-            residentId: residentIdForUpdate,
-          })
-        : EMPTY;
+    return defer(() => {
+      let eTag = originalUser.eTag;
+      let associationsSaved = false;
+      const updateAssociations$ =
+        homesChanged || rolesChanged || residentLinkChanged
+          ? defer(() =>
+              this.httpClient.put<{ eTag: string }>(`api/user/${encodeURIComponent(changedUser.uniqueId)}/associations`, {
+                eTag,
+                roleNames: newRoleNames,
+                ownedHomeIds: newHomeIds,
+                residentId: residentIdForUpdate,
+              }),
+            ).pipe(
+              tap(saved => {
+                associationsSaved = true;
+                eTag = saved?.eTag;
+                if (!eTag) {
+                  throw new Error('The save response did not include a record version.');
+                }
+              }),
+            )
+          : EMPTY;
 
-    const updateProfile$ =
-      originalUser.givenName != changedUser.givenName ||
-      originalUser.surname != changedUser.surname ||
-      originalUser.streetAddress != changedUser.streetAddress
-        ? this.httpClient.put(`api/user`, {
-            uniqueId: changedUser.uniqueId,
-            givenName: changedUser.givenName,
-            surname: changedUser.surname,
-            streetAddress: changedUser.streetAddress,
-          })
-        : EMPTY;
+      const updateProfile$ =
+        originalUser.givenName != changedUser.givenName ||
+        originalUser.surname != changedUser.surname ||
+        originalUser.streetAddress != changedUser.streetAddress
+          ? defer(() =>
+              this.httpClient.put(`api/user`, {
+                eTag,
+                uniqueId: changedUser.uniqueId,
+                givenName: changedUser.givenName,
+                surname: changedUser.surname,
+                streetAddress: changedUser.streetAddress,
+              }),
+            )
+          : EMPTY;
 
-    return concat(updateAssociations$, updateProfile$).pipe(
-      ignoreElements(),
-      defaultIfEmpty(true as boolean),
-      finalize(() => this.dispatcher.next(new LoadAllUsers())),
-      catchError(e => {
-        console.error('Failed to update user.', e);
-        // Surface the server's reason when it sent one - the 400s here are deterministic
-        // validation messages for which a blind retry can never succeed.
-        this.snackBar.open(this.serverMessage(e) ?? 'Could not save the user. Please try again.', 'Dismiss', { duration: 8000 });
-        return of(false);
-      }),
-    );
+      return concat(updateAssociations$, updateProfile$).pipe(
+        ignoreElements(),
+        defaultIfEmpty(true as boolean),
+        finalize(() => this.dispatcher.next(new LoadAllUsers())),
+        catchError(e => {
+          console.error('Failed to update user.', e);
+          // Surface the server's reason when it sent one - the 400s here are deterministic
+          // validation messages for which a blind retry can never succeed.
+          const reason = this.serverMessage(e) ?? 'Could not save the user. Refresh to see the current state.';
+          const message = associationsSaved ? `Role and home associations were saved, but profile changes failed. ${reason}` : reason;
+          this.snackBar.open(message, 'Dismiss', { duration: 8000 });
+          return of(false);
+        }),
+      );
+    });
   }
 
   private serverMessage(err: unknown): string | null {
     const response = err as HttpErrorResponse | undefined;
     const body: unknown = response?.error;
+
+    if (response?.status === 400) {
+      const errors = (body as { errors?: { ETag?: string[] } } | null)?.errors?.ETag;
+      if (Array.isArray(errors) && typeof errors[0] === 'string') {
+        return errors[0];
+      }
+    }
 
     // Bare strings are the deterministic validation 400s; surface them for any status, as before.
     if (typeof body === 'string' && body.trim().length > 0) {
