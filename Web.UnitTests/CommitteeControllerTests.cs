@@ -162,11 +162,12 @@ public sealed class CommitteeControllerTests
                     It.IsAny<IFormFile>(),
                     It.IsAny<string>(),
                     It.IsAny<string>(),
-                    It.IsAny<string>()
+                    It.IsAny<string>(),
+                    It.IsAny<Action<string>>()
                 )
             )
             .ReturnsAsync(
-                (IFormFile f, string ext, string prefix, string baseName) =>
+                (IFormFile f, string ext, string prefix, string baseName, Action<string> onUploadStarting) =>
                     new ImageUploadResult(
                         $"{prefix}/{baseName}{ext.ToLowerInvariant()}",
                         $"{baseName}{ext.ToLowerInvariant()}",
@@ -695,7 +696,8 @@ public sealed class CommitteeControllerTests
                     It.IsAny<IFormFile>(),
                     It.IsAny<string>(),
                     It.IsAny<string>(),
-                    It.IsAny<string>()
+                    It.IsAny<string>(),
+                    It.IsAny<Action<string>>()
                 )
             )
             .ReturnsAsync(

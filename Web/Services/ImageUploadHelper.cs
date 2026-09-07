@@ -17,12 +17,14 @@ namespace Web.Services
         /// <summary>
         /// Attempts PNG-to-JPEG conversion, then uploads the (possibly converted) image to blob storage.
         /// Returns the final blob path, display name, content type, and size.
+        /// Invokes onUploadStarting with the final path before writing, so callers can clean up failed uploads.
         /// </summary>
         Task<ImageUploadResult> ConvertAndUploadAsync(
             IFormFile file,
             string extension,
             string blobPathPrefix,
-            string safeBaseName
+            string safeBaseName,
+            System.Action<string> onUploadStarting = null
         );
     }
 
@@ -41,7 +43,8 @@ namespace Web.Services
             IFormFile file,
             string extension,
             string blobPathPrefix,
-            string safeBaseName
+            string safeBaseName,
+            System.Action<string> onUploadStarting = null
         )
         {
             ImageConversionResult? converted = null;
@@ -61,6 +64,8 @@ namespace Web.Services
             var finalDisplayName = $"{safeBaseName}{extension.ToLowerInvariant()}";
             var blobPath = $"{blobPathPrefix}/{finalDisplayName}";
             var trustedContentType = converted?.ContentType ?? ImageContentTypes.FromExtension(extension);
+
+            onUploadStarting?.Invoke(blobPath);
 
             if (converted != null)
             {

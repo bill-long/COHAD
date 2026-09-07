@@ -179,16 +179,14 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            // Serve pre-generated thumbnail if available (either from the document field or the conventional blob path).
-            var thumbBlobPath = !string.IsNullOrWhiteSpace(stored.PromoMediaThumbBlobPath)
-                ? stored.PromoMediaThumbBlobPath
-                : $"events/{stored.Id:D}/og-thumb.jpg";
-
-            var thumbFile = await _documentFileStore.DownloadAsync(thumbBlobPath);
-            if (thumbFile != null)
+            if (!string.IsNullOrWhiteSpace(stored.PromoMediaThumbBlobPath))
             {
-                Response.Headers["Cache-Control"] = "public, max-age=86400";
-                return File(thumbFile.Stream, "image/jpeg");
+                var thumbFile = await _documentFileStore.DownloadAsync(stored.PromoMediaThumbBlobPath);
+                if (thumbFile != null)
+                {
+                    Response.Headers["Cache-Control"] = "public, max-age=86400";
+                    return File(thumbFile.Stream, "image/jpeg");
+                }
             }
 
             // Lazy-generate thumbnail for legacy events that predate the thumbnail feature.
@@ -211,28 +209,90 @@ namespace Web.Controllers
                 return StatusCode(StatusCodes.Status415UnsupportedMediaType);
             }
 
-            await using (var thumbStream = new MemoryStream(thumbBytes))
-            {
-                await _documentFileStore.UploadAsync(thumbBlobPath, thumbStream, "image/jpeg");
-            }
-
-            // Best-effort persist the blob path on the event document; ignore concurrency failures.
+            var thumbBlobPath = $"events/{stored.Id:D}/thumbs/{Guid.NewGuid():N}.jpg";
+            var mayBeReferenced = false;
             try
             {
+                await using (var thumbStream = new MemoryStream(thumbBytes))
+                {
+                    await _documentFileStore.UploadAsync(thumbBlobPath, thumbStream, "image/jpeg");
+                }
+
                 var read = await _communityEventRepository.ReadAsync(stored.Id);
-                if (read != null && string.IsNullOrWhiteSpace(read.Event.PromoMediaThumbBlobPath))
+                // Attach only to the source revision. A concurrent replacement/removal owns its own assets.
+                if (
+                    read != null
+                    && read.Event.PromoMediaBlobPath == stored.PromoMediaBlobPath
+                    && read.Event.PromoMediaThumbBlobPath == stored.PromoMediaThumbBlobPath
+                )
                 {
                     read.Event.PromoMediaThumbBlobPath = thumbBlobPath;
+                    mayBeReferenced = true;
                     await _communityEventRepository.ReplaceAsync(read.Event, read.ETag);
+                    await CleanupAssetsAsync(
+                        GetEventAssetPaths(stored).Except(new[] { read.Event.PromoMediaBlobPath, thumbBlobPath })
+                    );
                 }
             }
-            catch (CosmosException)
+            catch (Exception ex)
             {
-                // Non-critical: the blob is already uploaded and will be found via the conventional path on next request.
+                if (ex is CosmosException cosmos && IsRejectedAssetWrite(cosmos))
+                {
+                    mayBeReferenced = false;
+                }
+                _logger.LogWarning(
+                    ex,
+                    "Could not persist event thumbnail {BlobPath}; retained: {Retained}",
+                    thumbBlobPath,
+                    mayBeReferenced
+                );
+            }
+            finally
+            {
+                if (!mayBeReferenced)
+                {
+                    await CleanupAssetsAsync(new[] { thumbBlobPath });
+                }
             }
 
             Response.Headers["Cache-Control"] = "public, max-age=86400";
             return File(thumbBytes, "image/jpeg");
+        }
+
+        // Include the legacy thumbnail even when older lazy generation did not persist its path.
+        private static string[] GetEventAssetPaths(CommunityEvent communityEvent) =>
+            new[]
+            {
+                communityEvent.PromoMediaBlobPath,
+                communityEvent.PromoMediaThumbBlobPath,
+                $"events/{communityEvent.Id:D}/og-thumb.jpg",
+            };
+
+        // These responses report a write that was not committed, including exhausted throttling retries.
+        // Timeouts, cancellation and server errors have an unknown outcome.
+        private static bool IsRejectedAssetWrite(CosmosException ex) =>
+            ex.StatusCode == HttpStatusCode.NotFound
+            || ex.StatusCode == HttpStatusCode.PreconditionFailed
+            || ex.StatusCode == HttpStatusCode.BadRequest
+            || ex.StatusCode == HttpStatusCode.Unauthorized
+            || ex.StatusCode == HttpStatusCode.Forbidden
+            || ex.StatusCode == HttpStatusCode.Conflict
+            || ex.StatusCode == HttpStatusCode.RequestEntityTooLarge
+            || ex.StatusCode == HttpStatusCode.TooManyRequests;
+
+        private async Task CleanupAssetsAsync(IEnumerable<string> paths)
+        {
+            foreach (var path in paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.Ordinal))
+            {
+                try
+                {
+                    await _documentFileStore.DeleteAsync(path);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not delete unreferenced event asset {BlobPath}", path);
+                }
+            }
         }
 
         [HttpGet("manage")]
@@ -323,161 +383,172 @@ namespace Web.Controllers
                 communityEvent = updateRead.Event;
             }
 
-            if (request.PromotionalAsset != null && request.PromotionalAsset.Length > 0)
+            var previousAssets = GetEventAssetPaths(communityEvent);
+            var newAssets = new HashSet<string>(StringComparer.Ordinal);
+            var mayBeReferenced = false;
+            CommunityEvent saved;
+            try
             {
-                if (request.PromotionalAsset.Length > _storageOptions.MaxUploadBytes)
+                if (request.PromotionalAsset != null && request.PromotionalAsset.Length > 0)
                 {
-                    return BadRequest($"File size exceeds max allowed size of {_storageOptions.MaxUploadBytes} bytes.");
-                }
-
-                var extension = Path.GetExtension(request.PromotionalAsset.FileName);
-                if (string.IsNullOrWhiteSpace(extension) || !AllowedMediaExtensions.Contains(extension))
-                {
-                    return BadRequest("Promotional media must be an image file (PNG, JPEG, GIF, or WebP).");
-                }
-
-                var safeBaseName = SanitizeFileName(
-                    Path.GetFileNameWithoutExtension(request.PromotionalAsset.FileName)
-                );
-                if (string.IsNullOrWhiteSpace(safeBaseName))
-                {
-                    return BadRequest("Uploaded file name is invalid.");
-                }
-
-                var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
-                    request.PromotionalAsset,
-                    extension,
-                    $"events/{communityEvent.Id:D}",
-                    safeBaseName
-                );
-
-                if (
-                    !string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath)
-                    && !string.Equals(
-                        communityEvent.PromoMediaBlobPath,
-                        uploadResult.BlobPath,
-                        StringComparison.OrdinalIgnoreCase
-                    )
-                )
-                {
-                    await _documentFileStore.DeleteAsync(communityEvent.PromoMediaBlobPath);
-                }
-
-                communityEvent.PromoMediaBlobPath = uploadResult.BlobPath;
-                communityEvent.PromoMediaDisplayName = uploadResult.FinalDisplayName;
-                communityEvent.PromoMediaContentType = uploadResult.ContentType;
-                communityEvent.PromoMediaSizeBytes = uploadResult.SizeBytes;
-
-                // Remove any stale thumbnail before generating a new one so a failure
-                // doesn't leave an old preview that no longer matches the current promo.
-                var thumbBlobPath = $"events/{communityEvent.Id:D}/og-thumb.jpg";
-                if (!string.IsNullOrWhiteSpace(communityEvent.PromoMediaThumbBlobPath))
-                {
-                    await _documentFileStore.DeleteAsync(communityEvent.PromoMediaThumbBlobPath);
-                }
-                else
-                {
-                    // Best-effort delete in case a thumb exists at the conventional path from lazy-gen.
-                    await _documentFileStore.DeleteAsync(thumbBlobPath);
-                }
-
-                communityEvent.PromoMediaThumbBlobPath = null;
-
-                // Generate OG thumbnail for link previews. Non-critical: if this fails the
-                // original promo is still usable and the thumbnail will be lazy-generated on first crawler access.
-                try
-                {
-                    // Use the converted JPEG bytes when available to avoid re-decoding the original PNG.
-                    Stream thumbSourceStream =
-                        uploadResult.ConvertedData != null
-                            ? new MemoryStream(uploadResult.ConvertedData)
-                            : request.PromotionalAsset.OpenReadStream();
-                    await using (thumbSourceStream)
+                    if (request.PromotionalAsset.Length > _storageOptions.MaxUploadBytes)
                     {
-                        var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
-                        await using var thumbStream = new MemoryStream(thumbBytes);
-                        await _documentFileStore.UploadAsync(thumbBlobPath, thumbStream, "image/jpeg");
-                        communityEvent.PromoMediaThumbBlobPath = thumbBlobPath;
+                        return BadRequest(
+                            $"File size exceeds max allowed size of {_storageOptions.MaxUploadBytes} bytes."
+                        );
+                    }
+
+                    var extension = Path.GetExtension(request.PromotionalAsset.FileName);
+                    if (string.IsNullOrWhiteSpace(extension) || !AllowedMediaExtensions.Contains(extension))
+                    {
+                        return BadRequest("Promotional media must be an image file (PNG, JPEG, GIF, or WebP).");
+                    }
+
+                    var safeBaseName = SanitizeFileName(
+                        Path.GetFileNameWithoutExtension(request.PromotionalAsset.FileName)
+                    );
+                    if (string.IsNullOrWhiteSpace(safeBaseName))
+                    {
+                        return BadRequest("Uploaded file name is invalid.");
+                    }
+
+                    var uploadResult = await _imageUploadHelper.ConvertAndUploadAsync(
+                        request.PromotionalAsset,
+                        extension,
+                        $"events/{communityEvent.Id:D}/{Guid.NewGuid():N}/promo",
+                        safeBaseName,
+                        path => newAssets.Add(path)
+                    );
+
+                    newAssets.Add(uploadResult.BlobPath);
+
+                    communityEvent.PromoMediaBlobPath = uploadResult.BlobPath;
+                    communityEvent.PromoMediaDisplayName = uploadResult.FinalDisplayName;
+                    communityEvent.PromoMediaContentType = uploadResult.ContentType;
+                    communityEvent.PromoMediaSizeBytes = uploadResult.SizeBytes;
+
+                    var thumbBlobPath = $"events/{communityEvent.Id:D}/thumbs/{Guid.NewGuid():N}.jpg";
+                    communityEvent.PromoMediaThumbBlobPath = null;
+
+                    // Generate OG thumbnail for link previews. Non-critical: if this fails the
+                    // original promo is still usable and the thumbnail will be lazy-generated on first crawler access.
+                    try
+                    {
+                        // Use the converted JPEG bytes when available to avoid re-decoding the original PNG.
+                        Stream thumbSourceStream =
+                            uploadResult.ConvertedData != null
+                                ? new MemoryStream(uploadResult.ConvertedData)
+                                : request.PromotionalAsset.OpenReadStream();
+                        await using (thumbSourceStream)
+                        {
+                            var thumbBytes = _ogThumbnailService.GenerateThumbnail(thumbSourceStream);
+                            await using var thumbStream = new MemoryStream(thumbBytes);
+                            newAssets.Add(thumbBlobPath);
+                            await _documentFileStore.UploadAsync(thumbBlobPath, thumbStream, "image/jpeg");
+                            communityEvent.PromoMediaThumbBlobPath = thumbBlobPath;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        await CleanupAssetsAsync(new[] { thumbBlobPath });
+                        newAssets.Remove(thumbBlobPath);
+                        _logger.LogWarning(ex, "Could not generate event thumbnail {BlobPath}", thumbBlobPath);
+                        // Thumbnail generation failed (e.g. corrupt image); the event save can proceed without it.
                     }
                 }
-                catch (Exception)
+                else if (request.RemovePromoMedia && !string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath))
                 {
-                    // Thumbnail generation failed (e.g. corrupt image); the event save can proceed without it.
+                    communityEvent.PromoMediaBlobPath = null;
+                    communityEvent.PromoMediaDisplayName = null;
+                    communityEvent.PromoMediaContentType = null;
+                    communityEvent.PromoMediaSizeBytes = null;
+                    communityEvent.PromoMediaThumbBlobPath = null;
                 }
-            }
-            else if (request.RemovePromoMedia && !string.IsNullOrWhiteSpace(communityEvent.PromoMediaBlobPath))
-            {
-                await _documentFileStore.DeleteAsync(communityEvent.PromoMediaBlobPath);
-                if (!string.IsNullOrWhiteSpace(communityEvent.PromoMediaThumbBlobPath))
+
+                communityEvent.Title = request.Title.Trim();
+                communityEvent.Description = (request.Description ?? string.Empty).Trim();
+                communityEvent.StartUtc = NormalizeToUtc(request.StartUtc.Value);
+                communityEvent.AllowSignups = request.AllowSignups;
+                communityEvent.SignupMode = request.SignupMode;
+                communityEvent.ModifiedByUniqueId = apiUser.UniqueId;
+                communityEvent.ModifiedUtc = now;
+                communityEvent.Signups ??= new List<EventSignup>();
+
+                var allEvents = await _communityEventRepository.GetAllAsync();
+                var oldSlug = communityEvent.PublicSlug;
+                communityEvent.PublicSlug = EventUrlSlug
+                    .EnsureUniquePublicSlug(communityEvent.Id, communityEvent.StartUtc, communityEvent.Title, allEvents)
+                    .ToLowerInvariant();
+
+                var normalizedOldSlug = oldSlug?.Trim().ToLowerInvariant();
+
+                if (
+                    !isCreate
+                    && !string.IsNullOrWhiteSpace(normalizedOldSlug)
+                    && !string.Equals(normalizedOldSlug, communityEvent.PublicSlug, StringComparison.OrdinalIgnoreCase)
+                )
                 {
-                    await _documentFileStore.DeleteAsync(communityEvent.PromoMediaThumbBlobPath);
+                    communityEvent.PreviousSlugs ??= new List<string>();
+                    if (!communityEvent.PreviousSlugs.Contains(normalizedOldSlug, StringComparer.OrdinalIgnoreCase))
+                    {
+                        communityEvent.PreviousSlugs.Add(normalizedOldSlug);
+                    }
+                }
+
+                mayBeReferenced = true;
+                if (isCreate)
+                {
+                    saved = await _communityEventRepository.UpsertAsync(communityEvent);
                 }
                 else
                 {
-                    await _documentFileStore.DeleteAsync($"events/{communityEvent.Id:D}/og-thumb.jpg");
+                    try
+                    {
+                        saved = await _communityEventRepository.ReplaceAsync(communityEvent, updateRead!.ETag);
+                    }
+                    catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
+                    {
+                        mayBeReferenced = false;
+                        return NotFound();
+                    }
+                    catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+                    {
+                        mayBeReferenced = false;
+                        // Do not retry: a second read could merge signups while other fields stay stale vs that read.
+                        return StatusCode(
+                            StatusCodes.Status409Conflict,
+                            "Unable to save event due to concurrent updates. Please refresh and try again."
+                        );
+                    }
                 }
-
-                communityEvent.PromoMediaBlobPath = null;
-                communityEvent.PromoMediaDisplayName = null;
-                communityEvent.PromoMediaContentType = null;
-                communityEvent.PromoMediaSizeBytes = null;
-                communityEvent.PromoMediaThumbBlobPath = null;
             }
-
-            communityEvent.Title = request.Title.Trim();
-            communityEvent.Description = (request.Description ?? string.Empty).Trim();
-            communityEvent.StartUtc = NormalizeToUtc(request.StartUtc.Value);
-            communityEvent.AllowSignups = request.AllowSignups;
-            communityEvent.SignupMode = request.SignupMode;
-            communityEvent.ModifiedByUniqueId = apiUser.UniqueId;
-            communityEvent.ModifiedUtc = now;
-            communityEvent.Signups ??= new List<EventSignup>();
-
-            var allEvents = await _communityEventRepository.GetAllAsync();
-            var oldSlug = communityEvent.PublicSlug;
-            communityEvent.PublicSlug = EventUrlSlug
-                .EnsureUniquePublicSlug(communityEvent.Id, communityEvent.StartUtc, communityEvent.Title, allEvents)
-                .ToLowerInvariant();
-
-            var normalizedOldSlug = oldSlug?.Trim().ToLowerInvariant();
-
-            if (
-                !isCreate
-                && !string.IsNullOrWhiteSpace(normalizedOldSlug)
-                && !string.Equals(normalizedOldSlug, communityEvent.PublicSlug, StringComparison.OrdinalIgnoreCase)
-            )
+            catch (CosmosException ex) when (IsRejectedAssetWrite(ex))
             {
-                communityEvent.PreviousSlugs ??= new List<string>();
-                if (!communityEvent.PreviousSlugs.Contains(normalizedOldSlug, StringComparer.OrdinalIgnoreCase))
+                mayBeReferenced = false;
+                throw;
+            }
+            catch (Exception ex) when (mayBeReferenced)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Event write outcome unknown; retaining uploaded assets {BlobPaths}",
+                    string.Join(", ", newAssets)
+                );
+                throw;
+            }
+            finally
+            {
+                // Once a write starts, an unknown outcome may have committed these paths.
+                // Retain them for reconciliation rather than risk deleting live assets.
+                if (!mayBeReferenced)
                 {
-                    communityEvent.PreviousSlugs.Add(normalizedOldSlug);
+                    await CleanupAssetsAsync(newAssets);
                 }
             }
 
-            CommunityEvent saved;
-            if (isCreate)
-            {
-                saved = await _communityEventRepository.UpsertAsync(communityEvent);
-            }
-            else
-            {
-                try
-                {
-                    saved = await _communityEventRepository.ReplaceAsync(communityEvent, updateRead!.ETag);
-                }
-                catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
-                {
-                    return NotFound();
-                }
-                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
-                {
-                    // Do not retry: a second read could merge signups while other fields stay stale vs that read.
-                    return StatusCode(
-                        StatusCodes.Status409Conflict,
-                        "Unable to save event due to concurrent updates. Please refresh and try again."
-                    );
-                }
-            }
+            await CleanupAssetsAsync(
+                previousAssets.Except(new[] { saved.PromoMediaBlobPath, saved.PromoMediaThumbBlobPath })
+            );
 
             await _auditLogRepository.AddAsync(
                 new NewAuditLogEntry
@@ -492,7 +563,14 @@ namespace Web.Controllers
                 }
             );
 
-            return Ok(CommunityEventDetail.FromStorageModel(saved, includeSignups: true, currentUserHomeIds: apiUser.OwnedHomeIds, currentUserUniqueId: apiUser.UniqueId));
+            return Ok(
+                CommunityEventDetail.FromStorageModel(
+                    saved,
+                    includeSignups: true,
+                    currentUserHomeIds: apiUser.OwnedHomeIds,
+                    currentUserUniqueId: apiUser.UniqueId
+                )
+            );
         }
 
         [HttpDelete("manage/{id:guid}")]
@@ -516,21 +594,8 @@ namespace Web.Controllers
                 return NotFound();
             }
 
-            if (!string.IsNullOrWhiteSpace(stored.PromoMediaBlobPath))
-            {
-                await _documentFileStore.DeleteAsync(stored.PromoMediaBlobPath);
-            }
-
-            if (!string.IsNullOrWhiteSpace(stored.PromoMediaThumbBlobPath))
-            {
-                await _documentFileStore.DeleteAsync(stored.PromoMediaThumbBlobPath);
-            }
-            else
-            {
-                await _documentFileStore.DeleteAsync($"events/{stored.Id:D}/og-thumb.jpg");
-            }
-
             await _communityEventRepository.DeleteAsync(id);
+            await CleanupAssetsAsync(GetEventAssetPaths(stored));
             await _auditLogRepository.AddAsync(
                 new NewAuditLogEntry
                 {
