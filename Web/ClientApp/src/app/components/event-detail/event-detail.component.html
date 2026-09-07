@@ -77,6 +77,11 @@
                 </mat-form-field>
               </ng-container>
 
+              <p *ngIf="selectedHomeId && event.myUserSignup" class="mat-body-medium signup-helper">
+                Your earlier personal signup is still counted. Updating will replace it with a signup for the selected home. Removing will
+                cancel your personal signup and any signup for that home.
+              </p>
+
               <div class="signup-form-fields" *ngIf="event.signupMode !== 'HouseholdOnly'">
                 <div class="signup-form-counts">
                   <mat-form-field

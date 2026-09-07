@@ -196,6 +196,86 @@ describe('EventDetailComponent signup removal', () => {
     expect(service.signUp).not.toHaveBeenCalled();
   });
 
+  it('prefills an orphaned personal signup and moves its details to the selected home on update', () => {
+    event.signupMode = 'AdultsAndChildren';
+    event.myHomeSignups = [];
+    event.myUserSignup = { ...signup, homeId: null, adults: 2, children: 1, adultNames: ['Parent', 'Guest'], childNames: ['Child'] };
+    component.onHomeSelected('home-2');
+    fixture.detectChanges();
+
+    expect(component.adults).toBe(2);
+    expect(component.children).toBe(1);
+    expect(component.adultNames).toBe('Parent, Guest');
+    expect(component.childNames).toBe('Child');
+    expect(fixture.nativeElement.textContent).toContain('Your earlier personal signup is still counted.');
+    button('Update signup')!.click();
+    expect(service.signUp).toHaveBeenCalledOnceWith(event.publicSlug, {
+      homeId: 'home-2',
+      adults: 2,
+      children: 1,
+      adultNames: ['Parent', 'Guest'],
+      childNames: ['Child'],
+      remove: false,
+    });
+    response.next({ ...event, myUserSignup: null, myHomeSignups: [{ ...event.myUserSignup!, homeId: 'home-2' }] });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Your earlier personal signup');
+    expect(button('Update signup')).toBeDefined();
+    component.onHomeSelected('home-1');
+    fixture.detectChanges();
+    expect(button('Remove signup')).toBeUndefined();
+    expect(component.adults).toBe(1);
+  });
+
+  it('keeps home details ahead of an orphan and uses the orphan when switching to an unsigned home', () => {
+    event.signupMode = 'AdultsAndChildren';
+    event.myHomeSignups = [{ ...signup, adults: 4, adultNames: ['Home guest'] }];
+    event.myUserSignup = { ...signup, homeId: null, adults: 2, adultNames: ['Personal guest'] };
+    component.onHomeSelected('home-1');
+    expect(component.adults).toBe(4);
+    expect(component.adultNames).toBe('Home guest');
+    component.onHomeSelected('home-2');
+    expect(component.hasExistingSignup).toBeTrue();
+    expect(component.adults).toBe(2);
+    expect(component.adultNames).toBe('Personal guest');
+    component.onHomeSelected('home-1');
+    expect(component.adults).toBe(4);
+  });
+
+  for (const mode of ['HouseholdOnly', 'AdultsOnly'] as EventSignupMode[]) {
+    it(`removes an orphaned ${mode} signup while preserving another home's signup`, () => {
+      event.signupMode = mode;
+      event.myUserSignup = { ...signup, homeId: null, adults: mode === 'HouseholdOnly' ? 0 : 2 };
+      component.onHomeSelected('home-2');
+      fixture.detectChanges();
+      expect(component.requiredCountMin).toBe(0);
+      button('Remove signup')!.click();
+      expect(service.signUp.calls.mostRecent().args[1]).toEqual({
+        homeId: 'home-2',
+        adults: 0,
+        children: 0,
+        adultNames: [],
+        childNames: [],
+        remove: true,
+      });
+      response.next({ ...event, myUserSignup: null });
+      fixture.detectChanges();
+      expect(button('Remove signup')).toBeUndefined();
+      component.onHomeSelected('home-1');
+      expect(component.hasExistingSignup).toBeTrue();
+    });
+  }
+
+  it('allows zero-count removal of an orphaned count-based signup', () => {
+    event.signupMode = 'AdultsOnly';
+    event.myHomeSignups = [];
+    event.myUserSignup = { ...signup, homeId: null, adults: 2 };
+    component.onHomeSelected('home-1');
+    component.adults = 0;
+    component.submitSignup();
+    expect(service.signUp.calls.mostRecent().args[1].remove).toBeTrue();
+  });
+
   it('preserves zero-count removal for count-based modes', () => {
     event.signupMode = 'AdultsOnly';
     component.adults = 0;
