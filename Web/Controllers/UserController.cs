@@ -81,6 +81,7 @@ namespace Web.Controllers
             storedUser.GivenName = updatedUser.GivenName;
             storedUser.Surname = updatedUser.Surname;
             storedUser.StreetAddress = updatedUser.StreetAddress;
+            storedUser.ETag = updatedUser.ETag;
 
             // Write then audit, best-effort, like the sibling association endpoints: the audit log
             // only ever describes changes that really happened, and a failed audit after an applied
@@ -113,7 +114,7 @@ namespace Web.Controllers
                 );
             }
 
-            return Ok();
+            return Ok(new { storedUser.ETag });
         }
 
         [HttpPut("{userId}/associations")]
@@ -242,6 +243,7 @@ namespace Web.Controllers
             userToModify.Roles = requestedRoles;
             userToModify.OwnedHomeIds = requestedHomeIds;
             userToModify.ResidentId = effectiveResidentId;
+            userToModify.ETag = updatedAssociations.ETag;
 
             // Write then audit, so the audit log only ever describes changes that really happened
             // (same reasoning as UserPurgeRunner's delete-then-audit ordering). The audit write is
@@ -327,7 +329,7 @@ namespace Web.Controllers
                 }
             }
 
-            return Ok();
+            return Ok(new { userToModify.ETag });
         }
 
         /// <summary>

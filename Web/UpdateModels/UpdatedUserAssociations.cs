@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Web.UpdateModels
 {
-    public class UpdatedUserAssociations
+    public class UpdatedUserAssociations : VersionedUpdate
     {
         public List<string> RoleNames { get; set; } = new();
 

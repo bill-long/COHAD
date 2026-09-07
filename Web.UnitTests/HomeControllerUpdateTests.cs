@@ -106,7 +106,7 @@ public sealed class HomeControllerUpdateTests
             idp: "google.com"
         );
 
-        var result = await c.Update(new UpdatedHome { Id = homeId, Residents = new List<Resident>() });
+        var result = await c.Update(new UpdatedHome { ETag = "browser-version", Id = homeId, Residents = new List<Resident>() });
         Assert.IsType<ForbidResult>(result);
     }
 
@@ -151,7 +151,7 @@ public sealed class HomeControllerUpdateTests
             nameId: "u1"
         );
 
-        var result = await c.Update(new UpdatedHome { Id = homeId, Residents = new List<Resident>() });
+        var result = await c.Update(new UpdatedHome { ETag = "browser-version", Id = homeId, Residents = new List<Resident>() });
         Assert.IsType<OkResult>(result);
         mockHomes.Verify(r => r.UpsertAsync(It.IsAny<Home>()), Times.Once);
         mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Once);
@@ -214,7 +214,7 @@ public sealed class HomeControllerUpdateTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             c.Update(
                 new UpdatedHome
-                {
+                { ETag = "browser-version",
                     Id = homeId,
                     Residents = new List<Resident>
                     {
@@ -292,7 +292,7 @@ public sealed class HomeControllerUpdateTests
         );
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            c.Update(new UpdatedHome { Id = homeId, Residents = new List<Resident>() })
+            c.Update(new UpdatedHome { ETag = "browser-version", Id = homeId, Residents = new List<Resident>() })
         );
 
         mockAudit.Verify(
@@ -364,7 +364,7 @@ public sealed class HomeControllerUpdateTests
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             c.Update(
                 new UpdatedHome
-                {
+                { ETag = "browser-version",
                     Id = homeId,
                     Residents = new List<Resident>
                     {
@@ -422,7 +422,7 @@ public sealed class HomeControllerUpdateTests
             nameId: "admin"
         );
 
-        var result = await c.Update(new UpdatedHome { Id = homeId, Residents = new List<Resident>() });
+        var result = await c.Update(new UpdatedHome { ETag = "browser-version", Id = homeId, Residents = new List<Resident>() });
         Assert.IsType<OkResult>(result);
     }
 
@@ -448,7 +448,7 @@ public sealed class HomeControllerUpdateTests
 
         var c = CreateController(mockUsers.Object, mockHomes.Object, Mock.Of<IAuditLogRepository>(), nameId: "u1");
 
-        var result = await c.Update(new UpdatedHome { Id = homeId, Residents = new List<Resident>() });
+        var result = await c.Update(new UpdatedHome { ETag = "browser-version", Id = homeId, Residents = new List<Resident>() });
         Assert.IsType<NotFoundResult>(result);
     }
 
@@ -505,7 +505,7 @@ public sealed class HomeControllerUpdateTests
 
         await c.Update(
             new UpdatedHome
-            {
+            { ETag = "browser-version",
                 Id = homeId,
                 Residents = new List<Resident>
                 {
@@ -578,7 +578,7 @@ public sealed class HomeControllerUpdateTests
 
         await c.Update(
             new UpdatedHome
-            {
+            { ETag = "browser-version",
                 Id = homeId,
                 Residents = new List<Resident>
                 {
@@ -656,7 +656,7 @@ public sealed class HomeControllerUpdateTests
 
         await c.Update(
             new UpdatedHome
-            {
+            { ETag = "browser-version",
                 Id = homeId,
                 Residents = new List<Resident>
                 {

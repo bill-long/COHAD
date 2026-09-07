@@ -1,4 +1,5 @@
 export interface ApiUser {
+  eTag?: string;
   uniqueId: string;
   createdTime: string;
   modifiedTime: string;
@@ -62,6 +63,7 @@ export interface DirectoryEmailAddress {
 }
 
 export interface Home {
+  eTag?: string;
   id: string;
   streetNumber: number;
   streetName: string;

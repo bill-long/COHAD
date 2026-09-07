@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, of, throwError } from 'rxjs';
 import { HomeService } from './home.service';
-import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted } from '../state';
+import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted, LoadAllHomesFailed } from '../state';
 import { Home } from '../models';
 
 /**
@@ -42,6 +42,29 @@ describe('HomeService failure reporting', () => {
   }
 
   const home = { id: 'h-1' } as unknown as Home;
+
+  for (const method of ['saveHomeAndReloadAll', 'saveHomeAndReloadMine'] as const) {
+    it(`${method} sends the home snapshot version`, () => {
+      const service = setup(false);
+      service[method]({ ...home, eTag: 'home-v1' }).subscribe();
+      expect(httpSpy.put).toHaveBeenCalledOnceWith('api/home', jasmine.objectContaining({ eTag: 'home-v1' }));
+    });
+
+    it(`${method} shows missing-version refresh guidance`, () => {
+      const service = setup(false);
+      httpSpy.put.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: { errors: { ETag: ['Refresh to load the current record before saving.'] } },
+            }),
+        ),
+      );
+      service[method](home).subscribe();
+      expect(snackSpy.open.calls.mostRecent().args[0]).toBe('Refresh to load the current record before saving.');
+    });
+  }
 
   it('tells the user when saving all homes fails', () => {
     const service = setup(true);
@@ -162,12 +185,8 @@ describe('HomeService failure reporting', () => {
     // so a transient outage left an empty home list until a page reload.
     httpSpy = jasmine.createSpyObj('HttpClient', ['get', 'put', 'delete']);
     let getCalls = 0;
-    httpSpy.get.and.callFake(
-      (() =>
-        getCalls++ === 0
-          ? throwError(() => new HttpErrorResponse({ status: 500 }))
-          : of([{ id: 'h-1' } as unknown as Home])) as never,
-    );
+    httpSpy.get.and.callFake((() =>
+      getCalls++ === 0 ? throwError(() => new HttpErrorResponse({ status: 500 })) : of([{ id: 'h-1' } as unknown as Home])) as never);
     snackSpy = jasmine.createSpyObj('MatSnackBar', ['open']);
     const bus = new Subject<Action>();
 
@@ -182,7 +201,9 @@ describe('HomeService failure reporting', () => {
     });
 
     const completed: Home[][] = [];
+    let failures = 0;
     bus.subscribe(a => {
+      if (a instanceof LoadAllHomesFailed) failures++;
       if (a instanceof LoadAllHomesCompleted) {
         completed.push(a.homes);
       }
@@ -192,9 +213,27 @@ describe('HomeService failure reporting', () => {
     bus.next(new LoadAllHomes());
     bus.next(new LoadAllHomes());
 
-    expect(completed.length).toBe(2);
-    expect(completed[0]).toEqual([]);
-    expect(completed[1].length).toBe(1);
+    expect(completed.length).toBe(1);
+    expect(completed[0].length).toBe(1);
+    expect(failures).toBe(1);
+  });
+
+  it('finishes both overlapping reloads instead of cancelling the first', () => {
+    setup(false);
+    const first = new Subject<Home[]>();
+    httpSpy.get.and.returnValues(first, of([home]));
+    const actions = TestBed.inject(dispatcher);
+    let completions = 0;
+    actions.subscribe(action => {
+      if (action instanceof LoadAllHomesCompleted) completions++;
+    });
+    actions.next(new LoadAllHomes());
+    actions.next(new LoadAllHomes());
+    expect(httpSpy.get.calls.count()).toBe(1);
+    first.next([home]);
+    first.complete();
+    expect(httpSpy.get.calls.count()).toBe(2);
+    expect(completions).toBe(2);
   });
 
   it('says nothing when the save succeeds', () => {

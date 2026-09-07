@@ -8,6 +8,7 @@ namespace Web.PresentationModels
     public class PresentationUser
     {
         public string UniqueId { get; private set; }
+        public string ETag { get; private set; }
         public string GivenName { get; private set; }
         public string Surname { get; private set; }
         public string DisplayName => GivenName + " " + Surname;
@@ -26,6 +27,7 @@ namespace Web.PresentationModels
             return new PresentationUser
             {
                 UniqueId = user.UniqueId,
+                ETag = user.ETag,
                 GivenName = user.GivenName,
                 Surname = user.Surname,
                 StreetAddress = user.StreetAddress,

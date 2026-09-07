@@ -1,9 +1,9 @@
 import { Injectable, Inject } from '@angular/core';
-import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted, LoadDirectory, LoadUser } from '../state';
+import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted, LoadAllHomesFailed, LoadDirectory, LoadUser } from '../state';
 import { Observable, Subject, of } from 'rxjs';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { filter, switchMap, map, tap, catchError } from 'rxjs/operators';
+import { filter, concatMap, map, tap, catchError } from 'rxjs/operators';
 import { Home } from '../models';
 
 @Injectable({
@@ -18,14 +18,24 @@ export class HomeService {
     this.dispatcher
       .pipe(
         filter(a => a instanceof LoadAllHomes),
-        // Caught inside the switchMap, not on the subscription. An error that reaches the outer
+        // Catch each request's error so later reloads still work. Queue requests so every load
+        // finishes the operation counted by state, including overlapping save-triggered reloads.
+        // An error that reaches the outer
         // subscriber terminates it for good, so the first failed GET used to stop every later
         // LoadAllHomes for the rest of the session - the list stayed empty until a page reload.
         // That mattered most exactly when it was least visible: the save-failure paths below
         // dispatch LoadAllHomes to re-sync, and they run when the API is already failing.
-        switchMap(() => this.httpClient.get<Home[]>('api/home').pipe(catchError(() => of<Home[]>([])))),
+        concatMap(() =>
+          this.httpClient.get<Home[]>('api/home').pipe(
+            map(homes => new LoadAllHomesCompleted(homes)),
+            catchError(() => {
+              this.reportFailure('Could not refresh homes. Displayed information may be out of date. Refresh before editing.');
+              return of(new LoadAllHomesFailed());
+            }),
+          ),
+        ),
       )
-      .subscribe(homes => this.dispatcher.next(new LoadAllHomesCompleted(homes)));
+      .subscribe(action => this.dispatcher.next(action));
   }
 
   saveHomeAndReloadAll(home: Home): Observable<boolean> {
@@ -126,6 +136,12 @@ export class HomeService {
    */
   private serverMessage(err: unknown): string | null {
     const response = err as HttpErrorResponse | undefined;
+    if (response?.status === 400) {
+      const errors = response.error?.errors?.ETag;
+      if (Array.isArray(errors) && typeof errors[0] === 'string') {
+        return errors[0];
+      }
+    }
     if (response?.status !== 409) {
       return null;
     }

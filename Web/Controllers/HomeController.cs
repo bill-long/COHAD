@@ -86,6 +86,9 @@ namespace Web.Controllers
                 return NotFound();
             }
 
+            // The browser's snapshot, not this request's read, is the write precondition.
+            storedHome.ETag = updatedHome.ETag;
+
             // Null Residents = no resident changes (keep existing); prevents accidental
             // data loss from partial payloads that only update home phone/email.
             if (updatedHome.Residents != null)

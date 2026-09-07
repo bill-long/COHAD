@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace Web.UpdateModels
 {
-    public class UpdatedUser
+    public class UpdatedUser : VersionedUpdate
     {
         public string GivenName { get; set; }
 

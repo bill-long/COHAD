@@ -61,7 +61,7 @@ public sealed class UserControllerTests
         mockUsers.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
         var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>());
 
-        var result = await c.UpdateUserAssociations("some-user-id", new UpdatedUserAssociations());
+        var result = await c.UpdateUserAssociations("some-user-id", new UpdatedUserAssociations { ETag = "browser-version" });
 
         Assert.IsType<NotFoundResult>(result);
     }
@@ -126,13 +126,13 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(upserted);
         Assert.Contains(User.Role.Resident, upserted!.Roles);
         Assert.Contains(homeId, upserted.OwnedHomeIds);
@@ -170,7 +170,7 @@ public sealed class UserControllerTests
         // it to the 409 refresh guidance) - and write-then-audit means no audit entry may describe
         // the change that never happened.
         await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
-            c.UpdateUserProperties(new UpdatedUser { UniqueId = "target-user", GivenName = "New", Surname = "Name" })
+            c.UpdateUserProperties(new UpdatedUser { ETag = "browser-version", UniqueId = "target-user", GivenName = "New", Surname = "Name" })
         );
         mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
     }
@@ -219,7 +219,7 @@ public sealed class UserControllerTests
         // it to the 409 refresh guidance). The write was not applied: no audit entry, and no signup
         // conversion for a home assignment that never happened.
         await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
-            c.UpdateUserAssociations("target-user", new UpdatedUserAssociations { RoleNames = new List<string> { "Resident" } })
+            c.UpdateUserAssociations("target-user", new UpdatedUserAssociations { ETag = "browser-version", RoleNames = new List<string> { "Resident" } })
         );
         mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
         mockConversion.Verify(
@@ -264,7 +264,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "NotARole" },
                 OwnedHomeIds = new List<Guid>(),
             }
@@ -329,13 +329,13 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         mockConversion.Verify(
             s => s.ConvertUserSignupsToHomeAsync(targetUniqueId, homeId, "42 Oak Ave"),
             Times.Once
@@ -401,13 +401,13 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
     }
 
     [Fact]
@@ -450,7 +450,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
             }
@@ -508,13 +508,13 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid>(),
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         mockConversion.Verify(
             s => s.ConvertUserSignupsToHomeAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>()),
             Times.Never
@@ -574,13 +574,13 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId1, homeId2 },
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         mockConversion.Verify(
             s => s.ConvertUserSignupsToHomeAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>()),
             Times.Never
@@ -661,14 +661,14 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = residentId,
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.Equal(residentId, upserted!.ResidentId);
     }
 
@@ -689,7 +689,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = residentId,
@@ -714,7 +714,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = Guid.NewGuid(),
@@ -750,14 +750,14 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = null,
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.Equal(existingLink, upserted!.ResidentId);
     }
 
@@ -778,14 +778,14 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = Guid.Empty,
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.Null(upserted!.ResidentId);
     }
 
@@ -806,7 +806,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = residentId,
@@ -842,14 +842,14 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = null,
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.Null(upserted!.ResidentId);
         mockAudit.Verify(
             a => a.AddAsync(It.Is<NewAuditLogEntry>(e => e.Action.Contains("Cleared the resident link"))),
@@ -882,14 +882,14 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = null,
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         Assert.Equal(existingLink, upserted!.ResidentId);
     }
 
@@ -1292,13 +1292,13 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
             }
         );
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Once);
         mockConversion.Verify(s => s.ConvertUserSignupsToHomeAsync(targetUniqueId, homeId, It.IsAny<string>()), Times.Once);
     }
