@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json.Linq;
 using Web.Models;
+using Web.Services.Cosmos;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
 using CosmosPartitionKey = Microsoft.Azure.Cosmos.PartitionKey;
 
@@ -43,7 +44,7 @@ namespace Web.Services.Repositories
                 state.ETag = response.Headers.ETag;
                 return state;
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound && ex.SubStatusCode == 0)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // Only a genuinely missing document maps to "this job has never run". A 404 with a
                 // non-zero sub-status (e.g. the container was never provisioned) is a misconfiguration,

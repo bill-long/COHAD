@@ -81,7 +81,7 @@ namespace Web.Services.Repositories
             {
                 await _documentsContainer.DeleteItemAsync<JObject>(documentId, CosmosPartitionKey.None);
             }
-            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // Idempotent delete
             }

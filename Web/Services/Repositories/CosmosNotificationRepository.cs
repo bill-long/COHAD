@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json.Linq;
 using Web.Models;
+using Web.Services.Cosmos;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
 using CosmosPartitionKey = Microsoft.Azure.Cosmos.PartitionKey;
 using CosmosQueryDefinition = Microsoft.Azure.Cosmos.QueryDefinition;
@@ -72,7 +73,7 @@ namespace Web.Services.Repositories
                 notification.ETag = response.Headers.ETag;
                 return notification;
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 return null;
             }

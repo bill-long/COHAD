@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json.Linq;
 using Web.Models;
+using Web.Services.Cosmos;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
 using CosmosPartitionKey = Microsoft.Azure.Cosmos.PartitionKey;
 using CosmosQueryDefinition = Microsoft.Azure.Cosmos.QueryDefinition;
@@ -91,7 +92,7 @@ namespace Web.Services.Repositories
             {
                 await _container.PatchItemAsync<JObject>(deliveryEvent.Id, pk, patchOps);
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // Document deleted between Create conflict and Patch (e.g., retention
                 // cleanup raced). Retry create to keep AddAsync idempotent.
@@ -186,7 +187,7 @@ namespace Web.Services.Repositories
                 {
                     await _container.DeleteItemAsync<JObject>(documentId, pk);
                 }
-                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
                 {
                     // Already deleted — idempotent
                 }

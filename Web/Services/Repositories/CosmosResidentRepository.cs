@@ -42,7 +42,7 @@ namespace Web.Services.Repositories
                 var response = await _container.ReadItemAsync<JObject>(docId, CosmosPartitionKey.None);
                 return CosmosLegacyDocumentMapper.ToResidentEntity(response.Resource);
             }
-            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 return null;
             }
@@ -160,7 +160,7 @@ namespace Web.Services.Repositories
                 var docId = CosmosLegacyDocumentMapper.ResidentEntityDocumentId(id);
                 await _container.DeleteItemAsync<JObject>(docId, CosmosPartitionKey.None);
             }
-            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // Already deleted or never existed — idempotent.
             }

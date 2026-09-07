@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json.Linq;
 using Web.Models;
+using Web.Services.Cosmos;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
 using CosmosPartitionKey = Microsoft.Azure.Cosmos.PartitionKey;
 using CosmosQueryDefinition = Microsoft.Azure.Cosmos.QueryDefinition;
@@ -56,7 +57,7 @@ namespace Web.Services.Repositories
                 );
                 return ToBlogComment(response.Resource);
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 return null;
             }
@@ -79,7 +80,7 @@ namespace Web.Services.Repositories
             {
                 await _container.DeleteItemAsync<JObject>(ToDocumentId(commentId), CosmosPartitionKey.None);
             }
-            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // idempotent
             }

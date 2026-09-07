@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json.Linq;
 using Web.Models;
+using Web.Services.Cosmos;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
 using CosmosPartitionKey = Microsoft.Azure.Cosmos.PartitionKey;
 using CosmosQueryDefinition = Microsoft.Azure.Cosmos.QueryDefinition;
@@ -117,7 +118,7 @@ FROM c"
                 var response = await _container.ReadItemAsync<BlogPost>(id.ToString("D"), CosmosPartitionKey.None);
                 return response.Resource;
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 return null;
             }
@@ -171,7 +172,7 @@ FROM c"
                 var response = await _container.ReadItemAsync<BlogPost>(id.ToString("D"), CosmosPartitionKey.None);
                 return new BlogPostReadResult { Post = response.Resource, ETag = response.ETag };
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 return null;
             }
@@ -206,7 +207,7 @@ FROM c"
             {
                 await _container.DeleteItemAsync<BlogPost>(id.ToString("D"), CosmosPartitionKey.None);
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // Idempotent delete
             }

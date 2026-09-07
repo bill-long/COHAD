@@ -5,6 +5,7 @@ using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
 using Web.Models;
+using Web.Services.Cosmos;
 using Web.Services.Repositories;
 
 namespace Web.Services
@@ -132,7 +133,7 @@ namespace Web.Services
                     {
                         if (attempt == maxRetries) break; // Give up on this event after retries.
                     }
-                    catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                    catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
                     {
                         break; // Event was deleted.
                     }
@@ -289,7 +290,7 @@ namespace Web.Services
                             result.Details.Add($"Failed to save '{read.Event.Title}' after {maxRetries} retries (concurrency conflict).");
                         }
                     }
-                    catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                    catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
                     {
                         result.Details.Add($"Event '{read.Event.Title}' was deleted during migration.");
                         break;

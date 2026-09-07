@@ -16,6 +16,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using Web.Configuration;
 using Web.Models;
+using Web.Services.Cosmos;
 using Web.PresentationModels;
 using Web.Services;
 using Web.Services.Repositories;
@@ -464,7 +465,7 @@ namespace Web.Controllers
                 {
                     saved = await _communityEventRepository.ReplaceAsync(communityEvent, updateRead!.ETag);
                 }
-                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
                 {
                     return NotFound();
                 }
@@ -656,7 +657,7 @@ namespace Web.Controllers
                     saved = await _communityEventRepository.ReplaceAsync(read.Event, read.ETag);
                     break;
                 }
-                catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
                 {
                     return NotFound();
                 }

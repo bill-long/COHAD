@@ -11,6 +11,7 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Options;
 using Web.Configuration;
 using Web.Models;
+using Web.Services.Cosmos;
 using Web.PresentationModels;
 using Web.Services;
 using Web.Services.Repositories;
@@ -316,7 +317,7 @@ namespace Web.Controllers
                     saved = await _blogPostRepository.ReplaceAsync(post, updateRead!.ETag);
                 }
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 await DeleteUploadedFeaturedImageOnSaveFailureAsync(
                     uploadedFeaturedImageBlobPath,
