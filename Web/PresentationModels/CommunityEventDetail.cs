@@ -17,8 +17,8 @@ namespace Web.PresentationModels
         public List<EventSignupPresentation> MyHomeSignups { get; private set; }
 
         /// <summary>
-        /// The current user's personal signup when they are not associated with a home. Null when the user
-        /// has homes or when they haven't signed up as an individual.
+        /// The current user's personal signup, including one left over after they become associated with a home.
+        /// Null when they haven't signed up as an individual.
         /// </summary>
         public EventSignupPresentation MyUserSignup { get; private set; }
 
@@ -31,19 +31,21 @@ namespace Web.PresentationModels
         {
             var card = FromStorageModel(communityEvent);
             var signups = communityEvent.Signups ?? new List<EventSignup>();
-            var homeIdSet = currentUserHomeIds != null && currentUserHomeIds.Count > 0
-                ? new HashSet<Guid>(currentUserHomeIds)
-                : null;
-            var myHomeSignups = homeIdSet != null
-                ? signups.Where(s => s.HomeId != Guid.Empty && homeIdSet.Contains(s.HomeId))
-                    .Select(EventSignupPresentation.FromStorageModel)
-                    .ToList()
-                : new List<EventSignupPresentation>();
+            var homeIdSet =
+                currentUserHomeIds != null && currentUserHomeIds.Count > 0
+                    ? new HashSet<Guid>(currentUserHomeIds)
+                    : null;
+            var myHomeSignups =
+                homeIdSet != null
+                    ? signups
+                        .Where(s => s.HomeId != Guid.Empty && homeIdSet.Contains(s.HomeId))
+                        .Select(EventSignupPresentation.FromStorageModel)
+                        .ToList()
+                    : new List<EventSignupPresentation>();
 
-            // User-based signup: only when the user has no homes and signed up individually.
-            var myUserSignup = homeIdSet == null && !string.IsNullOrWhiteSpace(currentUserUniqueId)
-                ? signups.FirstOrDefault(s =>
-                    s.HomeId == Guid.Empty && s.UserUniqueId == currentUserUniqueId)
+            // Keep a personal signup visible if automatic conversion to a home signup did not complete.
+            var myUserSignup = !string.IsNullOrWhiteSpace(currentUserUniqueId)
+                ? signups.FirstOrDefault(s => s.HomeId == Guid.Empty && s.UserUniqueId == currentUserUniqueId)
                 : null;
 
             return new CommunityEventDetail

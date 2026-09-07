@@ -6,7 +6,7 @@ import { Observable, Observer, firstValueFrom } from 'rxjs';
 import { map, filter } from 'rxjs/operators';
 import { ApiUser, Home } from 'src/app/models';
 import { Login, Action, dispatcher, applicationState, ApplicationState } from 'src/app/state';
-import { EventDetail, EventsService } from 'src/app/services/events.service';
+import { EventDetail, EventSignup, EventsService } from 'src/app/services/events.service';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 import { httpErrorMessage } from 'src/app/utils/http-error-message';
 import { renderMarkdownToHtml } from 'src/app/utils/markdown';
@@ -83,13 +83,7 @@ export class EventDetailComponent implements OnInit {
 
   /** Whether the current user already has a signup for this event (home-based or user-based). */
   get hasExistingSignup(): boolean {
-    if (this.eventItem == null) {
-      return false;
-    }
-    if (this.selectedHomeId != null) {
-      return this.eventItem.myHomeSignups.some(s => s.homeId === this.selectedHomeId);
-    }
-    return this.eventItem.myUserSignup != null;
+    return this.eventItem != null && this.existingSignup(this.eventItem) != null;
   }
 
   logIn(): void {
@@ -214,13 +208,13 @@ export class EventDetailComponent implements OnInit {
     this.homeSelectionReady = true;
   }
 
+  private existingSignup(eventItem: EventDetail): EventSignup | null {
+    // A selected home's details take precedence; a personal signup can be moved to a home or removed.
+    return eventItem.myHomeSignups.find(s => s.homeId === this.selectedHomeId) ?? eventItem.myUserSignup;
+  }
+
   private applyExistingSignup(eventItem: EventDetail): void {
-    let signup: import('src/app/services/events.service').EventSignup | null = null;
-    if (this.selectedHomeId != null) {
-      signup = eventItem.myHomeSignups.find(s => s.homeId === this.selectedHomeId) ?? null;
-    } else {
-      signup = eventItem.myUserSignup;
-    }
+    const signup = this.existingSignup(eventItem);
     const mode = eventItem.signupMode ?? 'AdultsAndChildren';
     if (signup == null) {
       this.adults = mode === 'ChildrenOnly' || mode === 'HouseholdOnly' ? 0 : 1;
