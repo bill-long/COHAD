@@ -76,7 +76,7 @@ export class UserService {
                 associationsSaved = true;
                 eTag = saved?.eTag;
                 if (!eTag) {
-                  throw new Error('The save response did not include a record version.');
+                  throw new Error('The save response did not include a record version. Refresh before editing again.');
                 }
               }),
             )
@@ -105,8 +105,11 @@ export class UserService {
           console.error('Failed to update user.', e);
           // Surface the server's reason when it sent one - the 400s here are deterministic
           // validation messages for which a blind retry can never succeed.
-          const reason = this.serverMessage(e) ?? 'Could not save the user. Refresh to see the current state.';
-          const message = associationsSaved ? `Role and home associations were saved, but profile changes failed. ${reason}` : reason;
+          const reason =
+            e instanceof Error ? e.message : (this.serverMessage(e) ?? 'Could not save the user. Refresh to see the current state.');
+          const message = associationsSaved
+            ? `Role and home associations were saved. Remaining changes could not be confirmed. ${reason}`
+            : reason;
           this.snackBar.open(message, 'Dismiss', { duration: 8000 });
           return of(false);
         }),

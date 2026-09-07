@@ -69,7 +69,7 @@ describe('UserService failure reporting', () => {
     service.saveUser({ ...original, eTag: 'v1' }, { ...changed, givenName: 'New' }).subscribe(ok => (result = ok));
     expect(result).toBeFalse();
     expect(httpSpy.put.calls.count()).toBe(2);
-    expect(snackSpy.open.calls.mostRecent().args[0]).toContain('associations were saved, but profile changes failed');
+    expect(snackSpy.open.calls.mostRecent().args[0]).toContain('associations were saved. Remaining changes could not be confirmed');
   });
 
   it('does not send an unchecked profile update when a save response lacks its version', () => {
@@ -77,7 +77,9 @@ describe('UserService failure reporting', () => {
     httpSpy.put.and.returnValue(of(null));
     service.saveUser({ ...original, eTag: 'v1' }, { ...changed, givenName: 'New' }).subscribe();
     expect(httpSpy.put.calls.count()).toBe(1);
-    expect(snackSpy.open.calls.mostRecent().args[0]).toContain('associations were saved');
+    expect(snackSpy.open.calls.mostRecent().args[0]).toContain(
+      'The save response did not include a record version. Refresh before editing again.',
+    );
   });
 
   it('can reload again after a failed reload', () => {

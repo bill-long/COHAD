@@ -61,7 +61,7 @@ public sealed class UserControllerTests
         mockUsers.Setup(r => r.GetByUniqueIdAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
         var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>());
 
-        var result = await c.UpdateUserAssociations("some-user-id", new UpdatedUserAssociations());
+        var result = await c.UpdateUserAssociations("some-user-id", new UpdatedUserAssociations { ETag = "browser-version" });
 
         Assert.IsType<NotFoundResult>(result);
     }
@@ -126,7 +126,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
             }
@@ -170,7 +170,7 @@ public sealed class UserControllerTests
         // it to the 409 refresh guidance) - and write-then-audit means no audit entry may describe
         // the change that never happened.
         await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
-            c.UpdateUserProperties(new UpdatedUser { UniqueId = "target-user", GivenName = "New", Surname = "Name" })
+            c.UpdateUserProperties(new UpdatedUser { ETag = "browser-version", UniqueId = "target-user", GivenName = "New", Surname = "Name" })
         );
         mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
     }
@@ -219,7 +219,7 @@ public sealed class UserControllerTests
         // it to the 409 refresh guidance). The write was not applied: no audit entry, and no signup
         // conversion for a home assignment that never happened.
         await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
-            c.UpdateUserAssociations("target-user", new UpdatedUserAssociations { RoleNames = new List<string> { "Resident" } })
+            c.UpdateUserAssociations("target-user", new UpdatedUserAssociations { ETag = "browser-version", RoleNames = new List<string> { "Resident" } })
         );
         mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
         mockConversion.Verify(
@@ -264,7 +264,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "NotARole" },
                 OwnedHomeIds = new List<Guid>(),
             }
@@ -329,7 +329,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
             }
@@ -401,7 +401,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
             }
@@ -450,7 +450,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
             }
@@ -508,7 +508,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid>(),
             }
@@ -574,7 +574,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId1, homeId2 },
             }
@@ -661,7 +661,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = residentId,
@@ -689,7 +689,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = residentId,
@@ -714,7 +714,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = Guid.NewGuid(),
@@ -750,7 +750,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = null,
@@ -778,7 +778,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = Guid.Empty,
@@ -806,7 +806,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = residentId,
@@ -842,7 +842,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = null,
@@ -882,7 +882,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
                 ResidentId = null,
@@ -1292,7 +1292,7 @@ public sealed class UserControllerTests
         var result = await c.UpdateUserAssociations(
             targetUniqueId,
             new UpdatedUserAssociations
-            {
+            { ETag = "browser-version",
                 RoleNames = new List<string> { "Resident" },
                 OwnedHomeIds = new List<Guid> { homeId },
             }
