@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, of, throwError } from 'rxjs';
 import { UserService } from './user.service';
-import { Action, ApplicationState, applicationState, dispatcher, LoadAllUsers, LoadAllUsersCompleted } from '../state';
+import { Action, ApplicationState, applicationState, dispatcher, LoadAllUsers, LoadAllUsersCompleted, LoadAllUsersFailed } from '../state';
 import { ApiUser } from '../models';
 
 describe('UserService failure reporting', () => {
@@ -88,12 +88,15 @@ describe('UserService failure reporting', () => {
     );
     const actions = TestBed.inject(dispatcher);
     const completed: ApiUser[][] = [];
+    let failures = 0;
     actions.subscribe(action => {
       if (action instanceof LoadAllUsersCompleted) completed.push(action.users);
+      if (action instanceof LoadAllUsersFailed) failures++;
     });
     actions.next(new LoadAllUsers());
     actions.next(new LoadAllUsers());
-    expect(completed).toEqual([[], [original]]);
+    expect(completed).toEqual([[original]]);
+    expect(failures).toBe(1);
   });
 
   it('shows refresh guidance from MVC version validation', () => {

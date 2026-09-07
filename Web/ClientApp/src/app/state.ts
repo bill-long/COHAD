@@ -32,12 +32,14 @@ export class AuthenticatedUserChanged {
 }
 
 export class LoadAllHomes {}
+export class LoadAllHomesFailed {}
 
 export class LoadAllHomesCompleted {
   constructor(public homes: Home[]) {}
 }
 
 export class LoadAllUsers {}
+export class LoadAllUsersFailed {}
 
 export class LoadAllUsersCompleted {
   constructor(public users: ApiUser[]) {}
@@ -74,8 +76,10 @@ export type Action =
   | AuthenticatedUserChanged
   | LoadAllHomes
   | LoadAllHomesCompleted
+  | LoadAllHomesFailed
   | LoadAllUsers
   | LoadAllUsersCompleted
+  | LoadAllUsersFailed
   | LoadDirectory
   | LoadDirectoryCompleted
   | LoadUser
@@ -105,11 +109,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
         const currentSub = state.authUser?.identityClaims?.sub;
         const newSub = action.authUser?.identityClaims?.sub;
         const isSamePrincipalRefresh =
-          hasAccessToken &&
-          state.authUser?.accessToken != null &&
-          currentSub != null &&
-          newSub != null &&
-          currentSub === newSub;
+          hasAccessToken && state.authUser?.accessToken != null && currentSub != null && newSub != null && currentSub === newSub;
         newState = {
           allHomes: state.allHomes,
           allUsers: state.allUsers,
@@ -119,11 +119,7 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
           apiUser: isSamePrincipalRefresh ? state.apiUser : null,
           directory: state.directory,
           operationsInProgress: state.operationsInProgress,
-          authBootstrapStatus: hasAccessToken
-            ? isSamePrincipalRefresh
-              ? state.authBootstrapStatus
-              : 'inProgress'
-            : 'idle',
+          authBootstrapStatus: hasAccessToken ? (isSamePrincipalRefresh ? state.authBootstrapStatus : 'inProgress') : 'idle',
           authSessionResolved: state.authSessionResolved,
         };
       } else if (action instanceof AuthSessionResolved) {
@@ -137,6 +133,8 @@ export function applicationStateFactory(initialState: ApplicationState, dispatch
           authBootstrapStatus: state.authBootstrapStatus,
           authSessionResolved: true,
         };
+      } else if (action instanceof LoadAllHomesFailed || action instanceof LoadAllUsersFailed) {
+        newState = { ...state, operationsInProgress: state.operationsInProgress - 1 };
       } else if (action instanceof LoadAllHomes) {
         newState = addOperationInProgress(state);
       } else if (action instanceof LoadAllHomesCompleted) {

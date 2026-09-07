@@ -1,9 +1,9 @@
 import { Injectable, Inject } from '@angular/core';
-import { Action, applicationState, ApplicationState, dispatcher, LoadAllUsers, LoadAllUsersCompleted, LoadUserCompleted } from '../state';
+import { Action, applicationState, ApplicationState, dispatcher, LoadAllUsers, LoadAllUsersCompleted, LoadAllUsersFailed } from '../state';
 import { Observable, Subject, of, EMPTY, concat, defer } from 'rxjs';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { switchMap, filter, defaultIfEmpty, catchError, finalize, ignoreElements, tap } from 'rxjs/operators';
+import { switchMap, filter, defaultIfEmpty, catchError, finalize, ignoreElements, tap, map } from 'rxjs/operators';
 import { ApiUser } from '../models';
 
 /**
@@ -25,12 +25,19 @@ export class UserService {
     this.dispatcher
       .pipe(
         filter(a => a instanceof LoadAllUsers),
-        switchMap(() => this.httpClient.get<ApiUser[]>('api/user').pipe(catchError(() => of<ApiUser[]>([])))),
+        switchMap(() =>
+          this.httpClient.get<ApiUser[]>('api/user').pipe(
+            map(users => new LoadAllUsersCompleted(users)),
+            catchError(() => {
+              this.snackBar.open('Could not refresh users. Displayed information may be out of date. Refresh before editing.', 'Dismiss', {
+                duration: 8000,
+              });
+              return of(new LoadAllUsersFailed());
+            }),
+          ),
+        ),
       )
-      .subscribe(
-        u => this.dispatcher.next(new LoadAllUsersCompleted(u)),
-        err => this.dispatcher.next(new LoadAllUsersCompleted([])),
-      );
+      .subscribe(action => this.dispatcher.next(action));
   }
 
   saveUser(originalUser: ApiUser, changedUser: ApiUser): Observable<boolean> {

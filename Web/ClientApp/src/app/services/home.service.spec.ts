@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, of, throwError } from 'rxjs';
 import { HomeService } from './home.service';
-import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted } from '../state';
+import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted, LoadAllHomesFailed } from '../state';
 import { Home } from '../models';
 
 /**
@@ -201,7 +201,9 @@ describe('HomeService failure reporting', () => {
     });
 
     const completed: Home[][] = [];
+    let failures = 0;
     bus.subscribe(a => {
+      if (a instanceof LoadAllHomesFailed) failures++;
       if (a instanceof LoadAllHomesCompleted) {
         completed.push(a.homes);
       }
@@ -211,9 +213,9 @@ describe('HomeService failure reporting', () => {
     bus.next(new LoadAllHomes());
     bus.next(new LoadAllHomes());
 
-    expect(completed.length).toBe(2);
-    expect(completed[0]).toEqual([]);
-    expect(completed[1].length).toBe(1);
+    expect(completed.length).toBe(1);
+    expect(completed[0].length).toBe(1);
+    expect(failures).toBe(1);
   });
 
   it('says nothing when the save succeeds', () => {

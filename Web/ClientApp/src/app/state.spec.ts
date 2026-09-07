@@ -1,8 +1,26 @@
 import { Subject } from 'rxjs';
-import { ApiUser, AuthUser } from './models';
+import { ApiUser, AuthUser, Home } from './models';
 import { Action, applicationStateFactory, AuthenticatedUserChanged, initialStateValue, LoadUserCompleted, ApplicationState } from './state';
+import { LoadAllUsers, LoadAllUsersFailed, LoadAllHomes, LoadAllHomesFailed } from './state';
 
 describe('application state auth bootstrap', () => {
+  for (const [start, failure] of [
+    [new LoadAllUsers(), new LoadAllUsersFailed()],
+    [new LoadAllHomes(), new LoadAllHomesFailed()],
+  ]) {
+    it(`preserves loaded lists and ends the operation on ${failure.constructor.name}`, () => {
+      const bus = new Subject<Action>();
+      const initial = { ...initialStateValue, allUsers: [createApiUser()], allHomes: [{ id: 'home-1', eTag: 'v1' } as Home] };
+      let latest: ApplicationState = initial;
+      applicationStateFactory(initial, bus).subscribe(state => (latest = state));
+      bus.next(start);
+      expect(latest.operationsInProgress).toBe(1);
+      bus.next(failure);
+      expect(latest.operationsInProgress).toBe(0);
+      expect(latest.allUsers).toBe(initial.allUsers);
+      expect(latest.allHomes).toBe(initial.allHomes);
+    });
+  }
   function createApiUser(): ApiUser {
     return {
       uniqueId: 'u-1',
