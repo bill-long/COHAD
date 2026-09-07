@@ -97,7 +97,7 @@ public sealed class BrowserEditConcurrencyTests
         // The controller will re-read a newer version. It must still enforce the old browser version.
         var loser = await client.PutAsJsonAsync(Path(kind), Payload(kind, tag));
         Assert.Equal(HttpStatusCode.Conflict, loser.StatusCode);
-        Assert.Contains("refresh", await loser.Content.ReadAsStringAsync());
+        Assert.Contains("refresh", await loser.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
         Assert.Empty(audit.Invocations);
         Assert.Empty(conversion.Invocations);
         Assert.DoesNotContain(residents.Invocations, i => i.Method.Name is "UpsertAsync" or "DeleteAsync");

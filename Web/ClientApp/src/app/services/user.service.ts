@@ -3,7 +3,7 @@ import { Action, applicationState, ApplicationState, dispatcher, LoadAllUsers, L
 import { Observable, Subject, of, EMPTY, concat, defer } from 'rxjs';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { switchMap, filter, defaultIfEmpty, catchError, finalize, ignoreElements, tap, map } from 'rxjs/operators';
+import { concatMap, filter, defaultIfEmpty, catchError, finalize, ignoreElements, tap, map } from 'rxjs/operators';
 import { ApiUser } from '../models';
 
 /**
@@ -25,7 +25,7 @@ export class UserService {
     this.dispatcher
       .pipe(
         filter(a => a instanceof LoadAllUsers),
-        switchMap(() =>
+        concatMap(() =>
           this.httpClient.get<ApiUser[]>('api/user').pipe(
             map(users => new LoadAllUsersCompleted(users)),
             catchError(() => {

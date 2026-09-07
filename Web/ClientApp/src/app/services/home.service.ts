@@ -3,7 +3,7 @@ import { Action, dispatcher, LoadAllHomes, LoadAllHomesCompleted, LoadAllHomesFa
 import { Observable, Subject, of } from 'rxjs';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { filter, switchMap, map, tap, catchError } from 'rxjs/operators';
+import { filter, concatMap, map, tap, catchError } from 'rxjs/operators';
 import { Home } from '../models';
 
 @Injectable({
@@ -18,12 +18,14 @@ export class HomeService {
     this.dispatcher
       .pipe(
         filter(a => a instanceof LoadAllHomes),
-        // Caught inside the switchMap, not on the subscription. An error that reaches the outer
+        // Catch each request's error so later reloads still work. Queue requests so every load
+        // finishes the operation counted by state, including overlapping save-triggered reloads.
+        // An error that reaches the outer
         // subscriber terminates it for good, so the first failed GET used to stop every later
         // LoadAllHomes for the rest of the session - the list stayed empty until a page reload.
         // That mattered most exactly when it was least visible: the save-failure paths below
         // dispatch LoadAllHomes to re-sync, and they run when the API is already failing.
-        switchMap(() =>
+        concatMap(() =>
           this.httpClient.get<Home[]>('api/home').pipe(
             map(homes => new LoadAllHomesCompleted(homes)),
             catchError(() => {

@@ -218,6 +218,24 @@ describe('HomeService failure reporting', () => {
     expect(failures).toBe(1);
   });
 
+  it('finishes both overlapping reloads instead of cancelling the first', () => {
+    setup(false);
+    const first = new Subject<Home[]>();
+    httpSpy.get.and.returnValues(first, of([home]));
+    const actions = TestBed.inject(dispatcher);
+    let completions = 0;
+    actions.subscribe(action => {
+      if (action instanceof LoadAllHomesCompleted) completions++;
+    });
+    actions.next(new LoadAllHomes());
+    actions.next(new LoadAllHomes());
+    expect(httpSpy.get.calls.count()).toBe(1);
+    first.next([home]);
+    first.complete();
+    expect(httpSpy.get.calls.count()).toBe(2);
+    expect(completions).toBe(2);
+  });
+
   it('says nothing when the save succeeds', () => {
     const service = setup(false);
     let emitted: boolean | undefined;

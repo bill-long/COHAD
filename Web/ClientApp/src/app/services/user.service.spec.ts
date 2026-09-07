@@ -99,6 +99,24 @@ describe('UserService failure reporting', () => {
     expect(failures).toBe(1);
   });
 
+  it('finishes both overlapping reloads instead of cancelling the first', () => {
+    setup(new HttpErrorResponse({ status: 500 }));
+    const first = new Subject<ApiUser[]>();
+    httpSpy.get.and.returnValues(first, of([original]));
+    const actions = TestBed.inject(dispatcher);
+    let completions = 0;
+    actions.subscribe(action => {
+      if (action instanceof LoadAllUsersCompleted) completions++;
+    });
+    actions.next(new LoadAllUsers());
+    actions.next(new LoadAllUsers());
+    expect(httpSpy.get.calls.count()).toBe(1);
+    first.next([original]);
+    first.complete();
+    expect(httpSpy.get.calls.count()).toBe(2);
+    expect(completions).toBe(2);
+  });
+
   it('shows refresh guidance from MVC version validation', () => {
     const service = setup(
       new HttpErrorResponse({ status: 400, error: { errors: { ETag: ['Refresh to load the current record before saving.'] } } }),
