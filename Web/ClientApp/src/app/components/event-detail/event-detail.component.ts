@@ -104,8 +104,8 @@ export class EventDetailComponent implements OnInit {
     }
   }
 
-  submitSignup(): void {
-    if (this.eventItem == null || this.saving) {
+  submitSignup(remove = false): void {
+    if (this.eventItem == null || this.saving || !this.homeSelectionReady || (remove && !this.hasExistingSignup)) {
       return;
     }
 
@@ -118,18 +118,16 @@ export class EventDetailComponent implements OnInit {
     const sendAdults = mode !== 'ChildrenOnly' && mode !== 'HouseholdOnly';
     // Zeroing out all visible counts on an existing signup means "remove my signup".
     const removeRequested =
-      mode !== 'HouseholdOnly' &&
-      this.hasExistingSignup &&
-      (!sendAdults || this.adults === 0) &&
-      (!sendChildren || this.children === 0);
+      remove ||
+      (mode !== 'HouseholdOnly' && this.hasExistingSignup && (!sendAdults || this.adults === 0) && (!sendChildren || this.children === 0));
 
     this.eventsService
       .signUp(this.eventItem.publicSlug, {
         homeId: this.selectedHomeId,
-        adults: sendAdults ? this.adults : 0,
-        children: sendChildren ? this.children : 0,
-        adultNames: sendAdults ? this.parseNames(this.adultNames) : [],
-        childNames: sendChildren ? this.parseNames(this.childNames) : [],
+        adults: !removeRequested && sendAdults ? this.adults : 0,
+        children: !removeRequested && sendChildren ? this.children : 0,
+        adultNames: !removeRequested && sendAdults ? this.parseNames(this.adultNames) : [],
+        childNames: !removeRequested && sendChildren ? this.parseNames(this.childNames) : [],
         remove: removeRequested,
       })
       .subscribe({
@@ -200,9 +198,7 @@ export class EventDetailComponent implements OnInit {
     // Wait until auth bootstrap fully completes — authSessionResolved alone fires before
     // /api/me returns, so apiUser would still be null. authBootstrapStatus === 'completed'
     // (or 'idle' for unauthenticated users) ensures the user profile is loaded.
-    const state = await firstValueFrom(
-      this.appState.pipe(filter(s => s.authSessionResolved && s.authBootstrapStatus !== 'inProgress'))
-    );
+    const state = await firstValueFrom(this.appState.pipe(filter(s => s.authSessionResolved && s.authBootstrapStatus !== 'inProgress')));
     const user = state.apiUser;
     const homes = user?.ownedHomes ?? [];
     if (homes.length === 1) {

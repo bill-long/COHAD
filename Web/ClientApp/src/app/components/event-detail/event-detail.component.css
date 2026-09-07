@@ -156,6 +156,12 @@
   resize: vertical;
 }
 
+.event-detail-signup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .event-detail-signup-btn {
   display: inline-flex;
   align-items: center;
