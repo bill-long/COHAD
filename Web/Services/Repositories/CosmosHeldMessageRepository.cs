@@ -78,7 +78,7 @@ namespace Web.Services.Repositories
                 msg.ETag = response.Headers.ETag;
                 return msg;
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 return null;
             }

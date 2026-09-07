@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json.Linq;
 using Web.Models;
+using Web.Services.Cosmos;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
 using CosmosPartitionKey = Microsoft.Azure.Cosmos.PartitionKey;
 
@@ -78,7 +79,7 @@ namespace Web.Services.Repositories
                 link.ETag = response.Headers.ETag;
                 return link;
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound && ex.SubStatusCode == 0)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // Only a genuinely missing item maps to "no such link". A 404 with a non-zero
                 // sub-status means the container or database is missing, and swallowing that would

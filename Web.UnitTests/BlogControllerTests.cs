@@ -429,8 +429,14 @@ public sealed class BlogControllerTests
         Assert.Equal(StatusCodes.Status409Conflict, status.StatusCode);
     }
 
-    [Fact]
-    public async Task UpsertManage_update_with_new_featured_image_conflict_deletes_new_blob_not_existing_blob()
+    [Theory]
+    [InlineData(HttpStatusCode.PreconditionFailed, 0)]
+    [InlineData(HttpStatusCode.NotFound, 0)]
+    [InlineData(HttpStatusCode.NotFound, 1003)]
+    public async Task UpsertManage_failed_update_cleans_up_new_blob_and_preserves_storage_errors(
+        HttpStatusCode failureStatus,
+        int subStatus
+    )
     {
         var uniqueId = UniqueId("u1");
         var mockUsers = new Mock<IUserRepository>();
@@ -467,13 +473,7 @@ public sealed class BlogControllerTests
         mockPosts
             .Setup(r => r.ReplaceAsync(It.IsAny<BlogPost>(), It.IsAny<string>()))
             .ThrowsAsync(
-                new Microsoft.Azure.Cosmos.CosmosException(
-                    "conflict",
-                    HttpStatusCode.PreconditionFailed,
-                    0,
-                    string.Empty,
-                    0
-                )
+                new Microsoft.Azure.Cosmos.CosmosException("save failed", failureStatus, subStatus, string.Empty, 0)
             );
 
         var deleted = new List<string>();
@@ -517,10 +517,20 @@ public sealed class BlogControllerTests
             FeaturedImage = formFile,
         };
 
-        var result = await c.UpsertManage(request);
-
-        var status = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(StatusCodes.Status409Conflict, status.StatusCode);
+        if (subStatus != 0)
+            Assert.Equal(
+                subStatus,
+                (
+                    await Assert.ThrowsAsync<Microsoft.Azure.Cosmos.CosmosException>(() => c.UpsertManage(request))
+                ).SubStatusCode
+            );
+        else if (failureStatus == HttpStatusCode.NotFound)
+            Assert.IsType<NotFoundResult>(await c.UpsertManage(request));
+        else
+            Assert.Equal(
+                StatusCodes.Status409Conflict,
+                Assert.IsType<ObjectResult>(await c.UpsertManage(request)).StatusCode
+            );
         Assert.Contains(
             deleted,
             p =>

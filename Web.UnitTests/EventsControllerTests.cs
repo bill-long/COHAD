@@ -1315,8 +1315,12 @@ public sealed class EventsControllerTests
         );
     }
 
-    [Fact]
-    public async Task SignUp_returns_NotFound_when_event_deleted_before_replace()
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1003, false)]
+    [InlineData(0, true)]
+    [InlineData(1003, true)]
+    public async Task Event_writes_only_map_item_not_found_to_404(int subStatus, bool editEvent)
     {
         var uniqueId = UniqueId("u1");
         var eventId = Guid.NewGuid();
@@ -1331,7 +1335,7 @@ public sealed class EventsControllerTests
                     GivenName = "Mock",
                     Surname = "Resident",
                     Emails = "mock@cohad.local",
-                    Roles = new List<User.Role> { User.Role.Resident },
+                    Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
                     OwnedHomeIds = new List<Guid> { homeId },
                 }
             );
@@ -1346,6 +1350,7 @@ public sealed class EventsControllerTests
         };
 
         var mockEvents = new Mock<ICommunityEventRepository>();
+        mockEvents.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<CommunityEvent> { stored });
         mockEvents.Setup(r => r.GetByRouteSegmentAsync(eventId.ToString("D"))).ReturnsAsync(stored);
         mockEvents
             .Setup(r => r.ReadAsync(eventId))
@@ -1353,12 +1358,26 @@ public sealed class EventsControllerTests
         mockEvents
             .Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()))
             .ThrowsAsync(
-                new Microsoft.Azure.Cosmos.CosmosException("Not found", HttpStatusCode.NotFound, 0, string.Empty, 0)
+                new Microsoft.Azure.Cosmos.CosmosException(
+                    "Not found",
+                    HttpStatusCode.NotFound,
+                    subStatus,
+                    string.Empty,
+                    0
+                )
             );
 
         var mockHomes = new Mock<IHomeRepository>();
-        mockHomes.Setup(r => r.GetByIdAsync(homeId))
-            .ReturnsAsync(new Home { Id = homeId, StreetNumber = 123, StreetName = "Test Lane" });
+        mockHomes
+            .Setup(r => r.GetByIdAsync(homeId))
+            .ReturnsAsync(
+                new Home
+                {
+                    Id = homeId,
+                    StreetNumber = 123,
+                    StreetName = "Test Lane",
+                }
+            );
 
         var c = CreateController(
             mockUsers.Object,
@@ -1367,9 +1386,32 @@ public sealed class EventsControllerTests
             Mock.Of<IAuditLogRepository>(),
             mockHomes.Object
         );
-        var result = await c.SignUp(eventId.ToString("D"), new EventSignupRequest { HomeId = homeId, Adults = 1, Children = 0 });
-
-        Assert.IsType<NotFoundResult>(result);
+        Task<IActionResult> Save() =>
+            editEvent
+                ? c.UpsertManage(
+                    new EventUpsertRequest
+                    {
+                        Id = eventId,
+                        Title = "Updated",
+                        StartUtc = stored.StartUtc,
+                    }
+                )
+                : c.SignUp(
+                    eventId.ToString("D"),
+                    new EventSignupRequest
+                    {
+                        HomeId = homeId,
+                        Adults = 1,
+                        Children = 0,
+                    }
+                );
+        if (subStatus == 0)
+            Assert.IsType<NotFoundResult>(await Save());
+        else
+            Assert.Equal(
+                subStatus,
+                (await Assert.ThrowsAsync<Microsoft.Azure.Cosmos.CosmosException>(Save)).SubStatusCode
+            );
     }
 
     [Fact]

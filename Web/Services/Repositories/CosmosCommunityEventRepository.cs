@@ -196,7 +196,7 @@ namespace Web.Services.Repositories
                     ETag = response.ETag,
                 };
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 return null;
             }
@@ -230,7 +230,7 @@ namespace Web.Services.Repositories
             {
                 await _eventsContainer.DeleteItemAsync<JObject>(documentId, CosmosPartitionKey.None);
             }
-            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // Idempotent delete
             }

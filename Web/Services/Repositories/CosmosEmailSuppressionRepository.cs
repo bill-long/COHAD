@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json.Linq;
 using Web.Models;
+using Web.Services.Cosmos;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
 using CosmosPartitionKey = Microsoft.Azure.Cosmos.PartitionKey;
 
@@ -92,7 +93,7 @@ namespace Web.Services.Repositories
             }
             catch (CosmosException ex)
                 when (ex.StatusCode == HttpStatusCode.PreconditionFailed
-                    || (ex.StatusCode == HttpStatusCode.NotFound && ex.SubStatusCode == 0)
+                    || CosmosNotFound.IsItemNotFound(ex)
                 )
             {
                 // 412 is a stale ETag; 404 (item sub-status only) is Replace on a document deleted
@@ -129,7 +130,7 @@ namespace Web.Services.Repositories
                 suppression.ETag = response.Headers.ETag;
                 return suppression;
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound && ex.SubStatusCode == 0)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // Only a genuinely missing item maps to "not suppressed". A 404 with a non-zero
                 // sub-status means the container or database is missing, and swallowing that would

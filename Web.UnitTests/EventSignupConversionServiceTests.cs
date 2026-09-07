@@ -12,6 +12,66 @@ namespace Web.UnitTests;
 
 public sealed class EventSignupConversionServiceTests
 {
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1003, false)]
+    [InlineData(0, true)]
+    [InlineData(1003, true)]
+    public async Task Conversion_only_ignores_a_genuinely_deleted_event(int subStatus, bool bulk)
+    {
+        var homeId = Guid.NewGuid();
+        var stored = new CommunityEvent
+        {
+            Id = Guid.NewGuid(),
+            Signups = new List<EventSignup>
+            {
+                new() { UserUniqueId = "user", Adults = 2 },
+            },
+        };
+        var repo = new Mock<ICommunityEventRepository>();
+        repo.Setup(r => r.GetEventIdsWithUserSignupAsync("user")).ReturnsAsync(new List<Guid> { stored.Id });
+        repo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<CommunityEvent> { stored });
+        repo.Setup(r => r.ReadAsync(stored.Id))
+            .ReturnsAsync(new CommunityEventReadResult { Event = stored, ETag = "etag" });
+        var failure = new Microsoft.Azure.Cosmos.CosmosException(
+            "Missing",
+            System.Net.HttpStatusCode.NotFound,
+            subStatus,
+            "activity",
+            0
+        );
+        repo.Setup(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>())).ThrowsAsync(failure);
+        var users = new Mock<IUserRepository>();
+        users
+            .Setup(r => r.GetAllAsync())
+            .ReturnsAsync(
+                new List<User>
+                {
+                    new()
+                    {
+                        UniqueId = "user",
+                        OwnedHomeIds = new List<Guid> { homeId },
+                    },
+                }
+            );
+        var homes = new Mock<IHomeRepository>();
+        homes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(new List<Home> { new() { Id = homeId } });
+        var service = new EventSignupConversionService(repo.Object);
+
+        Task Convert() =>
+            bulk
+                ? service.MigrateAllUserSignupsAsync(users.Object, homes.Object)
+                : service.ConvertUserSignupsToHomeAsync("user", homeId, "123 Mock Lane");
+        if (subStatus == 0)
+            await Convert();
+        else
+            Assert.Same(failure, await Assert.ThrowsAsync<Microsoft.Azure.Cosmos.CosmosException>(Convert));
+        repo.Verify(r => r.ReplaceAsync(It.IsAny<CommunityEvent>(), It.IsAny<string>()), Times.Once);
+    }
+
+
     [Fact]
     public async Task Converts_user_signup_to_home_signup()
     {

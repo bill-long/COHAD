@@ -40,7 +40,7 @@ namespace Web.Services.Repositories
                 job.ETag = response.Headers.ETag;
                 return job;
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 return null;
             }
@@ -53,7 +53,7 @@ namespace Web.Services.Repositories
             {
                 await _emailJobContainer.DeleteItemAsync<JObject>(documentId, CosmosPartitionKey.None);
             }
-            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // Idempotent cleanup
             }

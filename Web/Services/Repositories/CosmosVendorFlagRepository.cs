@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Web.Models;
+using Web.Services.Cosmos;
 using CosmosContainer = Microsoft.Azure.Cosmos.Container;
 using CosmosPartitionKey = Microsoft.Azure.Cosmos.PartitionKey;
 using CosmosQueryDefinition = Microsoft.Azure.Cosmos.QueryDefinition;
@@ -111,7 +112,7 @@ namespace Web.Services.Repositories
             {
                 await _vendorFlagsContainer.DeleteItemAsync<JObject>(ToDocumentId(flagId), CosmosPartitionKey.None);
             }
-            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // idempotent
             }
@@ -124,7 +125,7 @@ namespace Web.Services.Repositories
             {
                 await _vendorFlagsContainer.DeleteItemAsync<JObject>(ToDocumentId(flagId), CosmosPartitionKey.None);
             }
-            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 // idempotent
             }

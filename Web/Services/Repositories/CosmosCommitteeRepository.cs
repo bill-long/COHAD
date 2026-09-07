@@ -49,7 +49,7 @@ namespace Web.Services.Repositories
                 var response = await _container.ReadItemAsync<JObject>(committeeKey, CosmosPartitionKey.None);
                 return CosmosLegacyDocumentMapper.ToCommittee(response.Resource);
             }
-            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            catch (Microsoft.Azure.Cosmos.CosmosException ex) when (CosmosNotFound.IsItemNotFound(ex))
             {
                 return null;
             }
