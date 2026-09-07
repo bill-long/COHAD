@@ -74,11 +74,12 @@ public sealed class EventsControllerTests
                     It.IsAny<IFormFile>(),
                     It.IsAny<string>(),
                     It.IsAny<string>(),
-                    It.IsAny<string>()
+                    It.IsAny<string>(),
+                    It.IsAny<Action<string>>()
                 )
             )
             .ReturnsAsync(
-                (IFormFile f, string ext, string prefix, string baseName) =>
+                (IFormFile f, string ext, string prefix, string baseName, Action<string> onUploadStarting) =>
                     new ImageUploadResult(
                         $"{prefix}/{baseName}{ext.ToLowerInvariant()}",
                         $"{baseName}{ext.ToLowerInvariant()}",
@@ -1579,7 +1580,7 @@ public sealed class EventsControllerTests
             .ReturnsAsync(
                 new CommunityEventReadResult
                 {
-                    Event = new CommunityEvent { Id = eventId, Title = "Test" },
+                    Event = new CommunityEvent { Id = eventId, Title = "Test", PromoMediaBlobPath = "events/promo.png" },
                     ETag = "\"e1\"",
                 }
             );
@@ -1597,7 +1598,14 @@ public sealed class EventsControllerTests
 
         var fileResult = Assert.IsType<FileContentResult>(result);
         Assert.Equal("image/jpeg", fileResult.ContentType);
-        mockFileStore.Verify(s => s.UploadAsync(thumbPath, It.IsAny<Stream>(), "image/jpeg"), Times.Once);
+        mockFileStore.Verify(
+            s => s.UploadAsync(
+                It.Is<string>(p => p.StartsWith($"events/{eventId:D}/thumbs/")),
+                It.IsAny<Stream>(),
+                "image/jpeg"
+            ),
+            Times.Once
+        );
     }
 
     private static byte[] CreateMinimalPng()
@@ -2206,9 +2214,17 @@ public sealed class EventsControllerTests
 
         var mockUploadHelper = new Mock<IImageUploadHelper>();
         mockUploadHelper
-            .Setup(h => h.ConvertAndUploadAsync(It.IsAny<IFormFile>(), ".png", It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(h =>
+                h.ConvertAndUploadAsync(
+                    It.IsAny<IFormFile>(),
+                    ".png",
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<Action<string>>()
+                )
+            )
             .ReturnsAsync(
-                (IFormFile _, string _, string prefix, string baseName) =>
+                (IFormFile _, string _, string prefix, string baseName, Action<string> onUploadStarting) =>
                     new ImageUploadResult($"{prefix}/{baseName}.jpg", $"{baseName}.jpg", "image/jpeg", 5)
             );
 
