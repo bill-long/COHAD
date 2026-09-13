@@ -77,11 +77,7 @@ describe('EditHomeComponent associated-user self-removal', () => {
   }
 
   function createComponent(apiUser: Partial<ApiUser> | null, dialog: { open: jasmine.Spy } = { open: jasmine.createSpy('open') }) {
-    return new EditHomeComponent(
-      {} as never,
-      dialog as never,
-      of({ ...initialStateValue, apiUser: apiUser as ApiUser | null }),
-    );
+    return new EditHomeComponent({} as never, dialog as never, of({ ...initialStateValue, apiUser: apiUser as ApiUser | null }));
   }
 
   it('recognises the signed-in account among the associated users', () => {
