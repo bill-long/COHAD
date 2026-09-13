@@ -176,6 +176,169 @@ public sealed class UserControllerTests
     }
 
     [Fact]
+    public async Task UpdateUserAssociations_returns_BadRequest_when_admin_drops_a_home_from_own_account()
+    {
+        var apiUniqueId = UniqueId("admin");
+        var keptHomeId = Guid.NewGuid();
+        var droppedHomeId = Guid.NewGuid();
+        var self = new User
+        {
+            UniqueId = apiUniqueId,
+            Emails = "admin@example.com",
+            Roles = new List<User.Role> { User.Role.Administrator, User.Role.Resident },
+            OwnedHomeIds = new List<Guid> { keptHomeId, droppedHomeId },
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(apiUniqueId)).ReturnsAsync(self);
+        var mockHomes = new Mock<IHomeRepository>();
+        var mockAudit = new Mock<IAuditLogRepository>();
+
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, nameId: "admin");
+        var result = await c.UpdateUserAssociations(
+            apiUniqueId,
+            new UpdatedUserAssociations
+            {
+                ETag = "browser-version",
+                RoleNames = new List<string> { "Administrator" },
+                OwnedHomeIds = new List<Guid> { keptHomeId },
+            }
+        );
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal(HomeAssociationRules.SelfRemovalMessage, bad.Value);
+        Assert.Contains(droppedHomeId, self.OwnedHomeIds);
+        mockHomes.Verify(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()), Times.Never);
+        mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+        mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateUserAssociations_returns_BadRequest_when_admin_clears_own_roles_while_listing_own_home()
+    {
+        // UserAssociationState.Apply empties the home list when no roles remain, so a self-update
+        // with roles: [] drops every home even though the request still lists it. The rule is judged
+        // on what the upsert would persist, not on the request's spelling.
+        var apiUniqueId = UniqueId("admin");
+        var homeId = Guid.NewGuid();
+        var self = new User
+        {
+            UniqueId = apiUniqueId,
+            Emails = "admin@example.com",
+            Roles = new List<User.Role> { User.Role.Administrator, User.Role.Resident },
+            OwnedHomeIds = new List<Guid> { homeId },
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(apiUniqueId)).ReturnsAsync(self);
+        var mockHomes = new Mock<IHomeRepository>();
+
+        var c = CreateController(mockUsers.Object, mockHomes.Object, Mock.Of<IAuditLogRepository>(), nameId: "admin");
+        var result = await c.UpdateUserAssociations(
+            apiUniqueId,
+            new UpdatedUserAssociations
+            {
+                ETag = "browser-version",
+                RoleNames = new List<string>(),
+                OwnedHomeIds = new List<Guid> { homeId },
+            }
+        );
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal(HomeAssociationRules.SelfRemovalMessage, bad.Value);
+        mockHomes.Verify(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()), Times.Never);
+        mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateUserAssociations_judges_self_removal_against_the_freshly_read_record()
+    {
+        // The current-user snapshot predates the target read. A home granted to the caller in
+        // between must still count as theirs, so the rule reads the fresh record.
+        var apiUniqueId = UniqueId("admin");
+        var newlyGrantedHomeId = Guid.NewGuid();
+        var snapshot = new User
+        {
+            UniqueId = apiUniqueId,
+            Roles = new List<User.Role> { User.Role.Administrator, User.Role.Resident },
+            OwnedHomeIds = new List<Guid>(),
+        };
+        var fresh = new User
+        {
+            UniqueId = apiUniqueId,
+            Emails = "admin@example.com",
+            Roles = new List<User.Role> { User.Role.Administrator, User.Role.Resident },
+            OwnedHomeIds = new List<Guid> { newlyGrantedHomeId },
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.SetupSequence(r => r.GetByUniqueIdAsync(apiUniqueId)).ReturnsAsync(snapshot).ReturnsAsync(fresh);
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>(), nameId: "admin");
+        var result = await c.UpdateUserAssociations(
+            apiUniqueId,
+            new UpdatedUserAssociations
+            {
+                ETag = "browser-version",
+                RoleNames = new List<string> { "Administrator" },
+                OwnedHomeIds = new List<Guid>(),
+            }
+        );
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateUserAssociations_allows_admin_to_add_a_home_and_change_roles_on_own_account()
+    {
+        // The guard is only about dropping a home the caller owns; growing the list or editing
+        // roles on one's own account is ordinary administration.
+        var apiUniqueId = UniqueId("admin");
+        var existingHomeId = Guid.NewGuid();
+        var addedHomeId = Guid.NewGuid();
+        var self = new User
+        {
+            UniqueId = apiUniqueId,
+            Emails = "admin@example.com",
+            Roles = new List<User.Role> { User.Role.Administrator, User.Role.Resident },
+            OwnedHomeIds = new List<Guid> { existingHomeId },
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(apiUniqueId)).ReturnsAsync(self);
+        User? upserted = null;
+        mockUsers
+            .Setup(r => r.UpsertAsync(It.IsAny<User>()))
+            .Callback<User>(u => upserted = u)
+            .ReturnsAsync((User u) => u);
+        var mockHomes = new Mock<IHomeRepository>();
+        mockHomes
+            .Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync(
+                new List<Home>
+                {
+                    new Home { Id = existingHomeId, Residents = new List<Resident>() },
+                    new Home { Id = addedHomeId, Residents = new List<Resident>() },
+                }
+            );
+        var mockAudit = new Mock<IAuditLogRepository>();
+        mockAudit.Setup(r => r.AddAsync(It.IsAny<NewAuditLogEntry>())).Returns(Task.CompletedTask);
+
+        var c = CreateController(mockUsers.Object, mockHomes.Object, mockAudit.Object, nameId: "admin");
+        var result = await c.UpdateUserAssociations(
+            apiUniqueId,
+            new UpdatedUserAssociations
+            {
+                ETag = "browser-version",
+                RoleNames = new List<string> { "Administrator", "Board" },
+                OwnedHomeIds = new List<Guid> { existingHomeId, addedHomeId },
+            }
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(upserted);
+        Assert.Contains(addedHomeId, upserted!.OwnedHomeIds);
+        Assert.Contains(User.Role.Board, upserted.Roles);
+    }
+
+    [Fact]
     public async Task UpdateUserAssociations_propagates_conflict_for_the_409_filter_without_auditing()
     {
         var apiUniqueId = UniqueId("admin");

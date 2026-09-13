@@ -1,5 +1,19 @@
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
-import { Component, OnInit, OnChanges, SimpleChanges, Input, ElementRef, ViewChild, ViewEncapsulation, Output, EventEmitter, Inject } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  OnChanges,
+  SimpleChanges,
+  Input,
+  ElementRef,
+  ViewChild,
+  ViewEncapsulation,
+  Output,
+  EventEmitter,
+  Inject,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ApiUser, Home, Resident } from 'src/app/models';
 import { UntypedFormControl } from '@angular/forms';
 import { MatChipInputEvent } from '@angular/material/chips';
@@ -46,6 +60,8 @@ export class UserComponent implements OnInit, OnChanges {
 
   removable = true;
 
+  private currentUserUniqueId: string | null = null;
+
   saveInProgress = false;
 
   readonly administratorRole = 'Administrator';
@@ -62,6 +78,7 @@ export class UserComponent implements OnInit, OnChanges {
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     private userService: UserService,
     private readonly dialog: MatDialog,
+    private readonly destroyRef: DestroyRef,
   ) {}
 
   ngOnInit(): void {
@@ -77,11 +94,20 @@ export class UserComponent implements OnInit, OnChanges {
       }),
     );
 
-    this.appState.pipe(map(s => s.apiUser)).subscribe(u => {
-      if (u?.roles.includes(this.administratorRole) && !this.allRoles.includes(this.administratorRole)) {
-        this.allRoles.push(this.administratorRole);
-      }
-    });
+    // applicationState is a BehaviorSubject, so this receives the current user synchronously
+    // before the first render; the editor is opened and closed repeatedly in one session, so the
+    // subscription must not outlive the component.
+    this.appState
+      .pipe(
+        map(s => s.apiUser),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(u => {
+        this.currentUserUniqueId = u?.uniqueId ?? null;
+        if (u?.roles.includes(this.administratorRole) && !this.allRoles.includes(this.administratorRole)) {
+          this.allRoles.push(this.administratorRole);
+        }
+      });
 
     this.apiUserCopy = JSON.parse(JSON.stringify(this.apiUser));
     this.apiUserCopy.roles ??= [];
@@ -126,7 +152,36 @@ export class UserComponent implements OnInit, OnChanges {
   // an untouched link, clears an invalidated retained link with an audit note, and rejects an
   // explicitly invalid one with a message the save flow surfaces in the snackbar.
 
+  /**
+   * An administrator editing their own account may add homes and change roles, but may not drop a
+   * home they already own - the server refuses it (HomeAssociationRules, the same rule the home
+   * editor enforces), so the chip is not removable rather than failing on save. A home added in
+   * this edit session stays removable: it is not owned yet. Until the signed-in account is known,
+   * unknown is treated as "could be me" and no chip is removable, matching the home editor.
+   */
+  canRemoveHome(home: Home): boolean {
+    if (this.currentUserUniqueId == null) {
+      return false;
+    }
+    if (this.apiUserCopy?.uniqueId !== this.currentUserUniqueId) {
+      return true;
+    }
+    return !(this.apiUser?.ownedHomes ?? []).some(h => h.id === home.id);
+  }
+
+  /**
+   * True when the editor is open on the signed-in account and it already owns a home. Like
+   * canRemoveHome, an unknown signed-in account counts as "could be me".
+   */
+  isEditingOwnAccountWithHomes(): boolean {
+    const isOwnOrUnknown = this.currentUserUniqueId == null || this.apiUserCopy?.uniqueId === this.currentUserUniqueId;
+    return isOwnOrUnknown && (this.apiUser?.ownedHomes?.length ?? 0) > 0;
+  }
+
   removeHome(home: Home) {
+    if (!this.canRemoveHome(home)) {
+      return;
+    }
     const index = this.apiUserCopy.ownedHomes.indexOf(home);
     if (index >= 0) {
       this.apiUserCopy.ownedHomes.splice(index, 1);
@@ -178,7 +233,21 @@ export class UserComponent implements OnInit, OnChanges {
     this.homeControl.setValue(null);
   }
 
+  /**
+   * Removing the last role also clears the home list (an account cannot own homes with no roles),
+   * so on the signed-in account it would be an indirect self-removal the server refuses. The last
+   * role chip is therefore not removable while the account owns a home; every other role change on
+   * one's own account remains allowed.
+   */
+  canRemoveRole(role: string): boolean {
+    const isLastRole = (this.apiUserCopy?.roles ?? []).length === 1 && this.apiUserCopy.roles[0] === role;
+    return !(isLastRole && this.isEditingOwnAccountWithHomes());
+  }
+
   removeRole(role: string) {
+    if (!this.canRemoveRole(role)) {
+      return;
+    }
     const index = this.apiUserCopy.roles.indexOf(role);
     if (index >= 0) {
       this.apiUserCopy.roles.splice(index, 1);

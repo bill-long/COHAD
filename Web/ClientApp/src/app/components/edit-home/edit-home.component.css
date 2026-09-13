@@ -278,6 +278,11 @@
   font-weight: 600;
 }
 
+.associatedUserSelf {
+  font-style: italic;
+  white-space: nowrap;
+}
+
 .associatedUsersHint {
   font-size: 13px;
   margin-top: 2px;

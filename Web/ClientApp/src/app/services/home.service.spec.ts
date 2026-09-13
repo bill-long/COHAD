@@ -94,6 +94,39 @@ describe('HomeService failure reporting', () => {
     expect(snackSpy.open).toHaveBeenCalled();
   });
 
+  it('passes on a deterministic 400 sent as a bare string', () => {
+    // RemoveAssociatedUser refuses a self-removal with a plain-string 400. Dropping that body would
+    // tell the user to retry an action the server will always refuse, instead of the "ask another
+    // owner or an administrator" guidance the message carries.
+    const service = setup(false);
+    httpSpy.delete.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: "You cannot remove your own account's association with a home.",
+          }),
+      ),
+    );
+
+    service.removeAssociatedUser('h-1', 'u-1', true).subscribe();
+
+    expect(snackSpy.open).toHaveBeenCalledWith(
+      "You cannot remove your own account's association with a home.",
+      'Dismiss',
+      jasmine.any(Object),
+    );
+  });
+
+  it('still falls back on a 400 with a generic object body', () => {
+    const service = setup(false);
+    httpSpy.delete.and.returnValue(throwError(() => new HttpErrorResponse({ status: 400, error: { title: 'Bad Request' } })));
+
+    service.removeAssociatedUser('h-1', 'u-1', true).subscribe();
+
+    expect(snackSpy.open.calls.mostRecent().args[0]).toBe('Could not remove the owner. Please try again.');
+  });
+
   it('passes on a conflict sent as a bare string, not just the object shape', () => {
     // The controller uses both shapes: Update returns `{ error: "..." }` while
     // RemoveAssociatedUser returns a bare string. Handling only the object shape downgraded this

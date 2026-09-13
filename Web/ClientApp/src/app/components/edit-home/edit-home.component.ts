@@ -1,6 +1,22 @@
-import { Component, ElementRef, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, ViewChild } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  EventEmitter,
+  Inject,
+  Input,
+  OnChanges,
+  OnInit,
+  Output,
+  SimpleChanges,
+  ViewChild,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { Home, HomeAssociatedUser, Resident } from 'src/app/models';
 import { HomeService } from 'src/app/services/home.service';
+import { applicationState, ApplicationState } from 'src/app/state';
 import { MatDialog } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
@@ -45,10 +61,28 @@ export class EditHomeComponent implements OnInit, OnChanges {
     residents?: { ok: boolean; message: string };
   } = {};
 
+  /**
+   * The signed-in account's id, used to keep the "Remove association" control off the caller's own
+   * row. A resident who removed their own association would be locked out of their home with no
+   * way back in; the API refuses the request too, this just keeps the dead end out of the UI.
+   * Null until /api/me has resolved (and again across a principal change), during which no row
+   * offers the control at all - unknown is treated as "could be me", not as "removable".
+   */
+  private currentUserUniqueId: string | null = null;
+
   constructor(
     private homeService: HomeService,
     private dialog: MatDialog,
-  ) {}
+    @Inject(applicationState) appState: Observable<ApplicationState>,
+    destroyRef: DestroyRef,
+  ) {
+    appState
+      .pipe(
+        map(s => s.apiUser?.uniqueId ?? null),
+        takeUntilDestroyed(destroyRef),
+      )
+      .subscribe(uniqueId => (this.currentUserUniqueId = uniqueId));
+  }
 
   ngOnInit(): void {
     this.refreshHomeCopyFromInput();
@@ -292,6 +326,16 @@ export class EditHomeComponent implements OnInit, OnChanges {
         this.deleteResidentAndSave(resident);
       }
     });
+  }
+
+  /** True for the row that belongs to the signed-in account, which cannot remove itself. */
+  isCurrentUser(associatedUser: HomeAssociatedUser): boolean {
+    return associatedUser.uniqueId === this.currentUserUniqueId;
+  }
+
+  /** True once the signed-in account is known and this row is someone else's. */
+  canRemoveAssociatedUser(associatedUser: HomeAssociatedUser): boolean {
+    return this.currentUserUniqueId != null && !this.isCurrentUser(associatedUser);
   }
 
   confirmRemoveAssociatedUser(associatedUser: HomeAssociatedUser) {
