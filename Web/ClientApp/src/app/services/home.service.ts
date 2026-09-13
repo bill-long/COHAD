@@ -128,19 +128,23 @@ export class HomeService {
   }
 
   /**
-   * The server's own message, for the responses where it carries guidance the client cannot infer -
-   * today that is the 409 telling the user someone else changed the record and to refresh, which is
-   * the opposite of the "try again" a generic message would suggest. Other statuses fall back,
-   * because their bodies are deliberately generic ("An unexpected error occurred.") and would be a
-   * downgrade on the wording above.
+   * The server's own message, for the responses where it carries guidance the client cannot infer:
+   * the 409 telling the user someone else changed the record and to refresh, and the deterministic
+   * 400s (a bare string, e.g. "you cannot remove your own account's association") for which a
+   * blind retry can never succeed - both the opposite of the "try again" a generic message would
+   * suggest. Other statuses fall back, because their bodies are deliberately generic ("An
+   * unexpected error occurred.") and would be a downgrade on the wording above.
    */
   private serverMessage(err: unknown): string | null {
     const response = err as HttpErrorResponse | undefined;
+    const body: unknown = response?.error;
+
     if (response?.status === 400) {
-      const errors = response.error?.errors?.ETag;
+      const errors = (body as { errors?: { ETag?: unknown[] } } | null)?.errors?.ETag;
       if (Array.isArray(errors) && typeof errors[0] === 'string') {
         return errors[0];
       }
+      return typeof body === 'string' && body.trim().length > 0 ? body : null;
     }
     if (response?.status !== 409) {
       return null;
@@ -151,7 +155,6 @@ export class HomeService {
     // downgraded the owner-removal conflict - "the specified user is not associated with the
     // specified home", which tells the user the state is already what they wanted - to generic
     // retry advice.
-    const body: unknown = response.error;
     const message = typeof body === 'string' ? body : (body as { error?: unknown } | null)?.error;
     return typeof message === 'string' && message.trim().length > 0 ? message : null;
   }

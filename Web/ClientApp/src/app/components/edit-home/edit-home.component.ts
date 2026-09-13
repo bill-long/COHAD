@@ -1,18 +1,19 @@
 import {
   Component,
+  DestroyRef,
   ElementRef,
   EventEmitter,
   Inject,
   Input,
   OnChanges,
-  OnDestroy,
   OnInit,
   Output,
   SimpleChanges,
   ViewChild,
 } from '@angular/core';
-import { Observable, Subscription } from 'rxjs';
-import { distinctUntilChanged, map } from 'rxjs/operators';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { Home, HomeAssociatedUser, Resident } from 'src/app/models';
 import { HomeService } from 'src/app/services/home.service';
 import { applicationState, ApplicationState } from 'src/app/state';
@@ -27,7 +28,7 @@ import { EditHomeContactDialogComponent } from '../edit-home-contact-dialog/edit
   styleUrls: ['./edit-home.component.css'],
   standalone: false,
 })
-export class EditHomeComponent implements OnInit, OnChanges, OnDestroy {
+export class EditHomeComponent implements OnInit, OnChanges {
   @Input() home!: Home | null;
 
   @Input() startWithEditEnabled: boolean | undefined;
@@ -64,20 +65,21 @@ export class EditHomeComponent implements OnInit, OnChanges, OnDestroy {
    * The signed-in account's id, used to keep the "Remove association" control off the caller's own
    * row. A resident who removed their own association would be locked out of their home with no
    * way back in; the API refuses the request too, this just keeps the dead end out of the UI.
+   * Null until /api/me has resolved (and again across a principal change), during which no row
+   * offers the control at all - unknown is treated as "could be me", not as "removable".
    */
-  currentUserUniqueId: string | null = null;
-
-  private readonly currentUserSubscription: Subscription;
+  private currentUserUniqueId: string | null = null;
 
   constructor(
     private homeService: HomeService,
     private dialog: MatDialog,
     @Inject(applicationState) appState: Observable<ApplicationState>,
+    destroyRef: DestroyRef,
   ) {
-    this.currentUserSubscription = appState
+    appState
       .pipe(
         map(s => s.apiUser?.uniqueId ?? null),
-        distinctUntilChanged(),
+        takeUntilDestroyed(destroyRef),
       )
       .subscribe(uniqueId => (this.currentUserUniqueId = uniqueId));
   }
@@ -93,10 +95,6 @@ export class EditHomeComponent implements OnInit, OnChanges, OnDestroy {
     if (changes['home'] && !this.editing.contact && !this.editing.phone && !this.editing.residents) {
       this.refreshHomeCopyFromInput();
     }
-  }
-
-  ngOnDestroy(): void {
-    this.currentUserSubscription.unsubscribe();
   }
 
   private refreshHomeCopyFromInput() {
@@ -332,14 +330,15 @@ export class EditHomeComponent implements OnInit, OnChanges, OnDestroy {
 
   /** True for the row that belongs to the signed-in account, which cannot remove itself. */
   isCurrentUser(associatedUser: HomeAssociatedUser): boolean {
-    const uniqueId = associatedUser?.uniqueId;
-    return !!uniqueId && uniqueId === this.currentUserUniqueId;
+    return associatedUser.uniqueId === this.currentUserUniqueId;
+  }
+
+  /** True once the signed-in account is known and this row is someone else's. */
+  canRemoveAssociatedUser(associatedUser: HomeAssociatedUser): boolean {
+    return this.currentUserUniqueId != null && !this.isCurrentUser(associatedUser);
   }
 
   confirmRemoveAssociatedUser(associatedUser: HomeAssociatedUser) {
-    if (this.isCurrentUser(associatedUser)) {
-      return;
-    }
     const providerLabel = this.associatedUserProviderLabel(associatedUser).replace(/\s+account$/i, '');
     const accountLabel = `${providerLabel} account`;
     const emailAddress = (associatedUser?.emails ?? '').trim() || 'this user';

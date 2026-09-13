@@ -260,12 +260,6 @@ namespace Web.Controllers
             );
         }
 
-        /// <summary>
-        /// Returned when a user asks to remove their own home association. Shown verbatim by the SPA.
-        /// </summary>
-        internal const string SelfRemovalMessage =
-            "You cannot remove your own account's association with a home. Ask another owner or an administrator to do it.";
-
         [HttpDelete("{homeId}/owners/{userUniqueId}")]
         public async Task<IActionResult> RemoveAssociatedUser(Guid homeId, string userUniqueId)
         {
@@ -281,13 +275,16 @@ namespace Web.Controllers
                 return Forbid();
             }
 
-            // A user may not remove their own association. For a resident that would lock them out
-            // of their own home with no way back in; the SPA hides the control for the signed-in
-            // account, and this is the enforcement behind it. Another owner or an administrator
-            // can still remove the association on their behalf.
-            if (string.Equals(userUniqueId, apiUser.UniqueId, StringComparison.Ordinal))
+            // A user may not remove a home from their own account (HomeAssociationRules is the single
+            // definition, shared with UpdateUserAssociations). The SPA hides the control for the
+            // signed-in account; this is the enforcement behind it, and the message reaches the
+            // user through HomeService.serverMessage when a stale view sends the request anyway.
+            // A caller who does not own the home is not removing anything of their own, so that
+            // case falls through to the 409 below rather than misreporting the state.
+            var remainingHomeIds = (apiUser.OwnedHomeIds ?? new List<Guid>()).Where(h => h != homeId);
+            if (HomeAssociationRules.RemovesCallersOwnHome(apiUser, userUniqueId, remainingHomeIds))
             {
-                return BadRequest(SelfRemovalMessage);
+                return BadRequest(HomeAssociationRules.SelfRemovalMessage);
             }
 
             var userToUpdate = await _userRepository.GetByUniqueIdAsync(userUniqueId);

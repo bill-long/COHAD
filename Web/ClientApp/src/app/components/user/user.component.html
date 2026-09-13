@@ -39,10 +39,10 @@
 <div class="wide-input chip-input">
     <mat-form-field appearance="fill">
         <mat-chip-grid #chipGrid aria-label="Home selection">
-            <mat-chip-row *ngFor="let home of apiUserCopy.ownedHomes" [removable]="removable" (removed)="removeHome(home)">
+            <mat-chip-row *ngFor="let home of apiUserCopy.ownedHomes" [removable]="removable && canRemoveHome(home)" (removed)="removeHome(home)">
                 {{home.streetNumber}}
                 {{home.streetName}}
-                <mat-icon matChipRemove *ngIf="removable">cancel</mat-icon>
+                <mat-icon matChipRemove *ngIf="removable && canRemoveHome(home)">cancel</mat-icon>
             </mat-chip-row>
             <input placeholder="Homes" aria-label="Add a home" #homeInput #homeAutocompleteTrigger="matAutocompleteTrigger"
                 [formControl]="homeControl" [matChipInputFor]="chipGrid"
@@ -55,6 +55,7 @@
             </mat-option>
         </mat-autocomplete>
         <mat-hint class="normalization-hint" *ngIf="!hasAnyRoles()">Adding a home will first add Resident so changes can be saved.</mat-hint>
+        <mat-hint class="normalization-hint" *ngIf="isEditingOwnAccountWithHomes()">You cannot remove a home from your own account; ask another administrator.</mat-hint>
     </mat-form-field>
 </div>
 

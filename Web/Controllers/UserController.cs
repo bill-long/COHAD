@@ -148,6 +148,16 @@ namespace Web.Controllers
             }
 
             var requestedHomeIds = (updatedAssociations?.OwnedHomeIds ?? new List<Guid>()).Distinct().ToList();
+
+            // An administrator editing their own account may change roles and add homes, but may not
+            // drop a home they own - the same rule the home editor's per-owner delete enforces
+            // (HomeAssociationRules is the single definition). Checked before any lookup is started
+            // so an early return never leaves a task unobserved.
+            if (HomeAssociationRules.RemovesCallersOwnHome(apiUser, userId, requestedHomeIds))
+            {
+                return BadRequest(HomeAssociationRules.SelfRemovalMessage);
+            }
+
             var homesTask = _homeRepository.GetByIdsAsync(requestedHomeIds);
 
             // Resident-link wire protocol: null (or an omitted property) leaves the stored link

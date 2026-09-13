@@ -46,6 +46,8 @@ export class UserComponent implements OnInit, OnChanges {
 
   removable = true;
 
+  private currentUserUniqueId: string | null = null;
+
   saveInProgress = false;
 
   readonly administratorRole = 'Administrator';
@@ -78,6 +80,7 @@ export class UserComponent implements OnInit, OnChanges {
     );
 
     this.appState.pipe(map(s => s.apiUser)).subscribe(u => {
+      this.currentUserUniqueId = u?.uniqueId ?? null;
       if (u?.roles.includes(this.administratorRole) && !this.allRoles.includes(this.administratorRole)) {
         this.allRoles.push(this.administratorRole);
       }
@@ -126,7 +129,28 @@ export class UserComponent implements OnInit, OnChanges {
   // an untouched link, clears an invalidated retained link with an audit note, and rejects an
   // explicitly invalid one with a message the save flow surfaces in the snackbar.
 
+  /**
+   * An administrator editing their own account may add homes and change roles, but may not drop a
+   * home they already own - the server refuses it (HomeAssociationRules, the same rule the home
+   * editor enforces), so the chip is not removable rather than failing on save. A home added in
+   * this edit session stays removable: it is not owned yet.
+   */
+  canRemoveHome(home: Home): boolean {
+    if (this.apiUserCopy?.uniqueId !== this.currentUserUniqueId) {
+      return true;
+    }
+    return !(this.apiUser?.ownedHomes ?? []).some(h => h.id === home.id);
+  }
+
+  /** True when the editor is open on the signed-in account and it already owns a home. */
+  isEditingOwnAccountWithHomes(): boolean {
+    return this.apiUserCopy?.uniqueId === this.currentUserUniqueId && (this.apiUser?.ownedHomes?.length ?? 0) > 0;
+  }
+
   removeHome(home: Home) {
+    if (!this.canRemoveHome(home)) {
+      return;
+    }
     const index = this.apiUserCopy.ownedHomes.indexOf(home);
     if (index >= 0) {
       this.apiUserCopy.ownedHomes.splice(index, 1);
