@@ -275,18 +275,6 @@ namespace Web.Controllers
                 return Forbid();
             }
 
-            // A user may not remove a home from their own account (HomeAssociationRules is the single
-            // definition, shared with UpdateUserAssociations). The SPA hides the control for the
-            // signed-in account; this is the enforcement behind it, and the message reaches the
-            // user through HomeService.serverMessage when a stale view sends the request anyway.
-            // A caller who does not own the home is not removing anything of their own, so that
-            // case falls through to the 409 below rather than misreporting the state.
-            var remainingHomeIds = (apiUser.OwnedHomeIds ?? new List<Guid>()).Where(h => h != homeId);
-            if (HomeAssociationRules.RemovesCallersOwnHome(apiUser, userUniqueId, remainingHomeIds))
-            {
-                return BadRequest(HomeAssociationRules.SelfRemovalMessage);
-            }
-
             var userToUpdate = await _userRepository.GetByUniqueIdAsync(userUniqueId);
             if (userToUpdate == null)
             {
@@ -299,7 +287,21 @@ namespace Web.Controllers
                 return Conflict("The specified user is not associated with the specified home.");
             }
 
-            userToUpdate.OwnedHomeIds = userToUpdate.OwnedHomeIds.Where(h => h != homeId).ToList();
+            // A user may not remove a home from their own account (HomeAssociationRules is the single
+            // definition, shared with UpdateUserAssociations). The SPA hides the control for the
+            // signed-in account; this is the enforcement behind it, and the message reaches the
+            // user through HomeService.serverMessage when a stale view sends the request anyway.
+            // Judged against the freshly read target record, not the earlier apiUser snapshot, so a
+            // home granted to the caller between the two reads still counts as theirs; a caller who
+            // does not own the home has already fallen through to the 409 above.
+            var remainingHomeIds = userToUpdate.OwnedHomeIds.Where(h => h != homeId).ToList();
+            var callerRecord = userToUpdate.UniqueId == apiUser.UniqueId ? userToUpdate : apiUser;
+            if (HomeAssociationRules.RemovesCallersOwnHome(callerRecord, userUniqueId, remainingHomeIds))
+            {
+                return BadRequest(HomeAssociationRules.SelfRemovalMessage);
+            }
+
+            userToUpdate.OwnedHomeIds = remainingHomeIds;
 
             // The resident link must stay usable against the reduced home list (ResidentLinkRules is
             // the single definition); clear it when it is not. Readers also treat an unusable link as

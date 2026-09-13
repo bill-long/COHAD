@@ -203,6 +203,38 @@ public sealed class HomeControllerAssociationsTests
     }
 
     [Fact]
+    public async Task RemoveAssociatedUser_judges_self_removal_against_the_freshly_read_record()
+    {
+        // The current-user snapshot predates the target read and this endpoint carries no ETag. A
+        // home granted to the caller in between must still count as theirs, so the rule reads the
+        // fresh record rather than the snapshot (which would let the removal through).
+        var homeId = Guid.NewGuid();
+        var requesterUniqueId = ExpectedUniqueId("u1", "google.com");
+        var snapshot = new User
+        {
+            UniqueId = requesterUniqueId,
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            OwnedHomeIds = new List<Guid>(),
+        };
+        var fresh = new User
+        {
+            UniqueId = requesterUniqueId,
+            Emails = "me@example.com",
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            OwnedHomeIds = new List<Guid> { homeId },
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.SetupSequence(r => r.GetByUniqueIdAsync(requesterUniqueId)).ReturnsAsync(snapshot).ReturnsAsync(fresh);
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>(), nameId: "u1");
+        var result = await c.RemoveAssociatedUser(homeId, requesterUniqueId);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains(homeId, fresh.OwnedHomeIds);
+        mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
     public async Task RemoveAssociatedUser_returns_Forbid_before_self_check_when_requester_is_not_owner_or_admin()
     {
         // Locks the guard's position: authorization is answered first, so a non-owner cannot probe

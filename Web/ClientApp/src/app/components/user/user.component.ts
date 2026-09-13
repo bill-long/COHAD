@@ -1,5 +1,19 @@
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
-import { Component, OnInit, OnChanges, SimpleChanges, Input, ElementRef, ViewChild, ViewEncapsulation, Output, EventEmitter, Inject } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  OnChanges,
+  SimpleChanges,
+  Input,
+  ElementRef,
+  ViewChild,
+  ViewEncapsulation,
+  Output,
+  EventEmitter,
+  Inject,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ApiUser, Home, Resident } from 'src/app/models';
 import { UntypedFormControl } from '@angular/forms';
 import { MatChipInputEvent } from '@angular/material/chips';
@@ -64,6 +78,7 @@ export class UserComponent implements OnInit, OnChanges {
     @Inject(applicationState) private appState: Observable<ApplicationState>,
     private userService: UserService,
     private readonly dialog: MatDialog,
+    private readonly destroyRef: DestroyRef,
   ) {}
 
   ngOnInit(): void {
@@ -79,12 +94,20 @@ export class UserComponent implements OnInit, OnChanges {
       }),
     );
 
-    this.appState.pipe(map(s => s.apiUser)).subscribe(u => {
-      this.currentUserUniqueId = u?.uniqueId ?? null;
-      if (u?.roles.includes(this.administratorRole) && !this.allRoles.includes(this.administratorRole)) {
-        this.allRoles.push(this.administratorRole);
-      }
-    });
+    // applicationState is a BehaviorSubject, so this receives the current user synchronously
+    // before the first render; the editor is opened and closed repeatedly in one session, so the
+    // subscription must not outlive the component.
+    this.appState
+      .pipe(
+        map(s => s.apiUser),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(u => {
+        this.currentUserUniqueId = u?.uniqueId ?? null;
+        if (u?.roles.includes(this.administratorRole) && !this.allRoles.includes(this.administratorRole)) {
+          this.allRoles.push(this.administratorRole);
+        }
+      });
 
     this.apiUserCopy = JSON.parse(JSON.stringify(this.apiUser));
     this.apiUserCopy.roles ??= [];
@@ -133,9 +156,13 @@ export class UserComponent implements OnInit, OnChanges {
    * An administrator editing their own account may add homes and change roles, but may not drop a
    * home they already own - the server refuses it (HomeAssociationRules, the same rule the home
    * editor enforces), so the chip is not removable rather than failing on save. A home added in
-   * this edit session stays removable: it is not owned yet.
+   * this edit session stays removable: it is not owned yet. Until the signed-in account is known,
+   * unknown is treated as "could be me" and no chip is removable, matching the home editor.
    */
   canRemoveHome(home: Home): boolean {
+    if (this.currentUserUniqueId == null) {
+      return false;
+    }
     if (this.apiUserCopy?.uniqueId !== this.currentUserUniqueId) {
       return true;
     }
