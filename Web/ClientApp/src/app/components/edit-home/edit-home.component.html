@@ -119,7 +119,9 @@
               <div class="muted">{{ associatedUser.emails }}</div>
               <div class="muted associatedUserProvider">{{ associatedUserProviderLabel(associatedUser) }}</div>
             </div>
+            <span *ngIf="isCurrentUser(associatedUser)" class="muted associatedUserSelf">Your account</span>
             <button
+              *ngIf="canRemoveAssociatedUser(associatedUser)"
               mat-stroked-button
               color="warn"
               [disabled]="saveInProgress"

@@ -174,6 +174,115 @@ public sealed class HomeControllerAssociationsTests
     }
 
     [Fact]
+    public async Task RemoveAssociatedUser_returns_BadRequest_when_requester_removes_own_association()
+    {
+        var homeId = Guid.NewGuid();
+        var requesterUniqueId = ExpectedUniqueId("u1", "google.com");
+        var requester = new User
+        {
+            UniqueId = requesterUniqueId,
+            Emails = "me@example.com",
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            OwnedHomeIds = new List<Guid> { homeId },
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(requesterUniqueId)).ReturnsAsync(requester);
+
+        var mockAudit = new Mock<IAuditLogRepository>();
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), mockAudit.Object, nameId: "u1");
+        var result = await c.RemoveAssociatedUser(homeId, requesterUniqueId);
+
+        // Even an administrator who owns the home is refused: the guard is on the caller's own
+        // account, not on role.
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal(HomeAssociationRules.SelfRemovalMessage, bad.Value);
+        Assert.Contains(homeId, requester.OwnedHomeIds);
+        mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+        mockAudit.Verify(r => r.AddAsync(It.IsAny<NewAuditLogEntry>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RemoveAssociatedUser_judges_self_removal_against_the_freshly_read_record()
+    {
+        // The current-user snapshot predates the target read and this endpoint carries no ETag. A
+        // home granted to the caller in between must still count as theirs, so the rule reads the
+        // fresh record rather than the snapshot (which would let the removal through).
+        var homeId = Guid.NewGuid();
+        var requesterUniqueId = ExpectedUniqueId("u1", "google.com");
+        var snapshot = new User
+        {
+            UniqueId = requesterUniqueId,
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            OwnedHomeIds = new List<Guid>(),
+        };
+        var fresh = new User
+        {
+            UniqueId = requesterUniqueId,
+            Emails = "me@example.com",
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            OwnedHomeIds = new List<Guid> { homeId },
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.SetupSequence(r => r.GetByUniqueIdAsync(requesterUniqueId)).ReturnsAsync(snapshot).ReturnsAsync(fresh);
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>(), nameId: "u1");
+        var result = await c.RemoveAssociatedUser(homeId, requesterUniqueId);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains(homeId, fresh.OwnedHomeIds);
+        mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RemoveAssociatedUser_returns_Forbid_before_self_check_when_requester_is_not_owner_or_admin()
+    {
+        // Locks the guard's position: authorization is answered first, so a non-owner cannot probe
+        // which homes they are associated with through a differing 400/403.
+        var homeId = Guid.NewGuid();
+        var requesterUniqueId = ExpectedUniqueId("u1", "google.com");
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers
+            .Setup(r => r.GetByUniqueIdAsync(requesterUniqueId))
+            .ReturnsAsync(
+                new User
+                {
+                    UniqueId = requesterUniqueId,
+                    Roles = new List<User.Role> { User.Role.Resident },
+                    OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+                }
+            );
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>(), nameId: "u1");
+        var result = await c.RemoveAssociatedUser(homeId, requesterUniqueId);
+
+        Assert.IsType<ForbidResult>(result);
+    }
+
+    [Fact]
+    public async Task RemoveAssociatedUser_returns_Conflict_when_admin_targets_self_on_a_home_they_do_not_own()
+    {
+        // Nothing of the caller's own is being removed, so the self-removal message would
+        // misdescribe the state; the existing "not associated" conflict is the honest answer.
+        var homeId = Guid.NewGuid();
+        var requesterUniqueId = ExpectedUniqueId("u1", "google.com");
+        var requester = new User
+        {
+            UniqueId = requesterUniqueId,
+            Roles = new List<User.Role> { User.Role.Resident, User.Role.Administrator },
+            OwnedHomeIds = new List<Guid> { Guid.NewGuid() },
+        };
+        var mockUsers = new Mock<IUserRepository>();
+        mockUsers.Setup(r => r.GetByUniqueIdAsync(requesterUniqueId)).ReturnsAsync(requester);
+
+        var c = CreateController(mockUsers.Object, Mock.Of<IHomeRepository>(), Mock.Of<IAuditLogRepository>(), nameId: "u1");
+        var result = await c.RemoveAssociatedUser(homeId, requesterUniqueId);
+
+        Assert.IsType<ConflictObjectResult>(result);
+        mockUsers.Verify(r => r.UpsertAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
     public async Task RemoveAssociatedUser_removes_home_and_writes_audit_when_requester_is_owner()
     {
         var homeId = Guid.NewGuid();

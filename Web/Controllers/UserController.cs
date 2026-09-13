@@ -148,6 +148,22 @@ namespace Web.Controllers
             }
 
             var requestedHomeIds = (updatedAssociations?.OwnedHomeIds ?? new List<Guid>()).Distinct().ToList();
+
+            // An administrator editing their own account may change roles and add homes, but may not
+            // drop a home they own - the same rule the home editor's per-owner delete enforces
+            // (HomeAssociationRules is the single definition). The rule is judged on the list the
+            // upsert will actually persist: UserAssociationState.Apply empties the home list when no
+            // roles remain, so a self-update with no roles drops every home however the request
+            // spells it. It is judged against the freshly read record rather than the earlier
+            // apiUser snapshot, so a home granted to the caller between the two reads counts.
+            // Checked before any lookup is started so an early return never leaves a task unobserved.
+            var homeIdsAfterUpsert = requestedRoles.Count > 0 ? requestedHomeIds : new List<Guid>();
+            var callerRecord = userToModify.UniqueId == apiUser.UniqueId ? userToModify : apiUser;
+            if (HomeAssociationRules.RemovesCallersOwnHome(callerRecord, userId, homeIdsAfterUpsert))
+            {
+                return BadRequest(HomeAssociationRules.SelfRemovalMessage);
+            }
+
             var homesTask = _homeRepository.GetByIdsAsync(requestedHomeIds);
 
             // Resident-link wire protocol: null (or an omitted property) leaves the stored link
