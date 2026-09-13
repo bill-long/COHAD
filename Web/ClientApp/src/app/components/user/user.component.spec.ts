@@ -19,6 +19,10 @@ describe('UserComponent own-home protection', () => {
     return { uniqueId, roles: ['Administrator', 'Resident'], ownedHomes } as unknown as ApiUser;
   }
 
+  function userWithRoles(uniqueId: string, roles: string[], ...ownedHomes: Home[]): ApiUser {
+    return { uniqueId, roles, ownedHomes } as unknown as ApiUser;
+  }
+
   function createComponent(signedIn: ApiUser | null, editing: ApiUser): UserComponent {
     const destroyRef = { onDestroy: () => () => undefined } as unknown as DestroyRef;
     const component = new UserComponent(of({ ...initialStateValue, apiUser: signedIn }), {} as never, {} as never, destroyRef);
@@ -54,6 +58,37 @@ describe('UserComponent own-home protection', () => {
     const theirs = home('h-1');
     const component = createComponent(null, user('someone-else', theirs));
     expect(component.canRemoveHome(component.apiUserCopy.ownedHomes[0])).toBeFalse();
+  });
+
+  it('protects the last role on the signed-in account while it owns a home', () => {
+    // Removing the last role clears the home list, which would be an indirect self-removal.
+    const existing = home('h-1');
+    const component = createComponent(user('me', existing), userWithRoles('me', ['Resident'], existing));
+    expect(component.canRemoveRole('Resident')).toBeFalse();
+    component.removeRole('Resident');
+    expect(component.apiUserCopy.roles).toEqual(['Resident']);
+    expect(component.apiUserCopy.ownedHomes.length).toBe(1);
+  });
+
+  it('still allows removing a role that is not the last on the signed-in account', () => {
+    const existing = home('h-1');
+    const component = createComponent(user('me', existing), user('me', existing));
+    expect(component.canRemoveRole('Administrator')).toBeTrue();
+    component.removeRole('Administrator');
+    expect(component.apiUserCopy.roles).toEqual(['Resident']);
+    expect(component.apiUserCopy.ownedHomes.length).toBe(1);
+  });
+
+  it('allows removing the last role on another account', () => {
+    const theirs = home('h-1');
+    const component = createComponent(user('me'), userWithRoles('someone-else', ['Resident'], theirs));
+    expect(component.canRemoveRole('Resident')).toBeTrue();
+  });
+
+  it('protects the last role until the signed-in account is known', () => {
+    const theirs = home('h-1');
+    const component = createComponent(null, userWithRoles('someone-else', ['Resident'], theirs));
+    expect(component.canRemoveRole('Resident')).toBeFalse();
   });
 
   it('ignores a removal of a protected home even if invoked directly', () => {

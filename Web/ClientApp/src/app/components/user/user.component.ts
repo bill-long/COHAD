@@ -169,9 +169,13 @@ export class UserComponent implements OnInit, OnChanges {
     return !(this.apiUser?.ownedHomes ?? []).some(h => h.id === home.id);
   }
 
-  /** True when the editor is open on the signed-in account and it already owns a home. */
+  /**
+   * True when the editor is open on the signed-in account and it already owns a home. Like
+   * canRemoveHome, an unknown signed-in account counts as "could be me".
+   */
   isEditingOwnAccountWithHomes(): boolean {
-    return this.apiUserCopy?.uniqueId === this.currentUserUniqueId && (this.apiUser?.ownedHomes?.length ?? 0) > 0;
+    const isOwnOrUnknown = this.currentUserUniqueId == null || this.apiUserCopy?.uniqueId === this.currentUserUniqueId;
+    return isOwnOrUnknown && (this.apiUser?.ownedHomes?.length ?? 0) > 0;
   }
 
   removeHome(home: Home) {
@@ -229,7 +233,21 @@ export class UserComponent implements OnInit, OnChanges {
     this.homeControl.setValue(null);
   }
 
+  /**
+   * Removing the last role also clears the home list (an account cannot own homes with no roles),
+   * so on the signed-in account it would be an indirect self-removal the server refuses. The last
+   * role chip is therefore not removable while the account owns a home; every other role change on
+   * one's own account remains allowed.
+   */
+  canRemoveRole(role: string): boolean {
+    const isLastRole = (this.apiUserCopy?.roles ?? []).length === 1 && this.apiUserCopy.roles[0] === role;
+    return !(isLastRole && this.isEditingOwnAccountWithHomes());
+  }
+
   removeRole(role: string) {
+    if (!this.canRemoveRole(role)) {
+      return;
+    }
     const index = this.apiUserCopy.roles.indexOf(role);
     if (index >= 0) {
       this.apiUserCopy.roles.splice(index, 1);

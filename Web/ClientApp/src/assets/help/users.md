@@ -41,7 +41,7 @@ An account missing a home, or missing roles, is deleted automatically 30 days af
 - Column widths can be dragged and are remembered on this browser.
 - **Last logged in** is approximate - treat it as "active around then", not an exact time.
 - Removing someone's home or roles restricts their access right away and may start their purge clock, so double-check before saving.
-- **You cannot remove a home from your own account** (the chip has no remove button, and the save is refused if it is attempted another way). You can still add homes and change your own roles. Ask another administrator to remove the home - the same rule applies on [Homes](#topic:homes) and My Info.
+- **You cannot remove a home from your own account** (the chip has no remove button, and the save is refused if it is attempted another way). You can still add homes and change your own roles, except that your last role cannot be removed while you own a home (that would drop the home too). Ask another administrator to remove the home - the same rule applies on [Homes](#topic:homes) and My Info.
 - If a save fails with "User was modified by another request", refresh and make the change again. Part of the edit may already have been applied, so check what took effect before reapplying it.
 - Saves check the version loaded with your form. Another admin's save or an account update (including a login) can make that version outdated. Cancel and reopen the edit after the list reloads, or refresh the page, before reapplying your changes.
 - When both associations and profile details change, associations save first. If the profile save fails, the message says which part succeeded. Review the current record before editing again.
