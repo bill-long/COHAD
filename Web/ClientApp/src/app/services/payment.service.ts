@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Payment, PaymentSummary } from '../models';
+import { Payment, PaymentOptions, PaymentSummary } from '../models';
 
 @Injectable({
   providedIn: 'root',
@@ -11,6 +11,10 @@ export class PaymentService {
 
   getMyPayments(): Observable<PaymentSummary[]> {
     return this.httpClient.get<PaymentSummary[]>('api/payment');
+  }
+
+  getPaymentOptions(): Observable<PaymentOptions> {
+    return this.httpClient.get<PaymentOptions>('api/payment/options');
   }
 
   recordPayment(payment: Payment): Observable<PaymentSummary> {

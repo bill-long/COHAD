@@ -25,6 +25,10 @@
   color: var(--text-secondary);
 }
 
+.zelle-email {
+  overflow-wrap: anywhere;
+}
+
 .empty-state {
   color: var(--text-muted);
 }

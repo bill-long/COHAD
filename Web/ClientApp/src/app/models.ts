@@ -282,6 +282,12 @@ export interface PaymentSummary {
   homeId: string | null;
 }
 
+/** Returned by GET api/payment/options: deployment-configured details the Dues page renders. */
+export interface PaymentOptions {
+  /** Zelle recipient address, or null when the deployment has none configured (hides the Zelle note). */
+  zelleEmail: string | null;
+}
+
 /** Request body when recording a payment; server stores details but responses use PaymentSummary. */
 export interface Payment {
   id: string;

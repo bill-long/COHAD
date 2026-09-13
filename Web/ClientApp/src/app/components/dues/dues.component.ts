@@ -25,6 +25,8 @@ export class DuesComponent {
   payOnceButtons: PayPalButtonsComponent | null = null;
   subscribeButtons: PayPalButtonsComponent | null = null;
   payments: PaymentSummary[] = [];
+  /** Zelle recipient address from server config; null hides the Zelle note (see DuesOptions). */
+  zelleEmail: string | null = null;
 
   constructor(
     @Inject(applicationState) private appState: Observable<ApplicationState>,
@@ -32,6 +34,19 @@ export class DuesComponent {
     public paymentService: PaymentService,
   ) {
     this.loadPayments();
+    this.loadPaymentOptions();
+  }
+
+  loadPaymentOptions() {
+    this.paymentService.getPaymentOptions().subscribe({
+      next: options => {
+        this.zelleEmail = options.zelleEmail?.trim() || null;
+      },
+      // The page is still usable without the Zelle note; leave it hidden rather than surfacing an error.
+      error: () => {
+        this.zelleEmail = null;
+      },
+    });
   }
 
   async loadPayments() {

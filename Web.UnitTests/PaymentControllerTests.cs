@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Moq;
 using Web.Controllers;
 using Web.Models;
@@ -22,10 +23,11 @@ public sealed class PaymentControllerTests
         IUserRepository users,
         IPaymentRepository payments,
         string nameId = "u1",
-        string idp = "google.com"
+        string idp = "google.com",
+        DuesOptions? dues = null
     )
     {
-        var c = new PaymentController(new CurrentUserAccessor(users), payments)
+        var c = new PaymentController(new CurrentUserAccessor(users), payments, Options.Create(dues ?? new DuesOptions()))
         {
             ControllerContext = new ControllerContext
             {
@@ -48,6 +50,52 @@ public sealed class PaymentControllerTests
     }
 
     private static string UniqueId(string nameId, string idp = "google.com") => $"{idp}{nameId}";
+
+    // ── GetOptions ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetOptions_returns_configured_Zelle_email_trimmed()
+    {
+        var c = CreateController(
+            Mock.Of<IUserRepository>(),
+            Mock.Of<IPaymentRepository>(),
+            dues: new DuesOptions { ZelleEmail = "  treasurer@example.com  " }
+        );
+
+        var ok = Assert.IsType<OkObjectResult>(c.GetOptions());
+        var options = Assert.IsType<PaymentOptions>(ok.Value);
+        Assert.Equal("treasurer@example.com", options.ZelleEmail);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void GetOptions_returns_null_Zelle_email_when_not_configured(string? configured)
+    {
+        var c = CreateController(
+            Mock.Of<IUserRepository>(),
+            Mock.Of<IPaymentRepository>(),
+            dues: new DuesOptions { ZelleEmail = configured }
+        );
+
+        var ok = Assert.IsType<OkObjectResult>(c.GetOptions());
+        var options = Assert.IsType<PaymentOptions>(ok.Value);
+        Assert.Null(options.ZelleEmail);
+    }
+
+    [Fact]
+    public void GetOptions_requires_only_the_Resident_policy_of_the_controller()
+    {
+        // The options endpoint carries no attribute of its own, so the class-level Resident policy
+        // (which Administrators also satisfy) is what gates it - it is not anonymous.
+        var method = typeof(PaymentController).GetMethod(nameof(PaymentController.GetOptions))!;
+        Assert.Empty(method.GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute), true));
+        var policy = Assert.Single(
+            typeof(PaymentController).GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), true)
+        );
+        Assert.Equal("Resident", ((Microsoft.AspNetCore.Authorization.AuthorizeAttribute)policy).Policy);
+    }
 
     // ── Get ──────────────────────────────────────────────────────────────────
 

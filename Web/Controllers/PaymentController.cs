@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Web.Models;
 using Web.PresentationModels;
 using Web.Services;
@@ -19,11 +20,28 @@ namespace Web.Controllers
     {
         private readonly ICurrentUserAccessor _currentUser;
         private readonly IPaymentRepository _paymentRepository;
+        private readonly DuesOptions _duesOptions;
 
-        public PaymentController(ICurrentUserAccessor currentUser, IPaymentRepository paymentRepository)
+        public PaymentController(
+            ICurrentUserAccessor currentUser,
+            IPaymentRepository paymentRepository,
+            IOptions<DuesOptions> duesOptions
+        )
         {
             _currentUser = currentUser;
             _paymentRepository = paymentRepository;
+            _duesOptions = duesOptions?.Value ?? new DuesOptions();
+        }
+
+        /// <summary>
+        /// Deployment-configured payment details for the Dues page. The Zelle address lives in app
+        /// settings rather than the SPA bundle so a personal mailbox never lands in source control.
+        /// </summary>
+        [HttpGet("options")]
+        public IActionResult GetOptions()
+        {
+            var zelleEmail = _duesOptions.ZelleEmail?.Trim();
+            return Ok(new PaymentOptions { ZelleEmail = string.IsNullOrEmpty(zelleEmail) ? null : zelleEmail });
         }
 
         [HttpGet]

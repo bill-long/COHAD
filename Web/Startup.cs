@@ -532,6 +532,7 @@ namespace Web
             // harmless. See UserPurgeService's remarks before adding pacing state back.
             services.Configure<UserPurgeOptions>(Configuration.GetSection("UserPurge"));
             services.Configure<PayPalOptions>(Configuration.GetSection("PayPal"));
+            services.Configure<DuesOptions>(Configuration.GetSection("Dues"));
             if (useMockData)
             {
                 // Never let a mock run reach the live PayPal API, whatever the config says. Mirrors the

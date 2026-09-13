@@ -55,6 +55,13 @@
               <li>Make check payable to "COHAD".</li>
               <li>Deliver to our Treasurer, Dorothy Woods, at 100 Hunters Hill Circle.</li>
             </ul>
+            <ng-container *ngIf="zelleEmail">
+              <p>You can also pay ${{baseDuesAmount}} with Zelle.</p>
+              <ul>
+                <li>Send to <strong class="zelle-email">{{zelleEmail}}</strong>.</li>
+                <li>The recipient name will show as "Canyon Oaks Homeowners Association".</li>
+              </ul>
+            </ng-container>
           </div>
         </mat-expansion-panel>
       </mat-accordion>
