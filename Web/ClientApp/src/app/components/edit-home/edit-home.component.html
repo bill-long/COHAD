@@ -119,13 +119,18 @@
               <div class="muted">{{ associatedUser.emails }}</div>
               <div class="muted associatedUserProvider">{{ associatedUserProviderLabel(associatedUser) }}</div>
             </div>
-            <button
-              mat-stroked-button
-              color="warn"
-              [disabled]="saveInProgress"
-              (click)="confirmRemoveAssociatedUser(associatedUser)">
-              Remove association
-            </button>
+            <span *ngIf="isCurrentUser(associatedUser); else removeAssociationButton" class="muted associatedUserSelf">
+              Your account
+            </span>
+            <ng-template #removeAssociationButton>
+              <button
+                mat-stroked-button
+                color="warn"
+                [disabled]="saveInProgress"
+                (click)="confirmRemoveAssociatedUser(associatedUser)">
+                Remove association
+              </button>
+            </ng-template>
           </div>
         </div>
         <ng-template #noAssociatedUsers><span class="muted">No associated users.</span></ng-template>

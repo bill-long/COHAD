@@ -1,5 +1,7 @@
+import { of } from 'rxjs';
 import { EditHomeComponent } from './edit-home.component';
-import { Home, Resident } from '../../models';
+import { ApiUser, Home, HomeAssociatedUser, Resident } from '../../models';
+import { initialStateValue } from '../../state';
 
 /**
  * Covers the keyboard-accessible reordering path. CDK drag-and-drop has no
@@ -29,10 +31,7 @@ describe('EditHomeComponent resident ordering', () => {
   }
 
   beforeEach(() => {
-    component = new EditHomeComponent(
-      {} as never,
-      {} as never,
-    );
+    component = new EditHomeComponent({} as never, {} as never, of(initialStateValue));
     component.homeCopy = {
       residents: [resident('1', 'Ana', 'Reyes'), resident('2', 'Ben', 'Silva'), resident('3', 'Cleo', 'Tran')],
     } as Home;
@@ -64,5 +63,54 @@ describe('EditHomeComponent resident ordering', () => {
 
   it('falls back to a generic label when the resident has no name yet', () => {
     expect(component.residentOrderLabel(resident('1', '', ''))).toBe('this resident');
+  });
+});
+
+/**
+ * The signed-in account must not be able to remove its own home association - a resident who did
+ * would be locked out of their own home. The template swaps the Remove button for a "Your account"
+ * marker on that row, and confirmRemoveAssociatedUser refuses even if something invokes it directly.
+ */
+describe('EditHomeComponent associated-user self-removal', () => {
+  function associatedUser(uniqueId: string): HomeAssociatedUser {
+    return { uniqueId, givenName: 'Ana', surname: 'Reyes', emails: 'ana@example.com', identityProvider: 'google.com' };
+  }
+
+  function createComponent(apiUser: Partial<ApiUser> | null, dialog: { open: jasmine.Spy } = { open: jasmine.createSpy('open') }) {
+    return new EditHomeComponent(
+      {} as never,
+      dialog as never,
+      of({ ...initialStateValue, apiUser: apiUser as ApiUser | null }),
+    );
+  }
+
+  it('recognises the signed-in account among the associated users', () => {
+    const component = createComponent({ uniqueId: 'me' });
+    expect(component.isCurrentUser(associatedUser('me'))).toBeTrue();
+    expect(component.isCurrentUser(associatedUser('someone-else'))).toBeFalse();
+  });
+
+  it('treats every row as removable when nobody is signed in', () => {
+    const component = createComponent(null);
+    expect(component.isCurrentUser(associatedUser('me'))).toBeFalse();
+  });
+
+  it('never matches a row with no id, even against a signed-out state', () => {
+    const component = createComponent(null);
+    expect(component.isCurrentUser(associatedUser(''))).toBeFalse();
+  });
+
+  it('does not open the confirmation dialog for the signed-in account', () => {
+    const dialog = { open: jasmine.createSpy('open') };
+    const component = createComponent({ uniqueId: 'me' }, dialog);
+    component.confirmRemoveAssociatedUser(associatedUser('me'));
+    expect(dialog.open).not.toHaveBeenCalled();
+  });
+
+  it('opens the confirmation dialog for another account', () => {
+    const dialog = { open: jasmine.createSpy('open').and.returnValue({ afterClosed: () => of(false) }) };
+    const component = createComponent({ uniqueId: 'me' }, dialog);
+    component.confirmRemoveAssociatedUser(associatedUser('someone-else'));
+    expect(dialog.open).toHaveBeenCalledTimes(1);
   });
 });
