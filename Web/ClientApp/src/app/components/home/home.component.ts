@@ -11,7 +11,7 @@ export class HomeComponent implements OnInit {
   private static readonly homeHeroImageUrl = 'assets/trees1.jpg';
 
   title = 'COHAD';
-  subtitles = ['Canyon Oaks Homeowners Association', 'Denton'];
+  subtitles = ['Canyon Oaks Homeowners Association', 'of Denton County'];
   nextEvent: EventCard | null = null;
 
   constructor(private readonly eventsService: EventsService) {}
